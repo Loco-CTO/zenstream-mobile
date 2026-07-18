@@ -23,7 +23,7 @@
     <string name="newly_added">Newly Added</string>
     <string name="top_rated">Top Rated</string>
     <string name="new_releases">New Releases</string>
-    <string name="library_row_title">%1$s · %2$s</string>
+    <string name="library_row_title">%1$s %2$s</string>
     <string name="logout">Log out</string>
     <string name="loading">Loading…</string>
     <string name="retry">Try again</string>
