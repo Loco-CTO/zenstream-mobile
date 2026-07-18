@@ -157,9 +157,11 @@ private fun FeaturedHero(
         return
     }
     val pagerState = rememberPagerState(pageCount = { items.size })
-    HorizontalPager(state = pagerState, modifier = Modifier
-        .fillMaxWidth()
-        .height(430.dp)) { page ->
+    HorizontalPager(
+        state = pagerState, modifier = Modifier
+            .fillMaxWidth()
+            .height(430.dp)
+    ) { page ->
         val item = items[page]
         Box(Modifier.fillMaxSize()) {
             val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
@@ -225,9 +227,11 @@ private fun FeaturedHero(
             }
         }
     }
-    Row(Modifier
-        .fillMaxWidth()
-        .padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp), horizontalArrangement = Arrangement.Center
+    ) {
         repeat(items.size) { index ->
             Box(
                 Modifier
@@ -303,9 +307,11 @@ fun SearchScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { inner ->
-        Column(Modifier
-            .fillMaxSize()
-            .padding(inner)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(inner)
+        ) {
             OutlinedTextField(
                 value = state.query,
                 onValueChange = vm::updateQuery,
@@ -399,9 +405,11 @@ fun LibraryScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { inner ->
-        Column(Modifier
-            .fillMaxSize()
-            .padding(inner)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(inner)
+        ) {
             if (state.libraries.isNotEmpty()) {
                 androidx.compose.foundation.lazy.LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
