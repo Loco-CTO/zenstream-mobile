@@ -17,6 +17,6 @@ fun normalizeServerUrl(input: String): String {
 private fun isLocalHttpHost(uri: URI): Boolean {
     if (!uri.scheme.equals("http", ignoreCase = true)) return false
     return uri.host.equals("localhost", ignoreCase = true) ||
-        uri.host == "10.0.2.2" ||
-        uri.host == "10.0.3.2"
+            uri.host == "10.0.2.2" ||
+            uri.host == "10.0.3.2"
 }
