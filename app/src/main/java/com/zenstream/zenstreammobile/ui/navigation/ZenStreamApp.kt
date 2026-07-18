@@ -7,7 +7,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -134,31 +136,37 @@ private fun MainScaffold(
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
-                    androidx.compose.material3.NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
-                        destinations.forEach { destination ->
-                            NavigationBarItem(
-                                selected = currentRoute == destination.route,
-                                onClick = {
-                                    navController.navigate(destination.route) {
-                                        popUpTo(HOME) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    androidx.compose.material3.Icon(
-                                        destination.icon,
-                                        contentDescription = null
-                                    )
-                                },
-                                label = {
-                                    androidx.compose.material3.Text(
-                                        androidx.compose.ui.res.stringResource(
-                                            destination.label
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        androidx.compose.material3.NavigationBar(containerColor = androidx.compose.ui.graphics.Color.Transparent) {
+                            destinations.forEach { destination ->
+                                NavigationBarItem(
+                                    selected = currentRoute == destination.route,
+                                    onClick = {
+                                        navController.navigate(destination.route) {
+                                            popUpTo(HOME) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = {
+                                        androidx.compose.material3.Icon(
+                                            destination.icon,
+                                            contentDescription = null
                                         )
-                                    )
-                                },
-                            )
+                                    },
+                                    label = {
+                                        androidx.compose.material3.Text(
+                                            androidx.compose.ui.res.stringResource(
+                                                destination.label
+                                            )
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
                 }
