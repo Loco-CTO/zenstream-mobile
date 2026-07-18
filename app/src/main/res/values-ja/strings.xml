@@ -4,7 +4,7 @@
     <string name="server_setup_description">開始するには、ZenStreamオーケストレーターのアドレスを入力してください。</string>
     <string name="server_url">サーバーURL</string>
     <string name="orchestrator_url">オーケストレーターURL</string>
-    <string name="server_url_hint">https://your-orchestrator.example</string>
+    <string name="server_url_hint">https://zso.example.com</string>
     <string name="continue_label">続行</string>
     <string name="server_url_required">サーバーURLを入力してください。</string>
     <string name="server_url_invalid">HTTPSのサーバーURLを使用してください。</string>

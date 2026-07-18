@@ -4,7 +4,7 @@
     <string name="server_setup_description">Enter your ZenStream Orchestrator address to get started.</string>
     <string name="server_url">Server URL</string>
     <string name="orchestrator_url">Orchestrator URL</string>
-    <string name="server_url_hint">https://your-orchestrator.example</string>
+    <string name="server_url_hint">https://zso.example.com</string>
     <string name="continue_label">Continue</string>
     <string name="server_url_required">Enter a server URL.</string>
     <string name="server_url_invalid">Use an HTTPS server URL.</string>
