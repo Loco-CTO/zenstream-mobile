@@ -109,7 +109,9 @@ fun HomeScreen(
                         data?.featured.orEmpty(),
                         session,
                         onPlay,
-                        onInfo = { infoItem = it })
+                        onInfo = { infoItem = it },
+                        showEmptyLibrary = data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                    )
                 }
                 items(
                     data?.rows.orEmpty(),
@@ -135,9 +137,14 @@ private fun FeaturedHero(
     items: List<MediaItem>,
     session: AuthSession,
     onPlay: (MediaItem) -> Unit,
-    onInfo: (MediaItem) -> Unit
+    onInfo: (MediaItem) -> Unit,
+    showEmptyLibrary: Boolean,
 ) {
     if (items.isEmpty()) {
+        if (!showEmptyLibrary) {
+            Spacer(Modifier.height(24.dp))
+            return
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
