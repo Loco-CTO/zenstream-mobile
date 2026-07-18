@@ -55,12 +55,7 @@ class JellyfinApi(
             getItems(
                 session,
                 "/Items",
-                mapOf(
-                    "limit" to "25",
-                    "includeItemTypes" to "Series,Movie",
-                    "sortBy" to "DateCreated",
-                    "sortOrder" to "Descending"
-                )
+                latestItemsQuery(session.userId)
             )
         }
         val resume = async {
@@ -97,6 +92,21 @@ class JellyfinApi(
             rows = rows
         )
     }
+
+    internal fun latestItemsQuery(userId: String): Map<String, String> = mapOf(
+        "userId" to userId,
+        "startIndex" to "0",
+        "limit" to "25",
+        "recursive" to "true",
+        "includeItemTypes" to "Series,Movie",
+        "sortBy" to "DateCreated",
+        "sortOrder" to "Descending",
+        "fields" to ITEM_FIELDS,
+        "enableImages" to "true",
+        "imageTypeLimit" to "1",
+        "enableImageTypes" to ITEM_IMAGE_TYPES,
+        "enableUserData" to "true",
+    )
 
     suspend fun getLibraries(session: AuthSession): List<Library> = withContext(Dispatchers.IO) {
         val json = requestJson(
@@ -222,6 +232,9 @@ class JellyfinApi(
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        private const val ITEM_FIELDS =
+            "Overview,Genres,PrimaryImageAspectRatio,CommunityRating,ProductionYear,PremiereDate,RecursiveItemCount,ParentId,ImageTags,BackdropImageTags,ImageBlurHashes,UserData,SeriesPrimaryImage"
+        private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"
 
         fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
             token?.let { "Token=\"$it\"" },
