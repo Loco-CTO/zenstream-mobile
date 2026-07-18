@@ -1,5 +1,6 @@
 [versions]
 agp = "9.2.1"
+kotlin = "2.4.0"
 coreKtx = "1.17.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -36,3 +37,4 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
