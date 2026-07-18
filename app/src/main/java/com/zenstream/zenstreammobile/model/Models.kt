@@ -36,10 +36,13 @@ data class Library(
 )
 
 data class MediaRow(
-    val title: String,
+    val title: RowTitle,
+    val libraryName: String? = null,
     val items: List<MediaItem>,
     val wide: Boolean = false,
 )
+
+enum class RowTitle { ContinueWatching, NextUp, NewlyAdded, TopRated, NewReleases }
 
 data class HomeData(
     val featured: List<MediaItem> = emptyList(),
