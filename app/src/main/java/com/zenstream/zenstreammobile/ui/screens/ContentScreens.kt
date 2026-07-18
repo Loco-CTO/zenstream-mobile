@@ -95,7 +95,7 @@ fun HomeScreen(
     var infoItem by remember { mutableStateOf<MediaItem?>(null) }
     when {
         state.loading && state.data == null -> CenterLoading(padding)
-        state.error && state.data == null -> ErrorState(padding, R.string.home_error, vm::load)
+        state.error && state.data == null -> ErrorState(padding, R.string.library_load_failed, vm::load)
         else -> {
             val data = state.data
             LazyColumn(
@@ -269,13 +269,13 @@ private fun InfoSheet(item: MediaItem, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                stringResource(R.string.details_for, item.name),
+                item.name,
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() })
             Text(itemSubtitle(item), color = MaterialTheme.colorScheme.onSurfaceVariant)
             item.communityRating?.let {
                 Text(
-                    stringResource(R.string.rating, "%.1f".format(it)),
+                    "${stringResource(R.string.sort_rating)} ${"%.1f".format(it)}",
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -335,7 +335,7 @@ fun SearchScreen(
                         )
                     }
                 },
-                placeholder = { Text(stringResource(R.string.search_hint)) },
+                placeholder = { Text(stringResource(R.string.search_placeholder)) },
                 singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier
@@ -344,15 +344,11 @@ fun SearchScreen(
             )
             when {
                 state.loading -> CenterLoading(PaddingValues())
-                state.error -> ErrorState(PaddingValues(), R.string.search_error) {}
-                state.query.trim().length < 2 -> Text(
-                    stringResource(R.string.search_minimum),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(20.dp)
-                )
+                state.error -> ErrorState(PaddingValues(), R.string.search_load_failed) {}
+                state.query.trim().length < 2 -> Unit
 
                 state.results.isEmpty() -> Text(
-                    stringResource(R.string.search_empty),
+                    stringResource(R.string.no_search_results),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp)
                 )
@@ -437,7 +433,7 @@ fun LibraryScreen(
                 state.loading -> CenterLoading(PaddingValues())
                 state.error -> ErrorState(
                     PaddingValues(),
-                    R.string.library_error,
+                    R.string.library_load_page_failed,
                     vm::loadLibraries
                 )
 
@@ -502,7 +498,7 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
             Text(
-                stringResource(R.string.native_playback_unavailable),
+                stringResource(R.string.media_playback_failed),
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
