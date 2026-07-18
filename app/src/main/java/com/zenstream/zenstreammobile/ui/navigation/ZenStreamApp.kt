@@ -1,6 +1,11 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -11,10 +16,19 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -83,42 +97,82 @@ private fun MainScaffold(
             )
         )
     }
+    val density = LocalDensity.current
+    val bottomBarVisibility = remember(density) {
+        BottomBarVisibilityController(
+            hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+            revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
+        )
+    }
+    var bottomBarVisible by remember { mutableStateOf(true) }
+    val scrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val deltaY = consumed.y + available.y
+                bottomBarVisible = bottomBarVisibility.onScroll(
+                    deltaY = deltaY,
+                    atTop = available.y > 0f && consumed.y == 0f
+                )
+                return Offset.Zero
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute) {
+        bottomBarVisible = bottomBarVisibility.resetForRoute()
+    }
 
     androidx.compose.material3.Scaffold(
         bottomBar = {
             if (currentRoute != PLAYBACK.substringBefore("/")) {
-                androidx.compose.material3.NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
-                    destinations.forEach { destination ->
-                        NavigationBarItem(
-                            selected = currentRoute == destination.route,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(HOME) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                androidx.compose.material3.Icon(
-                                    destination.icon,
-                                    contentDescription = null
-                                )
-                            },
-                            label = {
-                                androidx.compose.material3.Text(
-                                    androidx.compose.ui.res.stringResource(
-                                        destination.label
+                AnimatedVisibility(
+                    visible = bottomBarVisible,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    androidx.compose.material3.NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                        destinations.forEach { destination ->
+                            NavigationBarItem(
+                                selected = currentRoute == destination.route,
+                                onClick = {
+                                    navController.navigate(destination.route) {
+                                        popUpTo(HOME) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    androidx.compose.material3.Icon(
+                                        destination.icon,
+                                        contentDescription = null
                                     )
-                                )
-                            },
-                        )
+                                },
+                                label = {
+                                    androidx.compose.material3.Text(
+                                        androidx.compose.ui.res.stringResource(
+                                            destination.label
+                                        )
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        NavHost(navController, startDestination = HOME, modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController,
+            startDestination = HOME,
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(scrollConnection)
+        ) {
             composable(HOME) {
                 HomeScreen(
                     repository,
@@ -183,3 +237,58 @@ private data class NavigationDestination(
     val label: Int,
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 )
+
+internal class BottomBarVisibilityController(
+    private val hideDistance: Float,
+    private val revealDistance: Float
+) {
+    private enum class ScrollDirection {
+        HIDE,
+        REVEAL
+    }
+
+    private var direction: ScrollDirection? = null
+    private var accumulatedDistance = 0f
+    private var isVisible = true
+
+    fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
+        if (atTop) {
+            return reset(visible = true)
+        }
+
+        val nextDirection = when {
+            deltaY < 0f -> ScrollDirection.HIDE
+            deltaY > 0f -> ScrollDirection.REVEAL
+            else -> return isVisible
+        }
+
+        if (direction != nextDirection) {
+            direction = nextDirection
+            accumulatedDistance = 0f
+        }
+        accumulatedDistance += kotlin.math.abs(deltaY)
+
+        when (nextDirection) {
+            ScrollDirection.HIDE -> if (accumulatedDistance >= hideDistance) {
+                isVisible = false
+            }
+
+            ScrollDirection.REVEAL -> if (accumulatedDistance >= revealDistance) {
+                isVisible = true
+            }
+        }
+        return isVisible
+    }
+
+    fun resetForRoute(): Boolean = reset(visible = true)
+
+    private fun reset(visible: Boolean): Boolean {
+        direction = null
+        accumulatedDistance = 0f
+        isVisible = visible
+        return isVisible
+    }
+}
+
+private const val HIDE_DISTANCE_DP = 56f
+private const val REVEAL_DISTANCE_DP = 64f
