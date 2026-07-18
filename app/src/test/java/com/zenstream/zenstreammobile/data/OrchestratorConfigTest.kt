@@ -17,4 +17,11 @@ class OrchestratorConfigTest {
     fun rejectsMissingJellyfinUrl() {
         assertThrows(IllegalArgumentException::class.java) { normalizeConfiguredJellyfinUrl("http://remote.example") }
     }
+
+    @Test
+    fun normalizesOnlyFrontendLocales() {
+        assertEquals("en", normalizeLocale("en"))
+        assertEquals("ja", normalizeLocale("ja"))
+        assertEquals("en", normalizeLocale("fr"))
+    }
 }
