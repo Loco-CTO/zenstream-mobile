@@ -67,6 +67,7 @@ fun MediaRowView(
         RowTitle.NewlyAdded -> row.libraryName?.let {
             stringResource(R.string.newly_added_on, it)
         } ?: stringResource(R.string.new_releases)
+
         RowTitle.TopRated -> stringResource(R.string.top_rated)
         RowTitle.NewReleases -> stringResource(R.string.new_releases)
     }
