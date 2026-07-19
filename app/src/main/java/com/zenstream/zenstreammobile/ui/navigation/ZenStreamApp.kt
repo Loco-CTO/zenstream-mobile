@@ -260,6 +260,7 @@ private fun MainScaffold(
                 SettingsScreen(
                     repository = repository,
                     onBack = { navController.popBackStack() },
+                    onLogout = onLogout,
                 )
             }
         }

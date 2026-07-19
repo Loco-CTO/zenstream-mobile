@@ -54,6 +54,8 @@
     <string name="settings">Settings</string>
     <string name="player_group">Player</string>
     <string name="subtitles_group">Subtitles</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_version_value">Version %1$s</string>
     <string name="player_engine">Player engine</string>
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>
@@ -85,6 +87,7 @@
     <string name="outro_marker">Outro marker</string>
     <string name="player_timeline">Playback timeline</string>
     <string name="player_timeline_preview">Timeline preview at %1$s</string>
+    <string name="player_drag_seek_preview">Seek preview: %1$s of %2$s</string>
     <string name="player_quality">Quality</string>
     <string name="player_quality_auto">Auto</string>
     <string name="player_quality_bitrate">%1$d Mbps</string>

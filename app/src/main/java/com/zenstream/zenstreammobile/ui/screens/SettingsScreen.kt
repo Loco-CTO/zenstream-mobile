@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.PlayerEngine
@@ -55,18 +56,31 @@ import com.zenstream.zenstreammobile.ui.SettingsViewModel
 fun SettingsScreen(
     repository: JellyfinRepository,
     onBack: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel(
         key = "settings",
         factory = SettingsViewModel.Factory(repository),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    var section by remember { mutableStateOf(SettingsSection.Root) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings)) },
+                title = {
+                    Text(
+                        when (section) {
+                            SettingsSection.Root -> stringResource(R.string.settings)
+                            SettingsSection.Player -> stringResource(R.string.player_group)
+                            SettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
+                            SettingsSection.Version -> stringResource(R.string.settings_version)
+                        },
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (section == SettingsSection.Root) onBack() else section = SettingsSection.Root
+                    }) {
                         Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResource(R.string.back))
                     }
                 },
@@ -85,25 +99,69 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                item {
-                    SettingsGroup(title = stringResource(R.string.player_group)) {
-                        EngineSelector(state.playerEngine, vm::setPlayerEngine)
-                    }
-                }
-                item {
-                    SettingsGroup(title = stringResource(R.string.subtitles_group)) {
-                        SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
-                        if (state.subtitleSaveError) {
+                when (section) {
+                    SettingsSection.Root -> {
+                        item { SettingsMenuItem(stringResource(R.string.player_group)) { section = SettingsSection.Player } }
+                        item { SettingsMenuItem(stringResource(R.string.subtitles_group)) { section = SettingsSection.Subtitles } }
+                        item { SettingsMenuItem(stringResource(R.string.settings_version)) { section = SettingsSection.Version } }
+                        item {
+                            androidx.compose.material3.Button(
+                                onClick = onLogout,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.logout)) }
+                        }
+                        item {
                             Text(
-                                stringResource(R.string.subtitle_save_failed),
-                                color = MaterialThemeError,
-                                modifier = Modifier.padding(16.dp),
+                                stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    SettingsSection.Player -> item {
+                        SettingsGroup(title = stringResource(R.string.player_group)) {
+                            EngineSelector(state.playerEngine, vm::setPlayerEngine)
+                        }
+                    }
+                    SettingsSection.Subtitles -> item {
+                        SettingsGroup(title = stringResource(R.string.subtitles_group)) {
+                            SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
+                            if (state.subtitleSaveError) {
+                                Text(
+                                    stringResource(R.string.subtitle_save_failed),
+                                    color = MaterialThemeError,
+                                    modifier = Modifier.padding(16.dp),
+                                )
+                            }
+                        }
+                    }
+                    SettingsSection.Version -> item {
+                        SettingsGroup(title = stringResource(R.string.settings_version)) {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_version)) },
+                                supportingContent = { Text(BuildConfig.ZENSTREAM_VERSION) },
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private enum class SettingsSection { Root, Player, Subtitles, Version }
+
+@Composable
+private fun SettingsMenuItem(label: String, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
+        ListItem(
+            headlineContent = { Text(label) },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
