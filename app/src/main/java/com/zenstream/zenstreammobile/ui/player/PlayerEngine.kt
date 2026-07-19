@@ -194,26 +194,30 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private var view: MpvSurfaceView? = null
     private var pending: Pair<String, Double>? = null
     private val initialSeek = InitialSeekController()
-    private var pendingUrl: String? = null
     private var released = false
     private val ticker = object : Runnable {
         override fun run() {
             if (released) return
-            val position = MPVLib.getPropertyDouble("time-pos") ?: 0.0
-            val duration = MPVLib.getPropertyDouble("duration") ?: 0.0
-            val paused = MPVLib.getPropertyBoolean("pause") ?: true
-            val path = runCatching { MPVLib.getPropertyString("path") }.getOrNull()
-            if (duration > 0.0 && (pendingUrl == null || path == pendingUrl)) {
-                initialSeek.consume()?.let { MPVLib.command("seek", it.toString(), "absolute+exact") }
-                if (path == pendingUrl) pendingUrl = null
+            if (view == null) return
+            val position = runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
+            val duration = runCatching { MPVLib.getPropertyDouble("duration") }.getOrNull() ?: 0.0
+            val paused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: true
+            if (duration > 0.0) {
+                initialSeek.consume()?.let {
+                    MPVLib.command(arrayOf("seek", it.toString(), "absolute+exact"))
+                }
             }
             _state.value = _state.value.copy(
                 positionSeconds = position,
                 durationSeconds = duration,
-                bufferedSeconds = position + (MPVLib.getPropertyDouble("demuxer-cache-duration") ?: 0.0),
+                bufferedSeconds = position + (runCatching {
+                    MPVLib.getPropertyDouble("demuxer-cache-duration")
+                }.getOrNull() ?: 0.0),
                 isPlaying = !paused,
-                isBuffering = MPVLib.getPropertyBoolean("paused-for-cache") == true,
-                speed = (MPVLib.getPropertyDouble("speed") ?: 1.0).toFloat(),
+                isBuffering = runCatching {
+                    MPVLib.getPropertyBoolean("paused-for-cache") == true
+                }.getOrDefault(false),
+                speed = (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull() ?: 1.0).toFloat(),
                 ready = duration > 0,
             )
             handler.postDelayed(this, 250L)
@@ -223,87 +227,96 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     override fun createView(context: Context): View {
         check(!released) { "Playback engine has been released" }
         if (view == null) {
-            context.filesDir.resolve("mpv-config").mkdirs()
-            context.cacheDir.resolve("mpv-cache").mkdirs()
+            val configDir = context.filesDir.resolve("mpv-config").apply { mkdirs() }
+            val cacheDir = context.cacheDir.resolve("mpv-cache").apply { mkdirs() }
             view = MpvSurfaceView(context).also {
-                it.initialize(
-                    context.filesDir.resolve("mpv-config").absolutePath,
-                    context.cacheDir.resolve("mpv-cache").absolutePath,
-                )
+                it.initialize(configDir.absolutePath, cacheDir.absolutePath)
             }
             handler.post(ticker)
         }
         return view!!.also { pending?.let { (url, start) -> prepare(url, start) } }
     }
 
-    override fun currentPositionSeconds(): Double = runCatching {
-        if (released) return@runCatching null
-        MPVLib.getPropertyDouble("time-pos")
-    }.getOrNull()?.takeIf { it.isFinite() && it >= 0.0 } ?: _state.value.positionSeconds
+    override fun currentPositionSeconds(): Double {
+        if (released || view == null) return _state.value.positionSeconds
+        return runCatching { MPVLib.getPropertyDouble("time-pos") }
+            .getOrNull()
+            ?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: _state.value.positionSeconds
+    }
 
     override fun prepare(url: String, startPositionSeconds: Double) {
         if (released) return
         pending = url to startPositionSeconds
         initialSeek.schedule(startPositionSeconds)
-        pendingUrl = url
         val current = view ?: return
-        if (current.load(url)) MPVLib.setPropertyBoolean("pause", false)
+        pending = null
+        current.load(url)
+        if (current.hasSurface()) MPVLib.setPropertyBoolean("pause", false)
         _state.value = EngineState()
     }
 
     override fun play() {
-        if (!released) MPVLib.setPropertyBoolean("pause", false)
+        if (!released && view != null) MPVLib.setPropertyBoolean("pause", false)
     }
     override fun pause() {
-        if (!released) MPVLib.setPropertyBoolean("pause", true)
+        if (!released && view != null) MPVLib.setPropertyBoolean("pause", true)
     }
     override fun seekTo(positionSeconds: Double) {
         if (released) return
         initialSeek.cancel()
-        MPVLib.command("seek", max(0.0, positionSeconds).toString(), "absolute+exact")
+        if (view != null) {
+            MPVLib.command(arrayOf("seek", max(0.0, positionSeconds).toString(), "absolute+exact"))
+        }
     }
     override fun setSpeed(value: Float) {
-        if (!released) MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble())
+        if (!released && view != null) {
+            MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble())
+        }
     }
     override fun release() {
         if (released) return
         released = true
         handler.removeCallbacks(ticker)
         initialSeek.cancel()
-        pendingUrl = null
-        view?.requestDestroy()
-        view = null
+        view?.requestDestroy() ?: Unit
     }
 
-    private class MpvSurfaceView(context: Context) : BaseMPVView(context, EmptyAttributeSet) {
+    private class MpvSurfaceView(context: Context) : BaseMPVView(context, null) {
         private val lifecycle = MpvSurfaceLifecycle()
+        private var destroyAfterSurfaceTeardown = false
 
         override fun initOptions() {
-            MPVLib.setOptionString("vo", "gpu")
-            MPVLib.setOptionString("hwdec", "auto-safe")
-            mpvCaptionOptions.forEach { (name, value) -> MPVLib.setOptionString(name, value) }
+            MPVLib.setOptionString("profile", "fast")
+            MPVLib.setOptionString("vo", "gpu-next")
+            MPVLib.setOptionString("ao", "aaudio")
+            MPVLib.setOptionString("gpu-context", "android")
+            MPVLib.setOptionString("opengl-es", "yes")
+            MPVLib.setOptionString("hwdec", "mediacodec")
+            MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+            MPVLib.setOptionString("keep-open", "always")
             MPVLib.setOptionString("audio-client-name", "ZenStream")
+            mpvCaptionOptions.forEach { (name, value) -> MPVLib.setOptionString(name, value) }
         }
 
-        override fun postInitOptions() = Unit
+        override fun postInitOptions() {
+            setVo("gpu-next")
+        }
+
         override fun observeProperties() = Unit
 
-        fun load(url: String): Boolean {
+        fun hasSurface(): Boolean = lifecycle.hasSurface()
+
+        fun load(url: String) {
             if (lifecycle.hasSurface()) {
-                MPVLib.command("loadfile", url, "replace")
-                return true
+                MPVLib.command(arrayOf("loadfile", url, "replace"))
+            } else {
+                playFile(url)
             }
-            playFile(url)
-            return false
         }
 
-        fun requestDestroy() {
-            if (lifecycle.requestDestroy()) destroyNow()
-        }
-
-        private fun destroyNow() {
-            if (!lifecycle.markDestroyed()) return
-            super.destroy()
+        override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
+            if (lifecycle.canUseSurface()) super.surfaceChanged(holder, format, width, height)
         }
 
         override fun surfaceCreated(holder: android.view.SurfaceHolder) {
@@ -315,39 +328,18 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
             if (!lifecycle.canUseSurface()) return
-            val destroyAfterSurfaceTeardown = lifecycle.markSurfaceDestroyed()
+            destroyAfterSurfaceTeardown = lifecycle.markSurfaceDestroyed()
             super.surfaceDestroyed(holder)
-            if (destroyAfterSurfaceTeardown) {
-                // Let the surface callback finish before destroying libmpv. The
-                // native renderer can still be using the surface during the callback.
-                post(::destroyNow)
-            }
+            if (destroyAfterSurfaceTeardown) post { destroyNow() }
         }
-    }
 
-    private object EmptyAttributeSet : android.util.AttributeSet {
-        override fun getAttributeCount() = 0
-        override fun getAttributeName(index: Int): String? = null
-        override fun getAttributeValue(index: Int): String? = null
-        override fun getAttributeValue(namespace: String?, name: String): String? = null
-        override fun getAttributeResourceValue(namespace: String?, name: String, defaultValue: Int) = defaultValue
-        override fun getAttributeResourceValue(index: Int, defaultValue: Int) = defaultValue
-        override fun getAttributeIntValue(namespace: String?, name: String, defaultValue: Int) = defaultValue
-        override fun getAttributeIntValue(index: Int, defaultValue: Int) = defaultValue
-        override fun getAttributeUnsignedIntValue(namespace: String?, name: String, defaultValue: Int) = defaultValue
-        override fun getAttributeUnsignedIntValue(index: Int, defaultValue: Int) = defaultValue
-        override fun getAttributeBooleanValue(namespace: String?, name: String, defaultValue: Boolean) = defaultValue
-        override fun getAttributeBooleanValue(index: Int, defaultValue: Boolean) = defaultValue
-        override fun getAttributeFloatValue(namespace: String?, name: String, defaultValue: Float) = defaultValue
-        override fun getAttributeFloatValue(index: Int, defaultValue: Float) = defaultValue
-        override fun getAttributeListValue(namespace: String?, attribute: String, options: Array<out String>, defaultValue: Int) = defaultValue
-        override fun getAttributeListValue(index: Int, options: Array<out String>, defaultValue: Int) = defaultValue
-        override fun getAttributeNameResource(index: Int) = 0
-        override fun getPositionDescription() = ""
-        override fun getIdAttribute(): String? = null
-        override fun getClassAttribute(): String? = null
-        override fun getIdAttributeResourceValue(defaultValue: Int) = defaultValue
-        override fun getStyleAttribute() = 0
+        fun requestDestroy() {
+            if (lifecycle.requestDestroy()) destroyNow()
+        }
+
+        private fun destroyNow() {
+            if (lifecycle.markDestroyed()) super.destroy()
+        }
     }
 }
 
