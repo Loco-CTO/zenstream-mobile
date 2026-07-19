@@ -28,6 +28,7 @@
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:resizeableActivity="false"
             android:screenOrientation="landscape"
+            android:supportsPictureInPicture="true"
             android:exported="false">
             <property
                 android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
