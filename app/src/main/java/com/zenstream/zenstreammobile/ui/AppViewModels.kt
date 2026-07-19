@@ -6,14 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.JellyfinException
 import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.LibraryDataSource
+import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
-import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.SortOrder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -277,35 +281,60 @@ data class LibraryUiState(
     val loading: Boolean = true,
     val libraries: List<Library> = emptyList(),
     val selected: Library? = null,
-    val data: LibraryData? = null,
+    val sort: LibrarySort = LibrarySort(),
+    val items: List<MediaItem> = emptyList(),
+    val totalRecordCount: Int = 0,
+    val loadingMore: Boolean = false,
     val error: Boolean = false,
+    val loadMoreError: Boolean = false,
 )
 
 class LibraryViewModel(
-    private val repository: JellyfinRepository,
+    private val repository: LibraryDataSource,
     private val session: AuthSession
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState = _uiState.asStateFlow()
+    private var requestGeneration = 0L
+    private var requestJob: Job? = null
 
     init {
         loadLibraries()
     }
 
     fun loadLibraries(preferredLibraryId: String? = null) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true, error = false)
-            runCatching { repository.libraries(session) }
+        requestJob?.cancel()
+        val generation = ++requestGeneration
+        _uiState.value = _uiState.value.copy(
+            loading = true,
+            error = false,
+            loadMoreError = false,
+        )
+        requestJob = viewModelScope.launch {
+            val result = runCatching { repository.libraries(session) }
+            if (generation != requestGeneration) return@launch
+            result
                 .onSuccess { libraries ->
+                    val currentId = _uiState.value.selected?.id
                     val selected = libraries.firstOrNull { it.id == preferredLibraryId }
+                        ?: libraries.firstOrNull { it.id == currentId }
                         ?: libraries.firstOrNull()
                     _uiState.value = _uiState.value.copy(
                         loading = false,
                         libraries = libraries,
                         selected = selected,
-                        data = null,
+                        items = emptyList(),
+                        totalRecordCount = 0,
                     )
-                    selected?.let(::select)
+                    selected?.let { library ->
+                        viewModelScope.launch {
+                            val storedSort = repository.cachedLibrarySort(session.userId, library.id)
+                                ?: LibrarySort()
+                            if (generation != requestGeneration) return@launch
+                            _uiState.update { it.copy(sort = storedSort) }
+                            loadFirstPage(library, generation, storedSort)
+                        }
+                    }
                 }
                 .onFailure {
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
@@ -317,18 +346,125 @@ class LibraryViewModel(
     fun refresh() = loadLibraries(_uiState.value.selected?.id)
 
     fun select(library: Library) {
-        _uiState.value = _uiState.value.copy(selected = library, data = null, loading = true)
-        viewModelScope.launch {
-            runCatching { repository.library(session, library) }
-                .onSuccess { _uiState.value = _uiState.value.copy(loading = false, data = it) }
+        if (_uiState.value.selected?.id == library.id && !_uiState.value.loading) return
+        requestJob?.cancel()
+        val generation = ++requestGeneration
+        _uiState.value = _uiState.value.copy(
+            selected = library,
+            loading = true,
+            error = false,
+            loadMoreError = false,
+            items = emptyList(),
+            totalRecordCount = 0,
+            sort = LibrarySort(),
+        )
+        requestJob = viewModelScope.launch {
+            val storedSort = repository.cachedLibrarySort(session.userId, library.id)
+                ?: LibrarySort()
+            if (generation != requestGeneration) return@launch
+            _uiState.update { it.copy(sort = storedSort) }
+            loadFirstPage(library, generation, storedSort)
+        }
+    }
+
+    fun setSort(sort: LibrarySort) {
+        val library = _uiState.value.selected ?: return
+        if (_uiState.value.sort == sort) return
+        requestJob?.cancel()
+        val generation = ++requestGeneration
+        _uiState.value = _uiState.value.copy(
+            sort = sort,
+            loading = true,
+            error = false,
+            loadMoreError = false,
+            items = emptyList(),
+            totalRecordCount = 0,
+        )
+        requestJob = viewModelScope.launch {
+            repository.saveLibrarySort(session.userId, library.id, sort)
+            if (generation != requestGeneration) return@launch
+            loadFirstPage(library, generation, sort)
+        }
+    }
+
+    fun loadMore() {
+        val state = _uiState.value
+        val library = state.selected ?: return
+        if (state.loading || state.loadingMore || state.items.size >= state.totalRecordCount) return
+        val generation = requestGeneration
+        val startIndex = state.items.size
+        _uiState.value = state.copy(loadingMore = true, loadMoreError = false)
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            runCatching {
+                repository.libraryPage(
+                    session,
+                    library,
+                    startIndex = startIndex,
+                    limit = LIBRARY_PAGE_SIZE,
+                    sort = _uiState.value.sort,
+                )
+            }
+                .onSuccess { page ->
+                    if (generation != requestGeneration) return@onSuccess
+                    _uiState.update { current ->
+                        current.copy(
+                            items = uniqueItems(current.items + page.items),
+                            totalRecordCount = page.totalRecordCount,
+                            loadingMore = false,
+                            loadMoreError = false,
+                        )
+                    }
+                }
                 .onFailure {
+                    if (generation != requestGeneration) return@onFailure
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
-                    _uiState.value = _uiState.value.copy(loading = false, error = true)
+                    _uiState.update { current ->
+                        current.copy(loadingMore = false, loadMoreError = true)
+                    }
                 }
         }
     }
 
-    class Factory(private val repository: JellyfinRepository, private val session: AuthSession) :
+    private suspend fun loadFirstPage(
+        library: Library,
+        generation: Long,
+        sort: LibrarySort = _uiState.value.sort,
+    ) {
+        runCatching {
+            repository.libraryPage(
+                session,
+                library,
+                startIndex = 0,
+                limit = LIBRARY_PAGE_SIZE,
+                sort = sort,
+            )
+        }
+            .onSuccess { page ->
+                if (generation != requestGeneration) return@onSuccess
+                _uiState.update {
+                    it.copy(
+                        loading = false,
+                        items = uniqueItems(page.items),
+                        totalRecordCount = page.totalRecordCount,
+                        error = false,
+                        loadMoreError = false,
+                    )
+                }
+            }
+            .onFailure {
+                if (generation != requestGeneration) return@onFailure
+                if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                _uiState.update { current -> current.copy(loading = false, error = true) }
+            }
+    }
+
+    private fun uniqueItems(items: List<MediaItem>): List<MediaItem> {
+        val seen = HashSet<String>()
+        return items.filter { seen.add(it.id) }
+    }
+
+    class Factory(private val repository: LibraryDataSource, private val session: AuthSession) :
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -344,14 +480,16 @@ data class SearchUiState(
 )
 
 class SearchViewModel(
-    private val repository: JellyfinRepository,
+    private val repository: SearchDataSource,
     private val session: AuthSession
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState = _uiState.asStateFlow()
     private var searchJob: Job? = null
+    private var requestGeneration = 0L
 
     fun updateQuery(value: String) {
+        val generation = ++requestGeneration
         _uiState.value = _uiState.value.copy(
             query = value,
             loading = value.trim().length >= 2,
@@ -364,28 +502,70 @@ class SearchViewModel(
         }
         searchJob = viewModelScope.launch {
             delay(300)
-            _uiState.value = _uiState.value.copy(loading = true)
-            runCatching { repository.search(session, value) }
-                .onSuccess { _uiState.value = _uiState.value.copy(loading = false, results = it) }
-                .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
-                    _uiState.value = _uiState.value.copy(loading = false, error = true)
-                }
+            search(generation, value)
         }
     }
 
-    fun refresh() {
+    fun retry() {
         val query = _uiState.value.query
-        if (query.trim().length >= 2) updateQuery(query)
+        if (query.trim().length < 2) return
+        searchJob?.cancel()
+        val generation = ++requestGeneration
+        searchJob = viewModelScope.launch { search(generation, query) }
     }
 
-    class Factory(private val repository: JellyfinRepository, private val session: AuthSession) :
+    private suspend fun search(generation: Long, query: String) {
+        if (generation != requestGeneration) return
+        _uiState.value = _uiState.value.copy(loading = true)
+        runCatching { repository.search(session, query) }
+            .onSuccess {
+                if (generation != requestGeneration) return@onSuccess
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    results = rankSearchResults(it, query),
+                    error = false,
+                )
+            }
+            .onFailure {
+                if (generation != requestGeneration) return@onFailure
+                if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                _uiState.value = _uiState.value.copy(loading = false, error = true)
+            }
+    }
+
+    fun refresh() {
+        retry()
+    }
+
+    class Factory(private val repository: SearchDataSource, private val session: AuthSession) :
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             SearchViewModel(repository, session) as T
     }
 }
+
+internal fun rankSearchResults(items: List<MediaItem>, query: String): List<MediaItem> {
+    val terms = query.trim().lowercase().split(Regex("\\s+"))
+        .filter(String::isNotBlank)
+    val normalizedQuery = terms.joinToString(" ")
+    return items.mapIndexed { index, item ->
+        val title = item.name.trim().lowercase()
+        val words = title.split(Regex("\\s+"))
+        val score = when {
+            title == normalizedQuery -> 1000
+            title.startsWith(normalizedQuery) -> 700
+            terms.all { term -> words.any { it.startsWith(term) } } -> 500
+            terms.all(title::contains) -> 300
+            else -> terms.sumOf { term -> if (title.contains(term)) 1 else 0 } * 50
+        }
+        Triple(index, score, item)
+    }
+        .sortedWith(compareByDescending<Triple<Int, Int, MediaItem>> { it.second }.thenBy { it.first })
+        .map { it.third }
+}
+
+private const val LIBRARY_PAGE_SIZE = 40
 
 data class DetailUiState(
     val loading: Boolean = true,
