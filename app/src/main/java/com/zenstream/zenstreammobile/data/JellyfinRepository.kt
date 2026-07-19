@@ -5,6 +5,8 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
@@ -72,7 +74,21 @@ class JellyfinRepository(
         library: com.zenstream.zenstreammobile.model.Library
     ) = api.fetchLibraryData(session, library)
 
+    suspend fun libraryPage(
+        session: AuthSession,
+        library: Library,
+        startIndex: Int,
+        limit: Int,
+        sort: LibrarySort,
+    ): PagedLibrary = api.fetchLibraryPage(session, library, startIndex, limit, sort)
+
     suspend fun search(session: AuthSession, query: String) = api.search(session, query)
+
+    suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? =
+        sessionStore.cachedLibrarySort(userId, libraryId)
+
+    suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) =
+        sessionStore.cacheLibrarySort(userId, libraryId, sort)
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 

@@ -8,8 +8,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,6 +54,7 @@ class SessionStore(
         val locale = stringPreferencesKey("locale")
         val playerEngine = stringPreferencesKey("player_engine")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
+        val librarySorts = stringPreferencesKey("library_sorts")
     }
 
     val serverUrl: Flow<String?> = dataStore.data.map { it[Keys.serverUrl] }
@@ -132,6 +137,24 @@ class SessionStore(
         dataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
 
+    suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? {
+        val preferences = dataStore.data.first()
+        val stored = preferences[Keys.librarySorts].orEmpty()
+        if (stored.isBlank()) return null
+        val key = librarySortKey(userId, libraryId)
+        val value = runCatching { JSONObject(stored).optJSONObject(key) }.getOrNull()
+            ?: return null
+        return runCatching { librarySortFromJson(value) }.getOrNull()
+    }
+
+    suspend fun cacheLibrarySort(userId: String, libraryId: String, sort: LibrarySort) {
+        val current = dataStore.data.first()[Keys.librarySorts]
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: JSONObject()
+        current.put(librarySortKey(userId, libraryId), librarySortToJson(sort))
+        dataStore.edit { it[Keys.librarySorts] = current.toString() }
+    }
+
     suspend fun cachedSubtitleStyle(): SubtitleStyle? {
         val preferences = dataStore.data.first()
         val stored = preferences[Keys.subtitleStyle]
@@ -160,11 +183,27 @@ class SessionStore(
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.locale)
+            it.remove(Keys.librarySorts)
         }
     }
 
     suspend fun currentServerUrl(): String? = serverUrl.first()
 }
+
+private fun librarySortKey(userId: String, libraryId: String): String = "$userId\u0000$libraryId"
+
+private fun librarySortToJson(sort: LibrarySort): JSONObject = JSONObject()
+    .put("sortBy", sort.sortBy.name)
+    .put("sortOrder", sort.sortOrder.name)
+
+private fun librarySortFromJson(value: JSONObject): LibrarySort = LibrarySort(
+    sortBy = runCatching {
+        LibrarySortBy.valueOf(value.optString("sortBy"))
+    }.getOrDefault(LibrarySortBy.CommunityRating),
+    sortOrder = runCatching {
+        SortOrder.valueOf(value.optString("sortOrder"))
+    }.getOrDefault(SortOrder.Descending),
+)
 
 internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =
     preferences.asMap()
