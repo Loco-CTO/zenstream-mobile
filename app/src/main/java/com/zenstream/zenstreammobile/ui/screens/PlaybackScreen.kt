@@ -3,8 +3,11 @@ package com.zenstream.zenstreammobile.ui.screens
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import android.util.Rational
+import android.view.ViewTreeObserver
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,24 +93,30 @@ fun PlaybackScreen(
         factory = PlaybackViewModel.Factory(repository, session, orchestratorUrl, itemId, context),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<PlayerMenu?>(null) }
 
-    DisposableEffect(context) {
-        val activity = context as? Activity
-        val previousOrientation = activity?.requestedOrientation
-        activity?.let { enterPlaybackMode(it) }
+    val activity = remember(context) { context.findActivity() }
+    val playbackWindow = remember(activity) { activity?.let(::PlaybackWindowController) }
+    DisposableEffect(activity, playbackWindow) {
+        val decorView = activity?.window?.decorView
+        val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus) playbackWindow?.reapply()
+        }
+        decorView?.viewTreeObserver?.addOnWindowFocusChangeListener(focusListener)
+        playbackWindow?.enter()
         onDispose {
             vm.onPause()
-            activity?.let {
-                exitPlaybackMode(it, previousOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+            if (decorView?.viewTreeObserver?.isAlive == true) {
+                decorView.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
             }
+            playbackWindow?.exit()
         }
     }
 
     LaunchedEffect(controlsVisible, controlsLocked, menu, state.engine.isPlaying) {
-        if (controlsVisible && !controlsLocked && menu == null && state.engine.isPlaying) {
+        if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, menu != null, state.engine.isPlaying)) {
             delay(4_500)
             controlsVisible = false
         }
@@ -210,7 +219,7 @@ fun PlaybackScreen(
                     }
                     if (!controlsLocked) {
                         PlayerMenuButton(Icons.Default.FitScreen, stringResourceCompat(R.string.player_fit)) {
-                            enterPlaybackMode(context as? Activity)
+                            playbackWindow?.reapply()
                         }
                         PlayerMenuButton(Icons.Default.Speed, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
                         PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
@@ -354,20 +363,35 @@ private fun enterPip(context: android.content.Context) {
     }
 }
 
-private fun enterPlaybackMode(activity: Activity?) {
-    activity ?: return
-    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-    WindowCompat.setDecorFitsSystemWindows(activity.window, false)
-    WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-        hide(WindowInsetsCompat.Type.systemBars())
-        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+private class PlaybackWindowController(private val activity: Activity) {
+    private val previousOrientation = activity.requestedOrientation
+
+    fun enter() {
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        reapply()
+    }
+
+    fun reapply() {
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    fun exit() {
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            .show(WindowInsetsCompat.Type.systemBars())
+        // MainActivity uses edge-to-edge for the rest of the app as well.
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        activity.requestedOrientation = previousOrientation
     }
 }
 
-private fun exitPlaybackMode(activity: Activity, previousOrientation: Int) {
-    WindowCompat.getInsetsController(activity.window, activity.window.decorView).show(WindowInsetsCompat.Type.systemBars())
-    WindowCompat.setDecorFitsSystemWindows(activity.window, true)
-    activity.requestedOrientation = previousOrientation
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun playbackTitle(state: com.zenstream.zenstreammobile.ui.PlaybackUiState): String {
@@ -384,6 +408,13 @@ private fun formatTime(seconds: Double): String {
     val total = seconds.toInt().coerceAtLeast(0)
     return "%d:%02d".format(total / 60, total % 60)
 }
+
+internal fun shouldAutoHidePlaybackControls(
+    visible: Boolean,
+    locked: Boolean,
+    menuOpen: Boolean,
+    isPlaying: Boolean,
+): Boolean = visible && !locked && !menuOpen && isPlaying
 
 @Composable
 private fun stringResourceCompat(id: Int): String = androidx.compose.ui.res.stringResource(id)
