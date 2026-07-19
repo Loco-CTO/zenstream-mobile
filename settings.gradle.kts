@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZenStream Mobile"
+rootProject.name = "ZenStream"
 include(":app")

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ZenStream Mobile</string>
+    <string name="app_name">ZenStream</string>
     <string name="server_setup_title">Connect to ZenStream</string>
     <string name="server_setup_description">Enter your ZenStream Orchestrator address to get started.</string>
     <string name="server_url">Server URL</string>

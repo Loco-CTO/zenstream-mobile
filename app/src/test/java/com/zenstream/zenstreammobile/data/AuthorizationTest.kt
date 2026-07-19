@@ -9,7 +9,7 @@ class AuthorizationTest {
     fun anonymousHeaderContainsMobileIdentity() {
         val header = JellyfinApi.authorizationHeader(null, "device-1")
         assertTrue(header.startsWith("MediaBrowser "))
-        assertTrue(header.contains("Client=\"ZenStream Mobile\""))
+        assertTrue(header.contains("Client=\"ZenStream\""))
         assertTrue(header.contains("DeviceId=\"device-1\""))
         assertFalse(header.contains("Token=\""))
     }

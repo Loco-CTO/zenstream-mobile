@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ZenStream Mobile</string>
+    <string name="app_name">ZenStream</string>
     <string name="server_setup_title">ZenStreamに接続</string>
     <string name="server_setup_description">開始するには、ZenStreamオーケストレーターのアドレスを入力してください。</string>
     <string name="server_url">サーバーURL</string>
