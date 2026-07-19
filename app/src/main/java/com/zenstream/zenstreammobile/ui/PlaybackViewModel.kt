@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
+import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
 import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.data.playbackLocalPositionSeconds
 import com.zenstream.zenstreammobile.data.playbackStreamStartPositionSeconds
@@ -286,9 +287,14 @@ class PlaybackViewModel(
             }.getOrNull() ?: return@launch
             if (
                 loadGeneration != playbackGeneration ||
-                requestGeneration != subtitleGeneration ||
-                _uiState.value.selectedSubtitle != selected ||
-                _uiState.value.playback?.source?.id != sourceId
+                !isCurrentSubtitleRequest(
+                    requestGeneration = requestGeneration,
+                    currentGeneration = subtitleGeneration,
+                    requestedTrack = selected,
+                    currentTrack = _uiState.value.selectedSubtitle,
+                    requestedSourceId = sourceId,
+                    currentSourceId = _uiState.value.playback?.source?.id,
+                )
             ) return@launch
             _uiState.value = _uiState.value.copy(subtitleCues = parseWebVttCues(body))
         }

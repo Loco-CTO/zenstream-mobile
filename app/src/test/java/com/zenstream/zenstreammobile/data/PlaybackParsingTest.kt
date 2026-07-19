@@ -150,9 +150,17 @@ class PlaybackParsingTest {
         )
         assertEquals(
             "resume cue",
-            activeSubtitleCues(cues, positionSeconds = 4.9, timelineOriginSeconds = 120.0).single().text,
+            activeSubtitleCues(cues, positionSeconds = 5.0, timelineOriginSeconds = 120.0).single().text,
         )
         assertTrue(activeSubtitleCues(cues, positionSeconds = 5.0, timelineOriginSeconds = 125.0).isEmpty())
+    }
+
+    @Test
+    fun discardsSubtitleResponsesFromOlderTrackOrPlaybackGenerations() {
+        assertTrue(isCurrentSubtitleRequest(3L, 3L, 2, 2, "source-1", "source-1"))
+        assertFalse(isCurrentSubtitleRequest(2L, 3L, 2, 2, "source-1", "source-1"))
+        assertFalse(isCurrentSubtitleRequest(3L, 3L, 2, 3, "source-1", "source-1"))
+        assertFalse(isCurrentSubtitleRequest(3L, 3L, 2, 2, "source-1", "source-2"))
     }
 
     @Test

@@ -38,6 +38,17 @@ fun activeSubtitleCues(
     return cues.filter { cue -> time >= cue.startSeconds && time < cue.endSeconds }
 }
 
+internal fun isCurrentSubtitleRequest(
+    requestGeneration: Long,
+    currentGeneration: Long,
+    requestedTrack: Int,
+    currentTrack: Int?,
+    requestedSourceId: String?,
+    currentSourceId: String?,
+): Boolean = requestGeneration == currentGeneration &&
+    requestedTrack == currentTrack &&
+    requestedSourceId == currentSourceId
+
 private fun parseVttTimestamp(value: String): Double? {
     val parts = value.trim().split(':')
     if (parts.size !in 2..3) return null
