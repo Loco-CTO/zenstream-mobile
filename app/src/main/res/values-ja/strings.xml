@@ -58,8 +58,11 @@
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>
     <string name="audio_track">音声トラック</string>
+    <string name="player_audio_track_format">音声トラック %1$d</string>
     <string name="subtitle_track">字幕トラック</string>
+    <string name="player_subtitle_track_format">字幕トラック %1$d</string>
     <string name="subtitles_off">字幕オフ</string>
+    <string name="player_selected_option">選択中</string>
     <string name="player_pip">ピクチャー イン ピクチャー</string>
     <string name="player_lock">プレーヤー操作をロック</string>
     <string name="player_unlock">プレーヤー操作のロックを解除</string>
@@ -72,7 +75,10 @@
     <string name="player_volume">音量</string>
     <string name="player_fullscreen">全画面</string>
     <string name="player_speed">再生速度</string>
+    <string name="player_speed_value">%1$s倍</string>
     <string name="player_quality">画質</string>
+    <string name="player_quality_auto">自動</string>
+    <string name="player_quality_bitrate">%1$d Mbps</string>
     <string name="player_fallback">Media3を使用</string>
     <string name="mpv_initialization_failed">MPVを初期化できませんでした。</string>
     <string name="subtitle_font">フォント</string>

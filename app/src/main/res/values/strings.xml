@@ -58,8 +58,11 @@
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>
     <string name="audio_track">Audio track</string>
+    <string name="player_audio_track_format">Audio track %1$d</string>
     <string name="subtitle_track">Subtitle track</string>
+    <string name="player_subtitle_track_format">Subtitle track %1$d</string>
     <string name="subtitles_off">Subtitles off</string>
+    <string name="player_selected_option">Selected option</string>
     <string name="player_pip">Picture in picture</string>
     <string name="player_lock">Lock player controls</string>
     <string name="player_unlock">Unlock player controls</string>
@@ -72,12 +75,15 @@
     <string name="player_volume">Volume</string>
     <string name="player_fullscreen">Fullscreen</string>
     <string name="player_speed">Playback speed</string>
+    <string name="player_speed_value">%1$s×</string>
     <string name="skip_intro">Skip intro</string>
     <string name="skip_outro">Skip outro</string>
     <string name="intro_marker">Intro marker</string>
     <string name="outro_marker">Outro marker</string>
     <string name="player_timeline">Playback timeline</string>
     <string name="player_quality">Quality</string>
+    <string name="player_quality_auto">Auto</string>
+    <string name="player_quality_bitrate">%1$d Mbps</string>
     <string name="player_fallback">Use Media3</string>
     <string name="mpv_initialization_failed">MPV could not be initialized.</string>
     <string name="subtitle_font">Font</string>
