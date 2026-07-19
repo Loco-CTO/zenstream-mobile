@@ -291,6 +291,7 @@ fun PlaybackScreen(
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     PlaybackProgress(
+                        session = session,
                         positionSeconds = displayedPosition,
                         durationSeconds = state.engine.durationSeconds,
                         bufferedSeconds = state.engine.bufferedSeconds,
@@ -377,6 +378,7 @@ internal fun timelinePositionAt(x: Float, width: Float, duration: Double): Doubl
 
 @Composable
 private fun PlaybackProgress(
+    session: AuthSession,
     positionSeconds: Double,
     durationSeconds: Double,
     bufferedSeconds: Double,
@@ -534,7 +536,7 @@ private fun TrickplayBubble(
         ) {
             AsyncImage(
                 model = request,
-                contentDescription = stringResource(
+                contentDescription = stringResourceCompat(
                     R.string.player_timeline_preview,
                     formatTime(position.positionSeconds),
                 ),
