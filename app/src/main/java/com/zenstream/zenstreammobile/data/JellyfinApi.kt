@@ -77,7 +77,11 @@ class JellyfinApi(
         val sourceJson = json.optJSONArray("MediaSources")?.optJSONObject(0)
             ?: error("Jellyfin did not return a media source")
         val source = parseMediaSource(sourceJson)
-        val playSessionId = playbackSessionIdFromInfo(json, session, source)
+        val playSessionId = playbackSessionIdFromInfo(
+            json.optString("PlaySessionId"),
+            session,
+            source,
+        )
         PlaybackData(
             item = item,
             source = source,

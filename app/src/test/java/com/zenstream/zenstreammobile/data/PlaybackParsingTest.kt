@@ -8,7 +8,6 @@ import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
-import org.json.JSONObject
 
 class PlaybackParsingTest {
     @Test
@@ -21,7 +20,7 @@ class PlaybackParsingTest {
 
         assertEquals(
             "info-session",
-            playbackSessionIdFromInfo(JSONObject("{\"PlaySessionId\":\"info-session\"}"), session, source),
+            playbackSessionIdFromInfo("info-session", session, source),
         )
     }
 
@@ -33,7 +32,7 @@ class PlaybackParsingTest {
             transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
         )
 
-        assertEquals("url-session", playbackSessionIdFromInfo(JSONObject(), session, source))
+        assertEquals("url-session", playbackSessionIdFromInfo(null, session, source))
     }
 
     @Test

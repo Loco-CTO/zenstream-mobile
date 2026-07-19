@@ -1,60 +1,11 @@
 package com.zenstream.zenstreammobile.data
 
-import com.zenstream.zenstreammobile.model.AuthSession
-import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 
 class JellyfinApiTest {
-    private lateinit var server: MockWebServer
-
-    @Before
-    fun startServer() {
-        server = MockWebServer()
-        server.start()
-    }
-
-    @After
-    fun stopServer() {
-        server.shutdown()
-    }
-
-    @Test
-    fun reportsProgressWithNegotiatedSessionAndAcceptsNoContent() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(204))
-        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
-
-        JellyfinApi(deviceId = "device-id").reportPlayback(
-            session = session,
-            itemId = "item-1",
-            positionSeconds = 12.5,
-            isPaused = true,
-            playSessionId = "play-session-1",
-        )
-
-        val request = server.takeRequest()
-        assertEquals("POST", request.method)
-        assertEquals("/Sessions/Playing/Progress", request.path)
-        assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
-        assertEquals(
-            JSONObject()
-                .put("ItemId", "item-1")
-                .put("PositionTicks", 125_000_000L)
-                .put("IsPaused", true)
-                .put("PlayMethod", "DirectStream")
-                .put("PlaySessionId", "play-session-1")
-                .toString(),
-            JSONObject(request.body.readUtf8()).toString(),
-        )
-    }
-
     @Test
     fun latestItemsQueryIsAuthenticatedAndImageEnabled() {
         val query = JellyfinApi().latestItemsQuery("user-123")

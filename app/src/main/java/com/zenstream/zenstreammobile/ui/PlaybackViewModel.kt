@@ -24,6 +24,10 @@ import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,6 +88,7 @@ class PlaybackViewModel(
     private var engineJob: Job? = null
     private var progressJob: Job? = null
     private var progressFlushJob: Job? = null
+    private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var playbackLoadJob: Job? = null
     private var subtitleJob: Job? = null
     private var playbackGeneration = 0L
@@ -140,6 +145,7 @@ class PlaybackViewModel(
 
     private fun loadPlayback(options: PlaybackOptions = PlaybackOptions()) {
         val loadGeneration = ++playbackGeneration
+        progressFlushJob?.cancel()
         playbackLoadJob?.cancel()
         playbackLoadJob = viewModelScope.launch {
             val hasCurrentPlayback = _uiState.value.playback != null
@@ -331,7 +337,7 @@ class PlaybackViewModel(
         val snapshot = playbackProgressSnapshot()
         progressFlushJob?.cancel()
         if (snapshot != null) {
-            progressFlushJob = viewModelScope.launch { reportProgress(snapshot) }
+            progressFlushJob = progressReportingScope.launch { reportProgress(snapshot) }
         }
     }
 
@@ -339,7 +345,9 @@ class PlaybackViewModel(
 
     override fun onCleared() {
         progressJob?.cancel()
-        progressFlushJob?.cancel()
+        progressFlushJob?.let { job ->
+            job.invokeOnCompletion { progressReportingScope.cancel() }
+        } ?: progressReportingScope.cancel()
         playbackLoadJob?.cancel()
         subtitleJob?.cancel()
         engineJob?.cancel()
