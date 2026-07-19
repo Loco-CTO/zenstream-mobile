@@ -57,7 +57,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -706,11 +708,11 @@ private fun TrickplayBubble(
             .background(Color.Black.copy(alpha = .9f)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
+        Layout(
             modifier = Modifier
                 .requiredSize(cellWidth, cellHeight)
                 .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
-        ) {
+            content = {
             AsyncImage(
                 model = request,
                 contentDescription = stringResourceCompat(
@@ -718,17 +720,22 @@ private fun TrickplayBubble(
                     formatTime(position.positionSeconds),
                 ),
                 contentScale = ContentScale.FillBounds,
-                modifier = Modifier
-                    // Jellyfin returns one sprite sheet per URL. Force the image
-                    // to its complete sheet size, then offset it inside the
-                    // clipped frame so only the selected thumbnail is visible.
-                    .requiredSize(width = spriteSize.first, height = spriteSize.second)
-                    .offset(
-                        x = -(cellWidth * preview.cellX),
-                        y = -(cellHeight * preview.cellY),
-                    ),
+                modifier = Modifier,
                 onError = { onError() },
             )
+            },
+        ) { measurables, _ ->
+            val frameWidth = cellWidth.roundToPx()
+            val frameHeight = cellHeight.roundToPx()
+            val sheetWidth = spriteSize.first.roundToPx()
+            val sheetHeight = spriteSize.second.roundToPx()
+            val image = measurables.single().measure(Constraints.fixed(sheetWidth, sheetHeight))
+            layout(frameWidth, frameHeight) {
+                image.place(
+                    -cellWidth.roundToPx() * preview.cellX,
+                    -cellHeight.roundToPx() * preview.cellY,
+                )
+            }
         }
         Text(
             formatTime(position.positionSeconds),
