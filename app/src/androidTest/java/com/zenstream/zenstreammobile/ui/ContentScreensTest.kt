@@ -92,8 +92,9 @@ class ContentScreensTest {
         items.forEach { item ->
             val bounds = composeRule.onNodeWithContentDescription("Play ${item.name}")
                 .getUnclippedBoundsInRoot()
-            assertTrue(bounds.width >= POSTER_CARD_MIN_WIDTH)
-            assertTrue(bounds.width <= POSTER_CARD_MAX_WIDTH)
+            val width = bounds.right - bounds.left
+            assertTrue(width >= POSTER_CARD_MIN_WIDTH)
+            assertTrue(width <= POSTER_CARD_MAX_WIDTH)
         }
     }
 
