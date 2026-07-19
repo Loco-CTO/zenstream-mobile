@@ -292,7 +292,7 @@ internal fun DetailTopBar(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = Color.White,
                     )
                 }
             }
