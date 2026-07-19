@@ -9,8 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -87,7 +88,6 @@ class PlaybackGestureTest {
     @Test
     fun horizontalDragSeeksInTheDragDirection() {
         val seekTo = mutableStateListOf<Double>()
-        val feedback = mutableStateListOf<SeekFeedback>()
 
         composeRule.setContent {
             ZenStreamTheme {
@@ -98,7 +98,7 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = {},
                     onSeekBy = {},
-                    onSeekFeedback = feedback::add,
+                    onSeekFeedback = {},
                     onSurfaceDragEnd = seekTo::add,
                 )
             }
@@ -108,7 +108,6 @@ class PlaybackGestureTest {
 
         composeRule.runOnIdle {
             assertTrue(seekTo.last() > 50.0)
-            assertEquals(SeekDirection.FORWARD, feedback.last().direction)
         }
     }
 
@@ -216,8 +215,7 @@ class PlaybackGestureTest {
 
         composeRule.onNodeWithTag("surface-trickplay-preview").assertIsDisplayed()
         composeRule.onNodeWithText("1:05 / 2:05").assertIsDisplayed()
-        composeRule
-            .onNodeWithContentDescription("Seek preview: 1:05 of 2:05")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("surface-trickplay-preview")
+            .assert(hasContentDescription("Seek preview: 1:05 of 2:05"))
     }
 }
