@@ -24,9 +24,14 @@ val semanticVersion = configuredValue("zenstreamVersion")
     ?: "0.0.1"
 val semanticVersionMatch = Regex("(\\d+)\\.(\\d+)\\.(\\d+)").matchEntire(semanticVersion)
     ?: error("zenstreamVersion must use semantic version format X.Y.Z")
+val semanticMinor = semanticVersionMatch.groupValues[2].toLong()
+val semanticPatch = semanticVersionMatch.groupValues[3].toLong()
+require(semanticMinor in 0..999L && semanticPatch in 0..999L) {
+    "zenstreamVersion minor and patch components must be below 1000"
+}
 val semanticVersionCode = semanticVersionMatch.groupValues[1].toLong() * 1_000_000L +
-    semanticVersionMatch.groupValues[2].toLong() * 1_000L +
-    semanticVersionMatch.groupValues[3].toLong()
+    semanticMinor * 1_000L +
+    semanticPatch
 require(semanticVersionCode in 1..2_100_000_000L) {
     "zenstreamVersion produces an Android versionCode outside the supported range"
 }
