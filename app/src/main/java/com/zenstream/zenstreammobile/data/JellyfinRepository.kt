@@ -98,20 +98,12 @@ class JellyfinRepository(
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
 
-    suspend fun loadSubtitleStyle(session: AuthSession, orchestratorUrl: String?): SubtitleStyle {
-        val cached = sessionStore.cachedSubtitleStyle(session.userId)
-        if (orchestratorUrl.isNullOrBlank()) return cached ?: DEFAULT_SUBTITLE_STYLE
-        return runCatching { orchestratorApi.fetchSubtitleStyle(orchestratorUrl, session.token) }
-            .onSuccess { sessionStore.cacheSubtitleStyle(session.userId, it) }
-            .getOrElse { cached ?: DEFAULT_SUBTITLE_STYLE }
-    }
+    suspend fun loadSubtitleStyle(): SubtitleStyle =
+        sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
 
-    suspend fun saveSubtitleStyle(session: AuthSession, orchestratorUrl: String?, style: SubtitleStyle): SubtitleStyle {
+    suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle {
         val normalized = normalizeSubtitleStyle(style)
-        sessionStore.cacheSubtitleStyle(session.userId, normalized)
-        if (orchestratorUrl.isNullOrBlank()) return normalized
-        return runCatching { orchestratorApi.saveSubtitleStyle(orchestratorUrl, session.token, normalized) }
-            .onSuccess { sessionStore.cacheSubtitleStyle(session.userId, it) }
-            .getOrElse { normalized }
+        sessionStore.cacheSubtitleStyle(normalized)
+        return normalized
     }
 }

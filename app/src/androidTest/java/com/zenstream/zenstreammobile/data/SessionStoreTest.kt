@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -27,5 +28,18 @@ class SessionStoreTest {
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.clearAll()
         assertNull(store.orchestratorUrl.first())
+    }
+
+    @Test
+    fun subtitleStyleIsDeviceLocalAndSurvivesSessionClears() = runBlocking {
+        val store = SessionStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        store.clearAll()
+        val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
+
+        store.cacheSubtitleStyle(style)
+        store.clearSession()
+        assertEquals(style, store.cachedSubtitleStyle())
+        store.clearAll()
+        assertEquals(style, store.cachedSubtitleStyle())
     }
 }

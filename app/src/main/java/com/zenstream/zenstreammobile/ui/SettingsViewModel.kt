@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
-import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +21,6 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     private val repository: JellyfinRepository,
-    private val session: AuthSession,
-    private val orchestratorUrl: String?,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -45,7 +42,7 @@ class SettingsViewModel(
 
     private suspend fun refreshSubtitleStyle() {
         _uiState.value = _uiState.value.copy(refreshing = true)
-        runCatching { repository.loadSubtitleStyle(session, orchestratorUrl) }
+        runCatching { repository.loadSubtitleStyle() }
             .onSuccess {
                 _uiState.value = _uiState.value.copy(
                     subtitleStyle = it,
@@ -65,18 +62,16 @@ class SettingsViewModel(
         val next = change(_uiState.value.subtitleStyle)
         _uiState.value = _uiState.value.copy(subtitleStyle = next, subtitleSaveError = false)
         viewModelScope.launch {
-            runCatching { repository.saveSubtitleStyle(session, orchestratorUrl, next) }
+            runCatching { repository.saveSubtitleStyle(next) }
                 .onFailure { _uiState.value = _uiState.value.copy(subtitleSaveError = true) }
         }
     }
 
     class Factory(
         private val repository: JellyfinRepository,
-        private val session: AuthSession,
-        private val orchestratorUrl: String?,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            SettingsViewModel(repository, session, orchestratorUrl) as T
+            SettingsViewModel(repository) as T
     }
 }

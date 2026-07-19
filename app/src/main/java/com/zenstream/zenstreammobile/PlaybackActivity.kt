@@ -82,7 +82,6 @@ class PlaybackActivity : ComponentActivity() {
                 finish()
                 return@launch
             }
-            val orchestratorUrl = repository.orchestratorUrl.first()
             val locale = repository.locale.first()
             setContent {
                 ZenStreamTheme {
@@ -90,7 +89,6 @@ class PlaybackActivity : ComponentActivity() {
                         PlaybackScreen(
                             repository = repository,
                             session = session,
-                            orchestratorUrl = orchestratorUrl,
                             itemId = args.itemId,
                             initialItemName = args.itemName,
                             onBack = ::finish,

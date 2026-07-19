@@ -5,8 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
-import org.json.JSONArray
-import org.json.JSONObject
+import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 
 class PlaybackParsingTest {
     @Test
@@ -121,6 +120,24 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun keepsSimultaneousSubtitleCuesAvailableForStackedRendering() {
+        val cues = listOf(
+            com.zenstream.zenstreammobile.model.SubtitleCue(1.0, 3.0, "top"),
+            com.zenstream.zenstreammobile.model.SubtitleCue(1.5, 2.5, "bottom"),
+        )
+
+        assertEquals(listOf("top", "bottom"), activeSubtitleCues(cues, 2.0).map { it.text })
+    }
+
+    @Test
+    fun subtitleOutlineOffsetsFollowTheConfiguredBorderSize() {
+        assertTrue(subtitleOutlineOffsets(0f).isEmpty())
+        assertEquals(8, subtitleOutlineOffsets(4f).size)
+        assertTrue(subtitleOutlineOffsets(4f).contains(-4 to 4))
+        assertTrue(subtitleOutlineOffsets(20f).all { (x, y) -> x in -8..8 && y in -8..8 })
+    }
+
+    @Test
     fun initialSeekIsConsumedOnlyOnceWhenTheEngineBecomesReady() {
         val seek = InitialSeekController()
         seek.schedule(42.0)
@@ -160,14 +177,10 @@ class PlaybackParsingTest {
 
     @Test
     fun parsesTypedMediaSegmentsFromItemsAndConvertsTicks() {
-        val markers = parsePlaybackMarkers(
-            JSONObject(
-                """
-                {"Items":[
-                  {"Type":"Intro","StartTicks":100000000,"EndTicks":250000000},
-                  {"Type":"Outro","StartTicks":800,"EndTicks":1200}
-                ]}
-                """.trimIndent()
+        val markers = normalizePlaybackMarkers(
+            listOf(
+                PlaybackMarkerInput("Intro", 100_000_000.0, 250_000_000.0),
+                PlaybackMarkerInput("Outro", 800.0, 1200.0),
             )
         )
 
@@ -179,12 +192,10 @@ class PlaybackParsingTest {
 
     @Test
     fun parsesLegacyIntroSkipperObjectShape() {
-        val markers = parsePlaybackMarkers(
-            JSONObject(
-                """
-                {"IntroStart":100000000,"IntroEnd":200000000,
-                 "CreditsStart":900000000,"CreditsEnd":950000000}
-                """.trimIndent()
+        val markers = normalizePlaybackMarkers(
+            listOf(
+                PlaybackMarkerInput("Intro", 100_000_000.0, 200_000_000.0),
+                PlaybackMarkerInput("Credits", 900_000_000.0, 950_000_000.0),
             )
         )
 
@@ -199,14 +210,10 @@ class PlaybackParsingTest {
             id = "episode-1",
             name = "Episode",
             runtimeTicks = 600_000_000L,
-            chapters = parseChapters(
-                JSONObject().put(
-                    "Chapters",
-                    JSONArray()
-                        .put(JSONObject().put("StartPositionTicks", 0L).put("Name", "Opening"))
-                        .put(JSONObject().put("StartPositionTicks", 120_000_000L).put("Name", "Story"))
-                        .put(JSONObject().put("StartPositionTicks", 500_000_000L).put("Name", "Ending Credits")),
-                )
+            chapters = listOf(
+                com.zenstream.zenstreammobile.model.MediaChapter(0L, "Opening"),
+                com.zenstream.zenstreammobile.model.MediaChapter(120_000_000L, "Story"),
+                com.zenstream.zenstreammobile.model.MediaChapter(500_000_000L, "Ending Credits"),
             ),
         )
 

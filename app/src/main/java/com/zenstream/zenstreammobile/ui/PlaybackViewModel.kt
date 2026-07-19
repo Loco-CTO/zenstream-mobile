@@ -60,7 +60,6 @@ data class PlaybackUiState(
 class PlaybackViewModel(
     private val repository: JellyfinRepository,
     private val session: AuthSession,
-    private val orchestratorUrl: String?,
     private val itemId: String,
     private val appContext: Context,
 ) : ViewModel() {
@@ -76,7 +75,7 @@ class PlaybackViewModel(
     init {
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
-            val subtitleStyle = repository.loadSubtitleStyle(session, orchestratorUrl)
+            val subtitleStyle = repository.loadSubtitleStyle()
             _uiState.value = _uiState.value.copy(engineType = engineType, subtitleStyle = subtitleStyle)
             createEngine(engineType)
             loadPlayback()
@@ -259,7 +258,7 @@ class PlaybackViewModel(
     fun updateSubtitleStyle(change: SubtitleStyle.() -> SubtitleStyle) {
         val next = change(_uiState.value.subtitleStyle)
         _uiState.value = _uiState.value.copy(subtitleStyle = next)
-        viewModelScope.launch { repository.saveSubtitleStyle(session, orchestratorUrl, next) }
+        viewModelScope.launch { repository.saveSubtitleStyle(next) }
     }
 
     fun onPause() {
@@ -279,13 +278,12 @@ class PlaybackViewModel(
     class Factory(
         private val repository: JellyfinRepository,
         private val session: AuthSession,
-        private val orchestratorUrl: String?,
         private val itemId: String,
         private val context: Context,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = PlaybackViewModel(
-            repository, session, orchestratorUrl, itemId, context.applicationContext
+            repository, session, itemId, context.applicationContext
         ) as T
     }
 }

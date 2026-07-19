@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -28,6 +29,7 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
         val username = stringPreferencesKey("username")
         val locale = stringPreferencesKey("locale")
         val playerEngine = stringPreferencesKey("player_engine")
+        val subtitleStyle = stringPreferencesKey("subtitle_style")
     }
 
     val serverUrl: Flow<String?> = context.sessionDataStore.data.map { it[Keys.serverUrl] }
@@ -107,15 +109,20 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
         context.sessionDataStore.edit { it[Keys.playerEngine] = engine.name }
     }
 
-    suspend fun cacheSubtitleStyle(userId: String, style: SubtitleStyle) {
-        context.sessionDataStore.edit {
-            it[stringPreferencesKey("subtitle_style_$userId")] = subtitleStyleToJson(style)
-        }
+    suspend fun cacheSubtitleStyle(style: SubtitleStyle) {
+        context.sessionDataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
 
-    suspend fun cachedSubtitleStyle(userId: String): SubtitleStyle? =
-        context.sessionDataStore.data.first()[stringPreferencesKey("subtitle_style_$userId")]
+    suspend fun cachedSubtitleStyle(): SubtitleStyle? {
+        val preferences = context.sessionDataStore.data.first()
+        val stored = preferences[Keys.subtitleStyle]
             ?.let { runCatching { subtitleStyleFromJson(it) }.getOrNull() }
+        if (stored != null) return stored
+
+        val legacy = legacySubtitleStyleFrom(preferences)
+        if (legacy != null) cacheSubtitleStyle(legacy)
+        return legacy
+    }
 
     suspend fun clearSession() {
         context.sessionDataStore.edit {
@@ -139,3 +146,16 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
 
     suspend fun currentServerUrl(): String? = serverUrl.first()
 }
+
+internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =
+    preferences.asMap()
+        .entries
+        .asSequence()
+        .filter { it.key.name.startsWith("subtitle_style_") }
+        .sortedBy { it.key.name }
+        .mapNotNull { (_, value) ->
+            (value as? String)?.let { encoded ->
+                runCatching { subtitleStyleFromJson(encoded) }.getOrNull()
+            }
+        }
+        .firstOrNull()

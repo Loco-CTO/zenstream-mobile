@@ -79,7 +79,7 @@ fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewMo
             onConfigured = appViewModel::configureServer,
         )
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
-        appState.session != null -> MainScaffold(repository, appState.session, appState.orchestratorUrl, appViewModel::logout)
+        appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
         else -> LoadingScreen()
     }
 }
@@ -96,7 +96,6 @@ private fun LoadingScreen() {
 private fun MainScaffold(
     repository: JellyfinRepository,
     session: AuthSession,
-    orchestratorUrl: String?,
     onLogout: () -> Unit
 ) {
     val navController = rememberNavController()
@@ -260,8 +259,6 @@ private fun MainScaffold(
             composable(SETTINGS) {
                 SettingsScreen(
                     repository = repository,
-                    session = session,
-                    orchestratorUrl = orchestratorUrl,
                     onBack = { navController.popBackStack() },
                 )
             }

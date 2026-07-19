@@ -91,7 +91,7 @@ class JellyfinApi(
         itemId: String,
         item: MediaItem,
     ): List<PlaybackSegment> {
-        val providerSegments = playbackMarkerPaths(itemId).asSequence()
+        val providerSegments = playbackMarkerPaths(android.net.Uri.encode(itemId)).asSequence()
             .mapNotNull { path ->
                 runCatching { parsePlaybackMarkers(requestMarkerPayload(session, path)) }.getOrNull()
             }
@@ -719,45 +719,39 @@ internal fun parsePlaybackMarkers(value: Any?): List<PlaybackSegment> {
         } ?: listOf(value)
         else -> emptyList()
     }
-    val typed = entries.mapNotNull(::parseTypedMarker)
+    val typed = normalizePlaybackMarkers(
+        entries.map { entry ->
+            PlaybackMarkerInput(
+                type = entry.optString("Type").ifBlank { null },
+                start = entry.numberValue("StartTicks", "StartTimeTicks"),
+                end = entry.numberValue("EndTicks", "EndTimeTicks"),
+            )
+        }
+    )
     if (typed.isNotEmpty()) return typed
     val root = value as? JSONObject ?: return emptyList()
     return listOfNotNull(
-        parseNamedMarker(
+        parseNamedMarkerInput(
             root,
-            PlaybackSegmentType.INTRO,
             listOf("intro", "introduction", "opening"),
             listOf("IntroStart", "IntroStartTicks", "StartTicks"),
             listOf("IntroEnd", "IntroEndTicks", "EndTicks"),
-        ),
-        parseNamedMarker(
+        )?.let { PlaybackMarkerInput("Intro", it.first, it.second) },
+        parseNamedMarkerInput(
             root,
-            PlaybackSegmentType.OUTRO,
             listOf("outro", "credits", "closing"),
             listOf("OutroStart", "CreditsStart", "CreditsStartTicks"),
             listOf("OutroEnd", "CreditsEnd", "CreditsEndTicks"),
-        ),
-    )
+        )?.let { PlaybackMarkerInput("Outro", it.first, it.second) },
+    ).let(::normalizePlaybackMarkers)
 }
 
-private fun parseTypedMarker(value: JSONObject): PlaybackSegment? {
-    val type = when (value.optString("Type").lowercase()) {
-        "intro", "opening" -> PlaybackSegmentType.INTRO
-        "outro", "credits", "closing" -> PlaybackSegmentType.OUTRO
-        else -> return null
-    }
-    val start = value.numberValue("StartTicks", "StartTimeTicks") ?: return null
-    val end = value.numberValue("EndTicks", "EndTimeTicks") ?: return null
-    return marker(type, start, end)
-}
-
-private fun parseNamedMarker(
+private fun parseNamedMarkerInput(
     root: JSONObject,
-    type: PlaybackSegmentType,
     names: List<String>,
     startKeys: List<String>,
     endKeys: List<String>,
-): PlaybackSegment? {
+): Pair<Double, Double>? {
     val nested = names.asSequence()
         .mapNotNull { root.opt(it) as? JSONObject }
         .firstOrNull()
@@ -765,8 +759,26 @@ private fun parseNamedMarker(
         ?: startKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
     val end = nested?.numberValue("end", "End")
         ?: endKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
-    return if (start != null && end != null) marker(type, start, end) else null
+    return if (start != null && end != null) start to end else null
 }
+
+internal data class PlaybackMarkerInput(
+    val type: String?,
+    val start: Double?,
+    val end: Double?,
+)
+
+internal fun normalizePlaybackMarkers(inputs: List<PlaybackMarkerInput>): List<PlaybackSegment> =
+    inputs.mapNotNull { input ->
+        val type = when (input.type?.lowercase()) {
+            "intro", "opening" -> PlaybackSegmentType.INTRO
+            "outro", "credits", "closing" -> PlaybackSegmentType.OUTRO
+            else -> null
+        }
+        if (type != null && input.start != null && input.end != null) {
+            marker(type, input.start, input.end)
+        } else null
+    }
 
 private fun marker(type: PlaybackSegmentType, rawStart: Double, rawEnd: Double): PlaybackSegment? {
     val start = rawStart.toPlaybackSeconds()

@@ -42,12 +42,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +59,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
+import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -69,7 +67,6 @@ import kotlinx.coroutines.isActive
 fun PlaybackScreen(
     repository: JellyfinRepository,
     session: AuthSession,
-    orchestratorUrl: String?,
     itemId: String,
     initialItemName: String = "",
     onBack: () -> Unit,
@@ -77,7 +74,7 @@ fun PlaybackScreen(
     val context = LocalContext.current
     val vm: PlaybackViewModel = viewModel(
         key = "playback-${session.userId}-$itemId",
-        factory = PlaybackViewModel.Factory(repository, session, orchestratorUrl, itemId, context),
+        factory = PlaybackViewModel.Factory(repository, session, itemId, context),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(false) }
@@ -131,36 +128,12 @@ fun PlaybackScreen(
             )
         }
 
-        state.activeCuesAt(subtitlePositionSeconds).forEach { cue ->
-            Text(
-                text = cue.text,
-                color = parseColor(state.subtitleStyle.fontColor, Color.White),
-                fontFamily = when (state.subtitleStyle.fontFamily) {
-                    "serif" -> FontFamily.Serif
-                    "mono" -> FontFamily.Monospace
-                    else -> FontFamily.SansSerif
-                },
-                fontWeight = if (state.subtitleStyle.bold) FontWeight.Bold else FontWeight.Normal,
-                fontSize = (22f * state.subtitleStyle.textScale / 100f).sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 24.dp, vertical = if (controlsVisible && !controlsLocked) 128.dp else 48.dp)
-                    .background(
-                        parseColor(state.subtitleStyle.backgroundColor, Color.Black).copy(
-                            alpha = state.subtitleStyle.backgroundOpacity / 100f
-                        ),
-                        RoundedCornerShape(4.dp),
-                    )
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    shadow = Shadow(
-                        color = parseColor(state.subtitleStyle.borderColor, Color.Black),
-                        blurRadius = state.subtitleStyle.borderSize * 2f,
-                    )
-                ),
-            )
-        }
+        SubtitleOverlay(
+            cues = state.activeCuesAt(subtitlePositionSeconds),
+            style = state.subtitleStyle,
+            bottomPadding = if (controlsVisible && !controlsLocked) 128.dp else 48.dp,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
 
         if (state.loading) {
             CircularProgressIndicator(
@@ -333,7 +306,7 @@ private fun PlaybackProgress(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(32.dp)
+            .height(48.dp)
             .pointerInput(duration) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -475,7 +448,6 @@ private fun playbackTitle(
     }
 }
 
-private fun parseColor(value: String, fallback: Color): Color = runCatching { Color(android.graphics.Color.parseColor(value)) }.getOrDefault(fallback)
 private fun formatTime(seconds: Double): String {
     val total = seconds.toInt().coerceAtLeast(0)
     return "%d:%02d".format(total / 60, total % 60)

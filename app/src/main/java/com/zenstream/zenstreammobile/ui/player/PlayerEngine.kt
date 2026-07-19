@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -15,6 +16,12 @@ import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.max
+
+internal val mpvCaptionOptions = mapOf(
+    "sub-auto" to "no",
+    "sid" to "no",
+    "secondary-sid" to "no",
+)
 
 data class EngineState(
     val positionSeconds: Double = 0.0,
@@ -54,6 +61,7 @@ interface PlaybackEngine {
     fun release()
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class Media3PlaybackEngine : PlaybackEngine {
     private val _state = MutableStateFlow(EngineState())
     override val state: StateFlow<EngineState> = _state
@@ -83,6 +91,10 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun createView(context: Context): View {
         if (player == null) {
             player = ExoPlayer.Builder(context.applicationContext).build().also { exo ->
+                exo.trackSelectionParameters = exo.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
                 exo.addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
                         _state.value = _state.value.copy(error = error.message ?: "Playback failed")
@@ -101,6 +113,7 @@ class Media3PlaybackEngine : PlaybackEngine {
         }
         return PlayerView(context).apply {
             useController = false
+            subtitleView?.visibility = View.GONE
             player = this@Media3PlaybackEngine.player
         }.also { pending?.let { (url, start) -> prepare(url, start) } }
     }
@@ -224,7 +237,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         override fun initOptions() {
             MPVLib.setOptionString("vo", "gpu")
             MPVLib.setOptionString("hwdec", "auto-safe")
-            MPVLib.setOptionString("sub-auto", "no")
+            mpvCaptionOptions.forEach { (name, value) -> MPVLib.setOptionString(name, value) }
             MPVLib.setOptionString("audio-client-name", "ZenStream")
         }
 

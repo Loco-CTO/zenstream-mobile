@@ -47,7 +47,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
-import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 
@@ -55,13 +54,11 @@ import com.zenstream.zenstreammobile.ui.SettingsViewModel
 @Composable
 fun SettingsScreen(
     repository: JellyfinRepository,
-    session: AuthSession,
-    orchestratorUrl: String?,
     onBack: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel(
-        key = "settings-${session.userId}",
-        factory = SettingsViewModel.Factory(repository, session, orchestratorUrl),
+        key = "settings",
+        factory = SettingsViewModel.Factory(repository),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     Scaffold(
