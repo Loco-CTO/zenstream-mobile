@@ -50,4 +50,25 @@
     <string name="navigation_description">Main navigation</string>
     <string name="app_logo_description">ZenStream logo</string>
     <string name="profile_description">Profile</string>
+    <string name="detail_title">Details</string>
+    <string name="detail_load_failed">Could not load this title.</string>
+    <string name="detail_action_failed">Could not update this title.</string>
+    <string name="rating_value">★ %1$.1f</string>
+    <string name="runtime_minutes">%1$d min</string>
+    <string name="season_episode">Season %1$d · Episode %2$d</string>
+    <string name="episodes_label">Episodes</string>
+    <string name="cast_crew">Cast &amp; Crew</string>
+    <string name="more_like_this">More Like This</string>
+    <string name="no_episodes">No episodes available.</string>
+    <string name="mark_watched">Mark as watched</string>
+    <string name="mark_unwatched">Mark as unwatched</string>
+    <string name="add_favorite">Add to favorites</string>
+    <string name="remove_favorite">Remove from favorites</string>
+    <string name="watched_description">Watched</string>
+    <string name="episode_description">Episode artwork for %1$s</string>
+    <string name="person_description">Photo of %1$s</string>
+    <string name="parent_series">View series: %1$s</string>
+    <string name="season_value">Season %1$d: %2$s</string>
+    <string name="no_season">Season</string>
+    <string name="episode_title">%1$d. %2$s</string>
 </resources>

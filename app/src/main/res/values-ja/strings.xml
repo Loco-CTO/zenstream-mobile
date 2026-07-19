@@ -50,4 +50,25 @@
     <string name="navigation_description">メインナビゲーション</string>
     <string name="app_logo_description">ZenStreamのロゴ</string>
     <string name="profile_description">プロフィール</string>
+    <string name="detail_title">詳細</string>
+    <string name="detail_load_failed">このタイトルを読み込めませんでした。</string>
+    <string name="detail_action_failed">このタイトルを更新できませんでした。</string>
+    <string name="rating_value">★ %1$.1f</string>
+    <string name="runtime_minutes">%1$d分</string>
+    <string name="season_episode">シーズン%1$d · エピソード%2$d</string>
+    <string name="episodes_label">エピソード</string>
+    <string name="cast_crew">キャスト＆スタッフ</string>
+    <string name="more_like_this">関連作品</string>
+    <string name="no_episodes">エピソードがありません。</string>
+    <string name="mark_watched">視聴済みにする</string>
+    <string name="mark_unwatched">未視聴に戻す</string>
+    <string name="add_favorite">お気に入りに追加</string>
+    <string name="remove_favorite">お気に入りから削除</string>
+    <string name="watched_description">視聴済み</string>
+    <string name="episode_description">%1$sのエピソード画像</string>
+    <string name="person_description">%1$sの写真</string>
+    <string name="parent_series">シリーズを表示：%1$s</string>
+    <string name="season_value">シーズン%1$d：%2$s</string>
+    <string name="no_season">シーズン</string>
+    <string name="episode_title">%1$d. %2$s</string>
 </resources>
