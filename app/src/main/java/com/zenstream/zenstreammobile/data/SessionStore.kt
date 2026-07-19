@@ -1,10 +1,12 @@
 package com.zenstream.zenstreammobile.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -15,12 +17,30 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.delay
+import java.util.concurrent.ConcurrentHashMap
 import java.security.KeyStoreException
 import java.security.UnrecoverableKeyException
 
-private val Context.sessionDataStore by preferencesDataStore(name = "zenstream_session")
+internal const val DEFAULT_SESSION_DATA_STORE_NAME = "zenstream_session"
+internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrumentation"
 
-class SessionStore(private val context: Context, private val cipher: TokenCipher = TokenCipher()) {
+private val sessionDataStores = ConcurrentHashMap<String, DataStore<Preferences>>()
+
+private fun sessionDataStore(context: Context, name: String): DataStore<Preferences> {
+    val appContext = context.applicationContext
+    val file = appContext.preferencesDataStoreFile(name)
+    return sessionDataStores.computeIfAbsent(file.absolutePath) {
+        PreferenceDataStoreFactory.create { file }
+    }
+}
+
+class SessionStore(
+    context: Context,
+    private val cipher: TokenCipher = TokenCipher(),
+    dataStoreName: String = DEFAULT_SESSION_DATA_STORE_NAME,
+) {
+    private val dataStore = sessionDataStore(context, dataStoreName)
+
     private object Keys {
         val orchestratorUrl = stringPreferencesKey("orchestrator_url")
         val serverUrl = stringPreferencesKey("server_url")
@@ -32,20 +52,19 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
         val subtitleStyle = stringPreferencesKey("subtitle_style")
     }
 
-    val serverUrl: Flow<String?> = context.sessionDataStore.data.map { it[Keys.serverUrl] }
+    val serverUrl: Flow<String?> = dataStore.data.map { it[Keys.serverUrl] }
 
-    val orchestratorUrl: Flow<String?> =
-        context.sessionDataStore.data.map { it[Keys.orchestratorUrl] }
+    val orchestratorUrl: Flow<String?> = dataStore.data.map { it[Keys.orchestratorUrl] }
 
-    val locale: Flow<String> = context.sessionDataStore.data
+    val locale: Flow<String> = dataStore.data
         .map { normalizeLocale(it[Keys.locale]) }
         .distinctUntilChanged()
 
-    val playerEngine: Flow<PlayerEngine> = context.sessionDataStore.data
+    val playerEngine: Flow<PlayerEngine> = dataStore.data
         .map { value -> runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }.getOrDefault(PlayerEngine.MEDIA3) }
         .distinctUntilChanged()
 
-    val session: Flow<AuthSession?> = context.sessionDataStore.data
+    val session: Flow<AuthSession?> = dataStore.data
         .map { prefs ->
             val server = prefs[Keys.serverUrl]
             val encryptedToken = prefs[Keys.token]
@@ -76,24 +95,24 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
         .distinctUntilChanged()
 
     suspend fun saveServerUrl(server: String) {
-        context.sessionDataStore.edit { it[Keys.serverUrl] = normalizeServerUrl(server) }
+        dataStore.edit { it[Keys.serverUrl] = normalizeServerUrl(server) }
     }
 
     suspend fun saveServerConfig(orchestrator: String, jellyfin: String) {
-        context.sessionDataStore.edit {
+        dataStore.edit {
             it[Keys.orchestratorUrl] = normalizeServerUrl(orchestrator)
             it[Keys.serverUrl] = normalizeServerUrl(jellyfin)
         }
     }
 
     suspend fun saveOrchestratorUrl(orchestrator: String) {
-        context.sessionDataStore.edit {
+        dataStore.edit {
             it[Keys.orchestratorUrl] = normalizeServerUrl(orchestrator)
         }
     }
 
     suspend fun saveSession(session: AuthSession) {
-        context.sessionDataStore.edit {
+        dataStore.edit {
             it[Keys.serverUrl] = session.serverUrl
             it[Keys.token] = cipher.encrypt(session.token)
             it[Keys.userId] = session.userId
@@ -102,19 +121,19 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
     }
 
     suspend fun saveLocale(locale: String) {
-        context.sessionDataStore.edit { it[Keys.locale] = normalizeLocale(locale) }
+        dataStore.edit { it[Keys.locale] = normalizeLocale(locale) }
     }
 
     suspend fun savePlayerEngine(engine: PlayerEngine) {
-        context.sessionDataStore.edit { it[Keys.playerEngine] = engine.name }
+        dataStore.edit { it[Keys.playerEngine] = engine.name }
     }
 
     suspend fun cacheSubtitleStyle(style: SubtitleStyle) {
-        context.sessionDataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
+        dataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
 
     suspend fun cachedSubtitleStyle(): SubtitleStyle? {
-        val preferences = context.sessionDataStore.data.first()
+        val preferences = dataStore.data.first()
         val stored = preferences[Keys.subtitleStyle]
             ?.let { runCatching { subtitleStyleFromJson(it) }.getOrNull() }
         if (stored != null) return stored
@@ -125,7 +144,7 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
     }
 
     suspend fun clearSession() {
-        context.sessionDataStore.edit {
+        dataStore.edit {
             it.remove(Keys.token)
             it.remove(Keys.userId)
             it.remove(Keys.username)
@@ -134,7 +153,7 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
     }
 
     suspend fun clearAll() {
-        context.sessionDataStore.edit {
+        dataStore.edit {
             it.remove(Keys.orchestratorUrl)
             it.remove(Keys.serverUrl)
             it.remove(Keys.token)

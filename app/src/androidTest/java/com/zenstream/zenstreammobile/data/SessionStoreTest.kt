@@ -15,7 +15,7 @@ import org.junit.runner.RunWith
 class SessionStoreTest {
     @Test
     fun persistsEncryptedSessionAndClearsIdentity() = runBlocking {
-        val store = SessionStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        val store = SessionStore(InstrumentationRegistry.getInstrumentation().context)
         store.clearAll()
         store.saveOrchestratorUrl("https://orchestrator.example")
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
@@ -32,7 +32,7 @@ class SessionStoreTest {
 
     @Test
     fun subtitleStyleIsDeviceLocalAndSurvivesSessionClears() = runBlocking {
-        val store = SessionStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        val store = SessionStore(InstrumentationRegistry.getInstrumentation().context)
         store.clearAll()
         val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
 
