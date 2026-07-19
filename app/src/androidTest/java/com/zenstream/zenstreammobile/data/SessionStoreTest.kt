@@ -16,6 +16,8 @@ class SessionStoreTest {
     fun persistsEncryptedSessionAndClearsIdentity() = runBlocking {
         val store = SessionStore(InstrumentationRegistry.getInstrumentation().targetContext)
         store.clearAll()
+        store.saveOrchestratorUrl("https://orchestrator.example")
+        assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.saveServerConfig("https://orchestrator.example", "https://jellyfin.example")
         store.saveSession(AuthSession("https://jellyfin.example", "secret-token", "user-1", "User"))
         assertEquals("secret-token", store.session.first()!!.token)
