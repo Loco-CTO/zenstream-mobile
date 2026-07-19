@@ -30,6 +30,20 @@ class JellyfinApiTest {
     }
 
     @Test
+    fun newlyAddedTvLibraryQueryRequestsEpisodesByDateCreated() {
+        val query = JellyfinApi().newlyAddedItemsQuery("tvshows")
+
+        assertEquals("Episode", query["includeItemTypes"])
+        assertEquals("DateCreated", query["sortBy"])
+        assertEquals("Descending", query["sortOrder"])
+    }
+
+    @Test
+    fun newlyAddedMovieLibraryQueryStillRequestsMovies() {
+        assertEquals("Movie", JellyfinApi().newlyAddedItemsQuery("movies")["includeItemTypes"])
+    }
+
+    @Test
     fun detailQueryRequestsUserStatePeopleAndStudios() {
         val query = JellyfinApi().detailItemQuery("user-123")
         assertEquals("user-123", query["userId"])

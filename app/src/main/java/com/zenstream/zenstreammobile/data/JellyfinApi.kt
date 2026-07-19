@@ -284,11 +284,7 @@ class JellyfinApi(
                 getItems(
                     session,
                     "/Items",
-                    common + mapOf(
-                        "sortBy" to "DateCreated",
-                        "sortOrder" to "Descending",
-                        "includeItemTypes" to itemTypes(library.collectionType)
-                    ),
+                    common + newlyAddedItemsQuery(library.collectionType),
                     requestTimeoutMillis,
                 )
             }
@@ -377,6 +373,12 @@ class JellyfinApi(
         "imageTypeLimit" to "1",
         "enableImageTypes" to ITEM_IMAGE_TYPES,
         "enableUserData" to "true",
+    )
+
+    internal fun newlyAddedItemsQuery(collectionType: String?): Map<String, String> = mapOf(
+        "sortBy" to "DateCreated",
+        "sortOrder" to "Descending",
+        "includeItemTypes" to itemTypes(collectionType, newlyAdded = true),
     )
 
     suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
@@ -512,8 +514,8 @@ class JellyfinApi(
             "Version=\"1.0\"",
         ).filterNotNull().joinToString(", ").let { "MediaBrowser $it" }
 
-        private fun itemTypes(collectionType: String?) = when (collectionType) {
-            "tvshows" -> "Series"
+        private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false) = when (collectionType) {
+            "tvshows" -> if (newlyAdded) "Episode" else "Series"
             "movies" -> "Movie"
             "boxsets" -> "BoxSet"
             else -> "Series,Movie"
