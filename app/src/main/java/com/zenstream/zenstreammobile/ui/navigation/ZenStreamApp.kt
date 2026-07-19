@@ -40,6 +40,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.composables.icons.lucide.R as LucideR
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
@@ -106,17 +107,17 @@ private fun MainScaffold(
             NavigationDestination(
                 HOME,
                 com.zenstream.zenstreammobile.R.string.home,
-                R.drawable.lucide_ic_house
+                LucideR.drawable.lucide_ic_house
             ),
             NavigationDestination(
                 SEARCH,
                 com.zenstream.zenstreammobile.R.string.search,
-                R.drawable.lucide_ic_search
+                LucideR.drawable.lucide_ic_search
             ),
             NavigationDestination(
                 LIBRARY,
                 com.zenstream.zenstreammobile.R.string.library,
-                R.drawable.lucide_ic_library
+                LucideR.drawable.lucide_ic_library
             )
         )
     }
@@ -300,7 +301,7 @@ internal fun MainTopBar(onSettings: () -> Unit = {}) {
             ) {
                 androidx.compose.material3.IconButton(onClick = onSettings) {
                     Icon(
-                        painter = painterResource(R.drawable.lucide_ic_settings),
+                        painter = painterResource(LucideR.drawable.lucide_ic_settings),
                         contentDescription = stringResource(com.zenstream.zenstreammobile.R.string.settings_description),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -186,7 +187,7 @@ fun PlaybackScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { vm.onPause(); onBack() }) {
-                        Icon(painterResource(R.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
+                        Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
                     }
                     Text(
                         playbackTitle(state, initialItemName),
@@ -197,16 +198,16 @@ fun PlaybackScreen(
                     )
                     IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
                         Icon(
-                            painter = painterResource(if (controlsLocked) R.drawable.lucide_ic_lock else R.drawable.lucide_ic_lock_open),
+                            painter = painterResource(if (controlsLocked) LucideR.drawable.lucide_ic_lock else LucideR.drawable.lucide_ic_lock_open),
                             stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
                             tint = Color.White,
                         )
                     }
                     if (!controlsLocked) {
-                        PlayerMenuButton(R.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
-                        PlayerMenuButton(R.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
-                        PlayerMenuButton(R.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
-                        PlayerMenuButton(R.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
                     }
                 }
             }
@@ -216,8 +217,8 @@ fun PlaybackScreen(
                     horizontalArrangement = Arrangement.spacedBy(34.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PlayerMenuButton(R.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
-                    PlayerMenuButton(R.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
+                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
+                    PlayerMenuButton(LucideR.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
                     Surface(
                         onClick = vm::togglePlay,
                         modifier = Modifier.size(88.dp),
@@ -227,14 +228,14 @@ fun PlaybackScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                painter = painterResource(if (state.engine.isPlaying) R.drawable.lucide_ic_pause else R.drawable.lucide_ic_play),
+                                painter = painterResource(if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
                                 stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
                                 modifier = Modifier.size(44.dp),
                             )
                         }
                     }
-                    PlayerMenuButton(R.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
-                    PlayerMenuButton(R.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
+                    PlayerMenuButton(LucideR.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
+                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
                 }
                 Column(
                     modifier = Modifier

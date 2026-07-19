@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.normalizeServerUrl
@@ -66,7 +67,7 @@ fun ServerSetupScreen(
     }
     AuthContainer {
         Icon(
-            painter = painterResource(R.drawable.lucide_ic_lock),
+            painter = painterResource(LucideR.drawable.lucide_ic_lock),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary
         )
@@ -126,7 +127,7 @@ fun LoginScreen(repository: JellyfinRepository, onChangeServer: () -> Unit) {
     var password by remember { mutableStateOf("") }
     AuthContainer {
         Icon(
-            painter = painterResource(R.drawable.lucide_ic_lock),
+            painter = painterResource(LucideR.drawable.lucide_ic_lock),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary
         )

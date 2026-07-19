@@ -58,6 +58,7 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
@@ -306,7 +307,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = state.query,
             onValueChange = vm::updateQuery,
-            leadingIcon = { Icon(painterResource(R.drawable.lucide_ic_search), contentDescription = null) },
+            leadingIcon = { Icon(painterResource(LucideR.drawable.lucide_ic_search), contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) IconButton(onClick = {
                     vm.updateQuery(
@@ -314,7 +315,7 @@ fun SearchScreen(
                     )
                 }) {
                     Icon(
-                        painter = painterResource(R.drawable.lucide_ic_x),
+                        painter = painterResource(LucideR.drawable.lucide_ic_x),
                         contentDescription = stringResource(R.string.close)
                     )
                 }
@@ -455,7 +456,7 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(
-                        painter = painterResource(R.drawable.lucide_ic_arrow_left),
+                        painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
                         contentDescription = stringResource(R.string.back)
                     )
                 }
@@ -472,7 +473,7 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                painter = painterResource(R.drawable.lucide_ic_play),
+                painter = painterResource(LucideR.drawable.lucide_ic_play),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
@@ -515,7 +516,7 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(painterResource(R.drawable.lucide_ic_refresh_cw), contentDescription = null); Spacer(
+            Icon(painterResource(LucideR.drawable.lucide_ic_refresh_cw), contentDescription = null); Spacer(
             Modifier.width(6.dp)
         ); Text(stringResource(R.string.retry))
         }

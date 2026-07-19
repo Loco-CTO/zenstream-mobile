@@ -70,6 +70,7 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
@@ -262,7 +263,7 @@ private fun ExpandableOverview(overview: String) {
                 contentPadding = PaddingValues(horizontal = 0.dp),
             ) {
                 Icon(
-                    painter = painterResource(if (expanded) R.drawable.lucide_ic_chevron_up else R.drawable.lucide_ic_chevron_down),
+                    painter = painterResource(if (expanded) LucideR.drawable.lucide_ic_chevron_up else LucideR.drawable.lucide_ic_chevron_down),
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(4.dp))
@@ -304,7 +305,7 @@ internal fun DetailTopBar(
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.lucide_ic_arrow_left), stringResource(R.string.back))
+                Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResource(R.string.back))
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -430,7 +431,7 @@ private fun DetailActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Button(onClick = onPlay, enabled = !busy) {
-            Icon(painterResource(R.drawable.lucide_ic_play), stringResource(R.string.play_description, item.name))
+            Icon(painterResource(LucideR.drawable.lucide_ic_play), stringResource(R.string.play_description, item.name))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.play))
         }
@@ -442,7 +443,7 @@ private fun DetailActions(
             },
         ) {
             Icon(
-                painter = painterResource(R.drawable.lucide_ic_check),
+                painter = painterResource(LucideR.drawable.lucide_ic_check),
                 null,
                 tint = if (item.played) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -455,7 +456,7 @@ private fun DetailActions(
             },
         ) {
             Icon(
-                painter = painterResource(R.drawable.lucide_ic_heart),
+                painter = painterResource(LucideR.drawable.lucide_ic_heart),
                 null,
                 tint = if (item.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -587,7 +588,7 @@ private fun SeasonPicker(
                     fontWeight = FontWeight.Medium,
                 )
                 Icon(
-                    painter = painterResource(if (expanded) R.drawable.lucide_ic_chevron_up else R.drawable.lucide_ic_chevron_down),
+                    painter = painterResource(if (expanded) LucideR.drawable.lucide_ic_chevron_up else LucideR.drawable.lucide_ic_chevron_down),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -666,7 +667,7 @@ private fun SeasonPicker(
                                     },
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.lucide_ic_check),
+                                        painter = painterResource(LucideR.drawable.lucide_ic_check),
                                         contentDescription = null,
                                         tint = if (season.played) {
                                             MaterialTheme.colorScheme.primary
@@ -683,7 +684,7 @@ private fun SeasonPicker(
                                     },
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.lucide_ic_heart),
+                                        painter = painterResource(LucideR.drawable.lucide_ic_heart),
                                         contentDescription = null,
                                         tint = if (season.favorite) {
                                             MaterialTheme.colorScheme.primary
@@ -741,7 +742,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                             .padding(5.dp),
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.lucide_ic_check),
+                            painter = painterResource(LucideR.drawable.lucide_ic_check),
                             contentDescription = stringResource(R.string.watched_description),
                             tint = Color(0xFFBBF7D0),
                             modifier = Modifier
@@ -887,7 +888,7 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(painterResource(R.drawable.lucide_ic_refresh_cw), stringResource(R.string.retry))
+            Icon(painterResource(LucideR.drawable.lucide_ic_refresh_cw), stringResource(R.string.retry))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.retry))
         }

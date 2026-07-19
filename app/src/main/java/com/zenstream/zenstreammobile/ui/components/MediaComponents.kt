@@ -41,6 +41,7 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.imageUrl
@@ -129,7 +130,7 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                     ) {
                         if (item.played) Icon(
-                            painter = painterResource(R.drawable.lucide_ic_check),
+                            painter = painterResource(LucideR.drawable.lucide_ic_check),
                             contentDescription = null,
                             tint = Color(0xFFBBF7D0),
                             modifier = Modifier.width(14.dp)
