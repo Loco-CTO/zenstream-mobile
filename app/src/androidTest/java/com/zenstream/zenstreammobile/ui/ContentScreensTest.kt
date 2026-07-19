@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -32,8 +31,10 @@ import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
+import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -89,8 +90,10 @@ class ContentScreensTest {
         assertEquals(2, narrowBounds.map { it.left }.distinct().size)
         assertEquals(5, tabletBounds.map { it.left }.distinct().size)
         items.forEach { item ->
-            composeRule.onNodeWithContentDescription("Play ${item.name}")
-                .assertWidthIsEqualTo(POSTER_CARD_MAX_WIDTH)
+            val bounds = composeRule.onNodeWithContentDescription("Play ${item.name}")
+                .getUnclippedBoundsInRoot()
+            assertTrue(bounds.width >= POSTER_CARD_MIN_WIDTH)
+            assertTrue(bounds.width <= POSTER_CARD_MAX_WIDTH)
         }
     }
 
@@ -106,7 +109,7 @@ class ContentScreensTest {
                         .requiredHeight(500.dp)
                 ) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         contentPadding = PaddingValues(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
@@ -115,7 +118,7 @@ class ContentScreensTest {
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
                             ) {
-                                MediaCard(item, session, wide = false, onClick = { })
+                                MediaCard(item, session, wide = false, onClick = { }, gridCard = true)
                             }
                         }
                     }

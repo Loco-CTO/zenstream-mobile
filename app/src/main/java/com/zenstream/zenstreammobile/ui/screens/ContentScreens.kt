@@ -101,6 +101,7 @@ import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
+import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
@@ -423,7 +424,7 @@ fun SearchScreen(
                 )
 
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
+                    columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -450,7 +451,8 @@ private fun MediaCardForSearch(
         item,
         session,
         wide = false,
-        onClick = onItemClick
+        onClick = onItemClick,
+        gridCard = true,
     )
 }
 
@@ -567,7 +569,7 @@ fun LibraryScreen(
 
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         state = gridState,
                         contentPadding = PaddingValues(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -728,6 +730,7 @@ private fun LibraryPosterCard(item: MediaItem, session: AuthSession, onItemClick
         wide = false,
         onClick = onItemClick,
         showRating = true,
+        gridCard = true,
     )
 }
 

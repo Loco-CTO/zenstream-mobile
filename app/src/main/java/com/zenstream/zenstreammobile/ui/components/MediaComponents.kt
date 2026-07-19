@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +54,8 @@ import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlin.math.roundToInt
 
-internal val POSTER_CARD_MAX_WIDTH = 140.dp
+internal val POSTER_CARD_MIN_WIDTH = 140.dp
+internal val POSTER_CARD_MAX_WIDTH = 180.dp
 
 @Composable
 fun MediaRowView(
@@ -105,12 +107,18 @@ fun MediaCard(
     wide: Boolean,
     onClick: (MediaItem) -> Unit,
     showRating: Boolean = false,
+    gridCard: Boolean = false,
 ) {
-    val width = if (wide) 224.dp else POSTER_CARD_MAX_WIDTH
+    val cardWidthModifier = if (gridCard && !wide) {
+        Modifier
+            .fillMaxWidth()
+            .widthIn(min = POSTER_CARD_MIN_WIDTH, max = POSTER_CARD_MAX_WIDTH)
+    } else {
+        Modifier.width(if (wide) 224.dp else POSTER_CARD_MIN_WIDTH)
+    }
     val playDescription = stringResource(R.string.play_description, item.name)
     Column(
-        modifier = Modifier
-            .width(width)
+        modifier = cardWidthModifier
             .semantics {
                 role = Role.Button
                 contentDescription = playDescription
