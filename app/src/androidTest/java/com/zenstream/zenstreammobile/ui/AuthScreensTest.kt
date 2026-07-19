@@ -1,9 +1,10 @@
 package com.zenstream.zenstreammobile.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -51,7 +52,7 @@ class AuthScreensTest {
 
         composeRule.onNodeWithContentDescription("Show information for Example")
             .assertIsDisplayed()
-        composeRule.onNodeWithText("Info").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Info").assertCountEquals(0)
     }
 
     @Test
