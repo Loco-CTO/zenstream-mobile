@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.test.assertEquals
 
 class PlaybackControlsTest {
     @Test
@@ -37,5 +38,12 @@ class PlaybackControlsTest {
         assertEquals(intro, state.activeSegmentAt(10.0))
         assertEquals(intro, state.activeSegmentAt(19.99))
         assertNull(state.activeSegmentAt(20.0))
+    }
+
+    @Test
+    fun formatsPlaybackSpeedWithoutUnnecessaryTrailingZeros() {
+        assertEquals("0.5", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(.5f))
+        assertEquals("1", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(1f))
+        assertEquals("1.25", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(1.25f))
     }
 }

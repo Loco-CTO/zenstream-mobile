@@ -416,11 +416,16 @@ private fun PlayerMenuButton(
     }
 }
 
+private val playbackSpeedOptions = listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f)
+
+private val PlayerSheetSurface = Color(0xFF1B1B1F)
+
 @Composable
-private fun PlayerDropdown(
-    menu: PlayerMenu?,
+internal fun PlayerBottomSheet(
+    sheet: PlayerSheet?,
     selectedSubtitle: Int?,
     selectedAudio: Int?,
+    selectedQuality: Int,
     audio: List<MediaStream>,
     subtitles: List<MediaStream>,
     qualities: List<Int>,
@@ -431,29 +436,169 @@ private fun PlayerDropdown(
     onQuality: (Int) -> Unit,
     onSpeed: (Float) -> Unit,
 ) {
-    if (menu == null) return
-    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        when (menu) {
-            PlayerMenu.Audio -> audio.forEach { stream ->
-                DropdownMenuItem(text = { Text(stream.displayTitle ?: stream.language ?: "Audio ${stream.index}") }, onClick = { onAudio(stream) }, leadingIcon = { if (selectedAudio == stream.index) Text("✓") })
-            }
-            PlayerMenu.Subtitles -> {
-                DropdownMenuItem(text = { Text(stringResourceCompat(R.string.subtitles_off)) }, onClick = { onSubtitle(null) }, leadingIcon = { if (selectedSubtitle == null) Text("✓") })
-                subtitles.forEach { stream ->
-                    DropdownMenuItem(text = { Text(stream.displayTitle ?: stream.language ?: "Subtitle ${stream.index}") }, onClick = { onSubtitle(stream.index) }, leadingIcon = { if (selectedSubtitle == stream.index) Text("✓") })
-                }
-            }
-            PlayerMenu.Settings -> {
-                listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f).forEach { value ->
-                    DropdownMenuItem(text = { Text("Speed ${value}x") }, onClick = { onSpeed(value) }, leadingIcon = { if (speed == value) Text("✓") })
-                }
-                qualities.forEach { value ->
-                    DropdownMenuItem(text = { Text(if (value == 0) "Auto" else "${value / 1_000_000} Mbps") }, onClick = { onQuality(value) })
+    if (sheet == null) return
+
+    val title = when (sheet) {
+        PlayerSheet.Audio -> stringResourceCompat(R.string.audio_track)
+        PlayerSheet.Subtitles -> stringResourceCompat(R.string.subtitle_track)
+        PlayerSheet.Speed -> stringResourceCompat(R.string.player_speed)
+        PlayerSheet.Quality -> stringResourceCompat(R.string.player_quality)
+    }
+    val icon = when (sheet) {
+        PlayerSheet.Audio -> LucideR.drawable.lucide_ic_audio_lines
+        PlayerSheet.Subtitles -> LucideR.drawable.lucide_ic_captions
+        PlayerSheet.Speed -> LucideR.drawable.lucide_ic_gauge
+        PlayerSheet.Quality -> LucideR.drawable.lucide_ic_settings
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.Transparent,
+        contentColor = Color.White,
+        scrimColor = Color.Black.copy(alpha = .72f),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .36f))
+        },
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                color = PlayerSheetSurface,
+                contentColor = Color.White,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .semantics { heading() },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(icon),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp),
+                        )
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                        )
+                    }
+
+                    when (sheet) {
+                        PlayerSheet.Audio -> audio.forEach { stream ->
+                            PlayerOptionRow(
+                                label = streamTitle(stream, R.string.player_audio_track_format),
+                                selected = selectedAudio == stream.index,
+                                onClick = { onAudio(stream) },
+                            )
+                        }
+                        PlayerSheet.Subtitles -> {
+                            PlayerOptionRow(
+                                label = stringResourceCompat(R.string.subtitles_off),
+                                selected = selectedSubtitle == null,
+                                onClick = { onSubtitle(null) },
+                            )
+                            subtitles.forEach { stream ->
+                                PlayerOptionRow(
+                                    label = streamTitle(stream, R.string.player_subtitle_track_format),
+                                    selected = selectedSubtitle == stream.index,
+                                    onClick = { onSubtitle(stream.index) },
+                                )
+                            }
+                        }
+                        PlayerSheet.Speed -> playbackSpeedOptions.forEach { value ->
+                            PlayerOptionRow(
+                                label = playbackSpeedLabel(value),
+                                selected = speed == value,
+                                onClick = { onSpeed(value) },
+                            )
+                        }
+                        PlayerSheet.Quality -> qualities.forEach { value ->
+                            PlayerOptionRow(
+                                label = playbackQualityLabel(value),
+                                selected = selectedQuality == value,
+                                onClick = { onQuality(value) },
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun PlayerOptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton,
+            )
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_check),
+                contentDescription = stringResourceCompat(R.string.player_selected_option),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun streamTitle(stream: MediaStream, fallback: Int): String =
+    stream.displayTitle?.takeIf { it.isNotBlank() }
+        ?: stream.language?.takeIf { it.isNotBlank() }
+        ?: stringResourceCompat(fallback, stream.index)
+
+@Composable
+private fun playbackSpeedLabel(value: Float): String =
+    stringResourceCompat(R.string.player_speed_value, formatPlaybackSpeedValue(value))
+
+@Composable
+private fun playbackQualityLabel(value: Int): String =
+    if (value == 0) {
+        stringResourceCompat(R.string.player_quality_auto)
+    } else {
+        stringResourceCompat(R.string.player_quality_bitrate, value / 1_000_000)
+    }
+
+internal fun formatPlaybackSpeedValue(value: Float): String =
+    if (value % 1f == 0f) value.toInt().toString() else value.toString()
 
 private fun enterPip(context: android.content.Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -491,4 +636,5 @@ internal fun shouldShowAudioSelector(trackCount: Int): Boolean = trackCount > 1
 internal fun shouldShowSubtitleSelector(trackCount: Int): Boolean = trackCount > 0
 
 @Composable
-private fun stringResourceCompat(id: Int): String = androidx.compose.ui.res.stringResource(id)
+private fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =
+    androidx.compose.ui.res.stringResource(id, *formatArgs)
