@@ -1,0 +1,142 @@
+name: Version and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to bump
+        required: true
+        type: choice
+        default: fix
+        options:
+          - fix
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: zenstream-mobile-main-write
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Bump mobile version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)
+          [ -n "$version" ] || { echo 'Could not read mobile version.' >&2; exit 1; }
+          IFS=. read -r major minor fix <<< "$version"
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; fix=0 ;;
+            minor) minor=$((minor + 1)); fix=0 ;;
+            fix) fix=$((fix + 1)) ;;
+            *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
+          esac
+          new_version="$major.$minor.$fix"
+          tag="v$new_version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Release tag $tag already exists." >&2
+            exit 1
+          fi
+          sed -i -E "s/^version=.*/version=$new_version/" version.properties
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push release version
+        id: commit
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add version.properties
+          git commit -m "chore: release v$VERSION"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-release.jks"
+          test -s "$RUNNER_TEMP/zenstream-release.jks"
+
+      - name: Build signed release APK
+        env:
+          ANDROID_RELEASE_STORE_FILE: ${{ runner.temp }}/zenstream-release.jks
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$ANDROID_RELEASE_STORE_PASSWORD" ] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
+          [ -n "$ANDROID_RELEASE_KEY_ALIAS" ] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
+          [ -n "$ANDROID_RELEASE_KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
+          main=$(sed -nE 's/.*"main"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' .main-version.json)
+          [ -n "$main" ] || { echo 'Could not read main version counter.' >&2; exit 1; }
+          ./gradlew assembleRelease \
+            -PzenstreamVersion="$VERSION" \
+            -PzenstreamMain="$main" \
+            -PzenstreamRelease=true
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
+
+      - name: Create GitHub release and upload APK
+        uses: actions/github-script@v7
+        env:
+          APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET_SHA: ${{ steps.commit.outputs.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.APK_PATH;
+            const stat = fs.statSync(path);
+            const tag = `v${process.env.VERSION}`;
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              target_commitish: process.env.TARGET_SHA,
+              generate_release_notes: true,
+              name: tag,
+            });
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.data.id,
+              name: `zenstream-mobile-${tag}.apk`,
+              data: fs.createReadStream(path),
+              headers: {
+                contentType: 'application/vnd.android.package-archive',
+                contentLength: stat.size,
+              },
+            });

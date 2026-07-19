@@ -1,0 +1,58 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run lint, tests, and debug build
+        run: ./gradlew lint test assembleDebug
+
+      - name: Prepare debug APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)
+          main=$(sed -nE 's/.*"main"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' .main-version.json)
+          [ -n "$version" ] || { echo 'Could not read semantic version.' >&2; exit 1; }
+          [ -n "$main" ] || { echo 'Could not read main version counter.' >&2; exit 1; }
+          build_version="$version-main.$main"
+          artifact_dir="$RUNNER_TEMP/zenstream-mobile-debug"
+          mkdir -p "$artifact_dir"
+          cp app/build/outputs/apk/debug/app-debug.apk "$artifact_dir/zenstream-mobile-v$build_version-debug.apk"
+          echo "version=$build_version" >> "$GITHUB_OUTPUT"
+          echo "path=$artifact_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload debug APK artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenstream-mobile-debug-v${{ steps.apk.outputs.version }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
