@@ -215,7 +215,11 @@ class PlaybackGestureTest {
 
         composeRule.onNodeWithTag("surface-trickplay-preview").assertIsDisplayed()
         composeRule.onNodeWithText("1:05 / 2:05").assertIsDisplayed()
+        val expectedDescription = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+            .getString(R.string.player_drag_seek_preview, "1:05", "2:05")
         composeRule.onNodeWithTag("surface-trickplay-preview")
-            .assert(hasContentDescription("Seek preview: 1:05 of 2:05"))
+            .assert(hasContentDescription(expectedDescription))
     }
 }
