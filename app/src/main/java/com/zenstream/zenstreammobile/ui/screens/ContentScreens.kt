@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -61,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
@@ -68,6 +70,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -188,20 +191,26 @@ internal fun FeaturedHero(
         return
     }
     val pagerState = rememberPagerState(pageCount = { items.size })
-    Box(
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .aspectRatio(FEATURE_BAR_ASPECT_RATIO)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black)
     ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val item = items[page]
-            Box(Modifier.fillMaxSize()) {
+        val featureBarHeight = calculateFeatureBarHeight(maxWidth, screenHeightDp)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(featureBarHeight)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.Black)
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val item = items[page]
+                Box(Modifier.fillMaxSize()) {
                 val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
                 val request = url?.let {
                     ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
@@ -274,6 +283,7 @@ internal fun FeaturedHero(
                         color = Color.White.copy(alpha = .65f)
                     )
                 }
+                }
             }
         }
     }
@@ -299,6 +309,13 @@ internal fun FeaturedHero(
 }
 
 internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
+internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.6f
+
+internal fun featureBarMaxHeight(screenHeightDp: Int) =
+    screenHeightDp.toFloat().dp * FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION
+
+internal fun calculateFeatureBarHeight(maxWidth: Dp, screenHeightDp: Int) =
+    minOf(maxWidth / FEATURE_BAR_ASPECT_RATIO, featureBarMaxHeight(screenHeightDp))
 
 @Composable
 fun SearchScreen(

@@ -11,9 +11,11 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.ui.screens.FEATURE_BAR_ASPECT_RATIO
+import com.zenstream.zenstreammobile.ui.screens.calculateFeatureBarHeight
 import com.zenstream.zenstreammobile.ui.screens.FeaturedHero
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -79,5 +81,11 @@ class AuthScreensTest {
     @Test
     fun featureBarUsesSixteenByNineAspectRatio() {
         assertEquals(16f / 9f, FEATURE_BAR_ASPECT_RATIO, 0.001f)
+    }
+
+    @Test
+    fun featureBarIsCappedAtSixtyPercentOfScreenHeight() {
+        assertEquals(480f, calculateFeatureBarHeight(1280.dp, 800).value, 0.001f)
+        assertEquals(202.5f, calculateFeatureBarHeight(360.dp, 800).value, 0.001f)
     }
 }
