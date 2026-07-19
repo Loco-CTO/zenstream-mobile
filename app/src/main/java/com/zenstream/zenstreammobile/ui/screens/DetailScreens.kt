@@ -29,10 +29,14 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -513,38 +517,70 @@ private fun SeasonPicker(
     selected: MediaItem?,
     onSelectSeason: (String) -> Unit,
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(end = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(seasons, key = { it.id }) { season ->
-            val isSelected = season.id == selected?.id
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelectSeason(season.id) },
-                label = {
-                    Text(
+    var expanded by remember(selected?.id) { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .semantics { role = Role.Button },
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    selected?.let {
                         seasonChipLabel(
-                            season.indexNumber,
-                            season.name,
+                            it.indexNumber,
+                            it.name,
                             stringResource(R.string.season_number),
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                leadingIcon = if (isSelected) {
-                    {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
                         )
-                    }
-                } else {
-                    null
-                },
-            )
+                    } ?: stringResource(R.string.season_number, 0),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            seasons.forEach { season ->
+                val isSelected = season.id == selected?.id
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            seasonChipLabel(
+                                season.indexNumber,
+                                season.name,
+                                stringResource(R.string.season_number),
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelectSeason(season.id)
+                    },
+                    trailingIcon = if (isSelected) {
+                        {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
         }
     }
 }
@@ -578,7 +614,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     session,
                     stringResource(R.string.episode_description, item.name),
                     Modifier.fillMaxSize(),
-                    ContentScale.Crop,
+                    ContentScale.Fit,
                 )
                 if (item.played) {
                     Surface(
