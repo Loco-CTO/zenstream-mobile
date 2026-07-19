@@ -15,6 +15,8 @@ import androidx.lifecycle.lifecycleScope
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.SessionStore
+import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
+import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
@@ -24,6 +26,8 @@ import kotlinx.coroutines.launch
 object PlaybackActivityContract {
     const val EXTRA_ITEM_ID = "com.zenstream.zenstreammobile.extra.PLAYBACK_ITEM_ID"
     const val EXTRA_ITEM_NAME = "com.zenstream.zenstreammobile.extra.PLAYBACK_ITEM_NAME"
+    internal const val EXTRA_SESSION_DATA_STORE =
+        "com.zenstream.zenstreammobile.extra.SESSION_DATA_STORE"
 }
 
 data class PlaybackLaunchArgs(val itemId: String, val itemName: String)
@@ -57,7 +61,16 @@ class PlaybackActivity : ComponentActivity() {
     private var immersiveModeApplied = false
 
     private val repository by lazy {
-        JellyfinRepository(JellyfinApi(), SessionStore(applicationContext))
+        val dataStoreName = if (
+            BuildConfig.DEBUG &&
+            intent.getStringExtra(PlaybackActivityContract.EXTRA_SESSION_DATA_STORE) ==
+            INSTRUMENTATION_SESSION_DATA_STORE_NAME
+        ) {
+            INSTRUMENTATION_SESSION_DATA_STORE_NAME
+        } else {
+            DEFAULT_SESSION_DATA_STORE_NAME
+        }
+        JellyfinRepository(JellyfinApi(), SessionStore(applicationContext, dataStoreName = dataStoreName))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

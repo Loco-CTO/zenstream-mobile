@@ -9,6 +9,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.model.AuthSession
 import kotlinx.coroutines.runBlocking
@@ -27,8 +29,10 @@ class PlaybackActivityTest {
     @Before
     fun setUpSession() = runBlocking {
         sessionStore = SessionStore(
-            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
         )
+        sessionStore.clearAll()
         sessionStore.saveServerConfig("https://orchestrator.example", "https://jellyfin.example")
         sessionStore.saveSession(AuthSession("https://jellyfin.example", "test-token", "user-1", "Test"))
     }
@@ -44,6 +48,10 @@ class PlaybackActivityTest {
         val intent = Intent(context, PlaybackActivity::class.java).apply {
             putExtra(PlaybackActivityContract.EXTRA_ITEM_ID, "item-1")
             putExtra(PlaybackActivityContract.EXTRA_ITEM_NAME, "Example")
+            putExtra(
+                PlaybackActivityContract.EXTRA_SESSION_DATA_STORE,
+                INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+            )
         }
 
         ActivityScenario.launch<PlaybackActivity>(intent).use { scenario ->
@@ -66,6 +74,10 @@ class PlaybackActivityTest {
         val intent = Intent(context, PlaybackActivity::class.java).apply {
             putExtra(PlaybackActivityContract.EXTRA_ITEM_ID, "item-1")
             putExtra(PlaybackActivityContract.EXTRA_ITEM_NAME, "Example")
+            putExtra(
+                PlaybackActivityContract.EXTRA_SESSION_DATA_STORE,
+                INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+            )
         }
 
         ActivityScenario.launch<PlaybackActivity>(intent).use { scenario ->
