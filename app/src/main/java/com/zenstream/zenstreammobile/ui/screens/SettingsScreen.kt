@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,6 +65,9 @@ fun SettingsScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     var section by remember { mutableStateOf(SettingsSection.Root) }
+    BackHandler(enabled = section != SettingsSection.Root) {
+        section = SettingsSection.Root
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -100,24 +104,11 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when (section) {
-                    SettingsSection.Root -> {
-                        item { SettingsMenuItem(stringResource(R.string.player_group)) { section = SettingsSection.Player } }
-                        item { SettingsMenuItem(stringResource(R.string.subtitles_group)) { section = SettingsSection.Subtitles } }
-                        item { SettingsMenuItem(stringResource(R.string.settings_version)) { section = SettingsSection.Version } }
-                        item {
-                            androidx.compose.material3.Button(
-                                onClick = onLogout,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(stringResource(R.string.logout)) }
-                        }
-                        item {
-                            Text(
-                                stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
-                                color = Color.White.copy(alpha = 0.6f),
-                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
+                    SettingsSection.Root -> item {
+                        SettingsRootContent(
+                            onOpenSection = { section = it },
+                            onLogout = onLogout,
+                        )
                     }
                     SettingsSection.Player -> item {
                         SettingsGroup(title = stringResource(R.string.player_group)) {
@@ -150,7 +141,32 @@ fun SettingsScreen(
     }
 }
 
-private enum class SettingsSection { Root, Player, Subtitles, Version }
+internal enum class SettingsSection { Root, Player, Subtitles, Version }
+
+@Composable
+internal fun SettingsRootContent(
+    onOpenSection: (SettingsSection) -> Unit,
+    onLogout: () -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SettingsMenuItem(stringResource(R.string.player_group)) { onOpenSection(SettingsSection.Player) }
+        SettingsMenuItem(stringResource(R.string.subtitles_group)) { onOpenSection(SettingsSection.Subtitles) }
+        SettingsMenuItem(stringResource(R.string.settings_version)) { onOpenSection(SettingsSection.Version) }
+        androidx.compose.material3.Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.logout)) }
+        Text(
+            stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
+            color = Color.White.copy(alpha = 0.6f),
+            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
 @Composable
 private fun SettingsMenuItem(label: String, onClick: () -> Unit) {
