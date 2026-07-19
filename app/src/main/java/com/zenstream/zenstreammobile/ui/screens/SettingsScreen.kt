@@ -111,12 +111,16 @@ fun SettingsScreen(
                         )
                     }
                     SettingsSection.Player -> item {
-                        SettingsGroup(title = stringResource(R.string.player_group)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+                        ) {
                             EngineSelector(state.playerEngine, vm::setPlayerEngine)
                         }
                     }
                     SettingsSection.Subtitles -> item {
-                        SettingsGroup(title = stringResource(R.string.subtitles_group)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+                        ) {
                             SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
                             if (state.subtitleSaveError) {
                                 Text(
@@ -128,7 +132,9 @@ fun SettingsScreen(
                         }
                     }
                     SettingsSection.Version -> item {
-                        SettingsGroup(title = stringResource(R.string.settings_version)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+                        ) {
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_version)) },
                                 supportingContent = { Text(BuildConfig.ZENSTREAM_VERSION) },
