@@ -532,6 +532,14 @@ private data class TimelineScrub(
     val fraction: Float,
 )
 
+internal fun trickplaySpriteSize(
+    cellWidth: androidx.compose.ui.unit.Dp,
+    cellHeight: androidx.compose.ui.unit.Dp,
+    columns: Int,
+    rows: Int,
+): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> =
+    cellWidth * columns to cellHeight * rows
+
 internal fun timelinePositionAt(x: Float, width: Float, duration: Double): Double {
     val safeWidth = width.coerceAtLeast(1f)
     val safeDuration = duration.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
@@ -684,6 +692,7 @@ private fun TrickplayBubble(
     }
     val cellWidth = width
     val cellHeight = height
+    val spriteSize = trickplaySpriteSize(cellWidth, cellHeight, preview.columns, preview.rows)
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
@@ -706,10 +715,7 @@ private fun TrickplayBubble(
                     // Jellyfin returns one sprite sheet per URL. Force the image
                     // to its complete sheet size, then offset it inside the
                     // clipped frame so only the selected thumbnail is visible.
-                    .requiredSize(
-                        width = cellWidth * preview.columns,
-                        height = cellHeight * preview.rows,
-                    )
+                    .requiredSize(width = spriteSize.first, height = spriteSize.second)
                     .offset(
                         x = -(cellWidth * preview.cellX),
                         y = -(cellHeight * preview.cellY),
