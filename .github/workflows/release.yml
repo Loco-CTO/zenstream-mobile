@@ -132,22 +132,43 @@ jobs:
             const path = process.env.APK_PATH;
             const stat = fs.statSync(path);
             const tag = `v${process.env.VERSION}`;
-            const release = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              target_commitish: process.env.TARGET_SHA,
-              generate_release_notes: true,
-              name: tag,
-            });
+            let release;
+            try {
+              release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              release = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                target_commitish: process.env.TARGET_SHA,
+                generate_release_notes: true,
+                name: tag,
+              });
+            }
+
+            const assetName = `zenstream-mobile-${tag}.apk`;
+            const existingAsset = release.data.assets.find((asset) => asset.name === assetName);
+            if (existingAsset) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: existingAsset.id,
+              });
+            }
+
             await github.rest.repos.uploadReleaseAsset({
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: release.data.id,
-              name: `zenstream-mobile-${tag}.apk`,
-              data: fs.createReadStream(path),
+              name: assetName,
+              data: fs.readFileSync(path),
               headers: {
-                contentType: 'application/vnd.android.package-archive',
-                contentLength: stat.size,
+                'content-type': 'application/vnd.android.package-archive',
+                'content-length': stat.size,
               },
             });
