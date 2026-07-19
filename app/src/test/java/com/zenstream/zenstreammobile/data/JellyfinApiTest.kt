@@ -30,6 +30,22 @@ class JellyfinApiTest {
     }
 
     @Test
+    fun nextUpQueryMatchesWebFilteringAndMediaStateOptions() {
+        val query = JellyfinApi().nextUpItemsQuery("user-123")
+
+        assertEquals("user-123", query["userId"])
+        assertEquals("18", query["limit"])
+        assertEquals("0", query["startIndex"])
+        assertEquals("true", query["enableImages"])
+        assertEquals("true", query["enableUserData"])
+        assertEquals("false", query["enableTotalRecordCount"])
+        assertEquals("true", query["disableFirstEpisode"])
+        assertEquals("false", query["enableResumable"])
+        assertEquals("false", query["enableRewatching"])
+        assertTrue(query["fields"].orEmpty().contains("UserData"))
+    }
+
+    @Test
     fun newlyAddedTvLibraryQueryRequestsEpisodesByDateCreated() {
         val query = JellyfinApi().newlyAddedItemsQuery("tvshows")
 

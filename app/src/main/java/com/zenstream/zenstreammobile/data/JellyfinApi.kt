@@ -281,9 +281,24 @@ class JellyfinApi(
         getItems(
             session,
             "/Shows/NextUp",
-            mapOf("userId" to session.userId, "limit" to "18", "disableFirstEpisode" to "true"),
+            nextUpItemsQuery(session.userId),
             HOME_REQUEST_TIMEOUT_MILLIS,
         )
+
+    internal fun nextUpItemsQuery(userId: String): Map<String, String> = mapOf(
+        "userId" to userId,
+        "limit" to "18",
+        "startIndex" to "0",
+        "fields" to ITEM_FIELDS,
+        "enableImages" to "true",
+        "imageTypeLimit" to "1",
+        "enableImageTypes" to ITEM_IMAGE_TYPES,
+        "enableUserData" to "true",
+        "enableTotalRecordCount" to "false",
+        "disableFirstEpisode" to "true",
+        "enableResumable" to "false",
+        "enableRewatching" to "false",
+    )
 
     internal fun latestItemsQuery(userId: String): Map<String, String> = mapOf(
         "userId" to userId,
