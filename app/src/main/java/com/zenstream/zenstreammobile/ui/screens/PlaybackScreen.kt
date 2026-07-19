@@ -218,10 +218,10 @@ fun PlaybackScreen(
                         }
                         if (!controlsLocked) {
                             PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
-                            if (state.playback?.audio.orEmpty().size > 1) {
+                            if (shouldShowAudioSelector(state.playback?.audio.orEmpty().size)) {
                                 PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
                             }
-                            if (state.playback?.subtitles.orEmpty().isNotEmpty()) {
+                            if (shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)) {
                                 PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
                             }
                             PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
@@ -487,6 +487,9 @@ internal fun shouldAutoHidePlaybackControls(
     menuOpen: Boolean,
     isPlaying: Boolean,
 ): Boolean = visible && !locked && !menuOpen && isPlaying
+
+internal fun shouldShowAudioSelector(trackCount: Int): Boolean = trackCount > 1
+internal fun shouldShowSubtitleSelector(trackCount: Int): Boolean = trackCount > 0
 
 @Composable
 private fun stringResourceCompat(id: Int): String = androidx.compose.ui.res.stringResource(id)
