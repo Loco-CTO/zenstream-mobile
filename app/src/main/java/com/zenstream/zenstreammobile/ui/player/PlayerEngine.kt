@@ -22,8 +22,6 @@ data class EngineState(
     val bufferedSeconds: Double = 0.0,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
-    val volume: Float = 1f,
-    val muted: Boolean = false,
     val speed: Float = 1f,
     val ready: Boolean = false,
     val error: String? = null,
@@ -37,8 +35,6 @@ interface PlaybackEngine {
     fun play()
     fun pause()
     fun seekTo(positionSeconds: Double)
-    fun setVolume(value: Float)
-    fun setMuted(value: Boolean)
     fun setSpeed(value: Float)
     fun release()
 }
@@ -60,8 +56,6 @@ class Media3PlaybackEngine : PlaybackEngine {
                     bufferedSeconds = current.bufferedPosition / 1000.0,
                     isPlaying = current.isPlaying,
                     isBuffering = current.playbackState == Player.STATE_BUFFERING,
-                    volume = current.volume,
-                    muted = current.volume == 0f,
                     speed = current.playbackParameters.speed,
                     ready = current.playbackState == Player.STATE_READY,
                 )
@@ -114,8 +108,6 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun play() { player?.play() }
     override fun pause() { player?.pause() }
     override fun seekTo(positionSeconds: Double) { player?.seekTo(max(0.0, positionSeconds).times(1000).toLong()) }
-    override fun setVolume(value: Float) { player?.volume = value.coerceIn(0f, 1f) }
-    override fun setMuted(value: Boolean) { if (value) player?.volume = 0f else if (player?.volume == 0f) player?.volume = 1f }
     override fun setSpeed(value: Float) { player?.setPlaybackSpeed(value.coerceIn(.25f, 3f)) }
     override fun release() {
         handler.removeCallbacks(ticker)
@@ -135,15 +127,12 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             val position = MPVLib.getPropertyDouble("time-pos") ?: 0.0
             val duration = MPVLib.getPropertyDouble("duration") ?: 0.0
             val paused = MPVLib.getPropertyBoolean("pause") ?: true
-            val volume = ((MPVLib.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
             _state.value = _state.value.copy(
                 positionSeconds = position,
                 durationSeconds = duration,
                 bufferedSeconds = position + (MPVLib.getPropertyDouble("demuxer-cache-duration") ?: 0.0),
                 isPlaying = !paused,
                 isBuffering = MPVLib.getPropertyBoolean("paused-for-cache") == true,
-                volume = volume,
-                muted = volume == 0f,
                 speed = (MPVLib.getPropertyDouble("speed") ?: 1.0).toFloat(),
                 ready = duration > 0,
             )
@@ -181,8 +170,6 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     override fun play() { MPVLib.setPropertyBoolean("pause", false) }
     override fun pause() { MPVLib.setPropertyBoolean("pause", true) }
     override fun seekTo(positionSeconds: Double) { MPVLib.command("seek", max(0.0, positionSeconds).toString(), "absolute+exact") }
-    override fun setVolume(value: Float) { MPVLib.setPropertyDouble("volume", value.coerceIn(0f, 1f) * 100.0) }
-    override fun setMuted(value: Boolean) { MPVLib.setPropertyBoolean("mute", value) }
     override fun setSpeed(value: Float) { MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble()) }
     override fun release() {
         handler.removeCallbacks(ticker)
