@@ -241,13 +241,14 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         handler.removeCallbacks(ticker)
         initialSeek.cancel()
         pendingUrl = null
-        view?.detachSurfaceForDestroy()
-        view?.destroy()
+        view?.requestDestroy()
         view = null
     }
 
     private class MpvSurfaceView(context: Context) : BaseMPVView(context, EmptyAttributeSet) {
         private var surfaceReady = false
+        private var destroyRequested = false
+        private var destroyed = false
 
         override fun initOptions() {
             MPVLib.setOptionString("vo", "gpu")
@@ -263,22 +264,33 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             if (surfaceReady) MPVLib.command("loadfile", url, "replace") else playFile(url)
         }
 
-        fun detachSurfaceForDestroy() {
-            if (!surfaceReady) return
-            MPVLib.setPropertyString("vo", "null")
-            MPVLib.setPropertyString("force-window", "no")
-            MPVLib.detachSurface()
-            surfaceReady = false
+        fun requestDestroy() {
+            if (destroyed) return
+            destroyRequested = true
+            if (!surfaceReady) destroyNow()
+        }
+
+        private fun destroyNow() {
+            if (destroyed) return
+            destroyed = true
+            super.destroy()
         }
 
         override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+            if (destroyed) return
             super.surfaceCreated(holder)
             surfaceReady = true
         }
 
         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+            if (destroyed) return
             surfaceReady = false
             super.surfaceDestroyed(holder)
+            if (destroyRequested) {
+                // Let the surface callback finish before destroying libmpv. The
+                // native renderer can still be using the surface during the callback.
+                post(::destroyNow)
+            }
         }
     }
 
