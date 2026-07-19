@@ -312,47 +312,86 @@ fun SearchScreen(
         factory = SearchViewModel.Factory(repository, session)
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
+    val topBarVisibility = remember(density) {
+        ScrollVisibilityController(
+            hideDistance = with(density) { 56.dp.toPx() },
+            revealDistance = with(density) { 64.dp.toPx() },
+        )
+    }
+    var topBarVisible by remember { mutableStateOf(true) }
+    val topBarScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                val deltaY = consumed.y + available.y
+                topBarVisible = topBarVisibility.onScroll(
+                    deltaY = deltaY,
+                    atTop = available.y > 0f && consumed.y == 0f,
+                )
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        topBarVisible = topBarVisibility.resetForRoute()
+    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(padding)
     ) {
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = vm::updateQuery,
-            leadingIcon = { Icon(painterResource(LucideR.drawable.lucide_ic_search), contentDescription = null) },
-            trailingIcon = {
-                if (state.query.isNotEmpty()) IconButton(onClick = {
-                    vm.updateQuery(
-                        ""
-                    )
-                }) {
-                    Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_x),
-                        contentDescription = stringResource(R.string.close)
+        AnimatedVisibility(
+            visible = topBarVisible,
+            enter = expandVertically(expandFrom = Alignment.Top) +
+                    slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
+                    slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            Column {
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = vm::updateQuery,
+                    leadingIcon = { Icon(painterResource(LucideR.drawable.lucide_ic_search), contentDescription = null) },
+                    trailingIcon = {
+                        if (state.query.isNotEmpty()) IconButton(onClick = {
+                            vm.updateQuery(
+                                ""
+                            )
+                        }) {
+                            Icon(
+                                painter = painterResource(LucideR.drawable.lucide_ic_x),
+                                contentDescription = stringResource(R.string.close)
+                            )
+                        }
+                    },
+                    placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { vm.retry() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                )
+                if (state.query.trim().length >= 2 && !state.loading && !state.error) {
+                    Text(
+                        stringResource(R.string.search_result_count, state.results.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                     )
                 }
-            },
-            placeholder = { Text(stringResource(R.string.search_placeholder)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { vm.retry() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-        )
-        if (state.query.trim().length >= 2 && !state.loading && !state.error) {
-            Text(
-                stringResource(R.string.search_result_count, state.results.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-            )
+            }
         }
         PullToRefreshLayout(
             isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
             onRefresh = vm::refresh,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .nestedScroll(topBarScrollConnection),
         ) {
             when {
                 state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())

@@ -128,7 +128,14 @@ private fun MainScaffold(
             revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
         )
     }
+    val topBarVisibility = remember(density) {
+        ScrollVisibilityController(
+            hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+            revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
+        )
+    }
     var bottomBarVisible by remember { mutableStateOf(true) }
+    var topBarVisible by remember { mutableStateOf(true) }
     val scrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(
@@ -141,6 +148,10 @@ private fun MainScaffold(
                     deltaY = deltaY,
                     atTop = available.y > 0f && consumed.y == 0f
                 )
+                topBarVisible = topBarVisibility.onScroll(
+                    deltaY = deltaY,
+                    atTop = available.y > 0f && consumed.y == 0f
+                )
                 return Offset.Zero
             }
         }
@@ -148,6 +159,7 @@ private fun MainScaffold(
 
     LaunchedEffect(currentRoute) {
         bottomBarVisible = bottomBarVisibility.resetForRoute()
+        topBarVisible = topBarVisibility.resetForRoute()
     }
 
     val chromeHidden = currentRoute == DETAIL.substringBefore("/") ||
@@ -156,7 +168,21 @@ private fun MainScaffold(
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!chromeHidden) {
-                MainTopBar(onSettings = { navController.navigate(SETTINGS) { launchSingleTop = true } })
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    AnimatedVisibility(
+                        visible = topBarVisible,
+                        enter = expandVertically(expandFrom = Alignment.Top) +
+                                slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Top) +
+                                slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    ) {
+                        MainTopBar(onSettings = { navController.navigate(SETTINGS) { launchSingleTop = true } })
+                    }
+                }
             }
         },
         bottomBar = {
