@@ -247,8 +247,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         initialSeek.schedule(startPositionSeconds)
         pendingUrl = url
         val current = view ?: return
-        current.load(url)
-        MPVLib.setPropertyBoolean("pause", false)
+        if (current.load(url)) MPVLib.setPropertyBoolean("pause", false)
         _state.value = EngineState()
     }
 
@@ -289,8 +288,13 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         override fun postInitOptions() = Unit
         override fun observeProperties() = Unit
 
-        fun load(url: String) {
-            if (lifecycle.hasSurface()) MPVLib.command("loadfile", url, "replace") else playFile(url)
+        fun load(url: String): Boolean {
+            if (lifecycle.hasSurface()) {
+                MPVLib.command("loadfile", url, "replace")
+                return true
+            }
+            playFile(url)
+            return false
         }
 
         fun requestDestroy() {
@@ -306,6 +310,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             if (!lifecycle.canUseSurface()) return
             super.surfaceCreated(holder)
             lifecycle.markSurfaceCreated()
+            MPVLib.setPropertyBoolean("pause", false)
         }
 
         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
