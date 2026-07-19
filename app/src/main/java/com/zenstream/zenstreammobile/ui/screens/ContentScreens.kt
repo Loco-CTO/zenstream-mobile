@@ -471,27 +471,40 @@ fun LibraryScreen(
             .fillMaxSize()
             .padding(padding)
     ) {
-        if (state.libraries.isNotEmpty()) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(
-                    state.libraries,
-                    key = { it.id }) { library ->
-                    FilterChip(
-                        selected = state.selected?.id == library.id,
-                        onClick = { vm.select(library) },
-                        label = { Text(library.name) })
+        AnimatedVisibility(
+            visible = topBarVisible,
+            enter = expandVertically(expandFrom = Alignment.Top) +
+                    slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
+                    slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        ) {
+            Column {
+                if (state.libraries.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            state.libraries,
+                            key = { it.id }) { library ->
+                            FilterChip(
+                                selected = state.selected?.id == library.id,
+                                onClick = { vm.select(library) },
+                                label = { Text(library.name) })
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
+
+                LibraryHeader(state = state, onSortChanged = vm::setSort)
             }
-            Spacer(Modifier.height(12.dp))
         }
-        LibraryHeader(state = state, onSortChanged = vm::setSort)
         PullToRefreshLayout(
             isRefreshing = state.loading,
             onRefresh = vm::refresh,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .nestedScroll(topBarScrollConnection),
         ) {
             when {
                 state.loading && state.items.isEmpty() -> CenterLoading(PaddingValues())
