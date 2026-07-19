@@ -57,6 +57,11 @@ jobs:
             *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
           esac
           new_version="$major.$minor.$fix"
+          version_code=$((major * 1000000 + minor * 1000 + fix))
+          if (( minor > 999 || fix > 999 || version_code < 1 || version_code > 2100000000 )); then
+            echo "Release version $new_version cannot be represented by Android versionCode." >&2
+            exit 1
+          fi
           tag="v$new_version"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Release tag $tag already exists." >&2
