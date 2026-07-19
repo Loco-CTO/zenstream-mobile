@@ -235,9 +235,9 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
 }
 
 private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Boolean): HomeData {
-    val rows = rows.filterNot { it.title == title && it.libraryName == null } +
+    val globalRows = rows.filter { it.libraryName == null && it.title != title } +
         listOfNotNull(items.takeIf { it.isNotEmpty() }?.let { MediaRow(title, items = it, wide = wide) })
-    return copy(rows = rows)
+    return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
 }
 
 private fun HomeData.withLibraryData(
@@ -250,9 +250,18 @@ private fun HomeData.withLibraryData(
     byLibrary[libraryData.library.name] = libraryData.rows
     val orderedLibraryRows = libraries.flatMap { byLibrary[it.name].orEmpty() }
     return copy(
-        rows = rows.filter { it.libraryName == null } + orderedLibraryRows,
+        rows = rows.filter { it.libraryName == null }.orderedHomeRows() + orderedLibraryRows,
     )
 }
+
+private fun List<MediaRow>.orderedHomeRows(): List<MediaRow> =
+    sortedBy { row ->
+        when (row.title) {
+            RowTitle.ContinueWatching -> 0
+            RowTitle.NextUp -> 1
+            else -> 2
+        }
+    }
 
 data class LibraryUiState(
     val loading: Boolean = true,

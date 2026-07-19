@@ -98,6 +98,28 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun globalRowsKeepTheirDesignOrderWhenResponsesCompleteOutOfOrder() = runTest {
+        val continueGate = CompletableDeferred<List<MediaItem>>()
+        val source = FakeHomeDataSource(
+            continueRequest = { continueGate.await() },
+            nextUpRequest = { listOf(MediaItem("next", "Next")) },
+            librariesRequest = { emptyList() },
+        )
+        val viewModel = HomeViewModel(source, session)
+        runCurrent()
+
+        assertEquals(listOf(RowTitle.NextUp), viewModel.uiState.value.data?.rows?.map { it.title })
+
+        continueGate.complete(listOf(MediaItem("continue", "Continue")))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(RowTitle.ContinueWatching, RowTitle.NextUp),
+            viewModel.uiState.value.data?.rows?.map { it.title },
+        )
+    }
+
+    @Test
     fun allFailuresShowErrorAndRetryClearsTheFailedState() = runTest {
         val source = FakeHomeDataSource(
             featuredRequest = { error("featured failed") },
