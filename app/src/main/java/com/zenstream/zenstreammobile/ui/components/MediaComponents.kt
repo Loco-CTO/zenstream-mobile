@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -144,15 +143,6 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
                     }
                 }
             }
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = .86f),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(Color.Black.copy(alpha = .45f), RoundedCornerShape(50))
-                    .padding(7.dp),
-            )
             progressPercent(item)?.let { progress ->
                 LinearProgressIndicator(
                     progress = { progress / 100f },
@@ -227,12 +217,14 @@ fun MediaImage(
 
 fun progressPercent(item: MediaItem): Int? {
     val direct = item.playedPercentage
-    if (direct != null) return direct.coerceIn(0.0, 100.0).roundToInt()
+    if (direct != null) {
+        return direct.coerceIn(0.0, 100.0).roundToInt().takeIf { it > 0 }
+    }
     if (item.runtimeTicks != null && item.playbackPositionTicks != null && item.runtimeTicks > 0) {
         return ((item.playbackPositionTicks.toDouble() / item.runtimeTicks) * 100).coerceIn(
             0.0,
             100.0
-        ).roundToInt()
+        ).roundToInt().takeIf { it > 0 }
     }
     return null
 }
