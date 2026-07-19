@@ -61,6 +61,12 @@
     <string name="subtitle_track">字幕トラック</string>
     <string name="subtitles_off">字幕オフ</string>
     <string name="player_pip">ピクチャー イン ピクチャー</string>
+    <string name="player_lock">プレーヤー操作をロック</string>
+    <string name="player_unlock">プレーヤー操作のロックを解除</string>
+    <string name="player_fit">画面に合わせる</string>
+    <string name="player_previous">前の項目</string>
+    <string name="player_next">次の項目</string>
+    <string name="pause">一時停止</string>
     <string name="player_seek_back">10秒戻る</string>
     <string name="player_seek_forward">10秒進む</string>
     <string name="player_volume">音量</string>

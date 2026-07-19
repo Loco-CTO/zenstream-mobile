@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.os.Build
 import android.util.Rational
 import androidx.compose.foundation.background
@@ -10,23 +11,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -38,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
@@ -59,14 +66,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
-import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun PlaybackScreen(
@@ -83,10 +91,26 @@ fun PlaybackScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
+    var controlsLocked by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<PlayerMenu?>(null) }
 
-    DisposableEffect(Unit) {
-        onDispose { vm.onPause() }
+    DisposableEffect(context) {
+        val activity = context as? Activity
+        val previousOrientation = activity?.requestedOrientation
+        activity?.let { enterPlaybackMode(it) }
+        onDispose {
+            vm.onPause()
+            activity?.let {
+                exitPlaybackMode(it, previousOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+            }
+        }
+    }
+
+    LaunchedEffect(controlsVisible, controlsLocked, menu, state.engine.isPlaying) {
+        if (controlsVisible && !controlsLocked && menu == null && state.engine.isPlaying) {
+            delay(4_500)
+            controlsVisible = false
+        }
     }
 
     val playerView = remember(state.loading, state.engineType) {
@@ -97,7 +121,7 @@ fun PlaybackScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable { controlsVisible = !controlsVisible },
+            .clickable(enabled = !controlsLocked) { controlsVisible = !controlsVisible },
     ) {
         if (playerView != null) {
             AndroidView(
@@ -120,7 +144,7 @@ fun PlaybackScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 24.dp, vertical = 92.dp)
+                    .padding(horizontal = 24.dp, vertical = if (controlsVisible && !controlsLocked) 128.dp else 48.dp)
                     .background(
                         parseColor(state.subtitleStyle.backgroundColor, Color.Black).copy(
                             alpha = state.subtitleStyle.backgroundOpacity / 100f
@@ -154,62 +178,97 @@ fun PlaybackScreen(
             }
         }
 
-        if (controlsVisible) {
+        if (controlsVisible || controlsLocked) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .background(Color.Black.copy(alpha = .55f))
-                    .padding(top = 12.dp, start = 8.dp, end = 8.dp, bottom = 16.dp),
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = .78f), Color.Black.copy(alpha = 0f))
+                        )
+                    )
+                    .padding(top = 8.dp, start = 10.dp, end = 10.dp, bottom = 28.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { vm.onPause(); onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResourceCompat(R.string.back), tint = Color.White)
                     }
-                    Text(state.itemName, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { enterPip(context) }, enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        Icon(Icons.Default.PictureInPictureAlt, stringResourceCompat(R.string.player_pip), tint = Color.White)
+                    Text(
+                        playbackTitle(state),
+                        color = Color.White,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
+                        Icon(
+                            if (controlsLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
+                            tint = Color.White,
+                        )
+                    }
+                    if (!controlsLocked) {
+                        PlayerMenuButton(Icons.Default.FitScreen, stringResourceCompat(R.string.player_fit)) {
+                            enterPlaybackMode(context as? Activity)
+                        }
+                        PlayerMenuButton(Icons.Default.Speed, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
+                        PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
+                        PlayerMenuButton(Icons.Default.VolumeUp, stringResourceCompat(R.string.player_volume)) { menu = PlayerMenu.Volume }
+                        PlayerMenuButton(Icons.Default.PictureInPictureAlt, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
+                        PlayerMenuButton(Icons.Default.ClosedCaption, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
                     }
                 }
             }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = .65f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                Slider(
-                    value = state.engine.positionSeconds.toFloat().coerceIn(0f, state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f)),
-                    onValueChange = { vm.seekTo(it.toDouble()) },
-                    valueRange = 0f..state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { vm.seekBy(-10.0) }) { Icon(Icons.Default.Replay10, stringResourceCompat(R.string.player_seek_back), tint = Color.White) }
-                    IconButton(onClick = vm::togglePlay) {
-                        Icon(if (state.engine.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, stringResourceCompat(R.string.play), tint = Color.White, modifier = Modifier.size(32.dp))
-                    }
-                    IconButton(onClick = { vm.seekBy(10.0) }) { Icon(Icons.Default.Forward10, stringResourceCompat(R.string.player_seek_forward), tint = Color.White) }
-                    PlayerMenuButton(Icons.Default.VolumeUp, stringResourceCompat(R.string.player_volume)) { menu = PlayerMenu.Volume }
-                    Spacer(Modifier.weight(1f))
-                    PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
-                    PlayerMenuButton(Icons.Default.Subtitles, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
-                    PlayerMenuButton(Icons.Default.Settings, stringResourceCompat(R.string.settings)) { menu = PlayerMenu.Settings }
-                    IconButton(onClick = {
-                        (context as? Activity)?.window?.let { window ->
-                            WindowCompat.getInsetsController(window, window.decorView)
-                                .hide(WindowInsetsCompat.Type.systemBars())
+            if (controlsVisible && !controlsLocked) {
+                Row(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(34.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PlayerMenuButton(Icons.Default.SkipPrevious, stringResourceCompat(R.string.player_previous), enabled = false) {}
+                    PlayerMenuButton(Icons.Default.Replay10, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
+                    Surface(
+                        onClick = vm::togglePlay,
+                        modifier = Modifier.size(88.dp),
+                        shape = CircleShape,
+                        color = Color.White,
+                        contentColor = Color.Black,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                if (state.engine.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
+                                modifier = Modifier.size(44.dp),
+                            )
                         }
-                    }) {
-                        Icon(Icons.Default.Fullscreen, stringResourceCompat(R.string.player_fullscreen), tint = Color.White)
                     }
+                    PlayerMenuButton(Icons.Default.Forward10, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
+                    PlayerMenuButton(Icons.Default.SkipNext, stringResourceCompat(R.string.player_next), enabled = false) {}
                 }
-                Text(
-                    "${formatTime(state.engine.positionSeconds)} / ${formatTime(state.engine.durationSeconds)}",
-                    color = Color.White.copy(alpha = .7f),
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
+                            )
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        "${formatTime(state.engine.positionSeconds)}  -  ${formatTime(state.engine.durationSeconds)}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Slider(
+                        value = state.engine.positionSeconds.toFloat().coerceIn(0f, state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f)),
+                        onValueChange = { vm.seekTo(it.toDouble()) },
+                        valueRange = 0f..state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
 
@@ -220,8 +279,15 @@ fun PlaybackScreen(
 private enum class PlayerMenu { Audio, Subtitles, Settings, Volume }
 
 @Composable
-private fun PlayerMenuButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) { Icon(icon, label, tint = Color.White) }
+private fun PlayerMenuButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(icon, label, tint = if (enabled) Color.White else Color.White.copy(alpha = .3f))
+    }
 }
 
 @Composable
@@ -285,6 +351,31 @@ private fun enterPip(context: android.content.Context) {
         (context as? Activity)?.enterPictureInPictureMode(
             PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
         )
+    }
+}
+
+private fun enterPlaybackMode(activity: Activity?) {
+    activity ?: return
+    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+    WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+        hide(WindowInsetsCompat.Type.systemBars())
+        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+}
+
+private fun exitPlaybackMode(activity: Activity, previousOrientation: Int) {
+    WindowCompat.getInsetsController(activity.window, activity.window.decorView).show(WindowInsetsCompat.Type.systemBars())
+    WindowCompat.setDecorFitsSystemWindows(activity.window, true)
+    activity.requestedOrientation = previousOrientation
+}
+
+private fun playbackTitle(state: com.zenstream.zenstreammobile.ui.PlaybackUiState): String {
+    val item = state.playback?.item ?: return state.itemName
+    return if (item.parentIndexNumber != null && item.indexNumber != null) {
+        "S${item.parentIndexNumber}:E${item.indexNumber} - ${item.name}"
+    } else {
+        item.name
     }
 }
 

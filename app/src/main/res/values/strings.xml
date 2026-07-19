@@ -61,6 +61,12 @@
     <string name="subtitle_track">Subtitle track</string>
     <string name="subtitles_off">Subtitles off</string>
     <string name="player_pip">Picture in picture</string>
+    <string name="player_lock">Lock player controls</string>
+    <string name="player_unlock">Unlock player controls</string>
+    <string name="player_fit">Fit video to screen</string>
+    <string name="player_previous">Previous item</string>
+    <string name="player_next">Next item</string>
+    <string name="pause">Pause</string>
     <string name="player_seek_back">Seek back 10 seconds</string>
     <string name="player_seek_forward">Seek forward 10 seconds</string>
     <string name="player_volume">Volume</string>
