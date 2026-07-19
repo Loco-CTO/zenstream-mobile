@@ -40,8 +40,8 @@
     <string name="close">Close</string>
     <string name="year">%1$d</string>
     <string name="sort_rating">Rating</string>
-    <string name="episodes_unwatched">%1$d unwatched</string>
-    <string name="progress">%1$d%% watched</string>
+    <string name="episodes_unwatched">%1$d</string>
+    <string name="progress">%1$d%%</string>
     <string name="poster_description">Poster for %1$s</string>
     <string name="backdrop_description">Backdrop for %1$s</string>
     <string name="logo_description">Logo for %1$s</string>
