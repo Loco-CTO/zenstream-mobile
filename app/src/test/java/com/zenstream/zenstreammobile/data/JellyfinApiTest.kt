@@ -28,4 +28,14 @@ class JellyfinApiTest {
                 .contains("RemoteTrailers")
         )
     }
+
+    @Test
+    fun detailQueryRequestsUserStatePeopleAndStudios() {
+        val query = JellyfinApi().detailItemQuery("user-123")
+        assertEquals("user-123", query["userId"])
+        assertEquals("true", query["enableUserData"])
+        assertTrue(query["fields"].orEmpty().contains("People"))
+        assertTrue(query["fields"].orEmpty().contains("Studios"))
+        assertTrue(query["fields"].orEmpty().contains("PremiereDate"))
+    }
 }

@@ -1,10 +1,12 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlinx.coroutines.Dispatchers
@@ -190,6 +192,105 @@ class JellyfinApi(
             )
         }
 
+    suspend fun detail(
+        session: AuthSession,
+        itemId: String,
+        requestedSeasonId: String? = null,
+    ): DetailData = withContext(Dispatchers.IO) {
+        val item = getItem(session, itemId)
+        val parentSeries = if (item.type == "Episode" && !item.seriesId.isNullOrBlank()) {
+            getItem(session, item.seriesId)
+        } else null
+        val seriesId = when (item.type) {
+            "Series" -> item.id
+            "Episode" -> item.seriesId
+            else -> null
+        }
+        val seasons = if (seriesId != null) getSeasons(session, seriesId) else emptyList()
+        val selectedSeason = selectInitialSeason(item, seasons, requestedSeasonId)
+        val episodes = if (seriesId != null && selectedSeason != null) {
+            getEpisodes(session, seriesId, selectedSeason.id)
+        } else emptyList()
+        val similar = if (item.type == "Episode") emptyList() else getSimilar(session, item.id)
+        DetailData(
+            item = item,
+            parentSeries = parentSeries,
+            seasons = seasons,
+            episodes = episodes,
+            similar = similar,
+            selectedSeasonId = selectedSeason?.id,
+        )
+    }
+
+    internal fun detailItemQuery(userId: String): Map<String, String> = mapOf(
+        "userId" to userId,
+        "fields" to ITEM_FIELDS,
+        "enableImages" to "true",
+        "imageTypeLimit" to "1",
+        "enableImageTypes" to ITEM_IMAGE_TYPES,
+        "enableUserData" to "true",
+    )
+
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/UserFavoriteItems/$itemId",
+                method = if (favorite) "POST" else "DELETE",
+            )
+        }
+
+    suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/UserPlayedItems/$itemId",
+                method = if (played) "POST" else "DELETE",
+            )
+        }
+
+    private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
+        withContext(Dispatchers.IO) {
+            val json = requestJson(session, "/Items/$itemId", detailItemQuery(session.userId))
+            parseMediaItems(JSONObject().put("Items", org.json.JSONArray().put(json))).first()
+        }
+
+    private suspend fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
+        withContext(Dispatchers.IO) {
+            parseMediaItems(
+                requestJson(
+                    session,
+                    "/Shows/$seriesId/Seasons",
+                    detailItemQuery(session.userId),
+                )
+            )
+        }
+
+    private suspend fun getEpisodes(
+        session: AuthSession,
+        seriesId: String,
+        seasonId: String,
+    ): List<MediaItem> = withContext(Dispatchers.IO) {
+        parseMediaItems(
+            requestJson(
+                session,
+                "/Shows/$seriesId/Episodes",
+                detailItemQuery(session.userId) + mapOf("seasonId" to seasonId),
+            )
+        ).sortedWith(compareBy(nullsLast()) { it.indexNumber })
+    }
+
+    private suspend fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
+        withContext(Dispatchers.IO) {
+            parseMediaItems(
+                requestJson(
+                    session,
+                    "/Items/$itemId/Similar",
+                    detailItemQuery(session.userId) + mapOf("limit" to "8"),
+                )
+            )
+        }
+
     private suspend fun getItems(
         session: AuthSession,
         path: String,
@@ -202,7 +303,9 @@ class JellyfinApi(
         session: AuthSession,
         path: String,
         query: Map<String, String> = emptyMap(),
-    ): JSONObject = requestJson(session.serverUrl, path, query, session.token)
+        method: String = "GET",
+        body: String? = null,
+    ): JSONObject = requestJson(session.serverUrl, path, query, session.token, method, body)
 
     private fun requestJson(
         server: String,
@@ -219,21 +322,24 @@ class JellyfinApi(
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("Authorization", authorizationHeader(token, deviceId))
-        if (method == "POST") requestBuilder.post((body ?: "{}").toRequestBody(JSON_MEDIA_TYPE))
+        requestBuilder.method(
+            method,
+            if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
+        )
         val response = httpClient.newCall(requestBuilder.build()).execute()
         response.use {
             if (!it.isSuccessful) throw JellyfinException(
                 it.code,
                 "Jellyfin request failed with ${it.code}"
             )
-            return JSONObject(it.body?.string().orEmpty())
+            return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
         }
     }
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         private const val ITEM_FIELDS =
-            "Overview,Genres,PrimaryImageAspectRatio,CommunityRating,ProductionYear,PremiereDate,RecursiveItemCount,ParentId,ImageTags,BackdropImageTags,ImageBlurHashes,UserData,SeriesPrimaryImage"
+            "Overview,Genres,PrimaryImageAspectRatio,CommunityRating,ProductionYear,PremiereDate,RecursiveItemCount,ParentId,ImageTags,BackdropImageTags,ImageBlurHashes,UserData,SeriesPrimaryImage,People,Studios,ChildCount"
         private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"
 
         fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
@@ -251,7 +357,17 @@ class JellyfinApi(
             else -> "Series,Movie"
         }
     }
+
 }
+
+internal fun selectInitialSeason(
+    item: MediaItem,
+    seasons: List<MediaItem>,
+    requestedSeasonId: String? = null,
+): MediaItem? = requestedSeasonId?.let { id -> seasons.find { it.id == id } }
+    ?: item.seasonId?.let { id -> seasons.find { it.id == id } }
+    ?: seasons.find { it.indexNumber == 1 }
+    ?: seasons.firstOrNull()
 
 class JellyfinException(val statusCode: Int, message: String) : Exception(message)
 
@@ -278,22 +394,57 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> = items(json).mapNotNull 
         type = item.optString("Type").ifBlank { null },
         seriesName = item.optString("SeriesName").ifBlank { null },
         seriesId = item.optString("SeriesId").ifBlank { null },
+        seasonId = item.optString("SeasonId").ifBlank { null },
+        parentId = item.optString("ParentId").ifBlank { null },
         parentIndexNumber = item.optIntOrNull("ParentIndexNumber"),
         indexNumber = item.optIntOrNull("IndexNumber"),
         overview = item.optString("Overview").ifBlank { null },
+        premiereDate = item.optString("PremiereDate").ifBlank { null },
         productionYear = item.optIntOrNull("ProductionYear"),
         officialRating = item.optString("OfficialRating").ifBlank { null },
         communityRating = item.optDoubleOrNull("CommunityRating"),
+        genres = stringArray(item, "Genres"),
+        studios = objectNameArray(item, "Studios"),
+        people = people(item),
+        recursiveItemCount = item.optIntOrNull("RecursiveItemCount")
+            ?: item.optIntOrNull("ChildCount"),
         runtimeTicks = item.optLongOrNull("RunTimeTicks"),
         imageTags = imageTags,
         backdropImageTags = backdropTags,
         seriesPrimaryImageTag = item.optString("SeriesPrimaryImageTag").ifBlank { null },
         played = userData?.optBoolean("Played") ?: false,
+        favorite = userData?.optBoolean("IsFavorite") ?: false,
         unplayedItemCount = userData?.optIntOrNull("UnplayedItemCount"),
         playedPercentage = userData?.optDoubleOrNull("PlayedPercentage"),
         playbackPositionTicks = userData?.optLongOrNull("PlaybackPositionTicks"),
     )
 }
+
+private fun stringArray(item: JSONObject, key: String): List<String> =
+    item.optJSONArray(key)?.let { array ->
+        List(array.length()) { array.optString(it) }.filter(String::isNotBlank)
+    } ?: emptyList()
+
+private fun objectNameArray(item: JSONObject, key: String): List<String> =
+    item.optJSONArray(key)?.let { array ->
+        List(array.length()) { array.optJSONObject(it)?.optString("Name").orEmpty() }
+            .filter(String::isNotBlank)
+    } ?: emptyList()
+
+private fun people(item: JSONObject): List<MediaPerson> =
+    item.optJSONArray("People")?.let { array ->
+        List(array.length()) { index ->
+            val person = array.optJSONObject(index) ?: JSONObject()
+            person.optString("Name").takeIf { it.isNotBlank() }?.let {
+                MediaPerson(
+                    name = it,
+                    role = person.optString("Role").ifBlank { null },
+                    type = person.optString("Type").ifBlank { null },
+                    primaryImageTag = person.optString("PrimaryImageTag").ifBlank { null },
+                )
+            }
+        }.filterNotNull()
+    } ?: emptyList()
 
 private fun JSONObject.optIntOrNull(key: String): Int? =
     if (has(key) && !isNull(key)) optInt(key) else null
