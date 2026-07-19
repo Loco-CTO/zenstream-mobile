@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.data
 
+import android.os.Build
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
@@ -550,10 +551,15 @@ class JellyfinApi(
         fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
             token?.let { "Token=\"$it\"" },
             "Client=\"ZenStream\"",
-            "Device=\"Android\"",
+            "Device=\"${deviceName()}\"",
             "DeviceId=\"$deviceId\"",
-            "Version=\"1.0\"",
+            "Version=\"${BuildConfig.ZENSTREAM_VERSION}\"",
         ).filterNotNull().joinToString(", ").let { "MediaBrowser $it" }
+
+        private fun deviceName(): String = Build.MODEL
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
+            ?: "Android"
 
         private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false) = when (collectionType) {
             "tvshows" -> if (newlyAdded) "Episode" else "Series"

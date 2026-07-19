@@ -47,7 +47,11 @@ val mainVersion = configuredValue("zenstreamMain")
         ?.takeIf { it >= 0 }
     ?: 0
 val releaseBuild = configuredValue("zenstreamRelease") == "true"
-val displayVersion = if (releaseBuild) semanticVersion else "$semanticVersion-main.$mainVersion"
+val displayVersion = if (releaseBuild || mainVersion == 0) {
+    semanticVersion
+} else {
+    "$semanticVersion-main.$mainVersion"
+}
 
 val releaseStoreFile =
     configuredOrEnvironmentValue("releaseStoreFile", "ANDROID_RELEASE_STORE_FILE")
