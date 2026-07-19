@@ -126,7 +126,6 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = {},
                     onSeekBy = {},
-                    onSeekTo = {},
                     onSeekFeedback = {},
                     onSurfaceDragStart = {},
                     onSurfaceDragChanged = {
