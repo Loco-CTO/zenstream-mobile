@@ -1,0 +1,195 @@
+package com.zenstream.zenstreammobile.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.ui.SettingsViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    repository: JellyfinRepository,
+    session: AuthSession,
+    orchestratorUrl: String?,
+    onBack: () -> Unit,
+) {
+    val vm: SettingsViewModel = viewModel(
+        key = "settings-${session.userId}",
+        factory = SettingsViewModel.Factory(repository, session, orchestratorUrl),
+    )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            )
+        },
+        containerColor = Color.Transparent,
+    ) { padding ->
+        LazyColumn(
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(padding),
+        ) {
+            item {
+                SettingsGroup(title = stringResource(R.string.player_group)) {
+                    EngineSelector(state.playerEngine, vm::setPlayerEngine)
+                }
+            }
+            item {
+                SettingsGroup(title = stringResource(R.string.subtitles_group)) {
+                    SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
+                    if (state.subtitleSaveError) {
+                        Text(
+                            stringResource(R.string.subtitle_save_failed),
+                            color = MaterialThemeError,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun EngineSelector(selected: PlayerEngine, onChange: (PlayerEngine) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.player_engine)) },
+        supportingContent = { Text(if (selected == PlayerEngine.MEDIA3) stringResource(R.string.player_engine_media3) else stringResource(R.string.player_engine_mpv)) },
+        modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(text = { Text(stringResource(R.string.player_engine_media3)) }, onClick = { onChange(PlayerEngine.MEDIA3); expanded = false })
+        DropdownMenuItem(text = { Text(stringResource(R.string.player_engine_mpv)) }, onClick = { onChange(PlayerEngine.MPV); expanded = false })
+    }
+}
+
+@Composable
+private fun SubtitleSettings(
+    style: com.zenstream.zenstreammobile.model.SubtitleStyle,
+    onChange: (com.zenstream.zenstreammobile.model.SubtitleStyle.() -> com.zenstream.zenstreammobile.model.SubtitleStyle) -> Unit,
+) {
+    var fontExpanded by remember { mutableStateOf(false) }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.subtitle_font)) },
+        supportingContent = { Text(style.fontFamily) },
+        modifier = Modifier.fillMaxWidth().clickable { fontExpanded = true },
+    )
+    DropdownMenu(expanded = fontExpanded, onDismissRequest = { fontExpanded = false }) {
+        listOf("sans", "serif", "mono").forEach { family ->
+            DropdownMenuItem(text = { Text(family) }, onClick = { onChange { copy(fontFamily = family) }; fontExpanded = false })
+        }
+    }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.subtitle_bold)) },
+        trailingContent = { Switch(checked = style.bold, onCheckedChange = { onChange { copy(bold = it) } }) },
+    )
+    SliderRow(stringResource(R.string.subtitle_text_size), style.textScale, 50f..200f, "%d%%") { onChange { copy(textScale = it) } }
+    ColorField(stringResource(R.string.subtitle_font_color), style.fontColor) { onChange { copy(fontColor = it) } }
+    SliderRow(stringResource(R.string.subtitle_border_size), style.borderSize, 0f..8f, "%.0f") { onChange { copy(borderSize = it) } }
+    ColorField(stringResource(R.string.subtitle_border_color), style.borderColor) { onChange { copy(borderColor = it) } }
+    ColorField(stringResource(R.string.subtitle_background_color), style.backgroundColor) { onChange { copy(backgroundColor = it) } }
+    SliderRow(stringResource(R.string.subtitle_background_opacity), style.backgroundOpacity, 0f..100f, "%d%%") { onChange { copy(backgroundOpacity = it) } }
+    Text(
+        stringResource(R.string.subtitle_preview),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+    )
+    Text(
+        "The quick brown fox jumps over the lazy dog.",
+        color = runCatching { Color(android.graphics.Color.parseColor(style.fontColor)) }.getOrDefault(Color.White),
+        fontFamily = when (style.fontFamily) { "serif" -> FontFamily.Serif; "mono" -> FontFamily.Monospace; else -> FontFamily.SansSerif },
+        fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+        fontSize = (20f * style.textScale / 100f).sp,
+        modifier = Modifier.fillMaxWidth().background(Color.Black).padding(16.dp),
+    )
+}
+
+@Composable
+private fun SliderRow(label: String, value: Float, range: ClosedFloatingPointRange<Float>, format: String, onChange: (Float) -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label)
+            Text(if (format.contains("%d")) format.format(value.toInt()) else format.format(value))
+        }
+        Slider(value = value, onValueChange = onChange, valueRange = range)
+    }
+}
+
+@Composable
+private fun ColorField(label: String, value: String, onChange: (String) -> Unit) {
+    var text by remember(value) { mutableStateOf(value) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { text = it; if (Regex("^#[0-9a-fA-F]{6}$").matches(it)) onChange(it) },
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+private val MaterialThemeError = Color(0xFFFF8A80)

@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -25,6 +27,7 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val locale = stringPreferencesKey("locale")
+        val playerEngine = stringPreferencesKey("player_engine")
     }
 
     val serverUrl: Flow<String?> = context.sessionDataStore.data.map { it[Keys.serverUrl] }
@@ -34,6 +37,10 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
 
     val locale: Flow<String> = context.sessionDataStore.data
         .map { normalizeLocale(it[Keys.locale]) }
+        .distinctUntilChanged()
+
+    val playerEngine: Flow<PlayerEngine> = context.sessionDataStore.data
+        .map { value -> runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }.getOrDefault(PlayerEngine.MEDIA3) }
         .distinctUntilChanged()
 
     val session: Flow<AuthSession?> = context.sessionDataStore.data
@@ -95,6 +102,20 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
     suspend fun saveLocale(locale: String) {
         context.sessionDataStore.edit { it[Keys.locale] = normalizeLocale(locale) }
     }
+
+    suspend fun savePlayerEngine(engine: PlayerEngine) {
+        context.sessionDataStore.edit { it[Keys.playerEngine] = engine.name }
+    }
+
+    suspend fun cacheSubtitleStyle(userId: String, style: SubtitleStyle) {
+        context.sessionDataStore.edit {
+            it[stringPreferencesKey("subtitle_style_$userId")] = subtitleStyleToJson(style)
+        }
+    }
+
+    suspend fun cachedSubtitleStyle(userId: String): SubtitleStyle? =
+        context.sessionDataStore.data.first()[stringPreferencesKey("subtitle_style_$userId")]
+            ?.let { runCatching { subtitleStyleFromJson(it) }.getOrNull() }
 
     suspend fun clearSession() {
         context.sessionDataStore.edit {

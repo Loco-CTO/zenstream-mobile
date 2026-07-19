@@ -8,6 +8,10 @@ import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
+import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.PlaybackData
+import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -51,6 +55,127 @@ class JellyfinApi(
                 userId,
                 user?.optString("Name").orEmpty().ifBlank { username.trim() })
         }
+
+    suspend fun playback(
+        session: AuthSession,
+        itemId: String,
+        options: PlaybackOptions = PlaybackOptions(),
+    ): PlaybackData = withContext(Dispatchers.IO) {
+        val item = getItem(session, itemId)
+        val json = requestJson(
+            session,
+            "/Items/$itemId/PlaybackInfo",
+            playbackQuery(session, options),
+            method = "POST",
+            body = playbackBody(session, options),
+        )
+        val sourceJson = json.optJSONArray("MediaSources")?.optJSONObject(0)
+            ?: error("Jellyfin did not return a media source")
+        val source = parseMediaSource(sourceJson)
+        PlaybackData(
+            item = item,
+            source = source,
+            audio = source.mediaStreams.filter { it.type == "Audio" },
+            subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
+        )
+    }
+
+    suspend fun subtitleWebVtt(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String?,
+        streamIndex: Int,
+    ): String = withContext(Dispatchers.IO) {
+        val params = mapOf(
+            "api_key" to session.token,
+            "MediaSourceId" to (sourceId ?: itemId),
+            "format" to "vtt",
+            "addVttTimeMap" to "true",
+            "copyTimestamps" to "true",
+        )
+        val builder = "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
+            .toHttpUrl()
+            .newBuilder()
+        params.forEach { (key, value) -> builder.addQueryParameter(key, value) }
+        val request = Request.Builder()
+            .url(builder.build())
+            .header("Accept", "text/vtt")
+            .header("Authorization", authorizationHeader(session.token, deviceId))
+            .get()
+            .build()
+        httpClient.newCall(request).execute().use {
+            if (!it.isSuccessful) throw JellyfinException(it.code, "Subtitle request failed with ${it.code}")
+            it.body?.string().orEmpty()
+        }
+    }
+
+    suspend fun reportPlayback(
+        session: AuthSession,
+        itemId: String,
+        positionSeconds: Double,
+        isPaused: Boolean,
+    ) = withContext(Dispatchers.IO) {
+        requestJson(
+            session,
+            "/Sessions/Playing/Progress",
+            method = "POST",
+            body = JSONObject()
+                .put("ItemId", itemId)
+                .put("PositionTicks", (positionSeconds.coerceAtLeast(0.0) * 10_000_000.0).toLong())
+                .put("IsPaused", isPaused)
+                .put("PlayMethod", "DirectStream")
+                .put("PlaySessionId", deviceId)
+                .toString(),
+        )
+    }
+
+    internal fun playbackQuery(session: AuthSession, options: PlaybackOptions): Map<String, String> =
+        playbackParameters(session, options).mapValues { it.value.toString() }
+
+    internal fun playbackBody(session: AuthSession, options: PlaybackOptions): String =
+        JSONObject()
+            .put("UserId", session.userId)
+            .put("MaxStreamingBitrate", options.maxStreamingBitrate)
+            .put("StartTimeTicks", options.startTimeTicks)
+            .put("MediaSourceId", options.mediaSourceId)
+            .put("AudioStreamIndex", options.audioStreamIndex)
+            .put("SubtitleStreamIndex", -1)
+            .put("EnableDirectPlay", !options.forceTranscoding)
+            .put("EnableDirectStream", !options.forceTranscoding)
+            .put("AllowVideoStreamCopy", !options.forceTranscoding)
+            .put("AllowAudioStreamCopy", !options.forceTranscoding)
+            .put("EnableTranscoding", !options.directPlayOnly)
+            .put("DeviceProfile", deviceProfile(options))
+            .toString()
+
+    private fun playbackParameters(session: AuthSession, options: PlaybackOptions): Map<String, Any?> = mapOf(
+        "userId" to session.userId,
+        "startTimeTicks" to options.startTimeTicks,
+        "maxStreamingBitrate" to options.maxStreamingBitrate,
+        "mediaSourceId" to options.mediaSourceId,
+        "audioStreamIndex" to options.audioStreamIndex,
+        "subtitleStreamIndex" to -1,
+        "enableDirectPlay" to !options.forceTranscoding,
+        "enableDirectStream" to !options.forceTranscoding,
+        "allowVideoStreamCopy" to !options.forceTranscoding,
+        "allowAudioStreamCopy" to !options.forceTranscoding,
+        "enableTranscoding" to !options.directPlayOnly,
+    ).filterValues { it != null }
+
+    private fun deviceProfile(options: PlaybackOptions): JSONObject {
+        val directPlay = org.json.JSONArray()
+            .put(JSONObject().put("Type", "Video").put("VideoCodec", "h264,h265,vp9,av1").put("AudioCodec", "aac,ac3,opus,vorbis,mp3").put("Container", "mp4,mkv,webm"))
+        val subtitles = org.json.JSONArray()
+            .put(JSONObject().put("Format", "vtt").put("Method", "External"))
+        val transcoding = org.json.JSONArray()
+            .put(JSONObject().put("Type", "Video").put("Context", "Streaming").put("Protocol", "hls").put("Container", "ts").put("VideoCodec", "h264").put("AudioCodec", "aac").put("MaxAudioChannels", "2").put("MinSegments", 1).put("BreakOnNonKeyFrames", true))
+        return JSONObject()
+            .put("Name", "ZenStream Android")
+            .put("MaxStreamingBitrate", options.maxStreamingBitrate)
+            .put("DirectPlayProfiles", directPlay)
+            .put("SubtitleProfiles", subtitles)
+            .put("TranscodingProfiles", if (options.directPlayOnly) org.json.JSONArray() else transcoding)
+    }
 
     suspend fun fetchHome(session: AuthSession): HomeData = coroutineScope {
         val latest = async {
@@ -374,6 +499,55 @@ class JellyfinException(val statusCode: Int, message: String) : Exception(messag
 private fun items(json: JSONObject): List<JSONObject> {
     val array = json.optJSONArray("Items") ?: return emptyList()
     return List(array.length()) { array.optJSONObject(it) ?: JSONObject() }
+}
+
+private fun parseMediaSource(source: JSONObject): MediaSource {
+    val streams = source.optJSONArray("MediaStreams")?.let { array ->
+        List(array.length()) { index ->
+            val stream = array.optJSONObject(index) ?: JSONObject()
+            MediaStream(
+                index = stream.optInt("Index", -1),
+                type = stream.optString("Type"),
+                displayTitle = stream.optString("DisplayTitle").ifBlank { null },
+                language = stream.optString("Language").ifBlank { null },
+                isDefault = stream.optBoolean("IsDefault", false),
+            )
+        }.filter { it.index >= 0 }
+    } ?: emptyList()
+    return MediaSource(
+        id = source.optString("Id").ifBlank { null },
+        directStreamUrl = source.optString("DirectStreamUrl").ifBlank { null },
+        transcodingUrl = source.optString("TranscodingUrl").ifBlank { null },
+        mediaStreams = streams,
+        runTimeTicks = source.optLongOrNull("RunTimeTicks"),
+    )
+}
+
+fun playbackUrl(
+    session: AuthSession,
+    itemId: String,
+    source: MediaSource,
+    bitrate: Int = 0,
+    startTimeTicks: Long = 0L,
+): String {
+    val negotiated = source.transcodingUrl ?: source.directStreamUrl
+    if (negotiated != null) {
+        val resolved = session.serverUrl.toHttpUrl().resolve(negotiated)
+            ?: error("Jellyfin returned an invalid playback URL")
+        val url = resolved.newBuilder()
+        if (url.build().queryParameter("api_key") == null && url.build().queryParameter("apiKey") == null) {
+            url.addQueryParameter("api_key", session.token)
+        }
+        return url.build().toString()
+    }
+    val builder = "${session.serverUrl}/Videos/$itemId/${if (bitrate > 0) "stream.mp4" else "stream"}".toHttpUrl().newBuilder()
+    builder.addQueryParameter("api_key", session.token)
+    builder.addQueryParameter("Static", if (bitrate > 0) "false" else "true")
+    builder.addQueryParameter("MediaSourceId", source.id ?: itemId)
+    if (startTimeTicks > 0) builder.addQueryParameter("startTimeTicks", startTimeTicks.toString())
+    if (bitrate > 0) builder.addQueryParameter("TranscodingMaxBitrate", bitrate.toString())
+    builder.addQueryParameter("TranscodingMaxAudioChannels", "2")
+    return builder.build().toString()
 }
 
 fun parseMediaItems(json: JSONObject): List<MediaItem> = items(json).mapNotNull { item ->

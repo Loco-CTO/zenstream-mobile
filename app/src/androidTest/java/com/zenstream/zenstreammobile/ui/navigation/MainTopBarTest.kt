@@ -14,7 +14,7 @@ class MainTopBarTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun showsBrandLogoAndStaticProfileIcon() {
+    fun showsBrandLogoAndSettingsIcon() {
         composeRule.setContent {
             ZenStreamTheme {
                 MainTopBar()
@@ -26,7 +26,7 @@ class MainTopBarTest {
             context.getString(R.string.app_logo_description)
         ).assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
-            context.getString(R.string.profile_description)
+            context.getString(R.string.settings_description)
         ).assertIsDisplayed()
     }
 }

@@ -1,6 +1,11 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.PlaybackData
+import com.zenstream.zenstreammobile.model.PlaybackOptions
+import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
 
 class JellyfinRepository(
@@ -12,6 +17,7 @@ class JellyfinRepository(
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
     val locale: Flow<String> = sessionStore.locale
+    val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -53,4 +59,32 @@ class JellyfinRepository(
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
         api.setPlayed(session, itemId, played)
+
+    suspend fun playback(session: AuthSession, itemId: String, options: PlaybackOptions = PlaybackOptions()): PlaybackData =
+        api.playback(session, itemId, options)
+
+    suspend fun subtitleWebVtt(session: AuthSession, itemId: String, sourceId: String?, streamIndex: Int): String =
+        api.subtitleWebVtt(session, itemId, sourceId, streamIndex)
+
+    suspend fun reportPlayback(session: AuthSession, itemId: String, positionSeconds: Double, isPaused: Boolean) =
+        api.reportPlayback(session, itemId, positionSeconds, isPaused)
+
+    suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
+
+    suspend fun loadSubtitleStyle(session: AuthSession, orchestratorUrl: String?): SubtitleStyle {
+        val cached = sessionStore.cachedSubtitleStyle(session.userId)
+        if (orchestratorUrl.isNullOrBlank()) return cached ?: DEFAULT_SUBTITLE_STYLE
+        return runCatching { orchestratorApi.fetchSubtitleStyle(orchestratorUrl, session.token) }
+            .onSuccess { sessionStore.cacheSubtitleStyle(session.userId, it) }
+            .getOrElse { cached ?: DEFAULT_SUBTITLE_STYLE }
+    }
+
+    suspend fun saveSubtitleStyle(session: AuthSession, orchestratorUrl: String?, style: SubtitleStyle): SubtitleStyle {
+        val normalized = normalizeSubtitleStyle(style)
+        sessionStore.cacheSubtitleStyle(session.userId, normalized)
+        if (orchestratorUrl.isNullOrBlank()) return normalized
+        return runCatching { orchestratorApi.saveSubtitleStyle(orchestratorUrl, session.token, normalized) }
+            .onSuccess { sessionStore.cacheSubtitleStyle(session.userId, it) }
+            .getOrElse { normalized }
+    }
 }

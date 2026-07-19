@@ -1,10 +1,13 @@
 package com.zenstream.zenstreammobile.data
 
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 class OrchestratorApi(
@@ -45,6 +48,41 @@ class OrchestratorApi(
                 parseLocale(it.body?.string().orEmpty())
             }
         }
+
+    suspend fun fetchSubtitleStyle(orchestratorUrl: String, token: String): SubtitleStyle =
+        withContext(Dispatchers.IO) {
+            requestSubtitle(orchestratorUrl, token, "GET", null)
+        }
+
+    suspend fun saveSubtitleStyle(
+        orchestratorUrl: String,
+        token: String,
+        style: SubtitleStyle,
+    ): SubtitleStyle = withContext(Dispatchers.IO) {
+        requestSubtitle(orchestratorUrl, token, "PATCH", subtitleStyleToJson(style))
+    }
+
+    private fun requestSubtitle(
+        orchestratorUrl: String,
+        token: String,
+        method: String,
+        body: String?,
+    ): SubtitleStyle {
+        val request = Request.Builder()
+            .url("${normalizeServerUrl(orchestratorUrl)}/api/preferences/subtitles".toHttpUrl())
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("X-Jellyfin-Token", token)
+            .method(method, body?.toRequestBody("application/json".toMediaType()))
+            .build()
+        httpClient.newCall(request).execute().use {
+            if (!it.isSuccessful) throw OrchestratorException(
+                it.code,
+                "Orchestrator request failed with ${it.code}"
+            )
+            return subtitleStyleFromJson(it.body?.string().orEmpty())
+        }
+    }
 }
 
 fun parseMobileConfig(body: String): String {

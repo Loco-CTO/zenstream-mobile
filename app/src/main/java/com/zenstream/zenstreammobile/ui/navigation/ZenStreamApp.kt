@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,8 +59,9 @@ import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
-import com.zenstream.zenstreammobile.ui.screens.PlaybackPlaceholderScreen
+import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
+import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 
 private const val HOME = "home"
@@ -68,6 +69,7 @@ private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val PLAYBACK = "playback/{itemId}/{itemName}"
 private const val DETAIL = "detail/{itemId}"
+private const val SETTINGS = "settings"
 
 @Composable
 fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewModel: AppViewModel) {
@@ -78,7 +80,7 @@ fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewMo
             onConfigured = appViewModel::configureServer,
         )
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
-        appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
+        appState.session != null -> MainScaffold(repository, appState.session, appState.orchestratorUrl, appViewModel::logout)
         else -> LoadingScreen()
     }
 }
@@ -95,6 +97,7 @@ private fun LoadingScreen() {
 private fun MainScaffold(
     repository: JellyfinRepository,
     session: AuthSession,
+    orchestratorUrl: String?,
     onLogout: () -> Unit
 ) {
     val navController = rememberNavController()
@@ -149,12 +152,13 @@ private fun MainScaffold(
     }
 
     val chromeHidden = currentRoute == PLAYBACK.substringBefore("/") ||
-            currentRoute == DETAIL.substringBefore("/")
+            currentRoute == DETAIL.substringBefore("/") ||
+            currentRoute == SETTINGS
 
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!chromeHidden) {
-                MainTopBar()
+                MainTopBar(onSettings = { navController.navigate(SETTINGS) { launchSingleTop = true } })
             }
         },
         bottomBar = {
@@ -260,11 +264,21 @@ private fun MainScaffold(
                     navArgument("itemId") { type = NavType.StringType },
                     navArgument("itemName") { type = NavType.StringType })
             ) { entry ->
-                PlaybackPlaceholderScreen(
-                    Uri.decode(
-                        entry.arguments?.getString("itemName").orEmpty()
-                    )
-                ) { navController.popBackStack() }
+                PlaybackScreen(
+                    repository = repository,
+                    session = session,
+                    orchestratorUrl = orchestratorUrl,
+                    itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty()),
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(SETTINGS) {
+                SettingsScreen(
+                    repository = repository,
+                    session = session,
+                    orchestratorUrl = orchestratorUrl,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }
@@ -284,7 +298,7 @@ private fun navigateToPlayback(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MainTopBar() {
+internal fun MainTopBar(onSettings: () -> Unit = {}) {
     TopAppBar(
         title = {
             Image(
@@ -300,13 +314,13 @@ internal fun MainTopBar() {
                 modifier = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = stringResource(
-                        com.zenstream.zenstreammobile.R.string.profile_description
-                    ),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                androidx.compose.material3.IconButton(onClick = onSettings) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = stringResource(com.zenstream.zenstreammobile.R.string.settings_description),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
