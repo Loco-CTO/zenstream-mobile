@@ -17,6 +17,8 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.click
 import androidx.compose.ui.platform.testTag
+import androidx.test.platform.app.InstrumentationRegistry
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -155,6 +157,10 @@ class PlaybackGestureTest {
             }
         }
 
-        composeRule.onNodeWithText("5 seconds forward").assertIsDisplayed()
+        val expectedLabel = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+            .getString(R.string.player_quick_seek_forward, 5)
+        composeRule.onNodeWithText(expectedLabel).assertIsDisplayed()
     }
 }
