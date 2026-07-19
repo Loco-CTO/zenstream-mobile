@@ -330,6 +330,7 @@ private fun PlaybackProgress(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
+            .padding(horizontal = 12.dp)
             .pointerInput(duration) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
