@@ -17,6 +17,10 @@ class JellyfinRepository(
 
     suspend fun configureOrchestrator(value: String) {
         val orchestrator = normalizeServerUrl(value)
+        // Keep the user's server choice before the network request. If the
+        // config endpoint is temporarily unavailable, the next launch can
+        // keep the configured address instead of presenting a blank form.
+        sessionStore.saveOrchestratorUrl(orchestrator)
         val jellyfin = orchestratorApi.fetchJellyfinUrl(orchestrator)
         sessionStore.saveServerConfig(orchestrator, jellyfin)
     }

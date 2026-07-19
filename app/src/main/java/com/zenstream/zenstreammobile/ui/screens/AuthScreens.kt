@@ -25,10 +25,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,12 +50,20 @@ import com.zenstream.zenstreammobile.ui.LoginViewModel
 import kotlinx.coroutines.launch
 
 @Composable
-fun ServerSetupScreen(onConfigured: suspend (String) -> Unit) {
-    var server by remember { mutableStateOf("") }
+fun ServerSetupScreen(
+    initialServerUrl: String? = null,
+    onConfigured: suspend (String) -> Unit,
+) {
+    var server by rememberSaveable { mutableStateOf(initialServerUrl.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val invalidUrlMessage = stringResource(R.string.server_url_invalid)
+    LaunchedEffect(initialServerUrl) {
+        if (server.isBlank() && !initialServerUrl.isNullOrBlank()) {
+            server = initialServerUrl
+        }
+    }
     AuthContainer {
         Icon(
             Icons.Default.Lock,

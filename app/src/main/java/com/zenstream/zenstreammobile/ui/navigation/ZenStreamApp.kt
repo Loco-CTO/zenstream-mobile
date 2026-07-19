@@ -73,7 +73,10 @@ private const val DETAIL = "detail/{itemId}"
 fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewModel: AppViewModel) {
     when {
         appState.loading -> LoadingScreen()
-        appState.showSetup -> ServerSetupScreen { appViewModel.configureServer(it) }
+        appState.showSetup -> ServerSetupScreen(
+            initialServerUrl = appState.orchestratorUrl,
+            onConfigured = appViewModel::configureServer,
+        )
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
         appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
         else -> LoadingScreen()

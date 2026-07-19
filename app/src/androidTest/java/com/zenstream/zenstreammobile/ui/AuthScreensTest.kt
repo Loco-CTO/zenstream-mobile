@@ -33,6 +33,18 @@ class AuthScreensTest {
     }
 
     @Test
+    fun serverSetupRestoresPreviouslyEnteredAddress() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                ServerSetupScreen(initialServerUrl = "https://orchestrator.example") { }
+            }
+        }
+
+        composeRule.onNodeWithText("https://orchestrator.example")
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun featureBarUsesLogoAndNoActions() {
         val item = MediaItem(
             id = "1",
