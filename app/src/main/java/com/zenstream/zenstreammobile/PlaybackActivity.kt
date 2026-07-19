@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
@@ -39,11 +40,18 @@ fun playbackIntent(context: Context, itemId: String, itemName: String): Intent =
 
 fun launchPlayback(context: Context, itemId: String, itemName: String) {
     val intent = playbackIntent(context, itemId, itemName)
-    if (context is Activity) {
-        context.startActivity(intent)
+    val activity = context.findActivity()
+    if (activity != null) {
+        activity.startActivity(intent)
     } else {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 class PlaybackActivity : ComponentActivity() {
