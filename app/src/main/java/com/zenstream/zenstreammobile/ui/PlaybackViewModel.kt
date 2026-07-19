@@ -332,7 +332,7 @@ class PlaybackViewModel(
 
     fun flushProgress() {
         val now = SystemClock.elapsedRealtime()
-        if (now - lastProgressFlushAt < PROGRESS_FLUSH_DEBOUNCE_MILLIS) return
+        if (lastProgressFlushAt != 0L && now - lastProgressFlushAt < PROGRESS_FLUSH_DEBOUNCE_MILLIS) return
         lastProgressFlushAt = now
         val snapshot = playbackProgressSnapshot()
         progressFlushJob?.cancel()
