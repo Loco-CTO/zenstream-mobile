@@ -118,7 +118,7 @@ fun trickplayPreview(
         .addPathSegment("Trickplay")
         .addPathSegment(widthKey)
         .addPathSegment("$tileIndex.jpg")
-        .addQueryParameter("MediaSourceId", source?.id ?: itemId)
+        .addQueryParameter("MediaSourceId", source.id ?: itemId)
         .build()
         .toString()
     return TrickplayPreview(

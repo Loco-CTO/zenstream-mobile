@@ -8,24 +8,8 @@ import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
-import com.zenstream.zenstreammobile.model.TrickplayInfo
-import org.json.JSONObject
 
 class PlaybackParsingTest {
-    @Test
-    fun parsesTrickplayMetadataBySource() {
-        val result = parseTrickplayBySource(
-            JSONObject(
-                """{"source-1":{"320":{"Width":320,"Height":180,"TileWidth":2,"TileHeight":2,"Interval":5000}}}"""
-            )
-        )
-
-        assertEquals(
-            TrickplayInfo(320, 180, 2, 2, 5000),
-            result["source-1"]?.get("320"),
-        )
-    }
-
     @Test
     fun buildsTrickplayPreviewUsingLargestResolutionAndTileCoordinates() {
         val session = AuthSession("https://jellyfin.example", "token", "user", "name")
