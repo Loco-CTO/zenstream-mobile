@@ -101,6 +101,39 @@ class DetailScreensTest {
     }
 
     @Test
+    fun seasonChangeShowsLoadingIndicator() {
+        val series = MediaItem("series", "Example Series", type = "Series")
+        val data = DetailData(
+            item = series,
+            seasons = listOf(MediaItem("season", "Season", indexNumber = 1)),
+            episodes = listOf(MediaItem("episode", "Pilot", type = "Episode", indexNumber = 1)),
+            selectedSeasonId = "season",
+        )
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = data,
+                    session = session,
+                    padding = PaddingValues(),
+                    loading = true,
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithContentDescription(context.getString(R.string.loading))
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun episodeTopBarUsesSeriesTitleAndOpensSeries() {
         val series = MediaItem("series", "Example Series", type = "Series")
         var opened: MediaItem? = null
