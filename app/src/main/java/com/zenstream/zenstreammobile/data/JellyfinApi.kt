@@ -210,7 +210,7 @@ class JellyfinApi(
             "/Items",
             latestItemsQuery(session.userId),
             HOME_REQUEST_TIMEOUT_MILLIS,
-        )
+        ).filter { it.backdropImageTags.isNotEmpty() }.take(5)
 
     suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> =
         getItems(

@@ -2,6 +2,9 @@ package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.Library
+import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
@@ -10,14 +13,11 @@ import kotlinx.coroutines.flow.Flow
 
 interface HomeDataSource {
     suspend fun clearSession()
-    suspend fun homeFeatured(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
-    suspend fun homeContinueWatching(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
-    suspend fun homeNextUp(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
-    suspend fun homeLibraries(session: AuthSession): List<com.zenstream.zenstreammobile.model.Library>
-    suspend fun homeLibraryData(
-        session: AuthSession,
-        library: com.zenstream.zenstreammobile.model.Library,
-    ): com.zenstream.zenstreammobile.model.LibraryData
+    suspend fun homeFeatured(session: AuthSession): List<MediaItem>
+    suspend fun homeContinueWatching(session: AuthSession): List<MediaItem>
+    suspend fun homeNextUp(session: AuthSession): List<MediaItem>
+    suspend fun homeLibraries(session: AuthSession): List<Library>
+    suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData
 }
 
 class JellyfinRepository(
@@ -63,7 +63,7 @@ class JellyfinRepository(
 
     override suspend fun homeLibraryData(
         session: AuthSession,
-        library: com.zenstream.zenstreammobile.model.Library,
+        library: Library,
     ) = api.fetchLibraryData(session, library, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     suspend fun libraries(session: AuthSession) = api.getLibraries(session)
