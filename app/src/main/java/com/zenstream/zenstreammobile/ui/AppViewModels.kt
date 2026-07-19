@@ -320,7 +320,7 @@ class LibraryViewModel(
                         ?: libraries.firstOrNull { it.id == currentId }
                         ?: libraries.firstOrNull()
                     _uiState.value = _uiState.value.copy(
-                        loading = false,
+                        loading = selected != null,
                         libraries = libraries,
                         selected = selected,
                         items = emptyList(),

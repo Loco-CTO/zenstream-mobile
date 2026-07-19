@@ -8,6 +8,7 @@ import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import kotlinx.coroutines.CompletableDeferred
 import com.zenstream.zenstreammobile.model.SortOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -99,6 +100,30 @@ class SearchLibraryViewModelTest {
     }
 
     @Test
+    fun libraryStaysLoadingUntilInitialPageCompletes() = runTest {
+        val shows = Library("shows", "Shows", "tvshows")
+        val pageGate = CompletableDeferred<Unit>()
+        val source = FakeLibraryDataSource(
+            libraries = listOf(shows),
+            pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
+            pageGate = pageGate,
+        )
+        val viewModel = LibraryViewModel(source, session)
+
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.loading)
+        assertEquals(shows, viewModel.uiState.value.selected)
+        assertTrue(viewModel.uiState.value.items.isEmpty())
+
+        pageGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.loading)
+        assertEquals(listOf("one"), viewModel.uiState.value.items.map { it.id })
+    }
+
+    @Test
     fun librarySortIsRestoredAndChangesReloadAndPersist() = runTest {
         val shows = Library("shows", "Shows", "tvshows")
         val restored = LibrarySort(LibrarySortBy.SortName, SortOrder.Ascending)
@@ -138,6 +163,7 @@ private class FakeLibraryDataSource(
     private val libraries: List<Library>,
     private val pages: Map<Int, PagedLibrary>,
     private val storedSort: LibrarySort? = null,
+    private val pageGate: CompletableDeferred<Unit>? = null,
 ) : LibraryDataSource {
     var savedSort: LibrarySort? = null
     val requestedSorts = mutableListOf<LibrarySort>()
@@ -154,6 +180,7 @@ private class FakeLibraryDataSource(
         sort: LibrarySort,
     ): PagedLibrary {
         requestedSorts += sort
+        pageGate?.await()
         return pages[startIndex] ?: PagedLibrary(library, emptyList(), 0)
     }
 
