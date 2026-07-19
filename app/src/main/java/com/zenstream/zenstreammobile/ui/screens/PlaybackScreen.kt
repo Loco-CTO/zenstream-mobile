@@ -7,6 +7,7 @@ import android.util.Rational
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -42,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -105,6 +107,7 @@ fun PlaybackScreen(
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
+    var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
     var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
     var timelineScrub by remember { mutableStateOf<TimelineScrub?>(null) }
     var previewUnavailable by remember { mutableStateOf(false) }
@@ -126,6 +129,13 @@ fun PlaybackScreen(
         if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, sheet != null, state.engine.isPlaying)) {
             delay(4_500)
             controlsVisible = false
+        }
+    }
+
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback != null) {
+            delay(SEEK_FEEDBACK_VISIBLE_MILLIS)
+            seekFeedback = null
         }
     }
 
@@ -152,13 +162,21 @@ fun PlaybackScreen(
             )
         }
 
-        if (!controlsLocked) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(controlsLocked) {
-                        detectTapGestures { controlsVisible = !controlsVisible }
-                    },
+        PlaybackGestureLayer(
+            modifier = Modifier.fillMaxSize(),
+            controlsLocked = controlsLocked,
+            positionSeconds = state.engine.positionSeconds,
+            durationSeconds = state.engine.durationSeconds,
+            onToggleControls = { controlsVisible = !controlsVisible },
+            onSeekBy = vm::seekBy,
+            onSeekTo = vm::seekTo,
+            onSeekFeedback = { seekFeedback = it },
+        )
+
+        seekFeedback?.let { feedback ->
+            SeekFeedbackOverlay(
+                feedback = feedback,
+                modifier = Modifier.align(Alignment.Center),
             )
         }
 
@@ -362,6 +380,146 @@ fun PlaybackScreen(
         )
     }
 }
+
+internal enum class SeekDirection {
+    BACKWARD,
+    FORWARD,
+}
+
+internal data class SeekFeedback(
+    val direction: SeekDirection,
+    val seconds: Int,
+)
+
+private const val QUICK_SEEK_SECONDS = 5.0
+private const val SEEK_FEEDBACK_VISIBLE_MILLIS = 800L
+
+@Composable
+internal fun PlaybackGestureLayer(
+    modifier: Modifier = Modifier,
+    controlsLocked: Boolean,
+    positionSeconds: Double,
+    durationSeconds: Double,
+    onToggleControls: () -> Unit,
+    onSeekBy: (Double) -> Unit,
+    onSeekTo: (Double) -> Unit,
+    onSeekFeedback: (SeekFeedback) -> Unit,
+) {
+    val currentPosition = rememberUpdatedState(positionSeconds)
+    val currentDuration = rememberUpdatedState(durationSeconds)
+    val currentLocked = rememberUpdatedState(controlsLocked)
+    val toggleControls = rememberUpdatedState(onToggleControls)
+    val seekBy = rememberUpdatedState(onSeekBy)
+    val seekTo = rememberUpdatedState(onSeekTo)
+    val showFeedback = rememberUpdatedState(onSeekFeedback)
+
+    Box(
+        modifier = modifier
+            .pointerInput(Unit) {
+                var dragStartPosition = 0.0
+                var dragDistancePixels = 0f
+
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
+                        dragDistancePixels = 0f
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragDistancePixels += dragAmount
+                        val duration = currentDuration.value
+                        if (duration.isFinite() && duration > 0.0) {
+                            val delta = dragSeekDeltaSeconds(
+                                dragDistancePixels = dragDistancePixels,
+                                playerWidthPixels = size.width,
+                                durationSeconds = duration,
+                            )
+                            val target = (dragStartPosition + delta).coerceIn(0.0, duration)
+                            seekTo.value(target)
+                            showFeedback.value(
+                                SeekFeedback(
+                                    direction = if (delta < 0.0) SeekDirection.BACKWARD else SeekDirection.FORWARD,
+                                    seconds = feedbackSeconds(delta),
+                                )
+                            )
+                        }
+                    },
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        val delta = if (offset.x < size.width / 2f) {
+                            -QUICK_SEEK_SECONDS
+                        } else {
+                            QUICK_SEEK_SECONDS
+                        }
+                        seekBy.value(delta)
+                        showFeedback.value(
+                            SeekFeedback(
+                                direction = if (delta < 0.0) SeekDirection.BACKWARD else SeekDirection.FORWARD,
+                                seconds = feedbackSeconds(delta),
+                            )
+                        )
+                    },
+                    onTap = {
+                        if (!currentLocked.value) toggleControls.value()
+                    },
+                )
+            }
+            .semantics {
+                contentDescription = stringResourceCompat(R.string.player_quick_controls)
+            },
+    )
+}
+
+@Composable
+private fun SeekFeedbackOverlay(
+    feedback: SeekFeedback,
+    modifier: Modifier = Modifier,
+) {
+    val isBackward = feedback.direction == SeekDirection.BACKWARD
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Black.copy(alpha = .72f),
+        contentColor = Color.White,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(
+                    if (isBackward) LucideR.drawable.lucide_ic_rewind
+                    else LucideR.drawable.lucide_ic_fast_forward
+                ),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+            )
+            Text(
+                text = stringResourceCompat(
+                    if (isBackward) R.string.player_quick_seek_back else R.string.player_quick_seek_forward,
+                    feedback.seconds,
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+    }
+}
+
+internal fun dragSeekDeltaSeconds(
+    dragDistancePixels: Float,
+    playerWidthPixels: Int,
+    durationSeconds: Double,
+): Double {
+    if (playerWidthPixels <= 0 || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0.0
+    return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() * durationSeconds
+}
+
+internal fun feedbackSeconds(deltaSeconds: Double): Int =
+    kotlin.math.abs(deltaSeconds).toInt().coerceAtLeast(1)
 
 internal enum class PlayerSheet { Audio, Subtitles, Speed, Quality }
 
