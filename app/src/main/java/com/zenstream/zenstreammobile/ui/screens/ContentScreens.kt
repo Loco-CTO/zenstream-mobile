@@ -345,10 +345,9 @@ fun SearchScreen(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                val deltaY = consumed.y + available.y
-                topBarVisible = topBarVisibility.onScroll(
-                    deltaY = deltaY,
-                    atTop = available.y > 0f && consumed.y == 0f,
+                topBarVisible = topBarVisibility.onNestedScroll(
+                    consumedY = consumed.y,
+                    availableY = available.y,
                 )
                 return Offset.Zero
             }
@@ -483,10 +482,9 @@ fun LibraryScreen(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                val deltaY = consumed.y + available.y
-                topBarVisible = topBarVisibility.onScroll(
-                    deltaY = deltaY,
-                    atTop = available.y > 0f && consumed.y == 0f,
+                topBarVisible = topBarVisibility.onNestedScroll(
+                    consumedY = consumed.y,
+                    availableY = available.y,
                 )
                 return Offset.Zero
             }

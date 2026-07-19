@@ -47,6 +47,20 @@ class ScrollVisibilityControllerTest {
         assertTrue(controller.onScroll(0f, atTop = true))
     }
 
+    @Test
+    fun unconsumedUpwardDragDoesNotHideVisibility() {
+        val controller = controller()
+
+        assertTrue(controller.onNestedScroll(consumedY = 0f, availableY = -100f))
+    }
+
+    @Test
+    fun consumedScrollStillHidesVisibility() {
+        val controller = controller()
+
+        assertFalse(controller.onNestedScroll(consumedY = -56f, availableY = 0f))
+    }
+
     private fun controller() = ScrollVisibilityController(
         hideDistance = 56f,
         revealDistance = 64f

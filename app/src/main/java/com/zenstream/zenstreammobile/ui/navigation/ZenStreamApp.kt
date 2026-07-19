@@ -143,14 +143,13 @@ private fun MainScaffold(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                val deltaY = consumed.y + available.y
-                bottomBarVisible = bottomBarVisibility.onScroll(
-                    deltaY = deltaY,
-                    atTop = available.y > 0f && consumed.y == 0f
+                bottomBarVisible = bottomBarVisibility.onNestedScroll(
+                    consumedY = consumed.y,
+                    availableY = available.y,
                 )
-                topBarVisible = topBarVisibility.onScroll(
-                    deltaY = deltaY,
-                    atTop = available.y > 0f && consumed.y == 0f
+                topBarVisible = topBarVisibility.onNestedScroll(
+                    consumedY = consumed.y,
+                    availableY = available.y,
                 )
                 return Offset.Zero
             }
@@ -356,6 +355,15 @@ internal class ScrollVisibilityController(
     private var direction: ScrollDirection? = null
     private var accumulatedDistance = 0f
     private var isVisible = true
+
+    /**
+     * Applies only movement consumed by a scrollable child. Unconsumed upward
+     * drags are common on empty/short screens and must not hide the chrome.
+     */
+    fun onNestedScroll(consumedY: Float, availableY: Float): Boolean = onScroll(
+        deltaY = consumedY,
+        atTop = availableY > 0f && consumedY == 0f,
+    )
 
     fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
         if (atTop) {
