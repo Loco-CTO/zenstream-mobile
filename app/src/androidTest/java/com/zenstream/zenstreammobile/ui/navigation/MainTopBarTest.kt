@@ -4,8 +4,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.platform.app.InstrumentationRegistry
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -28,5 +30,22 @@ class MainTopBarTest {
         composeRule.onNodeWithContentDescription(
             context.getString(R.string.settings_description)
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun lucideIconResourcesAreAvailable() {
+        listOf(
+            LucideR.drawable.lucide_ic_house,
+            LucideR.drawable.lucide_ic_search,
+            LucideR.drawable.lucide_ic_library,
+            LucideR.drawable.lucide_ic_settings,
+            LucideR.drawable.lucide_ic_play,
+            LucideR.drawable.lucide_ic_pause,
+            LucideR.drawable.lucide_ic_arrow_left,
+            LucideR.drawable.lucide_ic_heart,
+            LucideR.drawable.lucide_ic_captions,
+        ).forEach { resourceId ->
+            assertTrue("Expected a Lucide drawable resource", resourceId != 0)
+        }
     }
 }
