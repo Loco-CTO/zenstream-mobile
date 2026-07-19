@@ -253,6 +253,7 @@ fun PlaybackScreen(
                         "${formatTime(state.engine.positionSeconds)}  -  ${formatTime(state.engine.durationSeconds)}",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     PlaybackProgress(
                         positionSeconds = state.engine.positionSeconds,
