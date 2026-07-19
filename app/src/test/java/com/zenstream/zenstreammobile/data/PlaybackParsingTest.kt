@@ -6,8 +6,36 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
+import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.MediaSource
+import org.json.JSONObject
 
 class PlaybackParsingTest {
+    @Test
+    fun prefersPlaybackInfoSessionId() {
+        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val source = MediaSource(
+            id = "source-1",
+            transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
+        )
+
+        assertEquals(
+            "info-session",
+            playbackSessionIdFromInfo(JSONObject("{\"PlaySessionId\":\"info-session\"}"), session, source),
+        )
+    }
+
+    @Test
+    fun fallsBackToNegotiatedPlaybackUrlSessionId() {
+        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val source = MediaSource(
+            id = "source-1",
+            transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
+        )
+
+        assertEquals("url-session", playbackSessionIdFromInfo(JSONObject(), session, source))
+    }
+
     @Test
     fun resolvesRelativeNegotiatedPlaybackUrlAgainstServer() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(

@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.json.JSONObject
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
     val lines = input.replace("\r\n", "\n").replace('\r', '\n').split('\n')
@@ -59,6 +60,14 @@ fun playbackSessionId(session: AuthSession, source: MediaSource): String? {
         ?.takeIf { it.isNotBlank() }
         ?: resolved?.queryParameter("playSessionId")?.takeIf { it.isNotBlank() }
 }
+
+internal fun playbackSessionIdFromInfo(
+    info: JSONObject,
+    session: AuthSession,
+    source: MediaSource,
+): String? = info.optString("PlaySessionId")
+    .takeIf { it.isNotBlank() }
+    ?: playbackSessionId(session, source)
 
 private fun parseVttTimestamp(value: String): Double? {
     val parts = value.trim().split(':')
