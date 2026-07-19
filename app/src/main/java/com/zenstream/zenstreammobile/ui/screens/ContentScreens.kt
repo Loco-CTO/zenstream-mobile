@@ -107,7 +107,8 @@ fun HomeScreen(
                     FeaturedHero(
                         data?.featured.orEmpty(),
                         session,
-                        showEmptyLibrary = data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                        showEmptyLibrary = !state.loading &&
+                            data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
                     )
                 }
                 items(
@@ -118,6 +119,22 @@ fun HomeScreen(
                         session,
                         onPlay
                     )
+                }
+                if (state.loading) {
+                    item(key = "home-loading") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                    }
                 }
             }
         }

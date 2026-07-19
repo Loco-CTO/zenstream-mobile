@@ -179,34 +179,18 @@ class JellyfinApi(
 
     suspend fun fetchHome(session: AuthSession): HomeData = coroutineScope {
         val latest = async {
-            getItems(
-                session,
-                "/Items",
-                latestItemsQuery(session.userId)
-            )
+            fetchHomeFeatured(session)
         }
         val resume = async {
-            getItems(
-                session,
-                "/UserItems/Resume",
-                mapOf(
-                    "userId" to session.userId,
-                    "limit" to "18",
-                    "includeItemTypes" to "Episode,Movie"
-                )
-            )
+            fetchHomeContinueWatching(session)
         }
         val nextUp = async {
-            getItems(
-                session,
-                "/Shows/NextUp",
-                mapOf("userId" to session.userId, "limit" to "18", "disableFirstEpisode" to "true")
-            )
+            fetchHomeNextUp(session)
         }
-        val libraries = async { getLibraries(session) }
+        val libraries = async { getLibraries(session, HOME_REQUEST_TIMEOUT_MILLIS) }
         val libraryData = libraries.await().flatMap { library ->
             if (library.collectionType != "tvshows" && library.collectionType != "movies") emptyList()
-            else listOf(async { fetchLibraryData(session, library) })
+            else listOf(async { fetchLibraryData(session, library, HOME_REQUEST_TIMEOUT_MILLIS) })
         }.awaitAll()
         val latestItems = latest.await()
         val rows = buildList {
@@ -219,6 +203,34 @@ class JellyfinApi(
             rows = rows
         )
     }
+
+    suspend fun fetchHomeFeatured(session: AuthSession): List<MediaItem> =
+        getItems(
+            session,
+            "/Items",
+            latestItemsQuery(session.userId),
+            HOME_REQUEST_TIMEOUT_MILLIS,
+        )
+
+    suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> =
+        getItems(
+            session,
+            "/UserItems/Resume",
+            mapOf(
+                "userId" to session.userId,
+                "limit" to "18",
+                "includeItemTypes" to "Episode,Movie"
+            ),
+            HOME_REQUEST_TIMEOUT_MILLIS,
+        )
+
+    suspend fun fetchHomeNextUp(session: AuthSession): List<MediaItem> =
+        getItems(
+            session,
+            "/Shows/NextUp",
+            mapOf("userId" to session.userId, "limit" to "18", "disableFirstEpisode" to "true"),
+            HOME_REQUEST_TIMEOUT_MILLIS,
+        )
 
     internal fun latestItemsQuery(userId: String): Map<String, String> = mapOf(
         "userId" to userId,
@@ -235,11 +247,15 @@ class JellyfinApi(
         "enableUserData" to "true",
     )
 
-    suspend fun getLibraries(session: AuthSession): List<Library> = withContext(Dispatchers.IO) {
+    suspend fun getLibraries(
+        session: AuthSession,
+        requestTimeoutMillis: Long? = null,
+    ): List<Library> = withContext(Dispatchers.IO) {
         val json = requestJson(
             session,
             "/Users/${session.userId}/Views",
-            mapOf("fields" to "CollectionType")
+            mapOf("fields" to "CollectionType"),
+            requestTimeoutMillis = requestTimeoutMillis,
         )
         items(json).mapNotNull { item ->
             item.optString("Id").takeIf { it.isNotBlank() }?.let { id ->
@@ -252,7 +268,11 @@ class JellyfinApi(
             .filter { it.collectionType == "tvshows" || it.collectionType == "movies" || it.collectionType == "boxsets" }
     }
 
-    suspend fun fetchLibraryData(session: AuthSession, library: Library): LibraryData =
+    suspend fun fetchLibraryData(
+        session: AuthSession,
+        library: Library,
+        requestTimeoutMillis: Long? = null,
+    ): LibraryData =
         coroutineScope {
             val common = mapOf(
                 "userId" to session.userId,
@@ -268,7 +288,8 @@ class JellyfinApi(
                         "sortBy" to "DateCreated",
                         "sortOrder" to "Descending",
                         "includeItemTypes" to itemTypes(library.collectionType)
-                    )
+                    ),
+                    requestTimeoutMillis,
                 )
             }
             val topRated = async {
@@ -279,7 +300,8 @@ class JellyfinApi(
                         "sortBy" to "CommunityRating",
                         "sortOrder" to "Descending",
                         "includeItemTypes" to itemTypes(library.collectionType)
-                    )
+                    ),
+                    requestTimeoutMillis,
                 )
             }
             val newReleases = async {
@@ -290,7 +312,8 @@ class JellyfinApi(
                         "sortBy" to "PremiereDate",
                         "sortOrder" to "Descending",
                         "includeItemTypes" to itemTypes(library.collectionType)
-                    )
+                    ),
+                    requestTimeoutMillis,
                 )
             }
             LibraryData(
@@ -419,9 +442,10 @@ class JellyfinApi(
     private suspend fun getItems(
         session: AuthSession,
         path: String,
-        query: Map<String, String>
+        query: Map<String, String>,
+        requestTimeoutMillis: Long? = null,
     ): List<MediaItem> = withContext(Dispatchers.IO) {
-        parseMediaItems(requestJson(session, path, query))
+        parseMediaItems(requestJson(session, path, query, requestTimeoutMillis = requestTimeoutMillis))
     }
 
     private fun requestJson(
@@ -430,7 +454,16 @@ class JellyfinApi(
         query: Map<String, String> = emptyMap(),
         method: String = "GET",
         body: String? = null,
-    ): JSONObject = requestJson(session.serverUrl, path, query, session.token, method, body)
+        requestTimeoutMillis: Long? = null,
+    ): JSONObject = requestJson(
+        session.serverUrl,
+        path,
+        query,
+        session.token,
+        method,
+        body,
+        requestTimeoutMillis,
+    )
 
     private fun requestJson(
         server: String,
@@ -439,6 +472,7 @@ class JellyfinApi(
         token: String?,
         method: String = "GET",
         body: String? = null,
+        requestTimeoutMillis: Long? = null,
     ): JSONObject {
         val urlBuilder = "$server${path}".toHttpUrl().newBuilder()
         query.forEach { (key, value) -> urlBuilder.addQueryParameter(key, value) }
@@ -451,7 +485,9 @@ class JellyfinApi(
             method,
             if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
         )
-        val response = httpClient.newCall(requestBuilder.build()).execute()
+        val call = httpClient.newCall(requestBuilder.build())
+        requestTimeoutMillis?.let { call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        val response = call.execute()
         response.use {
             if (!it.isSuccessful) throw JellyfinException(
                 it.code,
@@ -466,6 +502,7 @@ class JellyfinApi(
         private const val ITEM_FIELDS =
             "Overview,Genres,PrimaryImageAspectRatio,CommunityRating,ProductionYear,PremiereDate,RecursiveItemCount,ParentId,ImageTags,BackdropImageTags,ImageBlurHashes,UserData,SeriesPrimaryImage,People,Studios,ChildCount"
         private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"
+        internal const val HOME_REQUEST_TIMEOUT_MILLIS = 30_000L
 
         fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
             token?.let { "Token=\"$it\"" },

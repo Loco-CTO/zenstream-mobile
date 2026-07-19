@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.JellyfinException
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -11,16 +12,23 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MediaRow
+import com.zenstream.zenstreammobile.model.RowTitle
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 data class AppUiState(
     val loading: Boolean = true,
@@ -107,28 +115,114 @@ class LoginViewModel(private val repository: JellyfinRepository) : ViewModel() {
 data class HomeUiState(
     val loading: Boolean = true,
     val data: HomeData? = null,
-    val error: Boolean = false
+    val error: Boolean = false,
+    val pendingSections: Int = 0,
+    val successfulSections: Int = 0,
 )
 
-class HomeViewModel(private val repository: JellyfinRepository, private val session: AuthSession) :
+class HomeViewModel(private val repository: HomeDataSource, private val session: AuthSession) :
     ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState = _uiState.asStateFlow()
+    private var loadingJob: Job? = null
+
+    private companion object {
+        const val INITIAL_SECTION_COUNT = 4
+    }
 
     init {
         load()
     }
 
     fun load() {
+        if (loadingJob?.isActive == true) return
         if (!_uiState.value.loading && _uiState.value.data != null) return
-        viewModelScope.launch {
-            _uiState.value = HomeUiState(loading = true)
-            runCatching { repository.home(session) }
-                .onSuccess { _uiState.value = HomeUiState(data = it) }
-                .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
-                    _uiState.value = HomeUiState(error = true)
+        _uiState.value = HomeUiState(loading = true, pendingSections = INITIAL_SECTION_COUNT)
+        loadingJob = viewModelScope.launch {
+            supervisorScope {
+                launch {
+                    loadSection(
+                        request = { repository.homeFeatured(session) },
+                        apply = { data, items -> data.copy(featured = items) },
+                    )
                 }
+                launch {
+                    loadSection(
+                        request = { repository.homeContinueWatching(session) },
+                        apply = { data, items -> data.withRow(RowTitle.ContinueWatching, items, wide = true) },
+                    )
+                }
+                launch {
+                    loadSection(
+                        request = { repository.homeNextUp(session) },
+                        apply = { data, items -> data.withRow(RowTitle.NextUp, items, wide = true) },
+                    )
+                }
+                launch { loadLibraries() }
+            }
+        }
+    }
+
+    private suspend fun CoroutineScope.loadLibraries() {
+        try {
+            val libraries = repository.homeLibraries(session)
+            if (libraries.isNotEmpty()) addPendingSections(libraries.size)
+            completeSection(success = true)
+            if (libraries.isEmpty()) return
+
+            val libraryResults = libraries.map { library ->
+                launch {
+                    loadSection(
+                        request = { repository.homeLibraryData(session, library) },
+                        apply = { data, libraryData -> data.withLibraryData(libraries, libraryData) },
+                    )
+                }
+            }
+            libraryResults.joinAll()
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            handleFailure(error)
+            completeSection(success = false)
+        }
+    }
+
+    private suspend fun <T> loadSection(
+        request: suspend () -> T,
+        apply: (HomeData, T) -> HomeData,
+    ) {
+        try {
+            val result = request()
+            _uiState.update { state ->
+                state.copy(
+                    data = apply(state.data ?: HomeData(), result),
+                )
+            }
+            completeSection(success = true)
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            handleFailure(error)
+            completeSection(success = false)
+        }
+    }
+
+    private suspend fun handleFailure(error: Throwable) {
+        if ((error as? JellyfinException)?.statusCode == 401) repository.clearSession()
+    }
+
+    private fun addPendingSections(count: Int) {
+        _uiState.update { it.copy(pendingSections = it.pendingSections + count) }
+    }
+
+    private fun completeSection(success: Boolean) {
+        _uiState.update { state ->
+            val pending = (state.pendingSections - 1).coerceAtLeast(0)
+            val successful = state.successfulSections + if (success) 1 else 0
+            state.copy(
+                loading = pending > 0,
+                error = pending == 0 && successful == 0,
+                pendingSections = pending,
+                successfulSections = successful,
+            )
         }
     }
 
@@ -138,6 +232,26 @@ class HomeViewModel(private val repository: JellyfinRepository, private val sess
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             HomeViewModel(repository, session) as T
     }
+}
+
+private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Boolean): HomeData {
+    val rows = rows.filterNot { it.title == title && it.libraryName == null } +
+        listOfNotNull(items.takeIf { it.isNotEmpty() }?.let { MediaRow(title, items = it, wide = wide) })
+    return copy(rows = rows)
+}
+
+private fun HomeData.withLibraryData(
+    libraries: List<com.zenstream.zenstreammobile.model.Library>,
+    libraryData: com.zenstream.zenstreammobile.model.LibraryData,
+): HomeData {
+    val byLibrary = rows.filter { it.libraryName != null }
+        .groupBy { it.libraryName }
+        .toMutableMap()
+    byLibrary[libraryData.library.name] = libraryData.rows
+    val orderedLibraryRows = libraries.flatMap { byLibrary[it.name].orEmpty() }
+    return copy(
+        rows = rows.filter { it.libraryName == null } + orderedLibraryRows,
+    )
 }
 
 data class LibraryUiState(

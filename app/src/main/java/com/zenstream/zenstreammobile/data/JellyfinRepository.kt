@@ -8,11 +8,23 @@ import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
 
+interface HomeDataSource {
+    suspend fun clearSession()
+    suspend fun homeFeatured(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
+    suspend fun homeContinueWatching(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
+    suspend fun homeNextUp(session: AuthSession): List<com.zenstream.zenstreammobile.model.MediaItem>
+    suspend fun homeLibraries(session: AuthSession): List<com.zenstream.zenstreammobile.model.Library>
+    suspend fun homeLibraryData(
+        session: AuthSession,
+        library: com.zenstream.zenstreammobile.model.Library,
+    ): com.zenstream.zenstreammobile.model.LibraryData
+}
+
 class JellyfinRepository(
     private val api: JellyfinApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
-) {
+) : HomeDataSource {
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -40,10 +52,20 @@ class JellyfinRepository(
         sessionStore.saveLocale(orchestratorApi.fetchLocale(orchestratorUrl, token))
     }
 
-    suspend fun clearSession() = sessionStore.clearSession()
+    override suspend fun clearSession() = sessionStore.clearSession()
     suspend fun clearAll() = sessionStore.clearAll()
 
-    suspend fun home(session: AuthSession) = api.fetchHome(session)
+    override suspend fun homeFeatured(session: AuthSession) = api.fetchHomeFeatured(session)
+    override suspend fun homeContinueWatching(session: AuthSession) = api.fetchHomeContinueWatching(session)
+    override suspend fun homeNextUp(session: AuthSession) = api.fetchHomeNextUp(session)
+    override suspend fun homeLibraries(session: AuthSession) =
+        api.getLibraries(session, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
+
+    override suspend fun homeLibraryData(
+        session: AuthSession,
+        library: com.zenstream.zenstreammobile.model.Library,
+    ) = api.fetchLibraryData(session, library, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
+
     suspend fun libraries(session: AuthSession) = api.getLibraries(session)
     suspend fun library(
         session: AuthSession,
