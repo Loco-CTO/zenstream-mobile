@@ -3,6 +3,8 @@ package com.zenstream.zenstreammobile.ui.screens
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -23,7 +25,10 @@ class DetailScreensTest {
         val episode = MediaItem("episode", "Pilot", type = "Episode", indexNumber = 1)
         val data = DetailData(
             item = series,
-            seasons = listOf(MediaItem("season", "Season", indexNumber = 1)),
+            seasons = listOf(
+                MediaItem("season", "Season", indexNumber = 1),
+                MediaItem("season-2", "The Return", indexNumber = 2),
+            ),
             episodes = listOf(episode),
             selectedSeasonId = "season",
             similar = emptyList(),
@@ -48,6 +53,8 @@ class DetailScreensTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.play)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.episodes_label)).assertIsDisplayed()
+        composeRule.onAllNodesWithText(context.getString(R.string.season_value, 1, "Season"))
+            .assertCountEquals(2)
         composeRule.onNodeWithText(context.getString(R.string.episode_title, 1, "Pilot"))
             .assertIsDisplayed()
     }
@@ -81,7 +88,9 @@ class DetailScreensTest {
             }
         }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.parent_series, "Example Series"))
+        composeRule.onNodeWithText(context.getString(R.string.parent_series_label))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Example Series")
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.show_more)).assertIsDisplayed()
     }

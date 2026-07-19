@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -200,12 +203,10 @@ internal fun DetailContent(
         }
         if (mediaItem.type == "Episode" && data.parentSeries != null) {
             item {
-                OutlinedButton(
+                ParentSeriesButton(
+                    series = data.parentSeries,
                     onClick = { onOpenItem(data.parentSeries) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                ) {
-                    Text(stringResource(R.string.parent_series, data.parentSeries.name))
-                }
+                )
             }
         }
         if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
@@ -271,6 +272,40 @@ private fun ExpandableOverview(overview: String) {
 }
 
 private const val OVERVIEW_COLLAPSED_LINES = 4
+
+@Composable
+private fun ParentSeriesButton(series: MediaItem, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .72f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .38f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                stringResource(R.string.parent_series_label),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                series.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
 
 @Composable
 private fun DetailHero(item: MediaItem, parentSeries: MediaItem?, session: AuthSession) {
@@ -444,28 +479,40 @@ private fun EpisodeSection(
     onSelectSeason: (String) -> Unit,
     onOpenItem: (MediaItem) -> Unit,
 ) {
-    SectionTitle(R.string.episodes_label)
-    if (data.seasons.size > 1) {
-        var expanded by remember { mutableStateOf(false) }
-        val selected = data.seasons.firstOrNull { it.id == data.selectedSeasonId }
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            OutlinedButton(onClick = { expanded = true }) {
-                Text(seasonLabel(selected))
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                data.seasons.forEach { season ->
-                    DropdownMenuItem(
-                        text = { Text(seasonLabel(season)) },
-                        onClick = {
-                            expanded = false
-                            onSelectSeason(season.id)
-                        },
-                    )
-                }
+    val selected = data.seasons.firstOrNull { it.id == data.selectedSeasonId }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                stringResource(R.string.episodes_label),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .82f),
+                modifier = Modifier.semantics { heading() },
+            )
+            selected?.let {
+                Text(
+                    seasonLabel(it),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        if (data.seasons.size > 1) {
+            SeasonPicker(
+                seasons = data.seasons,
+                selected = selected,
+                onSelectSeason = onSelectSeason,
+            )
+        }
     }
+    Spacer(Modifier.height(4.dp))
     if (data.episodes.isEmpty()) {
         Text(
             stringResource(R.string.no_episodes),
@@ -479,6 +526,62 @@ private fun EpisodeSection(
         ) {
             data.episodes.forEach { episode ->
                 EpisodeRow(episode, session, onClick = { onOpenItem(episode) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonPicker(
+    seasons: List<MediaItem>,
+    selected: MediaItem?,
+    onSelectSeason: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .72f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+        ) {
+            Column(Modifier.widthIn(min = 116.dp, max = 184.dp)) {
+                Text(
+                    stringResource(R.string.no_season),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        seasonLabel(selected),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = stringResource(R.string.no_season),
+                    )
+                }
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            seasons.forEach { season ->
+                DropdownMenuItem(
+                    text = { Text(seasonLabel(season)) },
+                    onClick = {
+                        expanded = false
+                        onSelectSeason(season.id)
+                    },
+                )
             }
         }
     }
