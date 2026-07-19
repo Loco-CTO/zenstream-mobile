@@ -260,7 +260,6 @@ internal fun FeaturedHero(
 internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun SearchScreen(
     repository: JellyfinRepository,
     session: AuthSession,
@@ -272,21 +271,11 @@ fun SearchScreen(
         factory = SearchViewModel.Factory(repository, session)
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    Scaffold(
-        modifier = Modifier.padding(padding),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.search)) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { inner ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(inner)
-        ) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(padding)
+    ) {
             OutlinedTextField(
                 value = state.query,
                 onValueChange = vm::updateQuery,
@@ -335,7 +324,6 @@ fun SearchScreen(
                     }
                 }
             }
-        }
     }
 }
 
@@ -354,7 +342,6 @@ private fun MediaCardForSearch(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun LibraryScreen(
     repository: JellyfinRepository,
     session: AuthSession,
@@ -366,21 +353,11 @@ fun LibraryScreen(
         factory = LibraryViewModel.Factory(repository, session)
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    Scaffold(
-        modifier = Modifier.padding(padding),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.library)) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { inner ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(inner)
-        ) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(padding)
+    ) {
             if (state.libraries.isNotEmpty()) {
                 androidx.compose.foundation.lazy.LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -423,7 +400,6 @@ fun LibraryScreen(
                     }
                 }
             }
-        }
     }
 }
 
