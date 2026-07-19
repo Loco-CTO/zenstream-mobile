@@ -30,8 +30,8 @@ require(semanticMinor in 0..999L && semanticPatch in 0..999L) {
     "zenstreamVersion minor and patch components must be below 1000"
 }
 val semanticVersionCode = semanticVersionMatch.groupValues[1].toLong() * 1_000_000L +
-    semanticMinor * 1_000L +
-    semanticPatch
+        semanticMinor * 1_000L +
+        semanticPatch
 require(semanticVersionCode in 1..2_100_000_000L) {
     "zenstreamVersion produces an Android versionCode outside the supported range"
 }
@@ -49,10 +49,13 @@ val mainVersion = configuredValue("zenstreamMain")
 val releaseBuild = configuredValue("zenstreamRelease") == "true"
 val displayVersion = if (releaseBuild) semanticVersion else "$semanticVersion-main.$mainVersion"
 
-val releaseStoreFile = configuredOrEnvironmentValue("releaseStoreFile", "ANDROID_RELEASE_STORE_FILE")
-val releaseStorePassword = configuredOrEnvironmentValue("releaseStorePassword", "ANDROID_RELEASE_STORE_PASSWORD")
+val releaseStoreFile =
+    configuredOrEnvironmentValue("releaseStoreFile", "ANDROID_RELEASE_STORE_FILE")
+val releaseStorePassword =
+    configuredOrEnvironmentValue("releaseStorePassword", "ANDROID_RELEASE_STORE_PASSWORD")
 val releaseKeyAlias = configuredOrEnvironmentValue("releaseKeyAlias", "ANDROID_RELEASE_KEY_ALIAS")
-val releaseKeyPassword = configuredOrEnvironmentValue("releaseKeyPassword", "ANDROID_RELEASE_KEY_PASSWORD")
+val releaseKeyPassword =
+    configuredOrEnvironmentValue("releaseKeyPassword", "ANDROID_RELEASE_KEY_PASSWORD")
 val hasReleaseSigning = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -60,10 +63,13 @@ val hasReleaseSigning = listOf(
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
 
-val ciDebugStoreFile = configuredOrEnvironmentValue("ciDebugStoreFile", "ANDROID_CI_DEBUG_STORE_FILE")
-val ciDebugStorePassword = configuredOrEnvironmentValue("ciDebugStorePassword", "ANDROID_CI_DEBUG_STORE_PASSWORD")
+val ciDebugStoreFile =
+    configuredOrEnvironmentValue("ciDebugStoreFile", "ANDROID_CI_DEBUG_STORE_FILE")
+val ciDebugStorePassword =
+    configuredOrEnvironmentValue("ciDebugStorePassword", "ANDROID_CI_DEBUG_STORE_PASSWORD")
 val ciDebugKeyAlias = configuredOrEnvironmentValue("ciDebugKeyAlias", "ANDROID_CI_DEBUG_KEY_ALIAS")
-val ciDebugKeyPassword = configuredOrEnvironmentValue("ciDebugKeyPassword", "ANDROID_CI_DEBUG_KEY_PASSWORD")
+val ciDebugKeyPassword =
+    configuredOrEnvironmentValue("ciDebugKeyPassword", "ANDROID_CI_DEBUG_KEY_PASSWORD")
 val hasCiDebugSigning = listOf(
     ciDebugStoreFile,
     ciDebugStorePassword,
