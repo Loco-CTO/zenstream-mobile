@@ -1,10 +1,10 @@
 package com.zenstream.zenstreammobile.ui
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -25,9 +25,11 @@ class AuthScreensTest {
     @Test
     fun serverSetupShowsMaterialForm() {
         composeRule.setContent { ZenStreamTheme { ServerSetupScreen { } } }
-        composeRule.onNodeWithText("Connect to ZenStream").assertIsDisplayed()
-        composeRule.onNodeWithText("Orchestrator URL").assertIsDisplayed()
-        composeRule.onNodeWithText("Continue").assertIsDisplayed()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.server_setup_title))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.orchestrator_url)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.continue_label)).assertIsDisplayed()
     }
 
     @Test
