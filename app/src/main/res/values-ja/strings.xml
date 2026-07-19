@@ -110,4 +110,9 @@
     <string name="show_more">もっと見る</string>
     <string name="show_less">折りたたむ</string>
     <string name="select_season">シーズンを選択</string>
+    <string name="skip_intro">イントロをスキップ</string>
+    <string name="skip_outro">アウトロをスキップ</string>
+    <string name="intro_marker">イントロマーカー</string>
+    <string name="outro_marker">アウトロマーカー</string>
+    <string name="player_timeline">再生タイムライン</string>
 </resources>
