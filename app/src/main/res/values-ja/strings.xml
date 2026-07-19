@@ -48,4 +48,6 @@
     <string name="play_description">%1$sを再生</string>
     <string name="info_description">%1$sの情報を表示</string>
     <string name="navigation_description">メインナビゲーション</string>
+    <string name="app_logo_description">ZenStreamのロゴ</string>
+    <string name="profile_description">プロフィール</string>
 </resources>

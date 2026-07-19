@@ -48,4 +48,6 @@
     <string name="play_description">Play %1$s</string>
     <string name="info_description">Show information for %1$s</string>
     <string name="navigation_description">Main navigation</string>
+    <string name="app_logo_description">ZenStream logo</string>
+    <string name="profile_description">Profile</string>
 </resources>
