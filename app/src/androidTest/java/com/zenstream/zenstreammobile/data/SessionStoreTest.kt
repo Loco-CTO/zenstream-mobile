@@ -32,7 +32,10 @@ class SessionStoreTest {
 
     @Test
     fun subtitleStyleIsDeviceLocalAndSurvivesSessionClears() = runBlocking {
-        val store = SessionStore(InstrumentationRegistry.getInstrumentation().context)
+        val store = SessionStore(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+        )
         store.clearAll()
         val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
 
