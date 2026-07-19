@@ -45,6 +45,7 @@ interface PlaybackEngine {
     val state: StateFlow<EngineState>
     fun createView(context: Context): View
     fun currentPositionSeconds(): Double = state.value.positionSeconds
+    /** Loads the source and starts playback once it is ready. */
     fun prepare(url: String, startPositionSeconds: Double)
     fun play()
     fun pause()
@@ -116,6 +117,7 @@ class Media3PlaybackEngine : PlaybackEngine {
         }
         pending = null
         initialSeek.schedule(startPositionSeconds)
+        current.playWhenReady = true
         current.setMediaItem(MediaItem.fromUri(url))
         current.prepare()
         _state.value = _state.value.copy(error = null)
@@ -184,7 +186,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             }
             handler.post(ticker)
         }
-        return view!!
+        return view!!.also { pending?.let { (url, start) -> prepare(url, start) } }
     }
 
     override fun currentPositionSeconds(): Double = runCatching {
@@ -197,6 +199,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         pendingUrl = url
         val current = view ?: return
         current.load(url)
+        MPVLib.setPropertyBoolean("pause", false)
         _state.value = _state.value.copy(error = null)
     }
 
