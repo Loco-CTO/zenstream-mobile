@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -133,7 +134,7 @@ fun HomeScreen(
     androidx.compose.foundation.ExperimentalFoundationApi::class
 )
 @Composable
-private fun FeaturedHero(
+internal fun FeaturedHero(
     items: List<MediaItem>,
     session: AuthSession,
     onPlay: (MediaItem) -> Unit,
@@ -164,71 +165,79 @@ private fun FeaturedHero(
         return
     }
     val pagerState = rememberPagerState(pageCount = { items.size })
-    HorizontalPager(
-        state = pagerState, modifier = Modifier
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
-            .height(430.dp)
-    ) { page ->
-        val item = items[page]
-        Box(Modifier.fillMaxSize()) {
-            val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
-            val request = url?.let {
-                ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
-                    NetworkHeaders.Builder()
-                        .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                        .build()
-                ).crossfade(true).build()
-            }
-            AsyncImage(
-                model = request,
-                contentDescription = stringResource(R.string.backdrop_description, item.name),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(.58f)
-            )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                Color(0xFF080808)
+            .padding(horizontal = 16.dp)
+            .aspectRatio(FEATURE_BAR_ASPECT_RATIO)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val item = items[page]
+            Box(Modifier.fillMaxSize()) {
+                val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
+                val request = url?.let {
+                    ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
+                        NetworkHeaders.Builder()
+                            .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                            .build()
+                    ).crossfade(true).build()
+                }
+                AsyncImage(
+                    model = request,
+                    contentDescription = stringResource(R.string.backdrop_description, item.name),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(.58f)
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color(0xFF080808)
+                                )
                             )
                         )
-                    )
-            )
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    item.name,
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { heading() })
-                Text(
-                    itemSubtitle(item),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = .65f)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { onPlay(item) }) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null
-                        ); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play))
-                    }
-                    OutlinedButton(onClick = { onInfo(item) }) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null
-                        ); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.info))
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        item.name,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() })
+                    Text(
+                        itemSubtitle(item),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = .65f)
+                    )
+                    val infoDescription = stringResource(R.string.info_description, item.name)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = { onPlay(item) }) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null
+                            ); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play))
+                        }
+                        IconButton(
+                            onClick = { onInfo(item) },
+                        ) {
+                            Icon(Icons.Default.Info, contentDescription = infoDescription)
+                        }
                     }
                 }
             }
@@ -254,6 +263,8 @@ private fun FeaturedHero(
         }
     }
 }
+
+internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
