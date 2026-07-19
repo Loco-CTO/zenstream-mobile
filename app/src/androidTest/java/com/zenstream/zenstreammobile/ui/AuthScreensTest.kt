@@ -31,11 +31,12 @@ class AuthScreensTest {
     }
 
     @Test
-    fun featureBarUsesIconOnlyInfoAction() {
+    fun featureBarUsesLogoAndNoActions() {
         val item = MediaItem(
             id = "1",
             name = "Example",
             type = "Movie",
+            imageTags = mapOf("Logo" to "logo-tag"),
             backdropImageTags = listOf("backdrop-tag"),
         )
         val session = AuthSession("https://example.com", "token", "user", "name")
@@ -45,20 +46,19 @@ class AuthScreensTest {
                 FeaturedHero(
                     items = listOf(item),
                     session = session,
-                    onPlay = {},
-                    onInfo = {},
                     showEmptyLibrary = false,
                 )
             }
         }
 
-        val infoDescription = InstrumentationRegistry.getInstrumentation()
+        val logoDescription = InstrumentationRegistry.getInstrumentation()
             .targetContext
-            .getString(R.string.info_description, "Example")
-        composeRule.onNodeWithContentDescription(infoDescription)
+            .getString(R.string.logo_description, "Example")
+        composeRule.onNodeWithContentDescription(logoDescription)
             .assertExists()
-        composeRule.onNodeWithContentDescription(infoDescription)
+        composeRule.onNodeWithContentDescription(logoDescription)
             .assertIsDisplayed()
+        composeRule.onAllNodesWithText("Play").assertCountEquals(0)
         composeRule.onAllNodesWithText("Info").assertCountEquals(0)
     }
 
