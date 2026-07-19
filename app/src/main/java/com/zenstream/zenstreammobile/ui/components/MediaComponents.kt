@@ -157,7 +157,7 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
             }
         }
         Text(
-            wideEpisodeTitle(item),
+            episodeCardTitle(item),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelLarge,
@@ -165,7 +165,7 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
             modifier = Modifier.padding(top = 7.dp)
         )
         Text(
-            wideEpisodeSubtitle(item),
+            episodeCardSubtitle(item),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall,
@@ -230,14 +230,14 @@ fun progressPercent(item: MediaItem): Int? {
     return null
 }
 
-private fun wideEpisodeTitle(item: MediaItem): String =
+internal fun episodeCardTitle(item: MediaItem): String =
     if (item.type == "Episode" && !item.seriesId.isNullOrBlank()) {
         item.seriesName ?: "Series"
     } else {
         item.name
     }
 
-private fun wideEpisodeSubtitle(item: MediaItem): String =
+internal fun episodeCardSubtitle(item: MediaItem): String =
     if (item.type == "Episode" && !item.seriesId.isNullOrBlank()) {
         val season = item.parentIndexNumber?.toString()?.padStart(2, '0') ?: "??"
         val episode = item.indexNumber?.toString()?.padStart(2, '0') ?: "??"
