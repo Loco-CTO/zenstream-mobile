@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -71,6 +72,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun PlaybackScreen(
@@ -90,6 +92,7 @@ fun PlaybackScreen(
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<PlayerMenu?>(null) }
+    var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
 
     DisposableEffect(vm) {
         onDispose {
@@ -101,6 +104,13 @@ fun PlaybackScreen(
         if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, menu != null, state.engine.isPlaying)) {
             delay(4_500)
             controlsVisible = false
+        }
+    }
+
+    LaunchedEffect(vm) {
+        while (isActive) {
+            withFrameNanos { }
+            subtitlePositionSeconds = vm.subtitlePositionSeconds()
         }
     }
 
@@ -130,7 +140,7 @@ fun PlaybackScreen(
             )
         }
 
-        state.activeCues.forEach { cue ->
+        state.activeCuesAt(subtitlePositionSeconds).forEach { cue ->
             Text(
                 text = cue.text,
                 color = parseColor(state.subtitleStyle.fontColor, Color.White),

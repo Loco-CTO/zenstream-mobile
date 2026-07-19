@@ -32,6 +32,7 @@ data class EngineState(
 interface PlaybackEngine {
     val state: StateFlow<EngineState>
     fun createView(context: Context): View
+    fun currentPositionSeconds(): Double = state.value.positionSeconds
     fun prepare(url: String, startPositionSeconds: Double)
     fun play()
     fun pause()
@@ -92,6 +93,10 @@ class Media3PlaybackEngine : PlaybackEngine {
             player = this@Media3PlaybackEngine.player
         }.also { pending?.let { (url, start) -> prepare(url, start) } }
     }
+
+    override fun currentPositionSeconds(): Double =
+        player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0)
+            ?: _state.value.positionSeconds
 
     override fun prepare(url: String, startPositionSeconds: Double) {
         val current = player
@@ -160,6 +165,10 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         }
         return view!!
     }
+
+    override fun currentPositionSeconds(): Double = runCatching {
+        MPVLib.getPropertyDouble("time-pos")
+    }.getOrNull()?.takeIf { it.isFinite() && it >= 0.0 } ?: _state.value.positionSeconds
 
     override fun prepare(url: String, startPositionSeconds: Double) {
         pending = url to startPositionSeconds

@@ -48,4 +48,16 @@ class PlaybackParsingTest {
         assertEquals(100f, style.backgroundOpacity)
     }
 
+    @Test
+    fun selectsCuesFromTheFreshPlaybackPositionAtBoundaries() {
+        val cues = listOf(
+            com.zenstream.zenstreammobile.model.SubtitleCue(1.0, 2.0, "first"),
+            com.zenstream.zenstreammobile.model.SubtitleCue(2.0, 3.0, "second"),
+        )
+
+        assertEquals("first", activeSubtitleCues(cues, 1.999).single().text)
+        assertEquals("second", activeSubtitleCues(cues, 2.0).single().text)
+        assertTrue(activeSubtitleCues(cues, 0.5).isEmpty())
+    }
+
 }

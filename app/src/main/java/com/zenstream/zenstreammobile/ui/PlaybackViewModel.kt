@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -43,10 +44,10 @@ data class PlaybackUiState(
     val subtitleOffset: Double = 0.0,
 ) {
     val activeCues: List<SubtitleCue>
-        get() = subtitleCues.filter { cue ->
-            val time = engine.positionSeconds + subtitleOffset
-            time >= cue.startSeconds && time < cue.endSeconds
-        }
+        get() = activeCuesAt(engine.positionSeconds)
+
+    fun activeCuesAt(positionSeconds: Double): List<SubtitleCue> =
+        activeSubtitleCues(subtitleCues, positionSeconds, subtitleOffset)
 }
 
 class PlaybackViewModel(
@@ -179,6 +180,8 @@ class PlaybackViewModel(
     }
 
     fun seekTo(positionSeconds: Double) = playbackEngine?.seekTo(positionSeconds)
+    fun subtitlePositionSeconds(): Double = playbackEngine?.currentPositionSeconds()
+        ?: _uiState.value.engine.positionSeconds
     fun setVolume(value: Float) = playbackEngine?.setVolume(value)
     fun setMuted(value: Boolean) = playbackEngine?.setMuted(value)
     fun setSpeed(value: Float) = playbackEngine?.setSpeed(value)

@@ -28,6 +28,15 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
     }
 }
 
+fun activeSubtitleCues(
+    cues: List<SubtitleCue>,
+    positionSeconds: Double,
+    offsetSeconds: Double = 0.0,
+): List<SubtitleCue> {
+    val time = positionSeconds + offsetSeconds
+    return cues.filter { cue -> time >= cue.startSeconds && time < cue.endSeconds }
+}
+
 private fun parseVttTimestamp(value: String): Double? {
     val parts = value.trim().split(':')
     if (parts.size !in 2..3) return null
