@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.playbackUrl
+import com.zenstream.zenstreammobile.data.playbackLocalPositionSeconds
 import com.zenstream.zenstreammobile.data.playbackStreamStartPositionSeconds
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -63,6 +64,7 @@ class PlaybackViewModel(
     private var playbackEngine: PlaybackEngine? = null
     private var engineJob: Job? = null
     private var progressJob: Job? = null
+    private var subtitleJob: Job? = null
     private var mediaOriginSeconds = 0.0
     private var recovered = false
 
@@ -144,7 +146,7 @@ class PlaybackViewModel(
                     data.source,
                     requestedOrResumeStartSeconds,
                 )
-                val localStartSeconds = (requestedOrResumeStartSeconds - sourceOriginSeconds).coerceAtLeast(0.0)
+                val localStartSeconds = playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
                 val bitrate = requestOptions.maxStreamingBitrate ?: 0
                 mediaOriginSeconds = sourceOriginSeconds
                 _uiState.value = _uiState.value.copy(
@@ -219,16 +221,22 @@ class PlaybackViewModel(
     }
 
     fun chooseSubtitle(streamIndex: Int?) {
+        subtitleJob?.cancel()
         _uiState.value = _uiState.value.copy(selectedSubtitle = streamIndex, subtitleCues = emptyList())
-        loadSubtitle()
+        if (streamIndex != null) loadSubtitle()
     }
 
     private fun loadSubtitle() {
         val selected = _uiState.value.selectedSubtitle ?: return
         val playback = _uiState.value.playback ?: return
-        viewModelScope.launch {
+        subtitleJob?.cancel()
+        subtitleJob = viewModelScope.launch {
             runCatching { repository.subtitleWebVtt(session, itemId, playback.source.id, selected, ticks(mediaOriginSeconds)) }
-                .onSuccess { _uiState.value = _uiState.value.copy(subtitleCues = parseWebVttCues(it)) }
+                .onSuccess {
+                    if (_uiState.value.selectedSubtitle == selected && _uiState.value.playback?.source?.id == playback.source.id) {
+                        _uiState.value = _uiState.value.copy(subtitleCues = parseWebVttCues(it))
+                    }
+                }
         }
     }
 
@@ -247,6 +255,7 @@ class PlaybackViewModel(
     override fun onCleared() {
         viewModelScope.launch { reportProgress() }
         progressJob?.cancel()
+        subtitleJob?.cancel()
         engineJob?.cancel()
         playbackEngine?.release()
         playbackEngine = null

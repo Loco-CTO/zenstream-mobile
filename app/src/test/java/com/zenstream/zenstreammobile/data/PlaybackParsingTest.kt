@@ -57,6 +57,12 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun reloadPositionIsRelativeToTheNewStreamOrigin() {
+        assertEquals(15.0, playbackLocalPositionSeconds(140.0, 125.0), 0.001)
+        assertEquals(0.0, playbackLocalPositionSeconds(100.0, 125.0), 0.001)
+    }
+
+    @Test
     fun subtitleRequestUsesRelativeTimestampsFromThePlaybackOrigin() {
         val query = subtitleWebVttQuery(
             com.zenstream.zenstreammobile.model.AuthSession(
