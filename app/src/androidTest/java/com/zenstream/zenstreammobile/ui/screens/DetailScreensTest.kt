@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -22,7 +23,7 @@ class DetailScreensTest {
     @Test
     fun seriesDetailShowsActionsEpisodesAndCast() {
         val series = MediaItem("series", "Example Series", type = "Series")
-        val episode = MediaItem("episode", "Pilot", type = "Episode", indexNumber = 1)
+        val episode = MediaItem("episode", "Pilot", type = "Episode", indexNumber = 1, played = true)
         val data = DetailData(
             item = series,
             seasons = listOf(
@@ -53,9 +54,11 @@ class DetailScreensTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.play)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.episodes_label)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.season_value, 1, "Season"))
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 1))
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.episode_title, 1, "Pilot"))
+            .assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.watched_description))
             .assertIsDisplayed()
     }
 

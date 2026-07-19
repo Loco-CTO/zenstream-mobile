@@ -40,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -579,6 +580,24 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     Modifier.fillMaxSize(),
                     ContentScale.Crop,
                 )
+                if (item.played) {
+                    Surface(
+                        color = Color.Black.copy(alpha = .65f),
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(5.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = stringResource(R.string.watched_description),
+                            tint = Color(0xFFBBF7D0),
+                            modifier = Modifier
+                                .padding(5.dp)
+                                .size(14.dp),
+                        )
+                    }
+                }
                 progressPercent(item)?.let { progress ->
                     LinearProgressIndicator(
                         progress = { progress / 100f },
@@ -606,11 +625,6 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     )
                 }
             }
-            if (item.played) Icon(
-                Icons.Default.Check,
-                stringResource(R.string.watched_description),
-                tint = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }
