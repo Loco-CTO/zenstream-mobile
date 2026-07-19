@@ -1,9 +1,12 @@
 package com.zenstream.zenstreammobile.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
+import org.json.JSONArray
+import org.json.JSONObject
 
 class PlaybackParsingTest {
     @Test
@@ -141,6 +144,102 @@ class PlaybackParsingTest {
         seek.cancel()
 
         assertEquals(null, seek.consume())
+    }
+
+    @Test
+    fun followsTheWebMarkerProviderOrder() {
+        assertEquals(
+            listOf(
+                "/Episode/episode-1/IntroSkipperSegments",
+                "/Episode/episode-1/Timestamps",
+                "/MediaSegments/episode-1",
+            ),
+            playbackMarkerPaths("episode-1"),
+        )
+    }
+
+    @Test
+    fun parsesTypedMediaSegmentsFromItemsAndConvertsTicks() {
+        val markers = parsePlaybackMarkers(
+            JSONObject(
+                """
+                {"Items":[
+                  {"Type":"Intro","StartTicks":100000000,"EndTicks":250000000},
+                  {"Type":"Outro","StartTicks":800,"EndTicks":1200}
+                ]}
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(2, markers.size)
+        assertEquals(10.0, markers[0].startSeconds, 0.001)
+        assertEquals(25.0, markers[0].endSeconds, 0.001)
+        assertEquals(800.0, markers[1].startSeconds, 0.001)
+    }
+
+    @Test
+    fun parsesLegacyIntroSkipperObjectShape() {
+        val markers = parsePlaybackMarkers(
+            JSONObject(
+                """
+                {"IntroStart":100000000,"IntroEnd":200000000,
+                 "CreditsStart":900000000,"CreditsEnd":950000000}
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(2, markers.size)
+        assertEquals(10.0, markers.first { it.type.name == "INTRO" }.startSeconds, 0.001)
+        assertEquals(95.0, markers.first { it.type.name == "OUTRO" }.endSeconds, 0.001)
+    }
+
+    @Test
+    fun derivesChapterMarkerEndFromTheNextChapterOrRuntime() {
+        val item = com.zenstream.zenstreammobile.model.MediaItem(
+            id = "episode-1",
+            name = "Episode",
+            runtimeTicks = 600_000_000L,
+            chapters = parseChapters(
+                JSONObject().put(
+                    "Chapters",
+                    JSONArray()
+                        .put(JSONObject().put("StartPositionTicks", 0L).put("Name", "Opening"))
+                        .put(JSONObject().put("StartPositionTicks", 120_000_000L).put("Name", "Story"))
+                        .put(JSONObject().put("StartPositionTicks", 500_000_000L).put("Name", "Ending Credits")),
+                )
+            ),
+        )
+
+        val markers = chapterPlaybackSegments(item)
+
+        assertEquals(2, markers.size)
+        assertEquals(0.0, markers[0].startSeconds, 0.001)
+        assertEquals(12.0, markers[0].endSeconds, 0.001)
+        assertEquals(50.0, markers[1].startSeconds, 0.001)
+        assertEquals(60.0, markers[1].endSeconds, 0.001)
+    }
+
+    @Test
+    fun providerMarkerTypeWinsOverChapterFallback() {
+        val provider = listOf(
+            com.zenstream.zenstreammobile.model.PlaybackSegment(
+                com.zenstream.zenstreammobile.model.PlaybackSegmentType.INTRO, 10.0, 20.0
+            )
+        )
+        val chapters = listOf(
+            com.zenstream.zenstreammobile.model.PlaybackSegment(
+                com.zenstream.zenstreammobile.model.PlaybackSegmentType.INTRO, 1.0, 5.0
+            ),
+            com.zenstream.zenstreammobile.model.PlaybackSegment(
+                com.zenstream.zenstreammobile.model.PlaybackSegmentType.OUTRO, 50.0, 60.0
+            ),
+        )
+
+        val merged = mergePlaybackSegments(provider, chapters)
+
+        assertEquals(2, merged.size)
+        assertFalse(merged.any { it.startSeconds == 1.0 })
+        assertTrue(merged.any { it.startSeconds == 50.0 })
     }
 
 }

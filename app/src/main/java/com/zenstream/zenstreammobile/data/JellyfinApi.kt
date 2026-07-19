@@ -91,12 +91,7 @@ class JellyfinApi(
         itemId: String,
         item: MediaItem,
     ): List<PlaybackSegment> {
-        val providerPaths = listOf(
-            "/Episode/$itemId/IntroSkipperSegments",
-            "/Episode/$itemId/Timestamps",
-            "/MediaSegments/$itemId",
-        )
-        val providerSegments = providerPaths.asSequence()
+        val providerSegments = playbackMarkerPaths(itemId).asSequence()
             .mapNotNull { path ->
                 runCatching { parsePlaybackMarkers(requestMarkerPayload(session, path)) }.getOrNull()
             }
@@ -786,6 +781,7 @@ private fun JSONObject.numberValue(vararg keys: String): Double? = keys.asSequen
         if (!has(key) || isNull(key)) null else when (val value = opt(key)) {
             is Number -> value.toDouble()
             is String -> value.toDoubleOrNull()
+            null -> null
             else -> null
         }
     }
@@ -824,6 +820,12 @@ internal fun mergePlaybackSegments(
         .filter { it.startSeconds >= 0.0 && it.endSeconds > it.startSeconds }
         .sortedWith(compareBy<PlaybackSegment> { it.startSeconds }.thenBy { it.type })
 }
+
+internal fun playbackMarkerPaths(itemId: String): List<String> = listOf(
+    "/Episode/$itemId/IntroSkipperSegments",
+    "/Episode/$itemId/Timestamps",
+    "/MediaSegments/$itemId",
+)
 
 private fun stringArray(item: JSONObject, key: String): List<String> =
     item.optJSONArray(key)?.let { array ->
