@@ -58,7 +58,9 @@ class DetailScreensTest {
             "episode",
             "Pilot",
             type = "Episode",
-            overview = "A beginning. This is a deliberately long overview that should be collapsed initially so the detail screen remains compact and readable on a phone.",
+            overview = List(8) {
+                "A beginning. This is a deliberately long overview that should be collapsed initially so the detail screen remains compact and readable on a phone."
+            }.joinToString(" "),
         )
         val series = MediaItem("series", "Example Series", type = "Series")
         val session = AuthSession("https://example.com", "token", "user", "name")
