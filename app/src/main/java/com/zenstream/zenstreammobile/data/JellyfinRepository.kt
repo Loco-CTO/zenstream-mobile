@@ -22,11 +22,30 @@ interface HomeDataSource {
     suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData
 }
 
+interface LibraryDataSource {
+    suspend fun clearSession()
+    suspend fun libraries(session: AuthSession): List<Library>
+    suspend fun libraryPage(
+        session: AuthSession,
+        library: Library,
+        startIndex: Int,
+        limit: Int,
+        sort: LibrarySort,
+    ): PagedLibrary
+    suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort?
+    suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort)
+}
+
+interface SearchDataSource {
+    suspend fun clearSession()
+    suspend fun search(session: AuthSession, query: String): List<MediaItem>
+}
+
 class JellyfinRepository(
     private val api: JellyfinApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
-) : HomeDataSource {
+) : HomeDataSource, LibraryDataSource, SearchDataSource {
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -68,13 +87,13 @@ class JellyfinRepository(
         library: Library,
     ) = api.fetchLibraryData(session, library, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
-    suspend fun libraries(session: AuthSession) = api.getLibraries(session)
+    override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
     suspend fun library(
         session: AuthSession,
         library: com.zenstream.zenstreammobile.model.Library
     ) = api.fetchLibraryData(session, library)
 
-    suspend fun libraryPage(
+    override suspend fun libraryPage(
         session: AuthSession,
         library: Library,
         startIndex: Int,
@@ -82,12 +101,12 @@ class JellyfinRepository(
         sort: LibrarySort,
     ): PagedLibrary = api.fetchLibraryPage(session, library, startIndex, limit, sort)
 
-    suspend fun search(session: AuthSession, query: String) = api.search(session, query)
+    override suspend fun search(session: AuthSession, query: String) = api.search(session, query)
 
-    suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? =
+    override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? =
         sessionStore.cachedLibrarySort(userId, libraryId)
 
-    suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) =
+    override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) =
         sessionStore.cacheLibrarySort(userId, libraryId, sort)
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
