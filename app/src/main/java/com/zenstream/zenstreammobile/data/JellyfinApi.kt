@@ -122,9 +122,8 @@ class JellyfinApi(
         itemId: String,
         sourceId: String?,
         streamIndex: Int,
-        startPositionTicks: Long = 0L,
     ): String = withContext(Dispatchers.IO) {
-        val params = subtitleWebVttQuery(session, itemId, sourceId, startPositionTicks)
+        val params = subtitleWebVttQuery(session, itemId, sourceId)
         val builder = "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
             .toHttpUrl()
             .newBuilder()
@@ -579,14 +578,15 @@ internal fun subtitleWebVttQuery(
     session: AuthSession,
     itemId: String,
     sourceId: String?,
-    startPositionTicks: Long,
 ): Map<String, String> = mapOf(
     "api_key" to session.token,
     "MediaSourceId" to (sourceId ?: itemId),
     "format" to "vtt",
     "addVttTimeMap" to "false",
     "copyTimestamps" to "false",
-    "startPositionTicks" to startPositionTicks.toString(),
+    // Keep cue timestamps on the item's absolute media timeline. The player
+    // applies the playback source origin exactly once when selecting cues.
+    "startPositionTicks" to "0",
 )
 
 private fun parseMediaSource(source: JSONObject): MediaSource {

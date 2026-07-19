@@ -32,8 +32,9 @@ fun activeSubtitleCues(
     cues: List<SubtitleCue>,
     positionSeconds: Double,
     offsetSeconds: Double = 0.0,
+    timelineOriginSeconds: Double = 0.0,
 ): List<SubtitleCue> {
-    val time = positionSeconds + offsetSeconds
+    val time = positionSeconds + timelineOriginSeconds + offsetSeconds
     return cues.filter { cue -> time >= cue.startSeconds && time < cue.endSeconds }
 }
 
