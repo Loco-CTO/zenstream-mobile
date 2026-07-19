@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import android.os.Build
+import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
