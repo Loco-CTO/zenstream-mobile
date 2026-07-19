@@ -2,6 +2,8 @@ package com.zenstream.zenstreammobile
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.ComponentName
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.test.core.app.ActivityScenario
@@ -51,5 +53,17 @@ class PlaybackActivityTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun playbackActivitySupportsPictureInPictureWithResizableWindow() {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val activityInfo = context.packageManager.getActivityInfo(
+            ComponentName(context, PlaybackActivity::class.java),
+            PackageManager.GET_META_DATA,
+        )
+
+        assertEquals(true, activityInfo.supportsPictureInPicture())
+        assertEquals(ActivityInfo.RESIZE_MODE_RESIZEABLE, activityInfo.resizeableMode)
     }
 }

@@ -106,7 +106,16 @@ class PlaybackActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) applyImmersiveMode() else immersiveModeApplied = false
+        if (hasFocus && !isInPictureInPictureMode) applyImmersiveMode() else immersiveModeApplied = false
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        immersiveModeApplied = false
+        if (!isInPictureInPictureMode && hasWindowFocus()) applyImmersiveMode()
     }
 
     override fun onPause() {
@@ -116,7 +125,7 @@ class PlaybackActivity : ComponentActivity() {
     }
 
     private fun applyImmersiveMode() {
-        if (immersiveModeApplied) return
+        if (isInPictureInPictureMode || immersiveModeApplied) return
         immersiveModeApplied = true
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowCompat.getInsetsController(window, window.decorView).apply {
