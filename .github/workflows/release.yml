@@ -66,6 +66,22 @@ jobs:
           echo "version=$new_version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
+          [ -n "$KEYSTORE_PASSWORD" ] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
+          [ -n "$KEY_ALIAS" ] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
+          [ -n "$KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-release.jks"
+          test -s "$RUNNER_TEMP/zenstream-release.jks"
+
       - name: Commit and push release version
         id: commit
         env:
@@ -77,16 +93,6 @@ jobs:
           git commit -m "chore: release v$VERSION"
           git push origin HEAD:main
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare release signing key
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-release.jks"
-          test -s "$RUNNER_TEMP/zenstream-release.jks"
 
       - name: Build signed release APK
         env:
@@ -103,7 +109,7 @@ jobs:
           [ -n "$ANDROID_RELEASE_KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
           main=$(sed -nE 's/.*"main"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' .main-version.json)
           [ -n "$main" ] || { echo 'Could not read main version counter.' >&2; exit 1; }
-          ./gradlew assembleRelease \
+          bash ./gradlew assembleRelease \
             -PzenstreamVersion="$VERSION" \
             -PzenstreamMain="$main" \
             -PzenstreamRelease=true

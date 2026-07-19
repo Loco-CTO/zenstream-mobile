@@ -31,7 +31,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run lint, tests, and debug build
-        run: ./gradlew lint test assembleDebug
+        run: bash ./gradlew lint test assembleDebug
 
       - name: Prepare debug APK
         id: apk
