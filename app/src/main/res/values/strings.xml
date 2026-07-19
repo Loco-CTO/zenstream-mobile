@@ -72,6 +72,9 @@
     <string name="pause">Pause</string>
     <string name="player_seek_back">Seek back 10 seconds</string>
     <string name="player_seek_forward">Seek forward 10 seconds</string>
+    <string name="player_quick_controls">Quick player controls</string>
+    <string name="player_quick_seek_back">%1$d seconds back</string>
+    <string name="player_quick_seek_forward">%1$d seconds forward</string>
     <string name="player_volume">Volume</string>
     <string name="player_fullscreen">Fullscreen</string>
     <string name="player_speed">Playback speed</string>

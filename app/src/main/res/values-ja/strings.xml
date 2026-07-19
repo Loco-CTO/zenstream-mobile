@@ -72,6 +72,9 @@
     <string name="pause">一時停止</string>
     <string name="player_seek_back">10秒戻る</string>
     <string name="player_seek_forward">10秒進む</string>
+    <string name="player_quick_controls">プレーヤーのクイック操作</string>
+    <string name="player_quick_seek_back">%1$d秒戻る</string>
+    <string name="player_quick_seek_forward">%1$d秒進む</string>
     <string name="player_volume">音量</string>
     <string name="player_fullscreen">全画面</string>
     <string name="player_speed">再生速度</string>
