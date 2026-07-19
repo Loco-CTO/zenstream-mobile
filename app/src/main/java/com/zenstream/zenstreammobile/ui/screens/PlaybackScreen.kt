@@ -304,7 +304,7 @@ fun PlaybackScreen(
                         )
                     }
                     Text(
-                        "${formatTime(displayedPosition)}  -  ${formatTime(state.engine.durationSeconds)}",
+                        "${formatTime(displayedPosition)} / ${formatTime(state.engine.durationSeconds)}",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = 12.dp),
