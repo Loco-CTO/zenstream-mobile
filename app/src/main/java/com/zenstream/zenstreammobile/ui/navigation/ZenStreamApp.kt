@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
+import android.content.Context
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -42,6 +43,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -55,11 +57,11 @@ import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
-import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
@@ -67,7 +69,6 @@ import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 private const val HOME = "home"
 private const val SEARCH = "search"
 private const val LIBRARY = "library"
-private const val PLAYBACK = "playback/{itemId}/{itemName}"
 private const val DETAIL = "detail/{itemId}"
 private const val SETTINGS = "settings"
 
@@ -123,6 +124,7 @@ private fun MainScaffold(
         )
     }
     val density = LocalDensity.current
+    val context = LocalContext.current
     val bottomBarVisibility = remember(density) {
         BottomBarVisibilityController(
             hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
@@ -151,8 +153,7 @@ private fun MainScaffold(
         bottomBarVisible = bottomBarVisibility.resetForRoute()
     }
 
-    val chromeHidden = currentRoute == PLAYBACK.substringBefore("/") ||
-            currentRoute == DETAIL.substringBefore("/") ||
+    val chromeHidden = currentRoute == DETAIL.substringBefore("/") ||
             currentRoute == SETTINGS
 
     androidx.compose.material3.Scaffold(
@@ -255,21 +256,7 @@ private fun MainScaffold(
                     outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     onBack = { navController.popBackStack() },
                     onOpenItem = { item -> navigateToDetail(navController, item.id) },
-                    onPlay = { item -> navigateToPlayback(navController, item.id, item.name) },
-                )
-            }
-            composable(
-                PLAYBACK,
-                arguments = listOf(
-                    navArgument("itemId") { type = NavType.StringType },
-                    navArgument("itemName") { type = NavType.StringType })
-            ) { entry ->
-                PlaybackScreen(
-                    repository = repository,
-                    session = session,
-                    orchestratorUrl = orchestratorUrl,
-                    itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty()),
-                    onBack = { navController.popBackStack() },
+                    onPlay = { item -> navigateToPlayback(context, item.id, item.name) },
                 )
             }
             composable(SETTINGS) {
@@ -289,11 +276,11 @@ private fun navigateToDetail(navController: androidx.navigation.NavHostControlle
 }
 
 private fun navigateToPlayback(
-    navController: androidx.navigation.NavHostController,
+    context: Context,
     itemId: String,
     itemName: String,
 ) {
-    navController.navigate("playback/${Uri.encode(itemId)}/${Uri.encode(itemName)}")
+    launchPlayback(context, itemId, itemName)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

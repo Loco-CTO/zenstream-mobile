@@ -2,14 +2,10 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.app.Activity
 import android.app.PictureInPictureParams
-import android.content.pm.ActivityInfo
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Build
 import android.util.Rational
-import android.view.ViewTreeObserver
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -60,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -67,9 +63,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenstream.zenstreammobile.R
@@ -85,6 +78,7 @@ fun PlaybackScreen(
     session: AuthSession,
     orchestratorUrl: String?,
     itemId: String,
+    initialItemName: String = "",
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -97,21 +91,9 @@ fun PlaybackScreen(
     var controlsLocked by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<PlayerMenu?>(null) }
 
-    val activity = remember(context) { context.findActivity() }
-    val playbackWindow = remember(activity) { activity?.let(::PlaybackWindowController) }
-    DisposableEffect(activity, playbackWindow) {
-        val decorView = activity?.window?.decorView
-        val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-            if (hasFocus) playbackWindow?.reapply()
-        }
-        decorView?.viewTreeObserver?.addOnWindowFocusChangeListener(focusListener)
-        playbackWindow?.enter()
+    DisposableEffect(vm) {
         onDispose {
             vm.onPause()
-            if (decorView?.viewTreeObserver?.isAlive == true) {
-                decorView.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
-            }
-            playbackWindow?.exit()
         }
     }
 
@@ -129,13 +111,22 @@ fun PlaybackScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .clickable(enabled = !controlsLocked) { controlsVisible = !controlsVisible },
+            .background(Color.Black),
     ) {
         if (playerView != null) {
             AndroidView(
                 factory = { playerView },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (!controlsLocked) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(controlsLocked) {
+                        detectTapGestures { controlsVisible = !controlsVisible }
+                    },
             )
         }
 
@@ -204,7 +195,7 @@ fun PlaybackScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResourceCompat(R.string.back), tint = Color.White)
                     }
                     Text(
-                        playbackTitle(state),
+                        playbackTitle(state, initialItemName),
                         color = Color.White,
                         maxLines = 1,
                         style = MaterialTheme.typography.titleLarge,
@@ -218,9 +209,6 @@ fun PlaybackScreen(
                         )
                     }
                     if (!controlsLocked) {
-                        PlayerMenuButton(Icons.Default.FitScreen, stringResourceCompat(R.string.player_fit)) {
-                            playbackWindow?.reapply()
-                        }
                         PlayerMenuButton(Icons.Default.Speed, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
                         PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
                         PlayerMenuButton(Icons.Default.VolumeUp, stringResourceCompat(R.string.player_volume)) { menu = PlayerMenu.Volume }
@@ -363,39 +351,11 @@ private fun enterPip(context: android.content.Context) {
     }
 }
 
-private class PlaybackWindowController(private val activity: Activity) {
-    private val previousOrientation = activity.requestedOrientation
-
-    fun enter() {
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        reapply()
-    }
-
-    fun reapply() {
-        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
-        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(WindowInsetsCompat.Type.systemBars())
-        }
-    }
-
-    fun exit() {
-        WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-            .show(WindowInsetsCompat.Type.systemBars())
-        // MainActivity uses edge-to-edge for the rest of the app as well.
-        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
-        activity.requestedOrientation = previousOrientation
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
-private fun playbackTitle(state: com.zenstream.zenstreammobile.ui.PlaybackUiState): String {
-    val item = state.playback?.item ?: return state.itemName
+private fun playbackTitle(
+    state: com.zenstream.zenstreammobile.ui.PlaybackUiState,
+    initialItemName: String,
+): String {
+    val item = state.playback?.item ?: return state.itemName.ifBlank { initialItemName }
     return if (item.parentIndexNumber != null && item.indexNumber != null) {
         "S${item.parentIndexNumber}:E${item.indexNumber} - ${item.name}"
     } else {
