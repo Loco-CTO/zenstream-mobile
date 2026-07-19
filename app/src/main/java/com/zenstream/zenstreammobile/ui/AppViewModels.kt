@@ -311,6 +311,14 @@ class DetailViewModel(
         repository.setFavorite(session, item.id, value)
     }
 
+    fun toggleSeasonPlayed(seasonId: String) = toggleSeasonState(seasonId, playedAction = true) { item, value ->
+        repository.setPlayed(session, item.id, value)
+    }
+
+    fun toggleSeasonFavorite(seasonId: String) = toggleSeasonState(seasonId, playedAction = false) { item, value ->
+        repository.setFavorite(session, item.id, value)
+    }
+
     private fun toggleItemState(
         playedAction: Boolean,
         action: suspend (com.zenstream.zenstreammobile.model.MediaItem, Boolean) -> Unit,
@@ -326,6 +334,44 @@ class DetailViewModel(
             }
             _uiState.value = _uiState.value.copy(
                 data = current.copy(item = optimistic),
+                actionBusy = true,
+                actionError = false,
+            )
+            runCatching { action(previous, targetValue) }
+                .onFailure {
+                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    _uiState.value = _uiState.value.copy(
+                        data = current,
+                        actionBusy = false,
+                        actionError = true,
+                    )
+                }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(actionBusy = false)
+                }
+        }
+    }
+
+    private fun toggleSeasonState(
+        seasonId: String,
+        playedAction: Boolean,
+        action: suspend (com.zenstream.zenstreammobile.model.MediaItem, Boolean) -> Unit,
+    ) {
+        val current = _uiState.value.data ?: return
+        val previous = current.seasons.firstOrNull { it.id == seasonId } ?: return
+        viewModelScope.launch {
+            val targetValue = if (playedAction) !previous.played else !previous.favorite
+            val optimisticSeason = if (playedAction) {
+                previous.copy(played = targetValue)
+            } else {
+                previous.copy(favorite = targetValue)
+            }
+            _uiState.value = _uiState.value.copy(
+                data = current.copy(
+                    seasons = current.seasons.map { season ->
+                        if (season.id == seasonId) optimisticSeason else season
+                    },
+                ),
                 actionBusy = true,
                 actionError = false,
             )

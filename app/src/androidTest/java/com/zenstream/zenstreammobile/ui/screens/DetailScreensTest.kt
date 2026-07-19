@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.ui.screens
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -66,6 +67,53 @@ class DetailScreensTest {
             .assertIsDisplayed()
         composeRule.onNodeWithContentDescription(context.getString(R.string.watched_description))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun seasonDrawerShowsWatchedAndFavoriteActions() {
+        val series = MediaItem("series", "Example Series", type = "Series")
+        val data = DetailData(
+            item = series,
+            seasons = listOf(
+                MediaItem("season", "Season", indexNumber = 1),
+                MediaItem("season-2", "The Return", indexNumber = 2),
+            ),
+            selectedSeasonId = "season",
+        )
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        val toggledPlayed = mutableListOf<String>()
+        val toggledFavorite = mutableListOf<String>()
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = data,
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                    onToggleSeasonPlayed = toggledPlayed::add,
+                    onToggleSeasonFavorite = toggledFavorite::add,
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 1))
+            .performClick()
+        composeRule.onAllNodesWithContentDescription(context.getString(R.string.mark_watched))
+            .get(1)
+            .performClick()
+        composeRule.onAllNodesWithContentDescription(context.getString(R.string.add_favorite))
+            .get(1)
+            .performClick()
+
+        assertEquals(listOf("season"), toggledPlayed)
+        assertEquals(listOf("season"), toggledFavorite)
     }
 
     @Test

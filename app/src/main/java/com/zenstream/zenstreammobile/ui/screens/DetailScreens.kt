@@ -149,6 +149,8 @@ fun DetailScreen(
                 onSelectSeason = vm::selectSeason,
                 onTogglePlayed = vm::togglePlayed,
                 onToggleFavorite = vm::toggleFavorite,
+                onToggleSeasonPlayed = vm::toggleSeasonPlayed,
+                onToggleSeasonFavorite = vm::toggleSeasonFavorite,
             )
         }
     }
@@ -167,6 +169,8 @@ internal fun DetailContent(
     onSelectSeason: (String) -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleSeasonPlayed: (String) -> Unit = {},
+    onToggleSeasonFavorite: (String) -> Unit = {},
 ) {
     val mediaItem = data.item
     LazyColumn(
@@ -210,7 +214,10 @@ internal fun DetailContent(
                     data = data,
                     session = session,
                     loading = loading,
+                    actionBusy = actionBusy,
                     onSelectSeason = onSelectSeason,
+                    onToggleSeasonPlayed = onToggleSeasonPlayed,
+                    onToggleSeasonFavorite = onToggleSeasonFavorite,
                     onOpenItem = onOpenItem,
                 )
             }
@@ -478,7 +485,10 @@ private fun EpisodeSection(
     data: DetailData,
     session: AuthSession,
     loading: Boolean,
+    actionBusy: Boolean,
     onSelectSeason: (String) -> Unit,
+    onToggleSeasonPlayed: (String) -> Unit,
+    onToggleSeasonFavorite: (String) -> Unit,
     onOpenItem: (MediaItem) -> Unit,
 ) {
     val selected = data.seasons.firstOrNull { it.id == data.selectedSeasonId }
@@ -500,7 +510,10 @@ private fun EpisodeSection(
                 seasons = data.seasons,
                 selected = selected,
                 loading = loading,
+                actionBusy = actionBusy,
                 onSelectSeason = onSelectSeason,
+                onToggleSeasonPlayed = onToggleSeasonPlayed,
+                onToggleSeasonFavorite = onToggleSeasonFavorite,
             )
         }
     }
@@ -539,7 +552,10 @@ private fun SeasonPicker(
     seasons: List<MediaItem>,
     selected: MediaItem?,
     loading: Boolean,
+    actionBusy: Boolean,
     onSelectSeason: (String) -> Unit,
+    onToggleSeasonPlayed: (String) -> Unit,
+    onToggleSeasonFavorite: (String) -> Unit,
 ) {
     var expanded by remember(selected?.id) { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
@@ -606,7 +622,7 @@ private fun SeasonPicker(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
-                                .clickable {
+                                .clickable(enabled = !loading && !actionBusy) {
                                     expanded = false
                                     onSelectSeason(season.id)
                                 },
@@ -625,7 +641,7 @@ private fun SeasonPicker(
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
                                     seasonChipLabel(
@@ -636,7 +652,48 @@ private fun SeasonPicker(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
                                 )
+                                IconButton(
+                                    onClick = { onToggleSeasonPlayed(season.id) },
+                                    enabled = !loading && !actionBusy,
+                                    modifier = Modifier.semantics {
+                                        contentDescription = stringResource(
+                                            if (season.played) R.string.mark_unwatched
+                                            else R.string.mark_watched,
+                                        )
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (season.played) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onToggleSeasonFavorite(season.id) },
+                                    enabled = !loading && !actionBusy,
+                                    modifier = Modifier.semantics {
+                                        contentDescription = stringResource(
+                                            if (season.favorite) R.string.remove_favorite
+                                            else R.string.add_favorite,
+                                        )
+                                    },
+                                ) {
+                                    Icon(
+                                        if (season.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = if (season.favorite) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
                                 if (isSelected) {
                                     Icon(Icons.Default.Check, contentDescription = null)
                                 }
