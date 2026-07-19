@@ -472,7 +472,7 @@ internal fun PlaybackGestureLayer(
 }
 
 @Composable
-private fun SeekFeedbackOverlay(
+internal fun SeekFeedbackOverlay(
     feedback: SeekFeedback,
     modifier: Modifier = Modifier,
 ) {
