@@ -17,6 +17,7 @@ data class SettingsUiState(
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleSaveError: Boolean = false,
+    val refreshing: Boolean = false,
 )
 
 class SettingsViewModel(
@@ -34,9 +35,26 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch {
-            val style = repository.loadSubtitleStyle(session, orchestratorUrl)
-            _uiState.value = _uiState.value.copy(subtitleStyle = style)
+            refreshSubtitleStyle()
         }
+    }
+
+    fun refresh() {
+        viewModelScope.launch { refreshSubtitleStyle() }
+    }
+
+    private suspend fun refreshSubtitleStyle() {
+        _uiState.value = _uiState.value.copy(refreshing = true)
+        runCatching { repository.loadSubtitleStyle(session, orchestratorUrl) }
+            .onSuccess {
+                _uiState.value = _uiState.value.copy(
+                    subtitleStyle = it,
+                    refreshing = false,
+                )
+            }
+            .onFailure {
+                _uiState.value = _uiState.value.copy(refreshing = false)
+            }
     }
 
     fun setPlayerEngine(engine: PlayerEngine) {

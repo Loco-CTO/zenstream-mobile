@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
@@ -77,25 +78,31 @@ fun SettingsScreen(
         },
         containerColor = Color.Transparent,
     ) { padding ->
-        LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        PullToRefreshLayout(
+            isRefreshing = state.refreshing,
+            onRefresh = vm::refresh,
             modifier = Modifier.padding(padding),
         ) {
-            item {
-                SettingsGroup(title = stringResource(R.string.player_group)) {
-                    EngineSelector(state.playerEngine, vm::setPlayerEngine)
+            LazyColumn(
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                item {
+                    SettingsGroup(title = stringResource(R.string.player_group)) {
+                        EngineSelector(state.playerEngine, vm::setPlayerEngine)
+                    }
                 }
-            }
-            item {
-                SettingsGroup(title = stringResource(R.string.subtitles_group)) {
-                    SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
-                    if (state.subtitleSaveError) {
-                        Text(
-                            stringResource(R.string.subtitle_save_failed),
-                            color = MaterialThemeError,
-                            modifier = Modifier.padding(16.dp),
-                        )
+                item {
+                    SettingsGroup(title = stringResource(R.string.subtitles_group)) {
+                        SubtitleSettings(style = state.subtitleStyle, onChange = vm::updateSubtitle)
+                        if (state.subtitleSaveError) {
+                            Text(
+                                stringResource(R.string.subtitle_save_failed),
+                                color = MaterialThemeError,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
                     }
                 }
             }

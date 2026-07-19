@@ -142,10 +142,12 @@ fun DetailScreen(
                 session = session,
                 padding = innerPadding,
                 loading = state.loading,
+                isRefreshing = state.loading,
                 actionBusy = state.actionBusy,
                 actionError = state.actionError,
                 onPlay = onPlay,
                 onOpenItem = onOpenItem,
+                onRefresh = vm::load,
                 onSelectSeason = vm::selectSeason,
                 onTogglePlayed = vm::togglePlayed,
                 onToggleFavorite = vm::toggleFavorite,
@@ -162,10 +164,12 @@ internal fun DetailContent(
     session: AuthSession,
     padding: PaddingValues,
     loading: Boolean = false,
+    isRefreshing: Boolean = false,
     actionBusy: Boolean,
     actionError: Boolean,
     onPlay: (MediaItem) -> Unit,
     onOpenItem: (MediaItem) -> Unit,
+    onRefresh: () -> Unit = {},
     onSelectSeason: (String) -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -173,13 +177,16 @@ internal fun DetailContent(
     onToggleSeasonFavorite: (String) -> Unit = {},
 ) {
     val mediaItem = data.item
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
-        contentPadding = PaddingValues(bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.padding(padding),
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
         item {
             DetailHero(mediaItem, data.parentSeries, session)
         }
@@ -237,6 +244,7 @@ internal fun DetailContent(
                     }
                 }
             }
+        }
         }
     }
 }

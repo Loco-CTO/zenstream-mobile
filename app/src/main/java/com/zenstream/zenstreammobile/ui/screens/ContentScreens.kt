@@ -97,42 +97,46 @@ fun HomeScreen(
 
         else -> {
             val data = state.data
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 20.dp),
+            PullToRefreshLayout(
+                isRefreshing = state.loading,
+                onRefresh = vm::refresh,
+                modifier = Modifier.padding(padding),
             ) {
-                item {
-                    FeaturedHero(
-                        data?.featured.orEmpty(),
-                        session,
-                        showEmptyLibrary = !state.loading &&
-                            data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
-                    )
-                }
-                items(
-                    data?.rows.orEmpty(),
-                    key = { "${it.title}:${it.libraryName}" }) { row ->
-                    MediaRowView(
-                        row,
-                        session,
-                        onPlay
-                    )
-                }
-                if (state.loading) {
-                    item(key = "home-loading") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 20.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.dp,
-                            )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 20.dp),
+                ) {
+                    item {
+                        FeaturedHero(
+                            data?.featured.orEmpty(),
+                            session,
+                            showEmptyLibrary = !state.loading &&
+                                data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                        )
+                    }
+                    items(
+                        data?.rows.orEmpty(),
+                        key = { "${it.title}:${it.libraryName}" }) { row ->
+                        MediaRowView(
+                            row,
+                            session,
+                            onPlay
+                        )
+                    }
+                    if (state.loading) {
+                        item(key = "home-loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp,
+                                )
+                            }
                         }
                     }
                 }
@@ -327,28 +331,33 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
         )
-        when {
-            state.loading -> CenterLoading(PaddingValues())
-            state.error -> ErrorState(PaddingValues(), R.string.search_load_failed) {}
-            state.query.trim().length < 2 -> Unit
+        PullToRefreshLayout(
+            isRefreshing = state.loading,
+            onRefresh = vm::refresh,
+        ) {
+            when {
+                state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
+                state.error -> ErrorState(PaddingValues(), R.string.search_load_failed) {}
+                state.query.trim().length < 2 -> Unit
 
-            state.results.isEmpty() -> Text(
-                stringResource(R.string.no_search_results),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp)
-            )
+                state.results.isEmpty() -> Text(
+                    stringResource(R.string.no_search_results),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(20.dp)
+                )
 
-            else -> LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                items(state.results, key = { it.id }) { item ->
-                    Box(
-                        Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.TopCenter
-                    ) { MediaCardForSearch(item, session, onItemClick) }
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    items(state.results, key = { it.id }) { item ->
+                        Box(
+                            Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.TopCenter
+                        ) { MediaCardForSearch(item, session, onItemClick) }
+                    }
                 }
             }
         }
@@ -402,29 +411,34 @@ fun LibraryScreen(
             }
             Spacer(Modifier.height(18.dp))
         }
-        when {
-            state.loading -> CenterLoading(PaddingValues())
-            state.error -> ErrorState(
-                PaddingValues(),
-                R.string.library_load_page_failed,
-                vm::loadLibraries
-            )
+        PullToRefreshLayout(
+            isRefreshing = state.loading,
+            onRefresh = vm::refresh,
+        ) {
+            when {
+                state.loading -> CenterLoading(PaddingValues())
+                state.error -> ErrorState(
+                    PaddingValues(),
+                    R.string.library_load_page_failed,
+                    vm::loadLibraries
+                )
 
-            state.data?.rows?.isEmpty() != false -> Text(
-                stringResource(R.string.empty_library),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp)
-            )
+                state.data?.rows?.isEmpty() != false -> Text(
+                    stringResource(R.string.empty_library),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(20.dp)
+                )
 
-            else -> LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(
-                    state.data?.rows.orEmpty(),
-                    key = { "${it.title}:${it.libraryName}" }) {
-                    MediaRowView(
-                        it,
-                        session,
-                        onItemClick = onItemClick
-                    )
+                else -> LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                    items(
+                        state.data?.rows.orEmpty(),
+                        key = { "${it.title}:${it.libraryName}" }) {
+                        MediaRowView(
+                            it,
+                            session,
+                            onItemClick = onItemClick
+                        )
+                    }
                 }
             }
         }

@@ -145,6 +145,25 @@ class HomeViewModelTest {
         assertEquals(listOf(refreshed), viewModel.uiState.value.data?.featured)
     }
 
+    @Test
+    fun refreshReloadsCompletedHomeData() = runTest {
+        val source = FakeHomeDataSource(
+            featuredRequest = { listOf(MediaItem("old", "Old", backdropImageTags = listOf("tag"))) },
+        )
+        val viewModel = HomeViewModel(source, session)
+        advanceUntilIdle()
+        assertEquals("Old", viewModel.uiState.value.data?.featured?.single()?.name)
+
+        source.featuredRequest = {
+            listOf(MediaItem("new", "New", backdropImageTags = listOf("tag")))
+        }
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals("New", viewModel.uiState.value.data?.featured?.single()?.name)
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
     private fun libraryData(library: Library, itemId: String) = LibraryData(
         library,
         listOf(

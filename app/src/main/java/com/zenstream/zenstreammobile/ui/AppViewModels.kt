@@ -292,17 +292,20 @@ class LibraryViewModel(
         loadLibraries()
     }
 
-    fun loadLibraries() {
+    fun loadLibraries(preferredLibraryId: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true, error = false)
             runCatching { repository.libraries(session) }
                 .onSuccess { libraries ->
+                    val selected = libraries.firstOrNull { it.id == preferredLibraryId }
+                        ?: libraries.firstOrNull()
                     _uiState.value = _uiState.value.copy(
                         loading = false,
                         libraries = libraries,
-                        selected = libraries.firstOrNull()
+                        selected = selected,
+                        data = null,
                     )
-                    libraries.firstOrNull()?.let(::select)
+                    selected?.let(::select)
                 }
                 .onFailure {
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
@@ -310,6 +313,8 @@ class LibraryViewModel(
                 }
         }
     }
+
+    fun refresh() = loadLibraries(_uiState.value.selected?.id)
 
     fun select(library: Library) {
         _uiState.value = _uiState.value.copy(selected = library, data = null, loading = true)
@@ -347,7 +352,11 @@ class SearchViewModel(
     private var searchJob: Job? = null
 
     fun updateQuery(value: String) {
-        _uiState.value = _uiState.value.copy(query = value, error = false)
+        _uiState.value = _uiState.value.copy(
+            query = value,
+            loading = value.trim().length >= 2,
+            error = false,
+        )
         searchJob?.cancel()
         if (value.trim().length < 2) {
             _uiState.value = _uiState.value.copy(loading = false, results = emptyList())
@@ -363,6 +372,11 @@ class SearchViewModel(
                     _uiState.value = _uiState.value.copy(loading = false, error = true)
                 }
         }
+    }
+
+    fun refresh() {
+        val query = _uiState.value.query
+        if (query.trim().length >= 2) updateQuery(query)
     }
 
     class Factory(private val repository: JellyfinRepository, private val session: AuthSession) :
