@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -55,13 +54,14 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 class PlaybackActivity : ComponentActivity() {
+    private var immersiveModeApplied = false
+
     private val repository by lazy {
         JellyfinRepository(JellyfinApi(), SessionStore(applicationContext))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -106,15 +106,18 @@ class PlaybackActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) applyImmersiveMode()
+        if (hasFocus) applyImmersiveMode() else immersiveModeApplied = false
     }
 
     override fun onPause() {
         if (isFinishing) restoreSystemBars()
+        else immersiveModeApplied = false
         super.onPause()
     }
 
     private fun applyImmersiveMode() {
+        if (immersiveModeApplied) return
+        immersiveModeApplied = true
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -123,6 +126,7 @@ class PlaybackActivity : ComponentActivity() {
     }
 
     private fun restoreSystemBars() {
+        immersiveModeApplied = false
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
             show(WindowInsetsCompat.Type.systemBars())

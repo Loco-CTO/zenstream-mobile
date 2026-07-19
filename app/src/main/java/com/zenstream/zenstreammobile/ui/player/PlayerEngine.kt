@@ -164,8 +164,10 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private var pending: Pair<String, Double>? = null
     private val initialSeek = InitialSeekController()
     private var pendingUrl: String? = null
+    private var released = false
     private val ticker = object : Runnable {
         override fun run() {
+            if (released) return
             val position = MPVLib.getPropertyDouble("time-pos") ?: 0.0
             val duration = MPVLib.getPropertyDouble("duration") ?: 0.0
             val paused = MPVLib.getPropertyBoolean("pause") ?: true
@@ -188,6 +190,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     }
 
     override fun createView(context: Context): View {
+        check(!released) { "Playback engine has been released" }
         if (view == null) {
             context.filesDir.resolve("mpv-config").mkdirs()
             context.cacheDir.resolve("mpv-cache").mkdirs()
@@ -203,10 +206,12 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     }
 
     override fun currentPositionSeconds(): Double = runCatching {
+        if (released) return@runCatching null
         MPVLib.getPropertyDouble("time-pos")
     }.getOrNull()?.takeIf { it.isFinite() && it >= 0.0 } ?: _state.value.positionSeconds
 
     override fun prepare(url: String, startPositionSeconds: Double) {
+        if (released) return
         pending = url to startPositionSeconds
         initialSeek.schedule(startPositionSeconds)
         pendingUrl = url
@@ -216,17 +221,27 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         _state.value = _state.value.copy(error = null)
     }
 
-    override fun play() { MPVLib.setPropertyBoolean("pause", false) }
-    override fun pause() { MPVLib.setPropertyBoolean("pause", true) }
+    override fun play() {
+        if (!released) MPVLib.setPropertyBoolean("pause", false)
+    }
+    override fun pause() {
+        if (!released) MPVLib.setPropertyBoolean("pause", true)
+    }
     override fun seekTo(positionSeconds: Double) {
+        if (released) return
         initialSeek.cancel()
         MPVLib.command("seek", max(0.0, positionSeconds).toString(), "absolute+exact")
     }
-    override fun setSpeed(value: Float) { MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble()) }
+    override fun setSpeed(value: Float) {
+        if (!released) MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble())
+    }
     override fun release() {
+        if (released) return
+        released = true
         handler.removeCallbacks(ticker)
         initialSeek.cancel()
         pendingUrl = null
+        view?.detachSurfaceForDestroy()
         view?.destroy()
         view = null
     }
@@ -246,6 +261,14 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
         fun load(url: String) {
             if (surfaceReady) MPVLib.command("loadfile", url, "replace") else playFile(url)
+        }
+
+        fun detachSurfaceForDestroy() {
+            if (!surfaceReady) return
+            MPVLib.setPropertyString("vo", "null")
+            MPVLib.setPropertyString("force-window", "no")
+            MPVLib.detachSurface()
+            surfaceReady = false
         }
 
         override fun surfaceCreated(holder: android.view.SurfaceHolder) {

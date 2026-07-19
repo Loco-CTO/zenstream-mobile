@@ -57,6 +57,11 @@ data class PlaybackUiState(
         segments.firstOrNull { positionSeconds >= it.startSeconds && positionSeconds < it.endSeconds }
 }
 
+private data class PlaybackProgressSnapshot(
+    val positionSeconds: Double,
+    val paused: Boolean,
+)
+
 class PlaybackViewModel(
     private val repository: JellyfinRepository,
     private val session: AuthSession,
@@ -202,10 +207,21 @@ class PlaybackViewModel(
     }
 
     private suspend fun reportProgress() {
+        reportProgress(playbackProgressSnapshot())
+    }
+
+    private suspend fun reportProgress(snapshot: PlaybackProgressSnapshot?) {
+        if (snapshot == null) return
+        runCatching {
+            repository.reportPlayback(session, itemId, snapshot.positionSeconds, snapshot.paused)
+        }
+    }
+
+    private fun playbackProgressSnapshot(): PlaybackProgressSnapshot? {
         val state = _uiState.value.engine
         val position = mediaOriginSeconds + currentPlayerPositionSeconds()
-        if (position > 0) {
-            runCatching { repository.reportPlayback(session, itemId, position, !state.isPlaying) }
+        return position.takeIf { it > 0 }?.let {
+            PlaybackProgressSnapshot(positionSeconds = it, paused = !state.isPlaying)
         }
     }
 
@@ -262,11 +278,13 @@ class PlaybackViewModel(
     }
 
     fun onPause() {
-        viewModelScope.launch { reportProgress() }
+        val snapshot = playbackProgressSnapshot()
+        if (snapshot != null) viewModelScope.launch { reportProgress(snapshot) }
     }
 
     override fun onCleared() {
-        viewModelScope.launch { reportProgress() }
+        val snapshot = playbackProgressSnapshot()
+        if (snapshot != null) viewModelScope.launch { reportProgress(snapshot) }
         progressJob?.cancel()
         subtitleJob?.cancel()
         engineJob?.cancel()
