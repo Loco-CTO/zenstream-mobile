@@ -8,12 +8,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -55,6 +55,7 @@ import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
@@ -66,6 +67,7 @@ private const val HOME = "home"
 private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val PLAYBACK = "playback/{itemId}/{itemName}"
+private const val DETAIL = "detail/{itemId}"
 
 @Composable
 fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewModel: AppViewModel) {
@@ -143,14 +145,17 @@ private fun MainScaffold(
         bottomBarVisible = bottomBarVisibility.resetForRoute()
     }
 
+    val chromeHidden = currentRoute == PLAYBACK.substringBefore("/") ||
+            currentRoute == DETAIL.substringBefore("/")
+
     androidx.compose.material3.Scaffold(
         topBar = {
-            if (currentRoute != PLAYBACK.substringBefore("/")) {
+            if (!chromeHidden) {
                 MainTopBar()
             }
         },
         bottomBar = {
-            if (currentRoute != PLAYBACK.substringBefore("/")) {
+            if (!chromeHidden) {
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
@@ -163,9 +168,9 @@ private fun MainScaffold(
                     AnimatedVisibility(
                         visible = bottomBarVisible,
                         enter = expandVertically(expandFrom = Alignment.Bottom) +
-                            slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                                slideInVertically(initialOffsetY = { it }) + fadeIn(),
                         exit = shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                            slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                                slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
                         androidx.compose.material3.NavigationBar(
                             containerColor = Color.Transparent,
@@ -215,43 +220,36 @@ private fun MainScaffold(
                     repository,
                     session,
                     padding,
-                    onPlay = { item ->
-                        navController.navigate(
-                            "playback/${Uri.encode(item.id)}/${
-                                Uri.encode(item.name)
-                            }"
-                        )
-                    })
+                    onPlay = { item -> navigateToDetail(navController, item.id) })
             }
             composable(SEARCH) {
                 SearchScreen(
                     repository,
                     session,
                     padding
-                ) { item ->
-                    navController.navigate(
-                        "playback/${Uri.encode(item.id)}/${
-                            Uri.encode(
-                                item.name
-                            )
-                        }"
-                    )
-                }
+                ) { item -> navigateToDetail(navController, item.id) }
             }
             composable(LIBRARY) {
                 LibraryScreen(
                     repository,
                     session,
                     padding
-                ) { item ->
-                    navController.navigate(
-                        "playback/${Uri.encode(item.id)}/${
-                            Uri.encode(
-                                item.name
-                            )
-                        }"
-                    )
-                }
+                ) { item -> navigateToDetail(navController, item.id) }
+            }
+            composable(
+                DETAIL,
+                arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
+            ) { entry ->
+                val itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty())
+                DetailScreen(
+                    repository = repository,
+                    session = session,
+                    itemId = itemId,
+                    outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    onBack = { navController.popBackStack() },
+                    onOpenItem = { item -> navigateToDetail(navController, item.id) },
+                    onPlay = { item -> navigateToPlayback(navController, item.id, item.name) },
+                )
             }
             composable(
                 PLAYBACK,
@@ -267,6 +265,18 @@ private fun MainScaffold(
             }
         }
     }
+}
+
+private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
+    navController.navigate("detail/${Uri.encode(itemId)}")
+}
+
+private fun navigateToPlayback(
+    navController: androidx.navigation.NavHostController,
+    itemId: String,
+    itemName: String,
+) {
+    navController.navigate("playback/${Uri.encode(itemId)}/${Uri.encode(itemName)}")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -55,7 +56,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -89,7 +89,12 @@ fun HomeScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     when {
         state.loading && state.data == null -> CenterLoading(padding)
-        state.error && state.data == null -> ErrorState(padding, R.string.library_load_failed, vm::load)
+        state.error && state.data == null -> ErrorState(
+            padding,
+            R.string.library_load_failed,
+            vm::load
+        )
+
         else -> {
             val data = state.data
             LazyColumn(
@@ -198,21 +203,27 @@ internal fun FeaturedHero(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                    .padding(20.dp),
+                        .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
                     val logoRequest = logoUrl?.let {
                         ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
                             NetworkHeaders.Builder()
-                                .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                                .set(
+                                    "Authorization",
+                                    JellyfinApi.authorizationHeader(session.token)
+                                )
                                 .build()
                         ).crossfade(true).build()
                     }
                     if (logoRequest != null) {
                         AsyncImage(
                             model = logoRequest,
-                            contentDescription = stringResource(R.string.logo_description, item.name),
+                            contentDescription = stringResource(
+                                R.string.logo_description,
+                                item.name
+                            ),
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .size(260.dp, 72.dp)
@@ -276,54 +287,54 @@ fun SearchScreen(
             .fillMaxSize()
             .padding(padding)
     ) {
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = vm::updateQuery,
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (state.query.isNotEmpty()) IconButton(onClick = {
-                        vm.updateQuery(
-                            ""
-                        )
-                    }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(R.string.close)
-                        )
-                    }
-                },
-                placeholder = { Text(stringResource(R.string.search_placeholder)) },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = vm::updateQuery,
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (state.query.isNotEmpty()) IconButton(onClick = {
+                    vm.updateQuery(
+                        ""
+                    )
+                }) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.close)
+                    )
+                }
+            },
+            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+        )
+        when {
+            state.loading -> CenterLoading(PaddingValues())
+            state.error -> ErrorState(PaddingValues(), R.string.search_load_failed) {}
+            state.query.trim().length < 2 -> Unit
+
+            state.results.isEmpty() -> Text(
+                stringResource(R.string.no_search_results),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(20.dp)
             )
-            when {
-                state.loading -> CenterLoading(PaddingValues())
-                state.error -> ErrorState(PaddingValues(), R.string.search_load_failed) {}
-                state.query.trim().length < 2 -> Unit
 
-                state.results.isEmpty() -> Text(
-                    stringResource(R.string.no_search_results),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(20.dp)
-                )
-
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    items(state.results, key = { it.id }) { item ->
-                        Box(
-                            Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.TopCenter
-                        ) { MediaCardForSearch(item, session, onItemClick) }
-                    }
+            else -> LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                items(state.results, key = { it.id }) { item ->
+                    Box(
+                        Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.TopCenter
+                    ) { MediaCardForSearch(item, session, onItemClick) }
                 }
             }
+        }
     }
 }
 
@@ -358,48 +369,48 @@ fun LibraryScreen(
             .fillMaxSize()
             .padding(padding)
     ) {
-            if (state.libraries.isNotEmpty()) {
-                androidx.compose.foundation.lazy.LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
-                        state.libraries,
-                        key = { it.id }) { library ->
-                        FilterChip(
-                            selected = state.selected?.id == library.id,
-                            onClick = { vm.select(library) },
-                            label = { Text(library.name) })
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-            }
-            when {
-                state.loading -> CenterLoading(PaddingValues())
-                state.error -> ErrorState(
-                    PaddingValues(),
-                    R.string.library_load_page_failed,
-                    vm::loadLibraries
-                )
-
-                state.data?.rows?.isEmpty() != false -> Text(
-                    stringResource(R.string.empty_library),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(20.dp)
-                )
-
-                else -> LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
-                    items(
-                        state.data?.rows.orEmpty(),
-                        key = { "${it.title}:${it.libraryName}" }) {
-                        MediaRowView(
-                            it,
-                            session,
-                            onItemClick = onItemClick
-                        )
-                    }
+        if (state.libraries.isNotEmpty()) {
+            androidx.compose.foundation.lazy.LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    state.libraries,
+                    key = { it.id }) { library ->
+                    FilterChip(
+                        selected = state.selected?.id == library.id,
+                        onClick = { vm.select(library) },
+                        label = { Text(library.name) })
                 }
             }
+            Spacer(Modifier.height(18.dp))
+        }
+        when {
+            state.loading -> CenterLoading(PaddingValues())
+            state.error -> ErrorState(
+                PaddingValues(),
+                R.string.library_load_page_failed,
+                vm::loadLibraries
+            )
+
+            state.data?.rows?.isEmpty() != false -> Text(
+                stringResource(R.string.empty_library),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(20.dp)
+            )
+
+            else -> LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                items(
+                    state.data?.rows.orEmpty(),
+                    key = { "${it.title}:${it.libraryName}" }) {
+                    MediaRowView(
+                        it,
+                        session,
+                        onItemClick = onItemClick
+                    )
+                }
+            }
+        }
     }
 }
 
