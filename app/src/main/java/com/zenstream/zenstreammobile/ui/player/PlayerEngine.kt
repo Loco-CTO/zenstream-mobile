@@ -133,7 +133,7 @@ class Media3PlaybackEngine : PlaybackEngine {
         current.playWhenReady = true
         current.setMediaItem(MediaItem.fromUri(url))
         current.prepare()
-        _state.value = _state.value.copy(error = null)
+        _state.value = EngineState()
     }
 
     private fun applyInitialSeek() {
@@ -218,7 +218,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         val current = view ?: return
         current.load(url)
         MPVLib.setPropertyBoolean("pause", false)
-        _state.value = _state.value.copy(error = null)
+        _state.value = EngineState()
     }
 
     override fun play() {

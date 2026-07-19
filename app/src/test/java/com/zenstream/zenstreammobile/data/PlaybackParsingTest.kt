@@ -60,25 +60,44 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun fullLengthNegotiatedPlaybackKeepsZeroAsTheTimelineOrigin() {
+        val session = com.zenstream.zenstreammobile.model.AuthSession(
+            "https://jellyfin.example", "token", "user", "name"
+        )
+
+        assertEquals(
+            0.0,
+            playbackStreamStartPositionSeconds(
+                session,
+                com.zenstream.zenstreammobile.model.MediaSource(
+                    id = "source-1",
+                    transcodingUrl = "/video/master.m3u8?MediaSourceId=source-1",
+                ),
+                requestedStartSeconds = 125.0,
+            ),
+            0.001,
+        )
+    }
+
+    @Test
     fun reloadPositionIsRelativeToTheNewStreamOrigin() {
         assertEquals(15.0, playbackLocalPositionSeconds(140.0, 125.0), 0.001)
         assertEquals(0.0, playbackLocalPositionSeconds(100.0, 125.0), 0.001)
     }
 
     @Test
-    fun subtitleRequestUsesRelativeTimestampsFromThePlaybackOrigin() {
+    fun subtitleRequestUsesAbsoluteTimestampsFromTheItemTimeline() {
         val query = subtitleWebVttQuery(
             com.zenstream.zenstreammobile.model.AuthSession(
                 "https://jellyfin.example", "token", "user", "name"
             ),
             "item-1",
             "source-1",
-            1_250_000_000L,
         )
 
         assertEquals("false", query["copyTimestamps"])
         assertEquals("false", query["addVttTimeMap"])
-        assertEquals("1250000000", query["startPositionTicks"])
+        assertEquals("0", query["startPositionTicks"])
     }
 
     @Test
@@ -117,6 +136,23 @@ class PlaybackParsingTest {
         assertEquals("first", activeSubtitleCues(cues, 1.999).single().text)
         assertEquals("second", activeSubtitleCues(cues, 2.0).single().text)
         assertTrue(activeSubtitleCues(cues, 0.5).isEmpty())
+    }
+
+    @Test
+    fun mapsLocalPlaybackPositionToTheAbsoluteSubtitleTimeline() {
+        val cues = listOf(
+            com.zenstream.zenstreammobile.model.SubtitleCue(125.0, 130.0, "resume cue"),
+        )
+
+        assertEquals(
+            "resume cue",
+            activeSubtitleCues(cues, positionSeconds = 0.0, timelineOriginSeconds = 125.0).single().text,
+        )
+        assertEquals(
+            "resume cue",
+            activeSubtitleCues(cues, positionSeconds = 4.9, timelineOriginSeconds = 120.0).single().text,
+        )
+        assertTrue(activeSubtitleCues(cues, positionSeconds = 5.0, timelineOriginSeconds = 125.0).isEmpty())
     }
 
     @Test
