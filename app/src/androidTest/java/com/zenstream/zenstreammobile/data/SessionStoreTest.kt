@@ -15,7 +15,10 @@ import org.junit.runner.RunWith
 class SessionStoreTest {
     @Test
     fun persistsEncryptedSessionAndClearsIdentity() = runBlocking {
-        val store = SessionStore(InstrumentationRegistry.getInstrumentation().context)
+        val store = SessionStore(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+        )
         store.clearAll()
         store.saveOrchestratorUrl("https://orchestrator.example")
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
