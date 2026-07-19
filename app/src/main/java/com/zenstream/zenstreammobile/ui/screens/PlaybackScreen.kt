@@ -198,15 +198,15 @@ fun PlaybackScreen(
                             )
                         }
                         if (!controlsLocked) {
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
                             PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { sheet = PlayerSheet.Speed }
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_settings, stringResourceCompat(R.string.player_quality)) { sheet = PlayerSheet.Quality }
                             if (shouldShowAudioSelector(state.playback?.audio.orEmpty().size)) {
                                 PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { sheet = PlayerSheet.Audio }
                             }
                             if (shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)) {
                                 PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { sheet = PlayerSheet.Subtitles }
                             }
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_settings, stringResourceCompat(R.string.player_quality)) { sheet = PlayerSheet.Quality }
                         }
                     }
                 }
