@@ -134,10 +134,18 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
         load()
     }
 
-    fun load() {
+    fun load(force: Boolean = false) {
         if (loadingJob?.isActive == true) return
-        if (!_uiState.value.loading && _uiState.value.data != null) return
-        _uiState.value = HomeUiState(loading = true, pendingSections = INITIAL_SECTION_COUNT)
+        if (!force && !_uiState.value.loading && _uiState.value.data != null) return
+        _uiState.value = if (force) {
+            HomeUiState(
+                loading = true,
+                data = HomeData(),
+                pendingSections = INITIAL_SECTION_COUNT,
+            )
+        } else {
+            HomeUiState(loading = true, pendingSections = INITIAL_SECTION_COUNT)
+        }
         loadingJob = viewModelScope.launch {
             supervisorScope {
                 launch {
@@ -162,6 +170,8 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
             }
         }
     }
+
+    fun refresh() = load(force = true)
 
     private suspend fun CoroutineScope.loadLibraries() {
         try {
