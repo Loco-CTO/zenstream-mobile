@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +29,6 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -52,14 +50,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.selection.selectable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -458,9 +453,7 @@ internal fun PlayerBottomSheet(
         containerColor = Color.Transparent,
         contentColor = Color.White,
         scrimColor = Color.Black.copy(alpha = .72f),
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .36f))
-        },
+        dragHandle = null,
     ) {
         Box(
             modifier = Modifier
@@ -481,6 +474,14 @@ internal fun PlayerBottomSheet(
                         .verticalScroll(rememberScrollState())
                         .padding(bottom = 12.dp),
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp, bottom = 2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .36f))
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
