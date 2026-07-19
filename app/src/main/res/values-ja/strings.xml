@@ -44,6 +44,7 @@
     <string name="progress">視聴済み %1$d%%</string>
     <string name="poster_description">%1$sのポスター</string>
     <string name="backdrop_description">%1$sの背景画像</string>
+    <string name="logo_description">%1$sのロゴ</string>
     <string name="play_description">%1$sを再生</string>
     <string name="info_description">%1$sの情報を表示</string>
     <string name="navigation_description">メインナビゲーション</string>
