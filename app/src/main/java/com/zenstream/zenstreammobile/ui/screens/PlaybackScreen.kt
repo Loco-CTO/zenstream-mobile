@@ -436,7 +436,7 @@ internal fun PlaybackGestureLayer(
                                 playerWidthPixels = size.width,
                                 durationSeconds = duration,
                             )
-                            val target = (dragStartPosition + delta).coerceIn(0.0, duration)
+                            val target = clampSeekTarget(dragStartPosition + delta, duration)
                             seekTo.value(target)
                             showFeedback.value(
                                 SeekFeedback(
@@ -451,11 +451,7 @@ internal fun PlaybackGestureLayer(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { offset ->
-                        val delta = if (offset.x < size.width / 2f) {
-                            -QUICK_SEEK_SECONDS
-                        } else {
-                            QUICK_SEEK_SECONDS
-                        }
+                        val delta = quickSeekDeltaForTap(offset.x, size.width)
                         seekBy.value(delta)
                         showFeedback.value(
                             SeekFeedback(
@@ -519,6 +515,12 @@ internal fun dragSeekDeltaSeconds(
     if (playerWidthPixels <= 0 || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0.0
     return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() * durationSeconds
 }
+
+internal fun quickSeekDeltaForTap(tapX: Float, playerWidthPixels: Int): Double =
+    if (tapX < playerWidthPixels / 2f) -QUICK_SEEK_SECONDS else QUICK_SEEK_SECONDS
+
+internal fun clampSeekTarget(positionSeconds: Double, durationSeconds: Double): Double =
+    positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
 
 internal fun feedbackSeconds(deltaSeconds: Double): Int =
     kotlin.math.abs(deltaSeconds).toInt().coerceAtLeast(1)
