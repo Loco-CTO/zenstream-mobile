@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
@@ -12,6 +13,8 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
+import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -23,7 +26,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.util.UUID
 
 class JellyfinApi(
@@ -77,7 +82,44 @@ class JellyfinApi(
             source = source,
             audio = source.mediaStreams.filter { it.type == "Audio" },
             subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
+            segments = getPlaybackSegments(session, itemId, item),
         )
+    }
+
+    private fun getPlaybackSegments(
+        session: AuthSession,
+        itemId: String,
+        item: MediaItem,
+    ): List<PlaybackSegment> {
+        val providerPaths = listOf(
+            "/Episode/$itemId/IntroSkipperSegments",
+            "/Episode/$itemId/Timestamps",
+            "/MediaSegments/$itemId",
+        )
+        val providerSegments = providerPaths.asSequence()
+            .mapNotNull { path ->
+                runCatching { parsePlaybackMarkers(requestMarkerPayload(session, path)) }.getOrNull()
+            }
+            .firstOrNull { it.isNotEmpty() }
+            .orEmpty()
+        return mergePlaybackSegments(providerSegments, chapterPlaybackSegments(item))
+    }
+
+    private fun requestMarkerPayload(session: AuthSession, path: String): Any? {
+        val request = Request.Builder()
+            .url("${session.serverUrl}$path".toHttpUrl())
+            .header("Accept", "application/json")
+            .header("Authorization", authorizationHeader(session.token, deviceId))
+            .get()
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw JellyfinException(
+                response.code,
+                "Jellyfin marker request failed with ${response.code}",
+            )
+            val body = response.body?.string().orEmpty().ifBlank { return null }
+            return JSONTokener(body).nextValue()
+        }
     }
 
     suspend fun subtitleWebVtt(
@@ -370,6 +412,9 @@ class JellyfinApi(
         "enableUserData" to "true",
     )
 
+    private fun playbackItemQuery(userId: String): Map<String, String> =
+        detailItemQuery(userId) + ("fields" to "$ITEM_FIELDS,Chapters")
+
     internal fun newlyAddedItemsQuery(collectionType: String?): Map<String, String> = mapOf(
         "sortBy" to "DateCreated",
         "sortOrder" to "Descending",
@@ -396,7 +441,7 @@ class JellyfinApi(
 
     private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
         withContext(Dispatchers.IO) {
-            val json = requestJson(session, "/Items/$itemId", detailItemQuery(session.userId))
+            val json = requestJson(session, "/Items/$itemId", playbackItemQuery(session.userId))
             parseMediaItems(JSONObject().put("Items", org.json.JSONArray().put(json))).first()
         }
 

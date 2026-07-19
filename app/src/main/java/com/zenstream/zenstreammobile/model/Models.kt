@@ -7,6 +7,11 @@ data class AuthSession(
     val username: String,
 )
 
+data class MediaChapter(
+    val startPositionTicks: Long,
+    val name: String? = null,
+)
+
 data class MediaItem(
     val id: String,
     val name: String,
@@ -35,6 +40,7 @@ data class MediaItem(
     val unplayedItemCount: Int? = null,
     val playedPercentage: Double? = null,
     val playbackPositionTicks: Long? = null,
+    val chapters: List<MediaChapter> = emptyList(),
 )
 
 data class MediaPerson(
