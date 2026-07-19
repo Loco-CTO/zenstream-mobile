@@ -128,6 +128,8 @@ android {
 
     buildTypes {
         debug {
+            // Keep Android Studio debug installs separate from the stable release app.
+            applicationIdSuffix = ".debug"
             if (hasCiDebugSigning) {
                 signingConfig = signingConfigs.getByName("ciDebug")
             }
