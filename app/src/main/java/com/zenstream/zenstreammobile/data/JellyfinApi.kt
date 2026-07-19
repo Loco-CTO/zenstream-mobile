@@ -700,7 +700,129 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> = items(json).mapNotNull 
         unplayedItemCount = userData?.optIntOrNull("UnplayedItemCount"),
         playedPercentage = userData?.optDoubleOrNull("PlayedPercentage"),
         playbackPositionTicks = userData?.optLongOrNull("PlaybackPositionTicks"),
+        chapters = parseChapters(item),
     )
+}
+
+internal fun parseChapters(item: JSONObject): List<MediaChapter> =
+    item.optJSONArray("Chapters")?.let { array ->
+        List(array.length()) { index ->
+            val chapter = array.optJSONObject(index) ?: JSONObject()
+            MediaChapter(
+                startPositionTicks = chapter.optLong("StartPositionTicks", -1L),
+                name = chapter.optString("Name").ifBlank { null },
+            )
+        }.filter { it.startPositionTicks >= 0L }
+            .sortedBy { it.startPositionTicks }
+    } ?: emptyList()
+
+internal fun parsePlaybackMarkers(value: Any?): List<PlaybackSegment> {
+    val entries = when (value) {
+        is JSONArray -> List(value.length()) { value.optJSONObject(it) }.filterNotNull()
+        is JSONObject -> value.optJSONArray("Items")?.let { items ->
+            List(items.length()) { items.optJSONObject(it) }.filterNotNull()
+        } ?: listOf(value)
+        else -> emptyList()
+    }
+    val typed = entries.mapNotNull(::parseTypedMarker)
+    if (typed.isNotEmpty()) return typed
+    val root = value as? JSONObject ?: return emptyList()
+    return listOfNotNull(
+        parseNamedMarker(
+            root,
+            PlaybackSegmentType.INTRO,
+            listOf("intro", "introduction", "opening"),
+            listOf("IntroStart", "IntroStartTicks", "StartTicks"),
+            listOf("IntroEnd", "IntroEndTicks", "EndTicks"),
+        ),
+        parseNamedMarker(
+            root,
+            PlaybackSegmentType.OUTRO,
+            listOf("outro", "credits", "closing"),
+            listOf("OutroStart", "CreditsStart", "CreditsStartTicks"),
+            listOf("OutroEnd", "CreditsEnd", "CreditsEndTicks"),
+        ),
+    )
+}
+
+private fun parseTypedMarker(value: JSONObject): PlaybackSegment? {
+    val type = when (value.optString("Type").lowercase()) {
+        "intro", "opening" -> PlaybackSegmentType.INTRO
+        "outro", "credits", "closing" -> PlaybackSegmentType.OUTRO
+        else -> return null
+    }
+    val start = value.numberValue("StartTicks", "StartTimeTicks") ?: return null
+    val end = value.numberValue("EndTicks", "EndTimeTicks") ?: return null
+    return marker(type, start, end)
+}
+
+private fun parseNamedMarker(
+    root: JSONObject,
+    type: PlaybackSegmentType,
+    names: List<String>,
+    startKeys: List<String>,
+    endKeys: List<String>,
+): PlaybackSegment? {
+    val nested = names.asSequence()
+        .mapNotNull { root.opt(it) as? JSONObject }
+        .firstOrNull()
+    val start = nested?.numberValue("start", "Start")
+        ?: startKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
+    val end = nested?.numberValue("end", "End")
+        ?: endKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
+    return if (start != null && end != null) marker(type, start, end) else null
+}
+
+private fun marker(type: PlaybackSegmentType, rawStart: Double, rawEnd: Double): PlaybackSegment? {
+    val start = rawStart.toPlaybackSeconds()
+    val end = rawEnd.toPlaybackSeconds()
+    return if (start.isFinite() && end.isFinite() && end > start) {
+        PlaybackSegment(type, start, end)
+    } else null
+}
+
+private fun JSONObject.numberValue(vararg keys: String): Double? = keys.asSequence()
+    .mapNotNull { key ->
+        if (!has(key) || isNull(key)) null else when (val value = opt(key)) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull()
+            else -> null
+        }
+    }
+    .firstOrNull()
+
+private fun Double.toPlaybackSeconds(): Double =
+    if (this > 1_000_000.0) this / 10_000_000.0 else this
+
+internal fun chapterPlaybackSegments(item: MediaItem): List<PlaybackSegment> {
+    val chapters = item.chapters.sortedBy { it.startPositionTicks }
+    val runtime = item.runtimeTicks ?: return emptyList()
+    return chapters.mapIndexedNotNull { index, chapter ->
+        val end = chapters.getOrNull(index + 1)?.startPositionTicks ?: runtime
+        chapterNameType(chapter.name)?.let { type ->
+            marker(type, chapter.startPositionTicks.toDouble(), end.toDouble())
+        }
+    }
+}
+
+private fun chapterNameType(name: String?): PlaybackSegmentType? {
+    val normalized = name.orEmpty().trim().lowercase()
+    return when {
+        normalized == "op" || normalized == "opening" || normalized.contains("intro") -> PlaybackSegmentType.INTRO
+        normalized == "ed" || normalized == "ending" || normalized == "outro" ||
+            normalized.contains("credit") || normalized.contains("closing") -> PlaybackSegmentType.OUTRO
+        else -> null
+    }
+}
+
+internal fun mergePlaybackSegments(
+    providerSegments: List<PlaybackSegment>,
+    chapterSegments: List<PlaybackSegment>,
+): List<PlaybackSegment> {
+    val providerTypes = providerSegments.map { it.type }.toSet()
+    return (providerSegments + chapterSegments.filter { it.type !in providerTypes })
+        .filter { it.startSeconds >= 0.0 && it.endSeconds > it.startSeconds }
+        .sortedWith(compareBy<PlaybackSegment> { it.startSeconds }.thenBy { it.type })
 }
 
 private fun stringArray(item: JSONObject, key: String): List<String> =
