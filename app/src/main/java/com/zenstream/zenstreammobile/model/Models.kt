@@ -75,6 +75,35 @@ data class LibraryData(
     val rows: List<MediaRow>,
 )
 
+enum class LibrarySortBy(val apiValue: String) {
+    CommunityRating("CommunityRating"),
+    SortName("SortName"),
+    DateCreated("DateCreated"),
+    DateLastContentAdded("DateLastContentAdded"),
+    PremiereDate("PremiereDate"),
+    ProductionYear("ProductionYear"),
+    CriticRating("CriticRating"),
+    Runtime("Runtime"),
+    DatePlayed("DatePlayed"),
+    PlayCount("PlayCount"),
+}
+
+enum class SortOrder(val apiValue: String) {
+    Ascending("Ascending"),
+    Descending("Descending"),
+}
+
+data class LibrarySort(
+    val sortBy: LibrarySortBy = LibrarySortBy.CommunityRating,
+    val sortOrder: SortOrder = SortOrder.Descending,
+)
+
+data class PagedLibrary(
+    val library: Library,
+    val items: List<MediaItem>,
+    val totalRecordCount: Int,
+)
+
 data class DetailData(
     val item: MediaItem,
     val parentSeries: MediaItem? = null,
