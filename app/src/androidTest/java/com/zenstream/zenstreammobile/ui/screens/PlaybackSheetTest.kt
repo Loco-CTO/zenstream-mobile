@@ -5,10 +5,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -106,6 +107,6 @@ class PlaybackSheetTest {
 
         composeRule.onNodeWithText("Subtitles off").assertIsSelected().performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Subtitles off").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Subtitles off").assertCountEquals(0)
     }
 }

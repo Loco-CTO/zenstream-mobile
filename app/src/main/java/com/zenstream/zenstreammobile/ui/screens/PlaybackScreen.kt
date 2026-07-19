@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -421,6 +422,7 @@ private val playbackSpeedOptions = listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f)
 private val PlayerSheetSurface = Color(0xFF1B1B1F)
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun PlayerBottomSheet(
     sheet: PlayerSheet?,
     selectedSubtitle: Int?,
