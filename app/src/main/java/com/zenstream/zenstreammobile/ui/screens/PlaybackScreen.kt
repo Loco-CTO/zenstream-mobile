@@ -561,6 +561,7 @@ private fun PlayerOptionRow(
                 onClick = onClick,
                 role = Role.RadioButton,
             )
+            .semantics(mergeDescendants = true) {}
             .padding(horizontal = 20.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
