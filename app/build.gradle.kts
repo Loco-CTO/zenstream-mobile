@@ -60,6 +60,17 @@ val hasReleaseSigning = listOf(
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
 
+val ciDebugStoreFile = configuredOrEnvironmentValue("ciDebugStoreFile", "ANDROID_CI_DEBUG_STORE_FILE")
+val ciDebugStorePassword = configuredOrEnvironmentValue("ciDebugStorePassword", "ANDROID_CI_DEBUG_STORE_PASSWORD")
+val ciDebugKeyAlias = configuredOrEnvironmentValue("ciDebugKeyAlias", "ANDROID_CI_DEBUG_KEY_ALIAS")
+val ciDebugKeyPassword = configuredOrEnvironmentValue("ciDebugKeyPassword", "ANDROID_CI_DEBUG_KEY_PASSWORD")
+val hasCiDebugSigning = listOf(
+    ciDebugStoreFile,
+    ciDebugStorePassword,
+    ciDebugKeyAlias,
+    ciDebugKeyPassword,
+).all { !it.isNullOrBlank() }
+
 if (releaseBuild && !hasReleaseSigning) {
     error("A stable release build requires Android release signing configuration")
 }
@@ -88,18 +99,33 @@ android {
         buildConfig = true
     }
 
-    if (hasReleaseSigning) {
+    if (hasReleaseSigning || hasCiDebugSigning) {
         signingConfigs {
-            create("ciRelease") {
-                storeFile = rootProject.file(requireNotNull(releaseStoreFile))
-                storePassword = requireNotNull(releaseStorePassword)
-                keyAlias = requireNotNull(releaseKeyAlias)
-                keyPassword = requireNotNull(releaseKeyPassword)
+            if (hasCiDebugSigning) {
+                create("ciDebug") {
+                    storeFile = rootProject.file(requireNotNull(ciDebugStoreFile))
+                    storePassword = requireNotNull(ciDebugStorePassword)
+                    keyAlias = requireNotNull(ciDebugKeyAlias)
+                    keyPassword = requireNotNull(ciDebugKeyPassword)
+                }
+            }
+            if (hasReleaseSigning) {
+                create("ciRelease") {
+                    storeFile = rootProject.file(requireNotNull(releaseStoreFile))
+                    storePassword = requireNotNull(releaseStorePassword)
+                    keyAlias = requireNotNull(releaseKeyAlias)
+                    keyPassword = requireNotNull(releaseKeyPassword)
+                }
             }
         }
     }
 
     buildTypes {
+        debug {
+            if (hasCiDebugSigning) {
+                signingConfig = signingConfigs.getByName("ciDebug")
+            }
+        }
         release {
             optimization {
                 enable = false
