@@ -58,6 +58,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.selection.selectable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
@@ -80,6 +83,7 @@ fun PlaybackScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel = viewModel(
         key = "playback-${session.userId}-$itemId",
         factory = PlaybackViewModel.Factory(repository, session, itemId, context),
@@ -90,9 +94,16 @@ fun PlaybackScreen(
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
 
-    DisposableEffect(vm) {
+    DisposableEffect(vm, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                vm.flushProgress()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            vm.onPause()
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            vm.flushProgress()
         }
     }
 
@@ -176,7 +187,7 @@ fun PlaybackScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    IconButton(onClick = { vm.onPause(); onBack() }) {
+                    IconButton(onClick = { vm.flushProgress(); onBack() }) {
                         Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
                     }
                     Text(

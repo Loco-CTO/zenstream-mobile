@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui
 
+import android.os.SystemClock
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -67,6 +68,8 @@ data class PlaybackUiState(
 private data class PlaybackProgressSnapshot(
     val positionSeconds: Double,
     val paused: Boolean,
+    val playSessionId: String?,
+    val playbackGeneration: Long,
 )
 
 class PlaybackViewModel(
@@ -80,6 +83,7 @@ class PlaybackViewModel(
     private var playbackEngine: PlaybackEngine? = null
     private var engineJob: Job? = null
     private var progressJob: Job? = null
+    private var progressFlushJob: Job? = null
     private var playbackLoadJob: Job? = null
     private var subtitleJob: Job? = null
     private var playbackGeneration = 0L
@@ -232,8 +236,15 @@ class PlaybackViewModel(
 
     private suspend fun reportProgress(snapshot: PlaybackProgressSnapshot?) {
         if (snapshot == null) return
+        if (snapshot.playbackGeneration != playbackGeneration) return
         runCatching {
-            repository.reportPlayback(session, itemId, snapshot.positionSeconds, snapshot.paused)
+            repository.reportPlayback(
+                session,
+                itemId,
+                snapshot.positionSeconds,
+                snapshot.paused,
+                snapshot.playSessionId,
+            )
         }
     }
 
@@ -241,7 +252,12 @@ class PlaybackViewModel(
         val state = _uiState.value.engine
         val position = mediaOriginSeconds + currentPlayerPositionSeconds()
         return position.takeIf { it > 0 }?.let {
-            PlaybackProgressSnapshot(positionSeconds = it, paused = !state.isPlaying)
+            PlaybackProgressSnapshot(
+                positionSeconds = it,
+                paused = !state.isPlaying,
+                playSessionId = _uiState.value.playback?.playSessionId,
+                playbackGeneration = playbackGeneration,
+            )
         }
     }
 
@@ -308,21 +324,34 @@ class PlaybackViewModel(
         viewModelScope.launch { repository.saveSubtitleStyle(next) }
     }
 
-    fun onPause() {
+    fun flushProgress() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastProgressFlushAt < PROGRESS_FLUSH_DEBOUNCE_MILLIS) return
+        lastProgressFlushAt = now
         val snapshot = playbackProgressSnapshot()
-        if (snapshot != null) viewModelScope.launch { reportProgress(snapshot) }
+        progressFlushJob?.cancel()
+        if (snapshot != null) {
+            progressFlushJob = viewModelScope.launch { reportProgress(snapshot) }
+        }
     }
 
+    fun onPause() = flushProgress()
+
     override fun onCleared() {
-        val snapshot = playbackProgressSnapshot()
-        if (snapshot != null) viewModelScope.launch { reportProgress(snapshot) }
         progressJob?.cancel()
+        progressFlushJob?.cancel()
         playbackLoadJob?.cancel()
         subtitleJob?.cancel()
         engineJob?.cancel()
         playbackEngine?.release()
         playbackEngine = null
         super.onCleared()
+    }
+
+    private var lastProgressFlushAt = 0L
+
+    private companion object {
+        const val PROGRESS_FLUSH_DEBOUNCE_MILLIS = 1_000L
     }
 
     class Factory(
