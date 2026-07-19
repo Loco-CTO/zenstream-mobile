@@ -23,6 +23,37 @@ internal val mpvCaptionOptions = mapOf(
     "secondary-sid" to "no",
 )
 
+internal class MpvSurfaceLifecycle {
+    private var surfaceReady = false
+    private var destroyRequested = false
+    private var destroyed = false
+
+    fun canUseSurface(): Boolean = !destroyed
+    fun hasSurface(): Boolean = surfaceReady
+
+    fun markSurfaceCreated() {
+        if (!destroyed) surfaceReady = true
+    }
+
+    fun requestDestroy(): Boolean {
+        if (destroyed) return false
+        destroyRequested = true
+        return !surfaceReady
+    }
+
+    fun markSurfaceDestroyed(): Boolean {
+        if (destroyed) return false
+        surfaceReady = false
+        return destroyRequested
+    }
+
+    fun markDestroyed(): Boolean {
+        if (destroyed) return false
+        destroyed = true
+        return true
+    }
+}
+
 data class EngineState(
     val positionSeconds: Double = 0.0,
     val durationSeconds: Double = 0.0,
@@ -246,9 +277,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     }
 
     private class MpvSurfaceView(context: Context) : BaseMPVView(context, EmptyAttributeSet) {
-        private var surfaceReady = false
-        private var destroyRequested = false
-        private var destroyed = false
+        private val lifecycle = MpvSurfaceLifecycle()
 
         override fun initOptions() {
             MPVLib.setOptionString("vo", "gpu")
@@ -261,32 +290,29 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         override fun observeProperties() = Unit
 
         fun load(url: String) {
-            if (surfaceReady) MPVLib.command("loadfile", url, "replace") else playFile(url)
+            if (lifecycle.hasSurface()) MPVLib.command("loadfile", url, "replace") else playFile(url)
         }
 
         fun requestDestroy() {
-            if (destroyed) return
-            destroyRequested = true
-            if (!surfaceReady) destroyNow()
+            if (lifecycle.requestDestroy()) destroyNow()
         }
 
         private fun destroyNow() {
-            if (destroyed) return
-            destroyed = true
+            if (!lifecycle.markDestroyed()) return
             super.destroy()
         }
 
         override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-            if (destroyed) return
+            if (!lifecycle.canUseSurface()) return
             super.surfaceCreated(holder)
-            surfaceReady = true
+            lifecycle.markSurfaceCreated()
         }
 
         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-            if (destroyed) return
-            surfaceReady = false
+            if (!lifecycle.canUseSurface()) return
+            val destroyAfterSurfaceTeardown = lifecycle.markSurfaceDestroyed()
             super.surfaceDestroyed(holder)
-            if (destroyRequested) {
+            if (destroyAfterSurfaceTeardown) {
                 // Let the surface callback finish before destroying libmpv. The
                 // native renderer can still be using the surface during the callback.
                 post(::destroyNow)
