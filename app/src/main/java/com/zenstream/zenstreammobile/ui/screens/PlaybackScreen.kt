@@ -62,6 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.selection.selectable
@@ -405,6 +406,7 @@ internal fun PlaybackGestureLayer(
     onSeekTo: (Double) -> Unit,
     onSeekFeedback: (SeekFeedback) -> Unit,
 ) {
+    val quickControlsDescription = stringResourceCompat(R.string.player_quick_controls)
     val currentPosition = rememberUpdatedState(positionSeconds)
     val currentDuration = rememberUpdatedState(durationSeconds)
     val currentLocked = rememberUpdatedState(controlsLocked)
@@ -468,7 +470,7 @@ internal fun PlaybackGestureLayer(
                 )
             }
             .semantics {
-                contentDescription = stringResourceCompat(R.string.player_quick_controls)
+                contentDescription = quickControlsDescription
             },
     )
 }
