@@ -70,6 +70,7 @@
     <string name="parent_series">シリーズを表示：%1$s</string>
     <string name="season_value">シーズン%1$d：%2$s</string>
     <string name="no_season">シーズン</string>
+    <string name="season_number">シーズン%1$d</string>
     <string name="episode_title">%1$d. %2$s</string>
     <string name="show_more">もっと見る</string>
     <string name="show_less">折りたたむ</string>
