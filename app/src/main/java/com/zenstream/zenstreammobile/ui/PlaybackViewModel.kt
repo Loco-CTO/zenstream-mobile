@@ -90,6 +90,7 @@ class PlaybackViewModel(
     private var progressFlushJob: Job? = null
     private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var playbackLoadJob: Job? = null
+    private var trickplayJob: Job? = null
     private var subtitleJob: Job? = null
     private var playbackGeneration = 0L
     private var subtitleGeneration = 0L
@@ -147,6 +148,7 @@ class PlaybackViewModel(
         val loadGeneration = ++playbackGeneration
         progressFlushJob?.cancel()
         playbackLoadJob?.cancel()
+        trickplayJob?.cancel()
         playbackLoadJob = viewModelScope.launch {
             val hasCurrentPlayback = _uiState.value.playback != null
             val currentPosition = currentPlayerPositionSeconds()
@@ -187,12 +189,19 @@ class PlaybackViewModel(
             val localStartSeconds = playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
             val bitrate = requestOptions.maxStreamingBitrate ?: 0
             mediaOriginSeconds = sourceOriginSeconds
+            val previousTrickplay = _uiState.value.playback?.source?.trickplay.orEmpty()
+            val source = if (data.source.trickplay.isNotEmpty() || previousTrickplay.isEmpty()) {
+                data.source
+            } else {
+                data.source.copy(trickplay = previousTrickplay)
+            }
+            val playbackData = data.copy(source = source)
             val subtitleLoadGeneration = ++subtitleGeneration
             subtitleJob?.cancel()
             _uiState.value = _uiState.value.copy(
                 loading = false,
-                itemName = data.item.name,
-                playback = data,
+                itemName = playbackData.item.name,
+                playback = playbackData,
                 selectedAudio = selectedAudio,
                 selectedSubtitle = selectedSubtitle,
                 selectedQuality = bitrate,
@@ -209,11 +218,26 @@ class PlaybackViewModel(
                 error = null,
             )
             playbackEngine?.prepare(
-                playbackUrl(session, itemId, data.source, bitrate, requestOptions.startTimeTicks),
+                playbackUrl(session, itemId, playbackData.source, bitrate, requestOptions.startTimeTicks),
                 localStartSeconds,
             )
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()
+            loadTrickplay(loadGeneration, playbackData.source.trickplay.isEmpty())
+        }
+    }
+
+    private fun loadTrickplay(loadGeneration: Long, shouldLoad: Boolean) {
+        if (!shouldLoad) return
+        trickplayJob = viewModelScope.launch {
+            val bySource = runCatching { repository.trickplay(session, itemId) }.getOrDefault(emptyMap())
+            if (loadGeneration != playbackGeneration) return@launch
+            val current = _uiState.value.playback ?: return@launch
+            val trickplay = bySource[current.source.id.orEmpty()] ?: return@launch
+            if (trickplay.isEmpty()) return@launch
+            _uiState.value = _uiState.value.copy(
+                playback = current.copy(source = current.source.copy(trickplay = trickplay)),
+            )
         }
     }
 
@@ -349,6 +373,7 @@ class PlaybackViewModel(
             job.invokeOnCompletion { progressReportingScope.cancel() }
         } ?: progressReportingScope.cancel()
         playbackLoadJob?.cancel()
+        trickplayJob?.cancel()
         subtitleJob?.cancel()
         engineJob?.cancel()
         playbackEngine?.release()

@@ -18,6 +18,7 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.TrickplayInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -92,6 +93,18 @@ class JellyfinApi(
             segments = getPlaybackSegments(session, itemId, item),
             playSessionId = playSessionId,
         )
+    }
+
+    suspend fun trickplay(
+        session: AuthSession,
+        itemId: String,
+    ): Map<String, Map<String, TrickplayInfo>> = withContext(Dispatchers.IO) {
+        val json = requestJson(
+            session,
+            "/Items/${android.net.Uri.encode(itemId)}",
+            mapOf("fields" to "Trickplay"),
+        )
+        parseTrickplayBySource(json.optJSONObject("Trickplay"))
     }
 
     private fun getPlaybackSegments(
@@ -622,8 +635,27 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
         transcodingUrl = source.optString("TranscodingUrl").ifBlank { null },
         mediaStreams = streams,
         runTimeTicks = source.optLongOrNull("RunTimeTicks"),
+        trickplay = parseTrickplaySource(source.optJSONObject("Trickplay")),
     )
 }
+
+internal fun parseTrickplayBySource(value: JSONObject?): Map<String, Map<String, TrickplayInfo>> =
+    value?.keys()?.asSequence()?.mapNotNull { sourceId ->
+        val source = value.optJSONObject(sourceId) ?: return@mapNotNull null
+        sourceId to parseTrickplaySource(source)
+    }?.toMap().orEmpty()
+
+internal fun parseTrickplaySource(value: JSONObject?): Map<String, TrickplayInfo> =
+    value?.keys()?.asSequence()?.mapNotNull { width ->
+        val info = value.optJSONObject(width) ?: return@mapNotNull null
+        width to TrickplayInfo(
+            width = info.optIntOrNull("Width") ?: info.optIntOrNull("width"),
+            height = info.optIntOrNull("Height") ?: info.optIntOrNull("height"),
+            tileWidth = info.optIntOrNull("TileWidth") ?: info.optIntOrNull("tileWidth"),
+            tileHeight = info.optIntOrNull("TileHeight") ?: info.optIntOrNull("tileHeight"),
+            intervalMillis = info.optLongOrNull("Interval") ?: info.optLongOrNull("interval"),
+        )
+    }?.toMap().orEmpty()
 
 fun playbackUrl(
     session: AuthSession,

@@ -4,6 +4,9 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.model.TrickplayPreview
+import kotlin.math.floor
+import kotlin.math.max
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
@@ -83,3 +86,49 @@ fun normalizeSubtitleStyle(style: SubtitleStyle): SubtitleStyle = style.copy(
     borderSize = style.borderSize.coerceIn(0f, 8f),
     backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 100f),
 )
+
+fun trickplayPreview(
+    session: AuthSession,
+    itemId: String,
+    source: MediaSource?,
+    timeSeconds: Double,
+): TrickplayPreview? {
+    if (!timeSeconds.isFinite() || timeSeconds < 0.0) return null
+    val entry = source?.trickplay
+        ?.entries
+        ?.sortedByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
+        ?.firstOrNull { it.key.toIntOrNull() != null }
+        ?: return null
+    val widthKey = entry.key
+    val info = entry.value
+    val thumbnailWidth = info.width ?: widthKey.toIntOrNull() ?: return null
+    val thumbnailHeight = info.height ?: ((thumbnailWidth * 9) / 16)
+    val columns = info.tileWidth ?: 10
+    val rows = info.tileHeight ?: 10
+    val intervalSeconds = max(1.0, (info.intervalMillis ?: 10_000L) / 1_000.0)
+    if (thumbnailWidth <= 0 || thumbnailHeight <= 0 || columns <= 0 || rows <= 0) return null
+
+    val thumbnail = floor(timeSeconds / intervalSeconds).toInt().coerceAtLeast(0)
+    val tileSize = columns * rows
+    val tileIndex = thumbnail / tileSize
+    val tileOffset = thumbnail % tileSize
+    val url = session.serverUrl.toHttpUrl().newBuilder()
+        .addPathSegment("Videos")
+        .addPathSegment(itemId)
+        .addPathSegment("Trickplay")
+        .addPathSegment(widthKey)
+        .addPathSegment("$tileIndex.jpg")
+        .addQueryParameter("MediaSourceId", source?.id ?: itemId)
+        .build()
+        .toString()
+    return TrickplayPreview(
+        url = url,
+        width = thumbnailWidth,
+        height = thumbnailHeight,
+        tileIndex = tileIndex,
+        cellX = tileOffset % columns,
+        cellY = tileOffset / columns,
+        columns = columns,
+        rows = rows,
+    )
+}

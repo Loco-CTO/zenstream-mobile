@@ -24,12 +24,32 @@ data class MediaStream(
     val isDefault: Boolean = false,
 )
 
+data class TrickplayInfo(
+    val width: Int? = null,
+    val height: Int? = null,
+    val tileWidth: Int? = null,
+    val tileHeight: Int? = null,
+    val intervalMillis: Long? = null,
+)
+
 data class MediaSource(
     val id: String?,
     val directStreamUrl: String? = null,
     val transcodingUrl: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
     val runTimeTicks: Long? = null,
+    val trickplay: Map<String, TrickplayInfo> = emptyMap(),
+)
+
+data class TrickplayPreview(
+    val url: String,
+    val width: Int,
+    val height: Int,
+    val tileIndex: Int,
+    val cellX: Int,
+    val cellY: Int,
+    val columns: Int,
+    val rows: Int,
 )
 
 data class PlaybackData(

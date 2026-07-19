@@ -85,6 +85,8 @@ class JellyfinRepository(
     suspend fun playback(session: AuthSession, itemId: String, options: PlaybackOptions = PlaybackOptions()): PlaybackData =
         api.playback(session, itemId, options)
 
+    suspend fun trickplay(session: AuthSession, itemId: String) = api.trickplay(session, itemId)
+
     suspend fun subtitleWebVtt(
         session: AuthSession,
         itemId: String,
