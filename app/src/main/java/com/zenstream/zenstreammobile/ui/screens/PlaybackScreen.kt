@@ -50,13 +50,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.rememberScrollState
@@ -601,7 +601,7 @@ private fun PlaybackProgress(
                         x = (scrub.fraction * maxWidth.value - previewWidth.value / 2f)
                             .coerceIn(0f, (maxWidth - previewWidth).value)
                             .dp,
-                        y = -(previewHeight + 30.dp),
+                        y = -(previewHeight + 8.dp),
                     ),
             )
         }
@@ -692,8 +692,7 @@ private fun TrickplayBubble(
     ) {
         Box(
             modifier = Modifier
-                .width(cellWidth)
-                .height(cellHeight)
+                .requiredSize(cellWidth, cellHeight)
                 .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
         ) {
             AsyncImage(
@@ -704,12 +703,17 @@ private fun TrickplayBubble(
                 ),
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier
-                    .width((cellWidth.value * preview.columns).dp)
-                    .height((cellHeight.value * preview.rows).dp)
-                    .graphicsLayer {
-                        translationX = -cellWidth.toPx() * preview.cellX
-                        translationY = -cellHeight.toPx() * preview.cellY
-                    },
+                    // Jellyfin returns one sprite sheet per URL. Force the image
+                    // to its complete sheet size, then offset it inside the
+                    // clipped frame so only the selected thumbnail is visible.
+                    .requiredSize(
+                        width = cellWidth * preview.columns,
+                        height = cellHeight * preview.rows,
+                    )
+                    .offset(
+                        x = -(cellWidth * preview.cellX),
+                        y = -(cellHeight * preview.cellY),
+                    ),
                 onError = { onError() },
             )
         }
