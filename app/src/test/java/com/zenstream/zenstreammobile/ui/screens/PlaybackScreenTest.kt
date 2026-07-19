@@ -6,6 +6,11 @@ import org.junit.Test
 
 class PlaybackScreenTest {
     @Test
+    fun timelineSitsAboveTransportControlsWithAVisibleGap() {
+        assertEquals(16, PLAYBACK_TIMELINE_CONTROLS_GAP_DP)
+    }
+
+    @Test
     fun trickplaySpriteSizeCoversTheWholeSheetWithoutChangingTheFrameSize() {
         val (width, height) = trickplaySpriteSize(240.dp, 135.dp, columns = 10, rows = 10)
 

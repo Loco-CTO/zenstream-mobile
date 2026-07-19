@@ -261,77 +261,84 @@ fun PlaybackScreen(
                 }
             }
             if (controlsVisible && !controlsLocked) {
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(22.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
-                    Surface(
-                        onClick = vm::togglePlay,
-                        modifier = Modifier.size(64.dp),
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = .58f),
-                        contentColor = Color.White,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
-                                stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
-                                modifier = Modifier.size(28.dp),
-                                tint = Color.White,
-                            )
-                        }
-                    }
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
-                }
                 Column(
                     modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
-                            )
-                        )
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(PLAYBACK_TIMELINE_CONTROLS_GAP_DP.dp),
                 ) {
-                    val displayedPosition = timelineScrub?.positionSeconds ?: state.engine.positionSeconds
-                    val preview = timelineScrub?.let { scrub ->
-                        trickplayPreview(
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
+                                )
+                            )
+                            .padding(horizontal = 0.dp, vertical = 14.dp),
+                    ) {
+                        val displayedPosition = timelineScrub?.positionSeconds ?: state.engine.positionSeconds
+                        val preview = timelineScrub?.let { scrub ->
+                            trickplayPreview(
+                                session = session,
+                                itemId = itemId,
+                                source = state.playback?.source,
+                                timeSeconds = state.mediaOriginSeconds + scrub.positionSeconds,
+                            )
+                        }
+                        Text(
+                            "${formatTime(displayedPosition)} / ${formatTime(state.engine.durationSeconds)}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                        PlaybackProgress(
                             session = session,
-                            itemId = itemId,
-                            source = state.playback?.source,
-                            timeSeconds = state.mediaOriginSeconds + scrub.positionSeconds,
+                            positionSeconds = displayedPosition,
+                            durationSeconds = state.engine.durationSeconds,
+                            bufferedSeconds = state.engine.bufferedSeconds,
+                            segments = state.segments,
+                            scrub = timelineScrub,
+                            preview = preview.takeUnless { previewUnavailable },
+                            onScrubStart = {
+                                previewUnavailable = false
+                                timelineScrub = it
+                            },
+                            onScrubChanged = { timelineScrub = it },
+                            onScrubEnd = {
+                                vm.seekTo(it.positionSeconds)
+                                timelineScrub = null
+                            },
+                            onPreviewError = { previewUnavailable = true },
                         )
                     }
-                    Text(
-                        "${formatTime(displayedPosition)} / ${formatTime(state.engine.durationSeconds)}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                    PlaybackProgress(
-                        session = session,
-                        positionSeconds = displayedPosition,
-                        durationSeconds = state.engine.durationSeconds,
-                        bufferedSeconds = state.engine.bufferedSeconds,
-                        segments = state.segments,
-                        scrub = timelineScrub,
-                        preview = preview.takeUnless { previewUnavailable },
-                        onScrubStart = {
-                            previewUnavailable = false
-                            timelineScrub = it
-                        },
-                        onScrubChanged = { timelineScrub = it },
-                        onScrubEnd = {
-                            vm.seekTo(it.positionSeconds)
-                            timelineScrub = null
-                        },
-                        onPreviewError = { previewUnavailable = true },
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
+                        Surface(
+                            onClick = vm::togglePlay,
+                            modifier = Modifier.size(64.dp),
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = .58f),
+                            contentColor = Color.White,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    painter = painterResource(if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
+                                    stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
+                                    modifier = Modifier.size(28.dp),
+                                    tint = Color.White,
+                                )
+                            }
+                        }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
+                        PlayerMenuButton(LucideR.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
+                    }
                 }
             }
         }
@@ -396,6 +403,7 @@ internal data class SeekFeedback(
     val seconds: Int,
 )
 
+internal const val PLAYBACK_TIMELINE_CONTROLS_GAP_DP = 16
 private const val QUICK_SEEK_SECONDS = 5.0
 private const val SEEK_FEEDBACK_VISIBLE_MILLIS = 800L
 
