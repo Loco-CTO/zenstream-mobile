@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.navigation.ZenStreamApp
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 
 class MainActivity : ComponentActivity() {
     private val repository by lazy {
@@ -26,7 +27,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             ZenStreamTheme {
                 val appState by appViewModel.uiState.collectAsStateWithLifecycle()
-                ZenStreamApp(appState, repository, appViewModel)
+                ZenStreamLocale(appState.locale) {
+                    ZenStreamApp(appState, repository, appViewModel)
+                }
             }
         }
     }

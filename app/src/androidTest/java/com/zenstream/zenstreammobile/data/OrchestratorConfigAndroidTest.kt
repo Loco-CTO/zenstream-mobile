@@ -20,4 +20,11 @@ class OrchestratorConfigAndroidTest {
     fun rejectsMissingJellyfinUrl() {
         assertThrows(IllegalStateException::class.java) { parseMobileConfig("{}") }
     }
+
+    @Test
+    fun parsesOnlyFrontendLocales() {
+        assertEquals("en", parseLocale("{\"locale\":\"en\"}"))
+        assertEquals("ja", parseLocale("{\"locale\":\"ja\"}"))
+        assertThrows(IllegalStateException::class.java) { parseLocale("{\"locale\":\"fr\"}") }
+    }
 }
