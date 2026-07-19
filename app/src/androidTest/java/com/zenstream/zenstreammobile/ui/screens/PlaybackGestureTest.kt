@@ -1,6 +1,8 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -144,7 +146,12 @@ class PlaybackGestureTest {
     fun seekFeedbackShowsLocalizedDirectionAndAmount() {
         composeRule.setContent {
             ZenStreamTheme {
-                SeekFeedbackOverlay(SeekFeedback(SeekDirection.FORWARD, 5))
+                Box(Modifier.fillMaxSize()) {
+                    SeekFeedbackOverlay(
+                        feedback = SeekFeedback(SeekDirection.FORWARD, 5),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
             }
         }
 
