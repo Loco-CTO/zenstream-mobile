@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -235,8 +236,11 @@ internal fun FeaturedHero(
                         }
                         IconButton(
                             onClick = { onInfo(item) },
+                            modifier = Modifier.semantics {
+                                contentDescription = infoDescription
+                            },
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = infoDescription)
+                            Icon(Icons.Default.Info, contentDescription = null)
                         }
                     }
                 }
