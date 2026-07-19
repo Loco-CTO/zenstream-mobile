@@ -10,12 +10,10 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsets.Companion.navigationBars
-import androidx.compose.foundation.layout.WindowInsets.Companion.systemBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -140,7 +138,7 @@ private fun MainScaffold(
         // Keeping navigationBars out of the outer scaffold lets content remain
         // edge-to-edge when the bar is hidden instead of revealing a black
         // strip after the exit animation completes.
-        contentWindowInsets = WindowInsets.systemBars.exclude(WindowInsets.navigationBars),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (currentRoute != PLAYBACK.substringBefore("/")) {
                 AnimatedVisibility(
@@ -193,6 +191,7 @@ private fun MainScaffold(
             startDestination = HOME,
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .nestedScroll(scrollConnection)
         ) {
             composable(HOME) {
