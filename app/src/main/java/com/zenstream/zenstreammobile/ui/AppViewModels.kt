@@ -571,6 +571,7 @@ data class DetailUiState(
     val loading: Boolean = true,
     val data: DetailData? = null,
     val error: Boolean = false,
+    val seasonLoading: Boolean = false,
     val actionBusy: Boolean = false,
     val actionError: Boolean = false,
 )
@@ -589,7 +590,11 @@ class DetailViewModel(
 
     fun load() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true, error = false)
+            _uiState.value = _uiState.value.copy(
+                loading = true,
+                seasonLoading = false,
+                error = false,
+            )
             runCatching {
                 repository.detail(
                     session,
@@ -597,10 +602,16 @@ class DetailViewModel(
                     _uiState.value.data?.selectedSeasonId
                 )
             }
-                .onSuccess { _uiState.value = DetailUiState(loading = false, data = it) }
+                .onSuccess {
+                    _uiState.value = DetailUiState(loading = false, data = it)
+                }
                 .onFailure {
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
-                    _uiState.value = _uiState.value.copy(loading = false, error = true)
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        seasonLoading = false,
+                        error = true,
+                    )
                 }
         }
     }
@@ -610,6 +621,7 @@ class DetailViewModel(
         if (currentData.selectedSeasonId == seasonId) return
         _uiState.value = _uiState.value.copy(
             loading = true,
+            seasonLoading = true,
             error = false,
             data = currentData.copy(
                 selectedSeasonId = seasonId,
@@ -618,7 +630,9 @@ class DetailViewModel(
         )
         viewModelScope.launch {
             runCatching { repository.detail(session, itemId, seasonId) }
-                .onSuccess { _uiState.value = DetailUiState(loading = false, data = it) }
+                .onSuccess {
+                    _uiState.value = DetailUiState(loading = false, data = it)
+                }
                 .onFailure {
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = DetailUiState(

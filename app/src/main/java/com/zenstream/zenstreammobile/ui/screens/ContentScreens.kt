@@ -148,22 +148,6 @@ fun HomeScreen(
                             onPlay
                         )
                     }
-                    if (state.loading) {
-                        item(key = "home-loading") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 20.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 2.dp,
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -366,7 +350,7 @@ fun SearchScreen(
             )
         }
         PullToRefreshLayout(
-            isRefreshing = state.loading,
+            isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
             onRefresh = vm::refresh,
             modifier = Modifier.weight(1f),
         ) {
@@ -500,7 +484,7 @@ fun LibraryScreen(
             }
         }
         PullToRefreshLayout(
-            isRefreshing = state.loading,
+            isRefreshing = shouldShowPullToRefresh(state.loading, state.items.isNotEmpty()),
             onRefresh = vm::refresh,
             modifier = Modifier
                 .weight(1f)

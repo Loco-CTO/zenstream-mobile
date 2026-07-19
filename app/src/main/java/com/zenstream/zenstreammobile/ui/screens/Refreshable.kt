@@ -7,6 +7,15 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
+internal fun shouldShowPullToRefresh(isLoading: Boolean, hasContent: Boolean): Boolean =
+    isLoading && hasContent
+
+internal fun shouldShowDetailRefresh(
+    isLoading: Boolean,
+    seasonLoading: Boolean,
+    hasData: Boolean,
+): Boolean = isLoading && !seasonLoading && hasData
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PullToRefreshLayout(
