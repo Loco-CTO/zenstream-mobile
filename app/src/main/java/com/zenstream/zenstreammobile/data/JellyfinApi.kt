@@ -238,7 +238,7 @@ class JellyfinApi(
 
         fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
             token?.let { "Token=\"$it\"" },
-            "Client=\"ZenStream Mobile\"",
+            "Client=\"ZenStream\"",
             "Device=\"Android\"",
             "DeviceId=\"$deviceId\"",
             "Version=\"1.0\"",
