@@ -31,4 +31,18 @@ class PlayerEngineTest {
             mpvCaptionOptions,
         )
     }
+
+    @Test
+    fun releasedMpvEngineDoesNotTouchNativeState() {
+        val engine = MpvPlaybackEngine(InstrumentationRegistry.getInstrumentation().targetContext)
+
+        engine.release()
+        engine.release()
+        engine.play()
+        engine.pause()
+        engine.seekTo(10.0)
+        engine.setSpeed(1.25f)
+
+        assertEquals(0.0, engine.currentPositionSeconds(), 0.0)
+    }
 }
