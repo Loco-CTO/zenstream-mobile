@@ -68,8 +68,10 @@ jobs:
             exit 1
           fi
           sed -i -E "s/^version=.*/version=$new_version/" version.properties
+          printf '{\n  "main": 0\n}\n' > .main-version.json
           echo "version=$new_version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "main=0" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release signing key
         env:
@@ -94,7 +96,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add version.properties
+          git add version.properties .main-version.json
           git commit -m "chore: release v$VERSION"
           git push origin HEAD:main
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -112,11 +114,9 @@ jobs:
           [ -n "$ANDROID_RELEASE_STORE_PASSWORD" ] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
           [ -n "$ANDROID_RELEASE_KEY_ALIAS" ] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
           [ -n "$ANDROID_RELEASE_KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
-          main=$(sed -nE 's/.*"main"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' .main-version.json)
-          [ -n "$main" ] || { echo 'Could not read main version counter.' >&2; exit 1; }
           bash ./gradlew assembleRelease \
             -PzenstreamVersion="$VERSION" \
-            -PzenstreamMain="$main" \
+            -PzenstreamMain="${{ steps.version.outputs.main }}" \
             -PzenstreamRelease=true
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
 
