@@ -128,4 +128,22 @@
     <string name="player_timeline">再生タイムライン</string>
     <string name="player_timeline_preview">%1$sのタイムラインプレビュー</string>
     <string name="player_drag_seek_preview">シークプレビュー: %1$s / %2$s</string>
+    <string name="search_result_count">%1$d件の検索結果</string>
+    <string name="library_load_more_failed">さらに作品を読み込めませんでした。</string>
+    <string name="no_libraries">ライブラリが見つかりません</string>
+    <string name="no_libraries_hint">Jellyfinにメディアライブラリを追加して、このページを更新してください。</string>
+    <string name="library_item_count">%1$d件</string>
+    <string name="sort_by">並び順</string>
+    <string name="sort_ascending">昇順</string>
+    <string name="sort_descending">降順</string>
+    <string name="sort_title">タイトル</string>
+    <string name="sort_date_added">追加日</string>
+    <string name="sort_last_added">最終追加日</string>
+    <string name="sort_release_date">公開日</string>
+    <string name="sort_year">年</string>
+    <string name="sort_critic_rating">批評家評価</string>
+    <string name="sort_runtime">再生時間</string>
+    <string name="sort_last_played">最終再生日</string>
+    <string name="sort_play_count">再生回数</string>
+    <string name="rating_description">%1$sの評価</string>
 </resources>
