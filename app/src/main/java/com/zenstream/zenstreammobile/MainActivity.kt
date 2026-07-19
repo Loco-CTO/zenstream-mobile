@@ -12,9 +12,9 @@ import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.navigation.ZenStreamApp
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
-import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 
 class MainActivity : ComponentActivity() {
     private val repository by lazy {
