@@ -7,6 +7,8 @@ import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
@@ -388,21 +390,74 @@ class JellyfinApi(
                 ).filter { it.items.isNotEmpty() })
         }
 
+    suspend fun fetchLibraryPage(
+        session: AuthSession,
+        library: Library,
+        startIndex: Int,
+        limit: Int,
+        sort: LibrarySort,
+    ): PagedLibrary = withContext(Dispatchers.IO) {
+        val json = requestJson(
+            session,
+            "/Items",
+            libraryItemsQuery(
+                userId = session.userId,
+                library = library,
+                startIndex = startIndex,
+                limit = limit,
+                sort = sort,
+            ),
+        )
+        val parsed = parseMediaItems(json)
+        PagedLibrary(
+            library = library,
+            items = parsed,
+            totalRecordCount = json.optInt("TotalRecordCount", parsed.size),
+        )
+    }
+
     suspend fun search(session: AuthSession, query: String): List<MediaItem> =
         withContext(Dispatchers.IO) {
             if (query.trim().length < 2) return@withContext emptyList()
-            getItems(
-                session, "/Items", mapOf(
-                    "userId" to session.userId,
-                    "searchTerm" to query.trim(),
-                    "recursive" to "true",
-                    "limit" to "40",
-                    "includeItemTypes" to "Series,Movie",
-                    "sortBy" to "SortName",
-                    "sortOrder" to "Ascending",
-                )
-            )
+            getItems(session, "/Items", searchQuery(session.userId, query))
         }
+
+    internal fun searchQuery(userId: String, query: String): Map<String, String> = mapOf(
+        "userId" to userId,
+        "searchTerm" to query.trim(),
+        "startIndex" to "0",
+        "limit" to "40",
+        "recursive" to "true",
+        "includeItemTypes" to "Series,Movie",
+        "fields" to ITEM_FIELDS,
+        "enableImages" to "true",
+        "imageTypeLimit" to "1",
+        "enableImageTypes" to ITEM_IMAGE_TYPES,
+        "enableUserData" to "true",
+    )
+
+    internal fun libraryItemsQuery(
+        userId: String,
+        library: Library,
+        startIndex: Int,
+        limit: Int,
+        sort: LibrarySort,
+    ): Map<String, String> = mapOf(
+        "userId" to userId,
+        "parentId" to library.id,
+        "startIndex" to startIndex.toString(),
+        "limit" to limit.toString(),
+        "recursive" to "true",
+        "includeItemTypes" to itemTypes(library.collectionType),
+        "sortBy" to sort.sortBy.apiValue,
+        "sortOrder" to sort.sortOrder.apiValue,
+        "fields" to ITEM_FIELDS,
+        "enableImages" to "true",
+        "imageTypeLimit" to "1",
+        "enableImageTypes" to ITEM_IMAGE_TYPES,
+        "enableUserData" to "true",
+        "enableTotalRecordCount" to "true",
+    )
 
     suspend fun detail(
         session: AuthSession,
