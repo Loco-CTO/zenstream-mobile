@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,17 +18,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +53,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.selection.selectable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
@@ -79,7 +91,7 @@ fun PlaybackScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
-    var menu by remember { mutableStateOf<PlayerMenu?>(null) }
+    var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
 
     DisposableEffect(vm) {
@@ -88,8 +100,8 @@ fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(controlsVisible, controlsLocked, menu, state.engine.isPlaying) {
-        if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, menu != null, state.engine.isPlaying)) {
+    LaunchedEffect(controlsVisible, controlsLocked, sheet, state.engine.isPlaying) {
+        if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, sheet != null, state.engine.isPlaying)) {
             delay(4_500)
             controlsVisible = false
         }
@@ -182,20 +194,21 @@ fun PlaybackScreen(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
-                        Icon(
-                            painter = painterResource(if (controlsLocked) LucideR.drawable.lucide_ic_lock else LucideR.drawable.lucide_ic_lock_open),
-                            stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
-                            tint = Color.White,
-                        )
+                        IconButton(onClick = { controlsLocked = !controlsLocked; sheet = null }) {
+                            Icon(
+                                painter = painterResource(if (controlsLocked) LucideR.drawable.lucide_ic_lock else LucideR.drawable.lucide_ic_lock_open),
+                                stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
+                                tint = Color.White,
+                            )
                         }
                         if (!controlsLocked) {
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { sheet = PlayerSheet.Speed }
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_settings, stringResourceCompat(R.string.player_quality)) { sheet = PlayerSheet.Quality }
                             if (shouldShowAudioSelector(state.playback?.audio.orEmpty().size)) {
-                                PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
+                                PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { sheet = PlayerSheet.Audio }
                             }
                             if (shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)) {
-                                PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
+                                PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { sheet = PlayerSheet.Subtitles }
                             }
                             PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
                         }
@@ -288,11 +301,25 @@ fun PlaybackScreen(
             }
         }
 
-        PlayerDropdown(menu, state.selectedSubtitle, state.selectedAudio, state.playback?.audio.orEmpty(), state.playback?.subtitles.orEmpty(), state.playback?.qualities.orEmpty(), state.engine.speed, onDismiss = { menu = null }, onSubtitle = { vm.chooseSubtitle(it); menu = null }, onAudio = { vm.chooseAudio(it); menu = null }, onQuality = { vm.chooseQuality(it); menu = null }, onSpeed = { vm.setSpeed(it); menu = null })
+        PlayerBottomSheet(
+            sheet = sheet,
+            selectedSubtitle = state.selectedSubtitle,
+            selectedAudio = state.selectedAudio,
+            selectedQuality = state.selectedQuality,
+            audio = state.playback?.audio.orEmpty(),
+            subtitles = state.playback?.subtitles.orEmpty(),
+            qualities = state.playback?.qualities.orEmpty(),
+            speed = state.engine.speed,
+            onDismiss = { sheet = null },
+            onSubtitle = { vm.chooseSubtitle(it); sheet = null },
+            onAudio = { vm.chooseAudio(it); sheet = null },
+            onQuality = { vm.chooseQuality(it); sheet = null },
+            onSpeed = { vm.setSpeed(it); sheet = null },
+        )
     }
 }
 
-private enum class PlayerMenu { Audio, Subtitles, Settings }
+internal enum class PlayerSheet { Audio, Subtitles, Speed, Quality }
 
 @Composable
 private fun PlaybackProgress(
