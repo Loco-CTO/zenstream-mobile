@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,6 +26,7 @@ data class AppUiState(
     val orchestratorUrl: String? = null,
     val serverUrl: String? = null,
     val session: AuthSession? = null,
+    val locale: String = com.zenstream.zenstreammobile.data.ENGLISH_LOCALE,
 ) {
     val showSetup get() = !loading && (orchestratorUrl.isNullOrBlank() || serverUrl.isNullOrBlank())
     val showLogin get() = !loading && !showSetup && session == null
@@ -35,15 +37,29 @@ class AppViewModel(private val repository: JellyfinRepository) : ViewModel() {
     val uiState: StateFlow<AppUiState> = combine(
         repository.orchestratorUrl,
         repository.serverUrl,
-        repository.session
-    ) { orchestrator, server, session ->
+        repository.session,
+        repository.locale,
+    ) { orchestrator, server, session, locale ->
         AppUiState(
             loading = false,
             orchestratorUrl = orchestrator,
             serverUrl = server,
-            session = session
+            session = session,
+            locale = locale,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
+
+    init {
+        viewModelScope.launch {
+            combine(repository.orchestratorUrl, repository.session) { orchestrator, session ->
+                orchestrator to session
+            }.collectLatest { (orchestrator, session) ->
+                if (!orchestrator.isNullOrBlank() && session != null) {
+                    runCatching { repository.refreshLocale(orchestrator, session.token) }
+                }
+            }
+        }
+    }
 
     suspend fun configureServer(value: String) = repository.configureOrchestrator(value)
     fun logout() = viewModelScope.launch { repository.clearSession() }
