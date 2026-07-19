@@ -3,9 +3,8 @@ package com.zenstream.zenstreammobile.ui.screens
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -14,6 +13,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
 
 class DetailScreensTest {
     @get:Rule
@@ -53,8 +53,8 @@ class DetailScreensTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.play)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.episodes_label)).assertIsDisplayed()
-        composeRule.onAllNodesWithText(context.getString(R.string.season_value, 1, "Season"))
-            .assertCountEquals(2)
+        composeRule.onNodeWithText(context.getString(R.string.season_value, 1, "Season"))
+            .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.episode_title, 1, "Pilot"))
             .assertIsDisplayed()
     }
@@ -88,10 +88,26 @@ class DetailScreensTest {
             }
         }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.parent_series_label))
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("Example Series")
-            .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.show_more)).assertIsDisplayed()
+    }
+
+    @Test
+    fun episodeTopBarUsesSeriesTitleAndOpensSeries() {
+        val series = MediaItem("series", "Example Series", type = "Series")
+        var opened: MediaItem? = null
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailTopBar(
+                    title = "Pilot",
+                    parentSeries = series,
+                    onBack = {},
+                    onOpenItem = { opened = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Example Series").performClick()
+
+        assertEquals(series, opened)
     }
 }

@@ -67,7 +67,6 @@
     <string name="watched_description">Watched</string>
     <string name="episode_description">Episode artwork for %1$s</string>
     <string name="person_description">Photo of %1$s</string>
-    <string name="parent_series_label">Series</string>
     <string name="parent_series">View series: %1$s</string>
     <string name="season_value">Season %1$d: %2$s</string>
     <string name="no_season">Season</string>

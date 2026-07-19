@@ -47,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -110,20 +111,18 @@ fun DetailScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val title = state.data?.item?.name ?: stringResource(R.string.detail_title)
+    val parentSeries = state.data
+        ?.takeIf { it.item.type == "Episode" }
+        ?.parentSeries
 
     Scaffold(
         modifier = Modifier.padding(outerPadding),
         topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+            DetailTopBar(
+                title = if (parentSeries != null) parentSeries.name else title,
+                parentSeries = parentSeries,
+                onBack = onBack,
+                onOpenItem = onOpenItem,
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -201,14 +200,6 @@ internal fun DetailContent(
                 ExpandableOverview(overview)
             }
         }
-        if (mediaItem.type == "Episode" && data.parentSeries != null) {
-            item {
-                ParentSeriesButton(
-                    series = data.parentSeries,
-                    onClick = { onOpenItem(data.parentSeries) },
-                )
-            }
-        }
         if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
             item {
                 EpisodeSection(
@@ -274,37 +265,39 @@ private fun ExpandableOverview(overview: String) {
 private const val OVERVIEW_COLLAPSED_LINES = 4
 
 @Composable
-private fun ParentSeriesButton(series: MediaItem, onClick: () -> Unit) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .72f)),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .38f),
-            contentColor = MaterialTheme.colorScheme.onSurface,
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun DetailTopBar(
+    title: String,
+    parentSeries: MediaItem?,
+    onBack: () -> Unit,
+    onOpenItem: (MediaItem) -> Unit,
+) {
+    TopAppBar(
+        title = {
+            if (parentSeries == null) {
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                TextButton(
+                    onClick = { onOpenItem(parentSeries) },
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text(
+                        parentSeries.name,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
         ),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                stringResource(R.string.parent_series_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                series.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -494,15 +487,6 @@ private fun EpisodeSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = .82f),
                 modifier = Modifier.semantics { heading() },
             )
-            selected?.let {
-                Text(
-                    seasonLabel(it),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
         if (data.seasons.size > 1) {
             SeasonPicker(
