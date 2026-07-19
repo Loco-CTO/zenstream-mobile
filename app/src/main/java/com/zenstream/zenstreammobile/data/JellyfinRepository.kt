@@ -92,8 +92,13 @@ class JellyfinRepository(
         streamIndex: Int,
     ): String = api.subtitleWebVtt(session, itemId, sourceId, streamIndex)
 
-    suspend fun reportPlayback(session: AuthSession, itemId: String, positionSeconds: Double, isPaused: Boolean) =
-        api.reportPlayback(session, itemId, positionSeconds, isPaused)
+    suspend fun reportPlayback(
+        session: AuthSession,
+        itemId: String,
+        positionSeconds: Double,
+        isPaused: Boolean,
+        playSessionId: String?,
+    ) = api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId)
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
 

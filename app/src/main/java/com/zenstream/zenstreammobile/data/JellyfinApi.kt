@@ -77,12 +77,16 @@ class JellyfinApi(
         val sourceJson = json.optJSONArray("MediaSources")?.optJSONObject(0)
             ?: error("Jellyfin did not return a media source")
         val source = parseMediaSource(sourceJson)
+        val playSessionId = json.optString("PlaySessionId")
+            .takeIf { it.isNotBlank() }
+            ?: playbackSessionId(session, source)
         PlaybackData(
             item = item,
             source = source,
             audio = source.mediaStreams.filter { it.type == "Audio" },
             subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
             segments = getPlaybackSegments(session, itemId, item),
+            playSessionId = playSessionId,
         )
     }
 
@@ -145,18 +149,19 @@ class JellyfinApi(
         itemId: String,
         positionSeconds: Double,
         isPaused: Boolean,
+        playSessionId: String?,
     ) = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("ItemId", itemId)
+            .put("PositionTicks", (positionSeconds.coerceAtLeast(0.0) * 10_000_000.0).toLong())
+            .put("IsPaused", isPaused)
+            .put("PlayMethod", "DirectStream")
+        playSessionId?.takeIf { it.isNotBlank() }?.let { body.put("PlaySessionId", it) }
         requestJson(
             session,
             "/Sessions/Playing/Progress",
             method = "POST",
-            body = JSONObject()
-                .put("ItemId", itemId)
-                .put("PositionTicks", (positionSeconds.coerceAtLeast(0.0) * 10_000_000.0).toLong())
-                .put("IsPaused", isPaused)
-                .put("PlayMethod", "DirectStream")
-                .put("PlaySessionId", deviceId)
-                .toString(),
+            body = body.toString(),
         )
     }
 
