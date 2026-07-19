@@ -11,6 +11,7 @@ class JellyfinRepository(
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
+    val locale: Flow<String> = sessionStore.locale
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -23,6 +24,10 @@ class JellyfinRepository(
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
         return api.authenticate(server, username, password).also { sessionStore.saveSession(it) }
+    }
+
+    suspend fun refreshLocale(orchestratorUrl: String, token: String) {
+        sessionStore.saveLocale(orchestratorApi.fetchLocale(orchestratorUrl, token))
     }
 
     suspend fun clearSession() = sessionStore.clearSession()
