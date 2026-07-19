@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -45,10 +48,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.rememberScrollState
@@ -65,10 +71,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.JellyfinApi
+import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
+import com.zenstream.zenstreammobile.model.TrickplayPreview
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
@@ -93,6 +106,8 @@ fun PlaybackScreen(
     var controlsLocked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
+    var timelineScrub by remember { mutableStateOf<TimelineScrub?>(null) }
+    var previewUnavailable by remember { mutableStateOf(false) }
 
     DisposableEffect(vm, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -260,18 +275,38 @@ fun PlaybackScreen(
                         )
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                 ) {
+                    val displayedPosition = timelineScrub?.positionSeconds ?: state.engine.positionSeconds
+                    val preview = timelineScrub?.let { scrub ->
+                        trickplayPreview(
+                            session = session,
+                            itemId = itemId,
+                            source = state.playback?.source,
+                            timeSeconds = state.mediaOriginSeconds + scrub.positionSeconds,
+                        )
+                    }
                     Text(
-                        "${formatTime(state.engine.positionSeconds)}  -  ${formatTime(state.engine.durationSeconds)}",
+                        "${formatTime(displayedPosition)}  -  ${formatTime(state.engine.durationSeconds)}",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     PlaybackProgress(
-                        positionSeconds = state.engine.positionSeconds,
+                        positionSeconds = displayedPosition,
                         durationSeconds = state.engine.durationSeconds,
                         bufferedSeconds = state.engine.bufferedSeconds,
                         segments = state.segments,
-                        onSeek = vm::seekTo,
+                        scrub = timelineScrub,
+                        preview = preview.takeUnless { previewUnavailable },
+                        onScrubStart = {
+                            previewUnavailable = false
+                            timelineScrub = it
+                        },
+                        onScrubChanged = { timelineScrub = it },
+                        onScrubEnd = {
+                            vm.seekTo(it.positionSeconds)
+                            timelineScrub = null
+                        },
+                        onPreviewError = { previewUnavailable = true },
                     )
                 }
             }
@@ -329,16 +364,32 @@ fun PlaybackScreen(
 
 internal enum class PlayerSheet { Audio, Subtitles, Speed, Quality }
 
+private data class TimelineScrub(
+    val positionSeconds: Double,
+    val fraction: Float,
+)
+
+internal fun timelinePositionAt(x: Float, width: Float, duration: Double): Double {
+    val safeWidth = width.coerceAtLeast(1f)
+    val safeDuration = duration.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+    return (x / safeWidth).coerceIn(0f, 1f) * safeDuration
+}
+
 @Composable
 private fun PlaybackProgress(
     positionSeconds: Double,
     durationSeconds: Double,
     bufferedSeconds: Double,
     segments: List<PlaybackSegment>,
-    onSeek: (Double) -> Unit,
+    scrub: TimelineScrub?,
+    preview: TrickplayPreview?,
+    onScrubStart: (TimelineScrub) -> Unit,
+    onScrubChanged: (TimelineScrub) -> Unit,
+    onScrubEnd: (TimelineScrub) -> Unit,
+    onPreviewError: () -> Unit,
 ) {
     val duration = durationSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.1
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
@@ -346,17 +397,50 @@ private fun PlaybackProgress(
             .pointerInput(duration) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    fun seekFrom(x: Float) {
-                        onSeek((x / size.width.coerceAtLeast(1).toFloat() * duration).coerceIn(0.0, duration))
+                    fun scrubFrom(x: Float): TimelineScrub {
+                        val fraction = (x / size.width.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                        return TimelineScrub(
+                            positionSeconds = timelinePositionAt(x, size.width.toFloat(), duration),
+                            fraction = fraction,
+                        )
                     }
-                    seekFrom(down.position.x)
+                    var latest = scrubFrom(down.position.x)
+                    onScrubStart(latest)
                     drag(down.id) { change ->
                         change.consume()
-                        seekFrom(change.position.x)
+                        latest = scrubFrom(change.position.x)
+                        onScrubChanged(latest)
                     }
+                    onScrubEnd(latest)
                 }
             },
     ) {
+        val previewWidth = preview?.let {
+            val scale = minOf(1f, 240f / it.width, 150f / it.height)
+            (it.width * scale).dp
+        }
+        val previewHeight = preview?.let {
+            val scale = minOf(1f, 240f / it.width, 150f / it.height)
+            (it.height * scale).dp
+        }
+        if (preview != null && scrub != null && previewWidth != null && previewHeight != null) {
+            TrickplayBubble(
+                preview = preview,
+                position = scrub,
+                session = session,
+                width = previewWidth,
+                height = previewHeight,
+                onError = onPreviewError,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(
+                        x = (scrub.fraction * maxWidth.value - previewWidth.value / 2f)
+                            .coerceIn(0f, (maxWidth - previewWidth).value)
+                            .dp,
+                        y = -(previewHeight + 30.dp),
+                    ),
+            )
+        }
         Canvas(Modifier.fillMaxSize()) {
             val trackHeight = 3.dp.toPx()
             val trackTop = (size.height - trackHeight) / 2f
@@ -410,6 +494,67 @@ private fun PlaybackProgress(
                 center = androidx.compose.ui.geometry.Offset(progressWidth, size.height / 2f),
             )
         }
+    }
+}
+
+@Composable
+private fun TrickplayBubble(
+    preview: TrickplayPreview,
+    position: TimelineScrub,
+    session: AuthSession,
+    width: androidx.compose.ui.unit.Dp,
+    height: androidx.compose.ui.unit.Dp,
+    onError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val request = remember(preview.url) {
+        ImageRequest.Builder(context)
+            .data(preview.url)
+            .httpHeaders(
+                    NetworkHeaders.Builder()
+                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                    .build(),
+            )
+            .build()
+    }
+    val cellWidth = width
+    val cellHeight = height
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = .9f)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(cellWidth)
+                .height(cellHeight)
+                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
+        ) {
+            AsyncImage(
+                model = request,
+                contentDescription = stringResource(
+                    R.string.player_timeline_preview,
+                    formatTime(position.positionSeconds),
+                ),
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .width((cellWidth.value * preview.columns).dp)
+                    .height((cellHeight.value * preview.rows).dp)
+                    .graphicsLayer {
+                        translationX = -cellWidth.toPx() * preview.cellX
+                        translationY = -cellHeight.toPx() * preview.cellY
+                    },
+                onError = { onError() },
+            )
+        }
+        Text(
+            formatTime(position.positionSeconds),
+            color = Color.White.copy(alpha = .85f),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }
 
