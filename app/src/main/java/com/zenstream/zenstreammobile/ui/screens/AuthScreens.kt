@@ -15,10 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -35,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -66,7 +66,7 @@ fun ServerSetupScreen(
     }
     AuthContainer {
         Icon(
-            Icons.Default.Lock,
+            painter = painterResource(R.drawable.lucide_ic_lock),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary
         )
@@ -126,7 +126,7 @@ fun LoginScreen(repository: JellyfinRepository, onChangeServer: () -> Unit) {
     var password by remember { mutableStateOf("") }
     AuthContainer {
         Icon(
-            Icons.Default.Lock,
+            painter = painterResource(R.drawable.lucide_ic_lock),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary
         )

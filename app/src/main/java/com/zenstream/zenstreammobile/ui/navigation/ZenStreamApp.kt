@@ -17,11 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,6 +50,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.R
+import androidx.compose.ui.res.painterResource
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.launchPlayback
@@ -109,17 +106,17 @@ private fun MainScaffold(
             NavigationDestination(
                 HOME,
                 com.zenstream.zenstreammobile.R.string.home,
-                Icons.Default.Home
+                R.drawable.lucide_ic_house
             ),
             NavigationDestination(
                 SEARCH,
                 com.zenstream.zenstreammobile.R.string.search,
-                Icons.Default.Search
+                R.drawable.lucide_ic_search
             ),
             NavigationDestination(
                 LIBRARY,
                 com.zenstream.zenstreammobile.R.string.library,
-                Icons.Default.VideoLibrary
+                R.drawable.lucide_ic_library
             )
         )
     }
@@ -195,8 +192,8 @@ private fun MainScaffold(
                                         }
                                     },
                                     icon = {
-                                        androidx.compose.material3.Icon(
-                                            destination.icon,
+                                        Icon(
+                                            painter = painterResource(destination.icon),
                                             contentDescription = null
                                         )
                                     },
@@ -303,7 +300,7 @@ internal fun MainTopBar(onSettings: () -> Unit = {}) {
             ) {
                 androidx.compose.material3.IconButton(onClick = onSettings) {
                     Icon(
-                        imageVector = Icons.Default.Settings,
+                        painter = painterResource(R.drawable.lucide_ic_settings),
                         contentDescription = stringResource(com.zenstream.zenstreammobile.R.string.settings_description),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -319,7 +316,7 @@ internal fun MainTopBar(onSettings: () -> Unit = {}) {
 private data class NavigationDestination(
     val route: String,
     val label: Int,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector
+    @androidx.annotation.DrawableRes val icon: Int
 )
 
 internal class BottomBarVisibilityController(

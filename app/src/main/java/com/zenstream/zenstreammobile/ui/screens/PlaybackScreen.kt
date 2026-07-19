@@ -16,21 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPictureAlt
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -200,7 +186,7 @@ fun PlaybackScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { vm.onPause(); onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResourceCompat(R.string.back), tint = Color.White)
+                        Icon(painterResource(R.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
                     }
                     Text(
                         playbackTitle(state, initialItemName),
@@ -211,16 +197,16 @@ fun PlaybackScreen(
                     )
                     IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
                         Icon(
-                            if (controlsLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            painter = painterResource(if (controlsLocked) R.drawable.lucide_ic_lock else R.drawable.lucide_ic_lock_open),
                             stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
                             tint = Color.White,
                         )
                     }
                     if (!controlsLocked) {
-                        PlayerMenuButton(Icons.Default.Speed, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
-                        PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
-                        PlayerMenuButton(Icons.Default.PictureInPictureAlt, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
-                        PlayerMenuButton(Icons.Default.ClosedCaption, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
+                        PlayerMenuButton(R.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
+                        PlayerMenuButton(R.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
+                        PlayerMenuButton(R.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
+                        PlayerMenuButton(R.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
                     }
                 }
             }
@@ -230,8 +216,8 @@ fun PlaybackScreen(
                     horizontalArrangement = Arrangement.spacedBy(34.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PlayerMenuButton(Icons.Default.SkipPrevious, stringResourceCompat(R.string.player_previous), enabled = false) {}
-                    PlayerMenuButton(Icons.Default.Replay10, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
+                    PlayerMenuButton(R.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
+                    PlayerMenuButton(R.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
                     Surface(
                         onClick = vm::togglePlay,
                         modifier = Modifier.size(88.dp),
@@ -241,14 +227,14 @@ fun PlaybackScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                if (state.engine.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                painter = painterResource(if (state.engine.isPlaying) R.drawable.lucide_ic_pause else R.drawable.lucide_ic_play),
                                 stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
                                 modifier = Modifier.size(44.dp),
                             )
                         }
                     }
-                    PlayerMenuButton(Icons.Default.Forward10, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
-                    PlayerMenuButton(Icons.Default.SkipNext, stringResourceCompat(R.string.player_next), enabled = false) {}
+                    PlayerMenuButton(R.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
+                    PlayerMenuButton(R.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
                 }
                 Column(
                     modifier = Modifier
@@ -284,13 +270,13 @@ private enum class PlayerMenu { Audio, Subtitles, Settings }
 
 @Composable
 private fun PlayerMenuButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    @androidx.annotation.DrawableRes icon: Int,
     label: String,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     IconButton(onClick = onClick, enabled = enabled) {
-        Icon(icon, label, tint = if (enabled) Color.White else Color.White.copy(alpha = .3f))
+        Icon(painterResource(icon), label, tint = if (enabled) Color.White else Color.White.copy(alpha = .3f))
     }
 }
 

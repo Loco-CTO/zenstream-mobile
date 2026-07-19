@@ -16,10 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -130,7 +129,7 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                     ) {
                         if (item.played) Icon(
-                            Icons.Default.Check,
+                            painter = painterResource(R.drawable.lucide_ic_check),
                             contentDescription = null,
                             tint = Color(0xFFBBF7D0),
                             modifier = Modifier.width(14.dp)

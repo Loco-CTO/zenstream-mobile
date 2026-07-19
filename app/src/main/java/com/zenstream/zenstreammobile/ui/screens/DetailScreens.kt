@@ -25,17 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -272,7 +262,7 @@ private fun ExpandableOverview(overview: String) {
                 contentPadding = PaddingValues(horizontal = 0.dp),
             ) {
                 Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    painter = painterResource(if (expanded) R.drawable.lucide_ic_chevron_up else R.drawable.lucide_ic_chevron_down),
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(4.dp))
@@ -314,7 +304,7 @@ internal fun DetailTopBar(
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                Icon(painterResource(R.drawable.lucide_ic_arrow_left), stringResource(R.string.back))
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -440,7 +430,7 @@ private fun DetailActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Button(onClick = onPlay, enabled = !busy) {
-            Icon(Icons.Default.PlayArrow, stringResource(R.string.play_description, item.name))
+            Icon(painterResource(R.drawable.lucide_ic_play), stringResource(R.string.play_description, item.name))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.play))
         }
@@ -452,7 +442,7 @@ private fun DetailActions(
             },
         ) {
             Icon(
-                Icons.Default.Check,
+                painter = painterResource(R.drawable.lucide_ic_check),
                 null,
                 tint = if (item.played) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -465,7 +455,7 @@ private fun DetailActions(
             },
         ) {
             Icon(
-                if (item.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                painter = painterResource(R.drawable.lucide_ic_heart),
                 null,
                 tint = if (item.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -597,7 +587,7 @@ private fun SeasonPicker(
                     fontWeight = FontWeight.Medium,
                 )
                 Icon(
-                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    painter = painterResource(if (expanded) R.drawable.lucide_ic_chevron_up else R.drawable.lucide_ic_chevron_down),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -676,7 +666,7 @@ private fun SeasonPicker(
                                     },
                                 ) {
                                     Icon(
-                                        Icons.Default.Check,
+                                        painter = painterResource(R.drawable.lucide_ic_check),
                                         contentDescription = null,
                                         tint = if (season.played) {
                                             MaterialTheme.colorScheme.primary
@@ -693,7 +683,7 @@ private fun SeasonPicker(
                                     },
                                 ) {
                                     Icon(
-                                        if (season.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        painter = painterResource(R.drawable.lucide_ic_heart),
                                         contentDescription = null,
                                         tint = if (season.favorite) {
                                             MaterialTheme.colorScheme.primary
@@ -751,7 +741,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                             .padding(5.dp),
                     ) {
                         Icon(
-                            Icons.Default.Check,
+                            painter = painterResource(R.drawable.lucide_ic_check),
                             contentDescription = stringResource(R.string.watched_description),
                             tint = Color(0xFFBBF7D0),
                             modifier = Modifier
@@ -897,7 +887,7 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, stringResource(R.string.retry))
+            Icon(painterResource(R.drawable.lucide_ic_refresh_cw), stringResource(R.string.retry))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.retry))
         }

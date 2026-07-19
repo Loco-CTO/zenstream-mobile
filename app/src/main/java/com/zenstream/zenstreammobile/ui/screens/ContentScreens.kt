@@ -22,12 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -311,7 +306,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = state.query,
             onValueChange = vm::updateQuery,
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = { Icon(painterResource(R.drawable.lucide_ic_search), contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) IconButton(onClick = {
                     vm.updateQuery(
@@ -319,7 +314,7 @@ fun SearchScreen(
                     )
                 }) {
                     Icon(
-                        Icons.Default.Close,
+                        painter = painterResource(R.drawable.lucide_ic_x),
                         contentDescription = stringResource(R.string.close)
                     )
                 }
@@ -460,7 +455,7 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
+                        painter = painterResource(R.drawable.lucide_ic_arrow_left),
                         contentDescription = stringResource(R.string.back)
                     )
                 }
@@ -477,7 +472,7 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                Icons.Default.PlayArrow,
+                painter = painterResource(R.drawable.lucide_ic_play),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
@@ -520,7 +515,7 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null); Spacer(
+            Icon(painterResource(R.drawable.lucide_ic_refresh_cw), contentDescription = null); Spacer(
             Modifier.width(6.dp)
         ); Text(stringResource(R.string.retry))
         }
