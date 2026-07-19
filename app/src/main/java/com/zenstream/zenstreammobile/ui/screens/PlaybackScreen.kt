@@ -31,8 +31,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -221,7 +219,6 @@ fun PlaybackScreen(
                     if (!controlsLocked) {
                         PlayerMenuButton(Icons.Default.Speed, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
                         PlayerMenuButton(Icons.Default.AudioFile, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
-                        PlayerMenuButton(Icons.Default.VolumeUp, stringResourceCompat(R.string.player_volume)) { menu = PlayerMenu.Volume }
                         PlayerMenuButton(Icons.Default.PictureInPictureAlt, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
                         PlayerMenuButton(Icons.Default.ClosedCaption, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
                     }
@@ -279,11 +276,11 @@ fun PlaybackScreen(
             }
         }
 
-        PlayerDropdown(menu, state.selectedSubtitle, state.selectedAudio, state.playback?.audio.orEmpty(), state.playback?.subtitles.orEmpty(), state.playback?.qualities.orEmpty(), state.engine.speed, state.engine.volume, state.engine.muted, onDismiss = { menu = null }, onSubtitle = { vm.chooseSubtitle(it); menu = null }, onAudio = { vm.chooseAudio(it); menu = null }, onQuality = { vm.chooseQuality(it); menu = null }, onSpeed = { vm.setSpeed(it); menu = null }, onVolume = vm::setVolume, onMute = { vm.setMuted(!state.engine.muted) })
+        PlayerDropdown(menu, state.selectedSubtitle, state.selectedAudio, state.playback?.audio.orEmpty(), state.playback?.subtitles.orEmpty(), state.playback?.qualities.orEmpty(), state.engine.speed, onDismiss = { menu = null }, onSubtitle = { vm.chooseSubtitle(it); menu = null }, onAudio = { vm.chooseAudio(it); menu = null }, onQuality = { vm.chooseQuality(it); menu = null }, onSpeed = { vm.setSpeed(it); menu = null })
     }
 }
 
-private enum class PlayerMenu { Audio, Subtitles, Settings, Volume }
+private enum class PlayerMenu { Audio, Subtitles, Settings }
 
 @Composable
 private fun PlayerMenuButton(
@@ -306,15 +303,11 @@ private fun PlayerDropdown(
     subtitles: List<MediaStream>,
     qualities: List<Int>,
     speed: Float,
-    volume: Float,
-    muted: Boolean,
     onDismiss: () -> Unit,
     onSubtitle: (Int?) -> Unit,
     onAudio: (MediaStream) -> Unit,
     onQuality: (Int) -> Unit,
     onSpeed: (Float) -> Unit,
-    onVolume: (Float) -> Unit,
-    onMute: () -> Unit,
 ) {
     if (menu == null) return
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
@@ -335,19 +328,6 @@ private fun PlayerDropdown(
                 qualities.forEach { value ->
                     DropdownMenuItem(text = { Text(if (value == 0) "Auto" else "${value / 1_000_000} Mbps") }, onClick = { onQuality(value) })
                 }
-            }
-            PlayerMenu.Volume -> {
-                DropdownMenuItem(
-                    text = { Text(stringResourceCompat(R.string.player_volume)) },
-                    onClick = onMute,
-                    leadingIcon = { Icon(if (muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, null) },
-                )
-                Slider(
-                    value = if (muted) 0f else volume,
-                    onValueChange = onVolume,
-                    valueRange = 0f..1f,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
             }
         }
     }

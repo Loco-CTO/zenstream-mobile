@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.playbackUrl
+import com.zenstream.zenstreammobile.data.playbackStreamStartPositionSeconds
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -62,6 +63,7 @@ class PlaybackViewModel(
     private var playbackEngine: PlaybackEngine? = null
     private var engineJob: Job? = null
     private var progressJob: Job? = null
+    private var mediaOriginSeconds = 0.0
     private var recovered = false
 
     init {
@@ -98,38 +100,53 @@ class PlaybackViewModel(
 
     private fun fallbackToMedia3() {
         if (_uiState.value.engineType == PlayerEngine.MEDIA3) return
+        val currentPosition = currentPlayerPositionSeconds()
         createEngine(PlayerEngine.MEDIA3)
         _uiState.value = _uiState.value.copy(engineType = PlayerEngine.MEDIA3, error = null)
         viewModelScope.launch { repository.savePlayerEngine(PlayerEngine.MEDIA3) }
         val playback = _uiState.value.playback
         if (playback != null) {
             playbackEngine?.prepare(
-                playbackUrl(session, itemId, playback.source, _uiState.value.selectedQuality, (_uiState.value.engine.positionSeconds * 10_000_000).toLong()),
-                _uiState.value.engine.positionSeconds,
+                playbackUrl(session, itemId, playback.source, _uiState.value.selectedQuality, ticks(mediaOriginSeconds)),
+                currentPosition,
             )
         }
     }
 
     private fun loadPlayback(options: PlaybackOptions = PlaybackOptions()) {
         viewModelScope.launch {
-            val currentPosition = _uiState.value.engine.positionSeconds
+            val hasCurrentPlayback = _uiState.value.playback != null
+            val currentPosition = currentPlayerPositionSeconds()
+            val requestedStartSeconds = if (hasCurrentPlayback) {
+                mediaOriginSeconds + currentPosition
+            } else {
+                options.startTimeTicks / 10_000_000.0
+            }.coerceAtLeast(0.0)
+            val requestOptions = options.copy(
+                startTimeTicks = if (hasCurrentPlayback) ticks(requestedStartSeconds) else options.startTimeTicks,
+            )
             _uiState.value = _uiState.value.copy(loading = true, error = null)
             runCatching {
-                repository.playback(
-                    session,
-                    itemId,
-                    options.copy(
-                        startTimeTicks = if (currentPosition > 0) (currentPosition * 10_000_000).toLong() else options.startTimeTicks,
-                    ),
-                )
+                repository.playback(session, itemId, requestOptions)
             }.onSuccess { data ->
-                val selectedAudio = options.audioStreamIndex
+                val selectedAudio = requestOptions.audioStreamIndex
                     ?: data.audio.firstOrNull { it.isDefault }?.index
                     ?: data.audio.firstOrNull()?.index
                 val selectedSubtitle = _uiState.value.selectedSubtitle
                     ?: data.subtitles.firstOrNull { it.isDefault }?.index
-                val start = if (currentPosition > 0) currentPosition else data.item.playbackPositionTicks.orZero() / 10_000_000.0
-                val bitrate = options.maxStreamingBitrate ?: 0
+                val requestedOrResumeStartSeconds = if (hasCurrentPlayback || requestOptions.startTimeTicks > 0) {
+                    requestedStartSeconds
+                } else {
+                    data.item.playbackPositionTicks.orZero() / 10_000_000.0
+                }
+                val sourceOriginSeconds = playbackStreamStartPositionSeconds(
+                    session,
+                    data.source,
+                    requestedOrResumeStartSeconds,
+                )
+                val localStartSeconds = (requestedOrResumeStartSeconds - sourceOriginSeconds).coerceAtLeast(0.0)
+                val bitrate = requestOptions.maxStreamingBitrate ?: 0
+                mediaOriginSeconds = sourceOriginSeconds
                 _uiState.value = _uiState.value.copy(
                     loading = false,
                     itemName = data.item.name,
@@ -140,8 +157,8 @@ class PlaybackViewModel(
                     error = null,
                 )
                 playbackEngine?.prepare(
-                    com.zenstream.zenstreammobile.data.playbackUrl(session, itemId, data.source, bitrate, (start * 10_000_000).toLong()),
-                    start,
+                    playbackUrl(session, itemId, data.source, bitrate, requestOptions.startTimeTicks),
+                    localStartSeconds,
                 )
                 loadSubtitle()
                 startProgressReporting()
@@ -152,6 +169,13 @@ class PlaybackViewModel(
     }
 
     private fun Long?.orZero() = this ?: 0L
+
+    private fun ticks(seconds: Double): Long =
+        (seconds.coerceAtLeast(0.0) * 10_000_000.0).toLong()
+
+    private fun currentPlayerPositionSeconds(): Double =
+        playbackEngine?.currentPositionSeconds()?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: _uiState.value.engine.positionSeconds.coerceAtLeast(0.0)
 
     private fun startProgressReporting() {
         if (progressJob != null) return
@@ -165,8 +189,9 @@ class PlaybackViewModel(
 
     private suspend fun reportProgress() {
         val state = _uiState.value.engine
-        if (state.positionSeconds > 0) {
-            runCatching { repository.reportPlayback(session, itemId, state.positionSeconds, !state.isPlaying) }
+        val position = mediaOriginSeconds + currentPlayerPositionSeconds()
+        if (position > 0) {
+            runCatching { repository.reportPlayback(session, itemId, position, !state.isPlaying) }
         }
     }
 
@@ -176,25 +201,21 @@ class PlaybackViewModel(
 
     fun seekBy(deltaSeconds: Double) {
         val state = _uiState.value.engine
-        playbackEngine?.seekTo((state.positionSeconds + deltaSeconds).coerceIn(0.0, state.durationSeconds.takeIf { it > 0 } ?: Double.MAX_VALUE))
+        playbackEngine?.seekTo((currentPlayerPositionSeconds() + deltaSeconds).coerceIn(0.0, state.durationSeconds.takeIf { it > 0 } ?: Double.MAX_VALUE))
     }
 
     fun seekTo(positionSeconds: Double) = playbackEngine?.seekTo(positionSeconds)
     fun subtitlePositionSeconds(): Double = playbackEngine?.currentPositionSeconds()
         ?: _uiState.value.engine.positionSeconds
-    fun setVolume(value: Float) = playbackEngine?.setVolume(value)
-    fun setMuted(value: Boolean) = playbackEngine?.setMuted(value)
     fun setSpeed(value: Float) = playbackEngine?.setSpeed(value)
 
     fun chooseQuality(value: Int) {
-        val current = _uiState.value.engine.positionSeconds
-        loadPlayback(PlaybackOptions(maxStreamingBitrate = value.takeIf { it > 0 }, startTimeTicks = (current * 10_000_000).toLong()))
+        loadPlayback(PlaybackOptions(maxStreamingBitrate = value.takeIf { it > 0 }))
     }
 
     fun chooseAudio(stream: MediaStream) {
-        val current = _uiState.value.engine.positionSeconds
         _uiState.value = _uiState.value.copy(selectedAudio = stream.index)
-        loadPlayback(PlaybackOptions(mediaSourceId = _uiState.value.playback?.source?.id, audioStreamIndex = stream.index, startTimeTicks = (current * 10_000_000).toLong()))
+        loadPlayback(PlaybackOptions(mediaSourceId = _uiState.value.playback?.source?.id, audioStreamIndex = stream.index))
     }
 
     fun chooseSubtitle(streamIndex: Int?) {
@@ -206,7 +227,7 @@ class PlaybackViewModel(
         val selected = _uiState.value.selectedSubtitle ?: return
         val playback = _uiState.value.playback ?: return
         viewModelScope.launch {
-            runCatching { repository.subtitleWebVtt(session, itemId, playback.source.id, selected) }
+            runCatching { repository.subtitleWebVtt(session, itemId, playback.source.id, selected, ticks(mediaOriginSeconds)) }
                 .onSuccess { _uiState.value = _uiState.value.copy(subtitleCues = parseWebVttCues(it)) }
         }
     }
