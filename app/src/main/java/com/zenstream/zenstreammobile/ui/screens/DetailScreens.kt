@@ -112,7 +112,7 @@ fun DetailScreen(
         factory = DetailViewModel.Factory(repository, session, itemId),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val title = state.data?.item?.name ?: stringResource(R.string.detail_title)
+    val title = state.data?.item?.name.orEmpty()
     val parentSeries = state.data
         ?.takeIf { it.item.type == "Episode" }
         ?.parentSeries
