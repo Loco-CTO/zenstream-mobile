@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -134,26 +134,28 @@ private fun MainScaffold(
     }
 
     androidx.compose.material3.Scaffold(
-        // The animated NavigationBar owns the bottom inset while it is visible.
-        // Keeping navigationBars out of the outer scaffold lets content remain
-        // edge-to-edge when the bar is hidden instead of revealing a black
-        // strip after the exit animation completes.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (currentRoute != PLAYBACK.substringBefore("/")) {
-                AnimatedVisibility(
-                    visible = bottomBarVisible,
-                    enter = expandVertically(expandFrom = Alignment.Bottom) +
-                        slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                        slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                // Keep the system navigation-control surface mounted while the
+                // menu items animate. This prevents content from showing through
+                // the Android control strip during the transition.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .navigationBarsPadding()
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
+                    AnimatedVisibility(
+                        visible = bottomBarVisible,
+                        enter = expandVertically(expandFrom = Alignment.Bottom) +
+                            slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                            slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
-                        androidx.compose.material3.NavigationBar(containerColor = Color.Transparent) {
+                        androidx.compose.material3.NavigationBar(
+                            containerColor = Color.Transparent,
+                            windowInsets = WindowInsets(0, 0, 0, 0)
+                        ) {
                             destinations.forEach { destination ->
                                 NavigationBarItem(
                                     selected = currentRoute == destination.route,
@@ -191,7 +193,6 @@ private fun MainScaffold(
             startDestination = HOME,
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .nestedScroll(scrollConnection)
         ) {
             composable(HOME) {
