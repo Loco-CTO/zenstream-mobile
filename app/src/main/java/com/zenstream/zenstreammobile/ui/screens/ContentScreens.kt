@@ -310,7 +310,7 @@ internal fun FeaturedHero(
 }
 
 internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
-internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.6f
+internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.4f
 
 internal fun featureBarMaxHeight(screenHeightDp: Int) =
     screenHeightDp.toFloat().dp * FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION
