@@ -97,7 +97,13 @@ fun MediaRowView(
 }
 
 @Composable
-fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (MediaItem) -> Unit) {
+fun MediaCard(
+    item: MediaItem,
+    session: AuthSession,
+    wide: Boolean,
+    onClick: (MediaItem) -> Unit,
+    showRating: Boolean = false,
+) {
     val width = if (wide) 224.dp else 140.dp
     val playDescription = stringResource(R.string.play_description, item.name)
     Column(
@@ -142,6 +148,27 @@ fun MediaCard(item: MediaItem, session: AuthSession, wide: Boolean, onClick: (Me
                             ), style = MaterialTheme.typography.labelSmall, color = Color.White
                         )
                     }
+                }
+            }
+            if (showRating && item.communityRating != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_star),
+                        contentDescription = stringResource(R.string.rating_description, item.name),
+                        tint = Color(0xFFFACC15),
+                        modifier = Modifier.width(12.dp),
+                    )
+                    Text(
+                        text = String.format("%.1f", item.communityRating),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = .85f),
+                    )
                 }
             }
             progressPercent(item)?.let { progress ->
