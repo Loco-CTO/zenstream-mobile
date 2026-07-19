@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -343,9 +344,10 @@ private fun DetailHero(item: MediaItem, parentSeries: MediaItem?, session: AuthS
                 session = session,
                 description = stringResource(R.string.poster_description, item.name),
                 modifier = Modifier
-                    .size(if (item.type == "Episode") 170.dp else 104.dp, 156.dp)
+                    .width(if (item.type == "Episode") 170.dp else 104.dp)
+                    .aspectRatio(if (item.type == "Episode") 16f / 9f else 2f / 3f)
                     .clip(RoundedCornerShape(8.dp)),
-                scale = ContentScale.Crop,
+                scale = if (item.type == "Episode") ContentScale.Fit else ContentScale.Crop,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 if (item.type == "Episode") {
