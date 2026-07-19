@@ -6,9 +6,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.zenstream.zenstreammobile.model.AuthSession
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val Context.sessionDataStore by preferencesDataStore(name = "zenstream_session")
 
@@ -42,7 +42,7 @@ class SessionStore(private val context: Context, private val cipher: TokenCipher
                 cipher.decrypt(encryptedToken),
                 userId,
                 prefs[Keys.username].orEmpty().ifBlank { "ZenStream" })
-    }.getOrNull()
+        }.getOrNull()
     }.distinctUntilChanged()
 
     suspend fun saveServerUrl(server: String) {
