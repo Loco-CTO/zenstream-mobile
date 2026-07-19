@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -695,6 +697,11 @@ private fun TrickplayBubble(
     val spriteSize = trickplaySpriteSize(cellWidth, cellHeight, preview.columns, preview.rows)
     Column(
         modifier = modifier
+            // PlaybackProgress is only 48.dp tall. The web player renders this
+            // bubble out of flow, so do not let that track constraint collapse
+            // the preview viewport or its caption.
+            .requiredWidth(cellWidth)
+            .wrapContentHeight(unbounded = true)
             .clip(RoundedCornerShape(6.dp))
             .background(Color.Black.copy(alpha = .9f)),
         horizontalAlignment = Alignment.CenterHorizontally,
