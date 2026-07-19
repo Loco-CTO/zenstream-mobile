@@ -67,6 +67,7 @@
     <string name="watched_description">視聴済み</string>
     <string name="episode_description">%1$sのエピソード画像</string>
     <string name="person_description">%1$sの写真</string>
+    <string name="parent_series_label">シリーズ</string>
     <string name="parent_series">シリーズを表示：%1$s</string>
     <string name="season_value">シーズン%1$d：%2$s</string>
     <string name="no_season">シーズン</string>
