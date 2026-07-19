@@ -3,7 +3,11 @@ package com.zenstream.zenstreammobile.ui
 import com.zenstream.zenstreammobile.ui.screens.shouldAutoHidePlaybackControls
 import com.zenstream.zenstreammobile.ui.screens.shouldShowAudioSelector
 import com.zenstream.zenstreammobile.ui.screens.shouldShowSubtitleSelector
+import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,5 +27,15 @@ class PlaybackControlsTest {
         assertTrue(shouldShowAudioSelector(2))
         assertFalse(shouldShowSubtitleSelector(0))
         assertTrue(shouldShowSubtitleSelector(1))
+    }
+
+    @Test
+    fun exposesOnlyTheSegmentContainingTheCurrentPosition() {
+        val intro = PlaybackSegment(PlaybackSegmentType.INTRO, 10.0, 20.0)
+        val state = PlaybackUiState(segments = listOf(intro))
+
+        assertEquals(intro, state.activeSegmentAt(10.0))
+        assertEquals(intro, state.activeSegmentAt(19.99))
+        assertNull(state.activeSegmentAt(20.0))
     }
 }
