@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -605,21 +606,24 @@ private fun SeasonPicker(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                        .testTag("season_drawer_list"),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        stringResource(R.string.select_season),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp, vertical = 4.dp)
-                            .semantics { heading() },
-                    )
-                    seasons.forEach { season ->
+                    item {
+                        Text(
+                            stringResource(R.string.select_season),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                .semantics { heading() },
+                        )
+                    }
+                    items(seasons, key = { it.id }) { season ->
                         val isSelected = season.id == selected?.id
                         val seasonWatchedLabel = stringResource(
                             if (season.played) R.string.mark_unwatched else R.string.mark_watched,

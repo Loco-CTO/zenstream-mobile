@@ -6,7 +6,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.swipeUp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -114,6 +117,45 @@ class DetailScreensTest {
 
         assertEquals(listOf("season"), toggledPlayed)
         assertEquals(listOf("season"), toggledFavorite)
+    }
+
+    @Test
+    fun seasonDrawerScrollsToSeasonsBeyondViewport() {
+        val series = MediaItem("series", "Example Series", type = "Series")
+        val seasons = (1..30).map { number ->
+            MediaItem("season-$number", "Season $number", indexNumber = number)
+        }
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = DetailData(
+                        item = series,
+                        seasons = seasons,
+                        selectedSeasonId = seasons.first().id,
+                    ),
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 1)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 30))
+            .assertDoesNotExist()
+
+        val drawer = composeRule.onNodeWithTag("season_drawer_list")
+        repeat(6) { drawer.performTouchInput { swipeUp() } }
+
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 30)).assertIsDisplayed()
     }
 
     @Test
