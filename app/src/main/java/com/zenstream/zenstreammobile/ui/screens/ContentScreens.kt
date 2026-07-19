@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,7 +24,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -36,7 +34,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,9 +41,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,7 +50,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -94,7 +87,6 @@ fun HomeScreen(
         factory = HomeViewModel.Factory(repository, session)
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var infoItem by remember { mutableStateOf<MediaItem?>(null) }
     when {
         state.loading && state.data == null -> CenterLoading(padding)
         state.error && state.data == null -> ErrorState(padding, R.string.library_load_failed, vm::load)
@@ -110,8 +102,6 @@ fun HomeScreen(
                     FeaturedHero(
                         data?.featured.orEmpty(),
                         session,
-                        onPlay,
-                        onInfo = { infoItem = it },
                         showEmptyLibrary = data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
                     )
                 }
@@ -127,7 +117,6 @@ fun HomeScreen(
             }
         }
     }
-    infoItem?.let { item -> InfoSheet(item) { infoItem = null } }
 }
 
 @OptIn(
@@ -138,8 +127,6 @@ fun HomeScreen(
 internal fun FeaturedHero(
     items: List<MediaItem>,
     session: AuthSession,
-    onPlay: (MediaItem) -> Unit,
-    onInfo: (MediaItem) -> Unit,
     showEmptyLibrary: Boolean,
 ) {
     if (items.isEmpty()) {
@@ -211,38 +198,40 @@ internal fun FeaturedHero(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(20.dp),
+                    .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        item.name,
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.semantics { heading() })
+                    val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
+                    val logoRequest = logoUrl?.let {
+                        ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
+                            NetworkHeaders.Builder()
+                                .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                                .build()
+                        ).crossfade(true).build()
+                    }
+                    if (logoRequest != null) {
+                        AsyncImage(
+                            model = logoRequest,
+                            contentDescription = stringResource(R.string.logo_description, item.name),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .size(260.dp, 72.dp)
+                                .semantics { heading() },
+                        )
+                    } else {
+                        Text(
+                            item.name,
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.semantics { heading() })
+                    }
                     Text(
                         itemSubtitle(item),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = .65f)
                     )
-                    val infoDescription = stringResource(R.string.info_description, item.name)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { onPlay(item) }) {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null
-                            ); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play))
-                        }
-                        IconButton(
-                            onClick = { onInfo(item) },
-                            modifier = Modifier.semantics {
-                                contentDescription = infoDescription
-                            },
-                        ) {
-                            Icon(Icons.Default.Info, contentDescription = null)
-                        }
-                    }
                 }
             }
         }
@@ -269,42 +258,6 @@ internal fun FeaturedHero(
 }
 
 internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InfoSheet(item: MediaItem, onDismiss: () -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            Modifier
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                item.name,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() })
-            Text(itemSubtitle(item), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            item.communityRating?.let {
-                Text(
-                    "${stringResource(R.string.sort_rating)} ${"%.1f".format(it)}",
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            item.overview?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
