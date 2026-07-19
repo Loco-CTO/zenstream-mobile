@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 
 class PlaybackParsingTest {
     @Test
@@ -114,6 +115,32 @@ class PlaybackParsingTest {
         assertEquals("first", activeSubtitleCues(cues, 1.999).single().text)
         assertEquals("second", activeSubtitleCues(cues, 2.0).single().text)
         assertTrue(activeSubtitleCues(cues, 0.5).isEmpty())
+    }
+
+    @Test
+    fun initialSeekIsConsumedOnlyOnceWhenTheEngineBecomesReady() {
+        val seek = InitialSeekController()
+        seek.schedule(42.0)
+
+        assertEquals(42.0, requireNotNull(seek.consume()), 0.001)
+        assertEquals(null, seek.consume())
+    }
+
+    @Test
+    fun zeroInitialSeekDoesNotScheduleASeek() {
+        val seek = InitialSeekController()
+        seek.schedule(0.0)
+
+        assertEquals(null, seek.consume())
+    }
+
+    @Test
+    fun manualSeekCancelsThePendingInitialSeek() {
+        val seek = InitialSeekController()
+        seek.schedule(42.0)
+        seek.cancel()
+
+        assertEquals(null, seek.consume())
     }
 
 }

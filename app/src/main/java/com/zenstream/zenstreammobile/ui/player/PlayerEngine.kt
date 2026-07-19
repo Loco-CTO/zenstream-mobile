@@ -27,6 +27,20 @@ data class EngineState(
     val error: String? = null,
 )
 
+internal class InitialSeekController {
+    private var pendingPositionSeconds: Double? = null
+
+    fun schedule(positionSeconds: Double) {
+        pendingPositionSeconds = positionSeconds.takeIf { it.isFinite() && it > 0.0 }
+    }
+
+    fun consume(): Double? = pendingPositionSeconds.also { pendingPositionSeconds = null }
+
+    fun cancel() {
+        pendingPositionSeconds = null
+    }
+}
+
 interface PlaybackEngine {
     val state: StateFlow<EngineState>
     fun createView(context: Context): View
@@ -45,6 +59,7 @@ class Media3PlaybackEngine : PlaybackEngine {
     private val handler = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
     private var pending: Pair<String, Double>? = null
+    private val initialSeek = InitialSeekController()
     private val ticker = object : Runnable {
         override fun run() {
             val current = player
@@ -77,6 +92,7 @@ class Media3PlaybackEngine : PlaybackEngine {
                             ready = playbackState == Player.STATE_READY,
                             isBuffering = playbackState == Player.STATE_BUFFERING,
                         )
+                        if (playbackState == Player.STATE_READY) applyInitialSeek()
                     }
                 })
             }
@@ -99,18 +115,27 @@ class Media3PlaybackEngine : PlaybackEngine {
             return
         }
         pending = null
+        initialSeek.schedule(startPositionSeconds)
         current.setMediaItem(MediaItem.fromUri(url))
         current.prepare()
-        if (startPositionSeconds > 0) current.seekTo((startPositionSeconds * 1000).toLong())
         _state.value = _state.value.copy(error = null)
+    }
+
+    private fun applyInitialSeek() {
+        val positionSeconds = initialSeek.consume() ?: return
+        player?.seekTo((positionSeconds * 1000).toLong())
     }
 
     override fun play() { player?.play() }
     override fun pause() { player?.pause() }
-    override fun seekTo(positionSeconds: Double) { player?.seekTo(max(0.0, positionSeconds).times(1000).toLong()) }
+    override fun seekTo(positionSeconds: Double) {
+        initialSeek.cancel()
+        player?.seekTo(max(0.0, positionSeconds).times(1000).toLong())
+    }
     override fun setSpeed(value: Float) { player?.setPlaybackSpeed(value.coerceIn(.25f, 3f)) }
     override fun release() {
         handler.removeCallbacks(ticker)
+        initialSeek.cancel()
         player?.release()
         player = null
     }
@@ -122,11 +147,18 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private val handler = Handler(Looper.getMainLooper())
     private var view: MpvSurfaceView? = null
     private var pending: Pair<String, Double>? = null
+    private val initialSeek = InitialSeekController()
+    private var pendingUrl: String? = null
     private val ticker = object : Runnable {
         override fun run() {
             val position = MPVLib.getPropertyDouble("time-pos") ?: 0.0
             val duration = MPVLib.getPropertyDouble("duration") ?: 0.0
             val paused = MPVLib.getPropertyBoolean("pause") ?: true
+            val path = runCatching { MPVLib.getPropertyString("path") }.getOrNull()
+            if (duration > 0.0 && (pendingUrl == null || path == pendingUrl)) {
+                initialSeek.consume()?.let { MPVLib.command("seek", it.toString(), "absolute+exact") }
+                if (path == pendingUrl) pendingUrl = null
+            }
             _state.value = _state.value.copy(
                 positionSeconds = position,
                 durationSeconds = duration,
@@ -161,18 +193,24 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
     override fun prepare(url: String, startPositionSeconds: Double) {
         pending = url to startPositionSeconds
+        initialSeek.schedule(startPositionSeconds)
+        pendingUrl = url
         val current = view ?: return
         current.load(url)
-        if (startPositionSeconds > 0) MPVLib.setPropertyDouble("start", startPositionSeconds)
         _state.value = _state.value.copy(error = null)
     }
 
     override fun play() { MPVLib.setPropertyBoolean("pause", false) }
     override fun pause() { MPVLib.setPropertyBoolean("pause", true) }
-    override fun seekTo(positionSeconds: Double) { MPVLib.command("seek", max(0.0, positionSeconds).toString(), "absolute+exact") }
+    override fun seekTo(positionSeconds: Double) {
+        initialSeek.cancel()
+        MPVLib.command("seek", max(0.0, positionSeconds).toString(), "absolute+exact")
+    }
     override fun setSpeed(value: Float) { MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble()) }
     override fun release() {
         handler.removeCallbacks(ticker)
+        initialSeek.cancel()
+        pendingUrl = null
         view?.destroy()
         view = null
     }
