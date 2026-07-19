@@ -31,12 +31,19 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Prepare CI debug signing key
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_CI_DEBUG_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
           [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_CI_DEBUG_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
+          [ -n "$KEYSTORE_PASSWORD" ] || { echo 'ANDROID_CI_DEBUG_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
+          [ -n "$KEY_ALIAS" ] || { echo 'ANDROID_CI_DEBUG_KEY_ALIAS is not configured.' >&2; exit 1; }
+          [ -n "$KEY_PASSWORD" ] || { echo 'ANDROID_CI_DEBUG_KEY_PASSWORD is not configured.' >&2; exit 1; }
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-ci-debug.jks"
           test -s "$RUNNER_TEMP/zenstream-ci-debug.jks"
 
