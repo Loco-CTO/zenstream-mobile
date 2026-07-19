@@ -27,23 +27,24 @@ class OrchestratorApi(
         }
     }
 
-    suspend fun fetchLocale(orchestratorUrl: String, token: String): String = withContext(Dispatchers.IO) {
-        val orchestrator = normalizeServerUrl(orchestratorUrl)
-        val request = Request.Builder()
-            .url("$orchestrator/api/preferences/locale".toHttpUrl())
-            .header("Accept", "application/json")
-            .header("X-Jellyfin-Token", token)
-            .get()
-            .build()
-        val response = httpClient.newCall(request).execute()
-        response.use {
-            if (!it.isSuccessful) throw OrchestratorException(
-                it.code,
-                "Orchestrator request failed with ${it.code}"
-            )
-            parseLocale(it.body?.string().orEmpty())
+    suspend fun fetchLocale(orchestratorUrl: String, token: String): String =
+        withContext(Dispatchers.IO) {
+            val orchestrator = normalizeServerUrl(orchestratorUrl)
+            val request = Request.Builder()
+                .url("$orchestrator/api/preferences/locale".toHttpUrl())
+                .header("Accept", "application/json")
+                .header("X-Jellyfin-Token", token)
+                .get()
+                .build()
+            val response = httpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful) throw OrchestratorException(
+                    it.code,
+                    "Orchestrator request failed with ${it.code}"
+                )
+                parseLocale(it.body?.string().orEmpty())
+            }
         }
-    }
 }
 
 fun parseMobileConfig(body: String): String {

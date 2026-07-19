@@ -41,4 +41,12 @@ class JellyfinRepository(
     ) = api.fetchLibraryData(session, library)
 
     suspend fun search(session: AuthSession, query: String) = api.search(session, query)
+    suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
+        api.detail(session, itemId, seasonId)
+
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
+        api.setFavorite(session, itemId, favorite)
+
+    suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
+        api.setPlayed(session, itemId, played)
 }
