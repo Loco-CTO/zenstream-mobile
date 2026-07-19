@@ -100,7 +100,6 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
-import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
