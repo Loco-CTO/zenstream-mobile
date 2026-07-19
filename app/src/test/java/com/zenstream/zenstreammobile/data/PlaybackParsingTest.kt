@@ -8,8 +8,70 @@ import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.TrickplayInfo
+import org.json.JSONObject
 
 class PlaybackParsingTest {
+    @Test
+    fun parsesTrickplayMetadataBySource() {
+        val result = parseTrickplayBySource(
+            JSONObject(
+                """{"source-1":{"320":{"Width":320,"Height":180,"TileWidth":2,"TileHeight":2,"Interval":5000}}}"""
+            )
+        )
+
+        assertEquals(
+            TrickplayInfo(320, 180, 2, 2, 5000),
+            result["source-1"]?.get("320"),
+        )
+    }
+
+    @Test
+    fun buildsTrickplayPreviewUsingLargestResolutionAndTileCoordinates() {
+        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val preview = trickplayPreview(
+            session,
+            "episode/1",
+            MediaSource(
+                id = "source-1",
+                trickplay = mapOf(
+                    "320" to TrickplayInfo(320, 180, 2, 2, 5_000),
+                    "640" to TrickplayInfo(640, 360, 2, 2, 5_000),
+                ),
+            ),
+            45.0,
+        )
+
+        assertEquals(2, preview?.tileIndex)
+        assertEquals(1, preview?.cellX)
+        assertEquals(0, preview?.cellY)
+        assertEquals(640, preview?.width)
+        assertTrue(preview?.url.orEmpty().contains("/Videos/episode%2F1/Trickplay/640/2.jpg"))
+        assertTrue(preview?.url.orEmpty().contains("MediaSourceId=source-1"))
+        assertFalse(preview?.url.orEmpty().contains("api_key"))
+    }
+
+    @Test
+    fun trickplayPreviewUsesWebDefaultsWhenGeometryIsMissing() {
+        val preview = trickplayPreview(
+            AuthSession("https://jellyfin.example", "token", "user", "name"),
+            "item-1",
+            MediaSource(
+                id = "source-1",
+                trickplay = mapOf("320" to TrickplayInfo()),
+            ),
+            1.0,
+        )
+
+        assertEquals(320, preview?.width)
+        assertEquals(180, preview?.height)
+        assertEquals(0, preview?.tileIndex)
+        assertEquals(0, preview?.cellX)
+        assertEquals(0, preview?.cellY)
+        assertEquals(10, preview?.columns)
+        assertEquals(10, preview?.rows)
+    }
+
     @Test
     fun prefersPlaybackInfoSessionId() {
         val session = AuthSession("https://jellyfin.example", "token", "user", "name")

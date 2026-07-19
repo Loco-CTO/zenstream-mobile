@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.ui.screens.shouldShowAudioSelector
 import com.zenstream.zenstreammobile.ui.screens.shouldShowSubtitleSelector
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
+import com.zenstream.zenstreammobile.ui.screens.timelinePositionAt
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +13,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackControlsTest {
+    @Test
+    fun timelineScrubClampsToTheMediaRange() {
+        assertEquals(0.0, timelinePositionAt(-10f, 100f, 200.0), 0.001)
+        assertEquals(100.0, timelinePositionAt(50f, 100f, 200.0), 0.001)
+        assertEquals(200.0, timelinePositionAt(110f, 100f, 200.0), 0.001)
+    }
+
     @Test
     fun controlsCanAutoHideOnlyDuringActivePlayback() {
         assertTrue(shouldAutoHidePlaybackControls(visible = true, locked = false, menuOpen = false, isPlaying = true))

@@ -52,4 +52,22 @@ class JellyfinApiHttpTest {
         assertEquals("DirectStream", payload.getString("PlayMethod"))
         assertEquals("play-session-1", payload.getString("PlaySessionId"))
     }
+
+    @Test
+    fun loadsTrickplayWithAuthenticatedItemRequest() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"Trickplay":{"source-1":{"320":{"Width":320,"Interval":10000}}}}"""
+            )
+        )
+        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val result = JellyfinApi(deviceId = "device-id").trickplay(session, "episode-1")
+
+        val request = server.takeRequest()
+        assertEquals("/Items/episode-1?fields=Trickplay", request.path)
+        assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
+        assertEquals(320, result["source-1"]?.get("320")?.width)
+        assertEquals(10_000L, result["source-1"]?.get("320")?.intervalMillis)
+    }
 }
