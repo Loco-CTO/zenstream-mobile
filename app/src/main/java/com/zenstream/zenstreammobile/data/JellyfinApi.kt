@@ -87,14 +87,7 @@ class JellyfinApi(
         streamIndex: Int,
         startPositionTicks: Long = 0L,
     ): String = withContext(Dispatchers.IO) {
-        val params = mapOf(
-            "api_key" to session.token,
-            "MediaSourceId" to (sourceId ?: itemId),
-            "format" to "vtt",
-            "addVttTimeMap" to "false",
-            "copyTimestamps" to "false",
-            "startPositionTicks" to startPositionTicks.toString(),
-        )
+        val params = subtitleWebVttQuery(session, itemId, sourceId, startPositionTicks)
         val builder = "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
             .toHttpUrl()
             .newBuilder()
@@ -541,6 +534,20 @@ private fun items(json: JSONObject): List<JSONObject> {
     val array = json.optJSONArray("Items") ?: return emptyList()
     return List(array.length()) { array.optJSONObject(it) ?: JSONObject() }
 }
+
+internal fun subtitleWebVttQuery(
+    session: AuthSession,
+    itemId: String,
+    sourceId: String?,
+    startPositionTicks: Long,
+): Map<String, String> = mapOf(
+    "api_key" to session.token,
+    "MediaSourceId" to (sourceId ?: itemId),
+    "format" to "vtt",
+    "addVttTimeMap" to "false",
+    "copyTimestamps" to "false",
+    "startPositionTicks" to startPositionTicks.toString(),
+)
 
 private fun parseMediaSource(source: JSONObject): MediaSource {
     val streams = source.optJSONArray("MediaStreams")?.let { array ->

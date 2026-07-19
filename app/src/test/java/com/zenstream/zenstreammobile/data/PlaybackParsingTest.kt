@@ -23,6 +23,56 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun readsNegotiatedStreamTimelineOriginFromStartTimeTicks() {
+        val session = com.zenstream.zenstreammobile.model.AuthSession(
+            "https://jellyfin.example", "token", "user", "name"
+        )
+        val origin = playbackStreamStartPositionSeconds(
+            session,
+            com.zenstream.zenstreammobile.model.MediaSource(
+                id = "source-1",
+                transcodingUrl = "/video/master.m3u8?startTimeTicks=1250000000",
+            ),
+            requestedStartSeconds = 125.0,
+        )
+
+        assertEquals(125.0, origin, 0.001)
+    }
+
+    @Test
+    fun fallbackPlaybackUsesRequestedStartAsItsTimelineOrigin() {
+        val session = com.zenstream.zenstreammobile.model.AuthSession(
+            "https://jellyfin.example", "token", "user", "name"
+        )
+
+        assertEquals(
+            42.0,
+            playbackStreamStartPositionSeconds(
+                session,
+                com.zenstream.zenstreammobile.model.MediaSource(id = "source-1"),
+                requestedStartSeconds = 42.0,
+            ),
+            0.001,
+        )
+    }
+
+    @Test
+    fun subtitleRequestUsesRelativeTimestampsFromThePlaybackOrigin() {
+        val query = subtitleWebVttQuery(
+            com.zenstream.zenstreammobile.model.AuthSession(
+                "https://jellyfin.example", "token", "user", "name"
+            ),
+            "item-1",
+            "source-1",
+            1_250_000_000L,
+        )
+
+        assertEquals("false", query["copyTimestamps"])
+        assertEquals("false", query["addVttTimeMap"])
+        assertEquals("1250000000", query["startPositionTicks"])
+    }
+
+    @Test
     fun parsesWebVttCuesAndStripsMarkup() {
         val cues = parseWebVttCues(
             "WEBVTT\n\n00:01.500 --> 00:03.000\n<00:01.500>Hello <b>world</b>!\n"
