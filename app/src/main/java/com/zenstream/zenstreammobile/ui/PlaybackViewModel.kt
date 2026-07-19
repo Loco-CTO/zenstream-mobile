@@ -15,6 +15,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.player.EngineState
@@ -44,12 +45,16 @@ data class PlaybackUiState(
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleCues: List<SubtitleCue> = emptyList(),
     val subtitleOffset: Double = 0.0,
+    val segments: List<PlaybackSegment> = emptyList(),
 ) {
     val activeCues: List<SubtitleCue>
         get() = activeCuesAt(engine.positionSeconds)
 
     fun activeCuesAt(positionSeconds: Double): List<SubtitleCue> =
         activeSubtitleCues(subtitleCues, positionSeconds, subtitleOffset)
+
+    fun activeSegmentAt(positionSeconds: Double): PlaybackSegment? =
+        segments.firstOrNull { positionSeconds >= it.startSeconds && positionSeconds < it.endSeconds }
 }
 
 class PlaybackViewModel(
@@ -156,6 +161,14 @@ class PlaybackViewModel(
                     selectedAudio = selectedAudio,
                     selectedSubtitle = selectedSubtitle,
                     selectedQuality = bitrate,
+                    segments = data.segments.mapNotNull { segment ->
+                        val start = segment.startSeconds - sourceOriginSeconds
+                        val end = segment.endSeconds - sourceOriginSeconds
+                        if (end <= 0.0) null else segment.copy(
+                            startSeconds = start.coerceAtLeast(0.0),
+                            endSeconds = end,
+                        )
+                    },
                     error = null,
                 )
                 playbackEngine?.prepare(
@@ -207,6 +220,7 @@ class PlaybackViewModel(
     }
 
     fun seekTo(positionSeconds: Double) = playbackEngine?.seekTo(positionSeconds)
+    fun skipSegment(segment: PlaybackSegment) = seekTo(segment.endSeconds)
     fun subtitlePositionSeconds(): Double = playbackEngine?.currentPositionSeconds()
         ?: _uiState.value.engine.positionSeconds
     fun setSpeed(value: Float) = playbackEngine?.setSpeed(value)

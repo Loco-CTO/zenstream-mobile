@@ -5,13 +5,18 @@ import android.app.PictureInPictureParams
 import android.os.Build
 import android.util.Rational
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +28,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +59,8 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -183,9 +189,12 @@ fun PlaybackScreen(
                             listOf(Color.Black.copy(alpha = .78f), Color.Black.copy(alpha = 0f))
                         )
                     )
-                    .padding(top = 8.dp, start = 10.dp, end = 10.dp, bottom = 28.dp),
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 24.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     IconButton(onClick = { vm.onPause(); onBack() }) {
                         Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
                     }
@@ -196,41 +205,51 @@ fun PlaybackScreen(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { controlsLocked = !controlsLocked; menu = null }) {
                         Icon(
                             painter = painterResource(if (controlsLocked) LucideR.drawable.lucide_ic_lock else LucideR.drawable.lucide_ic_lock_open),
                             stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
                             tint = Color.White,
                         )
-                    }
-                    if (!controlsLocked) {
-                        PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
-                        PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
-                        PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
-                        PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
+                        }
+                        if (!controlsLocked) {
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { menu = PlayerMenu.Settings }
+                            if (state.playback?.audio.orEmpty().size > 1) {
+                                PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { menu = PlayerMenu.Audio }
+                            }
+                            if (state.playback?.subtitles.orEmpty().isNotEmpty()) {
+                                PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { menu = PlayerMenu.Subtitles }
+                            }
+                            PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
+                        }
                     }
                 }
             }
             if (controlsVisible && !controlsLocked) {
                 Row(
                     modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(34.dp),
+                    horizontalArrangement = Arrangement.spacedBy(22.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     PlayerMenuButton(LucideR.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
                     PlayerMenuButton(LucideR.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
                     Surface(
                         onClick = vm::togglePlay,
-                        modifier = Modifier.size(88.dp),
+                        modifier = Modifier.size(64.dp),
                         shape = CircleShape,
-                        color = Color.White,
-                        contentColor = Color.Black,
+                        color = Color.Black.copy(alpha = .58f),
+                        contentColor = Color.White,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 painter = painterResource(if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
                                 stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
-                                modifier = Modifier.size(44.dp),
+                                modifier = Modifier.size(28.dp),
+                                tint = Color.White,
                             )
                         }
                     }
@@ -239,26 +258,59 @@ fun PlaybackScreen(
                 }
                 Column(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
                                 listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
                             )
                         )
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
                 ) {
                     Text(
                         "${formatTime(state.engine.positionSeconds)}  -  ${formatTime(state.engine.durationSeconds)}",
                         color = Color.White,
                         style = MaterialTheme.typography.bodyLarge,
                     )
-                    Slider(
-                        value = state.engine.positionSeconds.toFloat().coerceIn(0f, state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f)),
-                        onValueChange = { vm.seekTo(it.toDouble()) },
-                        valueRange = 0f..state.engine.durationSeconds.toFloat().coerceAtLeast(0.1f),
-                        modifier = Modifier.fillMaxWidth(),
+                    PlaybackProgress(
+                        positionSeconds = state.engine.positionSeconds,
+                        durationSeconds = state.engine.durationSeconds,
+                        bufferedSeconds = state.engine.bufferedSeconds,
+                        segments = state.segments,
+                        onSeek = vm::seekTo,
                     )
+                }
+            }
+        }
+
+        if (!controlsLocked) {
+            state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
+                Surface(
+                    onClick = { vm.skipSegment(segment) },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = if (controlsVisible) 86.dp else 24.dp),
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(alpha = .58f),
+                    contentColor = Color.White,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painter = painterResource(LucideR.drawable.lucide_ic_fast_forward),
+                            contentDescription = stringResourceCompat(
+                                if (segment.type == PlaybackSegmentType.INTRO) R.string.skip_intro else R.string.skip_outro
+                            ),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            stringResourceCompat(if (segment.type == PlaybackSegmentType.INTRO) R.string.skip_intro else R.string.skip_outro),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
         }
@@ -268,6 +320,89 @@ fun PlaybackScreen(
 }
 
 private enum class PlayerMenu { Audio, Subtitles, Settings }
+
+@Composable
+private fun PlaybackProgress(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    bufferedSeconds: Double,
+    segments: List<PlaybackSegment>,
+    onSeek: (Double) -> Unit,
+) {
+    val duration = durationSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.1
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(duration) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    fun seekFrom(x: Float) {
+                        onSeek((x / size.width.coerceAtLeast(1).toFloat() * duration).coerceIn(0.0, duration))
+                    }
+                    seekFrom(down.position.x)
+                    drag(down.id) { change ->
+                        change.consume()
+                        seekFrom(change.position.x)
+                    }
+                }
+            },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val trackHeight = 3.dp.toPx()
+            val trackTop = (size.height - trackHeight) / 2f
+            val trackWidth = size.width
+            fun xAt(seconds: Double): Float =
+                (seconds.coerceIn(0.0, duration) / duration * trackWidth).toFloat()
+
+            drawRoundRect(
+                color = Color.White.copy(alpha = .25f),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                size = androidx.compose.ui.geometry.Size(trackWidth, trackHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f),
+            )
+            val bufferedWidth = xAt(bufferedSeconds)
+            if (bufferedWidth > 0f) {
+                drawRoundRect(
+                    color = Color.White.copy(alpha = .42f),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                    size = androidx.compose.ui.geometry.Size(bufferedWidth, trackHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f),
+                )
+            }
+            segments.forEach { segment ->
+                val left = xAt(segment.startSeconds)
+                val right = xAt(segment.endSeconds)
+                if (right > left) {
+                    drawRoundRect(
+                        color = if (segment.type == PlaybackSegmentType.INTRO) {
+                            Color(0xFF60A5FA)
+                        } else {
+                            Color(0xFFF59E0B)
+                        },
+                        topLeft = androidx.compose.ui.geometry.Offset(left, trackTop),
+                        size = androidx.compose.ui.geometry.Size(right - left, trackHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f),
+                    )
+                }
+            }
+            val progressWidth = xAt(positionSeconds)
+            if (progressWidth > 0f) {
+                drawRoundRect(
+                    color = Color(0xFFA78BFA),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackTop),
+                    size = androidx.compose.ui.geometry.Size(progressWidth, trackHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f),
+                )
+            }
+            drawCircle(
+                color = Color(0xFFA78BFA),
+                radius = 4.dp.toPx(),
+                center = androidx.compose.ui.geometry.Offset(progressWidth, size.height / 2f),
+            )
+        }
+    }
+}
 
 @Composable
 private fun PlayerMenuButton(
