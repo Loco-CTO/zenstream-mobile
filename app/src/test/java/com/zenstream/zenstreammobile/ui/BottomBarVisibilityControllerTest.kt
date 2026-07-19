@@ -1,11 +1,11 @@
 package com.zenstream.zenstreammobile.ui
 
-import com.zenstream.zenstreammobile.ui.navigation.BottomBarVisibilityController
+import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class BottomBarVisibilityControllerTest {
+class ScrollVisibilityControllerTest {
     @Test
     fun hideThresholdIsNotCrossedPrematurely() {
         val controller = controller()
@@ -47,7 +47,7 @@ class BottomBarVisibilityControllerTest {
         assertTrue(controller.onScroll(0f, atTop = true))
     }
 
-    private fun controller() = BottomBarVisibilityController(
+    private fun controller() = ScrollVisibilityController(
         hideDistance = 56f,
         revealDistance = 64f
     )

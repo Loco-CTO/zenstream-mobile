@@ -123,7 +123,7 @@ private fun MainScaffold(
     val density = LocalDensity.current
     val context = LocalContext.current
     val bottomBarVisibility = remember(density) {
-        BottomBarVisibilityController(
+        ScrollVisibilityController(
             hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
             revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
         )
@@ -318,7 +318,7 @@ private data class NavigationDestination(
     @androidx.annotation.DrawableRes val icon: Int
 )
 
-internal class BottomBarVisibilityController(
+internal class ScrollVisibilityController(
     private val hideDistance: Float,
     private val revealDistance: Float
 ) {

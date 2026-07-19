@@ -1,5 +1,12 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,12 +54,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
@@ -60,6 +69,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.text.KeyboardActions
@@ -86,6 +98,7 @@ import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
+import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
 @Composable
 fun HomeScreen(
@@ -413,6 +426,33 @@ fun LibraryScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val density = LocalDensity.current
+    val topBarVisibility = remember(density) {
+        ScrollVisibilityController(
+            hideDistance = with(density) { 56.dp.toPx() },
+            revealDistance = with(density) { 64.dp.toPx() },
+        )
+    }
+    var topBarVisible by remember { mutableStateOf(true) }
+    val topBarScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                val deltaY = consumed.y + available.y
+                topBarVisible = topBarVisibility.onScroll(
+                    deltaY = deltaY,
+                    atTop = available.y > 0f && consumed.y == 0f,
+                )
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        topBarVisible = topBarVisibility.resetForRoute()
+    }
     LaunchedEffect(gridState, state.items.size, state.totalRecordCount, state.loading, state.loadingMore) {
         snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
             if (
