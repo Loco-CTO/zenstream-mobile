@@ -178,7 +178,6 @@ fun PlaybackScreen(
             durationSeconds = state.engine.durationSeconds,
             onToggleControls = { controlsVisible = !controlsVisible },
             onSeekBy = vm::seekBy,
-            onSeekTo = vm::seekTo,
             onSeekFeedback = { seekFeedback = it },
             onSurfaceDragStart = {
                 seekFeedback = null
@@ -452,7 +451,6 @@ internal fun PlaybackGestureLayer(
     durationSeconds: Double,
     onToggleControls: () -> Unit,
     onSeekBy: (Double) -> Unit,
-    onSeekTo: (Double) -> Unit,
     onSeekFeedback: (SeekFeedback) -> Unit,
     onSurfaceDragStart: (Double) -> Unit = {},
     onSurfaceDragChanged: (Double) -> Unit = {},
@@ -465,7 +463,6 @@ internal fun PlaybackGestureLayer(
     val currentLocked = rememberUpdatedState(controlsLocked)
     val toggleControls = rememberUpdatedState(onToggleControls)
     val seekBy = rememberUpdatedState(onSeekBy)
-    val seekTo = rememberUpdatedState(onSeekTo)
     val showFeedback = rememberUpdatedState(onSeekFeedback)
 
     Box(
@@ -730,6 +727,73 @@ private fun PlaybackProgress(
 }
 
 @Composable
+internal fun SurfaceTrickplayOverlay(
+    session: AuthSession,
+    positionSeconds: Double,
+    durationSeconds: Double,
+    preview: TrickplayPreview?,
+    onPreviewError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val maxPreviewWidth = (maxWidth - 32.dp).coerceAtLeast(1.dp)
+        val previewSize = preview?.let {
+            val scale = minOf(
+                1f,
+                360f / it.width.coerceAtLeast(1),
+                203f / it.height.coerceAtLeast(1),
+                maxPreviewWidth.value / it.width.coerceAtLeast(1),
+            )
+            (it.width * scale).dp to (it.height * scale).dp
+        }
+        val accessibilityDescription = stringResourceCompat(
+            R.string.player_drag_seek_preview,
+            formatTime(positionSeconds),
+            formatTime(durationSeconds),
+        )
+        Surface(
+            modifier = Modifier
+                .testTag("surface-trickplay-preview")
+                .semantics {
+                    contentDescription = accessibilityDescription
+                },
+            shape = RoundedCornerShape(18.dp),
+            color = Color.Black.copy(alpha = .78f),
+            contentColor = Color.White,
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (preview != null && previewSize != null) {
+                    TrickplaySpriteFrame(
+                        preview = preview,
+                        session = session,
+                        width = previewSize.first,
+                        height = previewSize.second,
+                        contentDescription = stringResourceCompat(
+                            R.string.player_timeline_preview,
+                            formatTime(positionSeconds),
+                        ),
+                        onError = onPreviewError,
+                    )
+                }
+                Text(
+                    "${formatTime(positionSeconds)} / ${formatTime(durationSeconds)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun TrickplayBubble(
     preview: TrickplayPreview,
     position: TimelineScrub,
@@ -739,20 +803,8 @@ private fun TrickplayBubble(
     onError: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val request = remember(preview.url) {
-        ImageRequest.Builder(context)
-            .data(preview.url)
-            .httpHeaders(
-                    NetworkHeaders.Builder()
-                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                    .build(),
-            )
-            .build()
-    }
     val cellWidth = width
     val cellHeight = height
-    val spriteSize = trickplaySpriteSize(cellWidth, cellHeight, preview.columns, preview.rows)
     Column(
         modifier = modifier
             // PlaybackProgress is only 48.dp tall. The web player renders this
@@ -764,41 +816,74 @@ private fun TrickplayBubble(
             .background(Color.Black.copy(alpha = .9f)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Layout(
-            modifier = Modifier
-                .requiredSize(cellWidth, cellHeight)
-                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
-            content = {
-            AsyncImage(
-                model = request,
-                contentDescription = stringResourceCompat(
-                    R.string.player_timeline_preview,
-                    formatTime(position.positionSeconds),
-                ),
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier,
-                onError = { onError() },
-            )
-            },
-        ) { measurables, _ ->
-            val frameWidth = cellWidth.roundToPx()
-            val frameHeight = cellHeight.roundToPx()
-            val sheetWidth = spriteSize.first.roundToPx()
-            val sheetHeight = spriteSize.second.roundToPx()
-            val image = measurables.single().measure(Constraints.fixed(sheetWidth, sheetHeight))
-            layout(frameWidth, frameHeight) {
-                image.place(
-                    -cellWidth.roundToPx() * preview.cellX,
-                    -cellHeight.roundToPx() * preview.cellY,
-                )
-            }
-        }
+        TrickplaySpriteFrame(
+            preview = preview,
+            session = session,
+            width = cellWidth,
+            height = cellHeight,
+            contentDescription = stringResourceCompat(
+                R.string.player_timeline_preview,
+                formatTime(position.positionSeconds),
+            ),
+            onError = onError,
+            modifier = Modifier.clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
+        )
         Text(
             formatTime(position.positionSeconds),
             color = Color.White.copy(alpha = .85f),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
+    }
+}
+
+@Composable
+private fun TrickplaySpriteFrame(
+    preview: TrickplayPreview,
+    session: AuthSession,
+    width: androidx.compose.ui.unit.Dp,
+    height: androidx.compose.ui.unit.Dp,
+    contentDescription: String,
+    onError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val request = remember(preview.url, session.token) {
+        ImageRequest.Builder(context)
+            .data(preview.url)
+            .httpHeaders(
+                NetworkHeaders.Builder()
+                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                    .build(),
+            )
+            .build()
+    }
+    val spriteSize = trickplaySpriteSize(width, height, preview.columns, preview.rows)
+    Layout(
+        modifier = modifier
+            .requiredSize(width, height)
+            .clip(RoundedCornerShape(6.dp)),
+        content = {
+            AsyncImage(
+                model = request,
+                contentDescription = contentDescription,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier,
+                onError = { onError() },
+            )
+        },
+    ) { measurables, _ ->
+        val frameWidth = width.roundToPx()
+        val frameHeight = height.roundToPx()
+        val sheetWidth = spriteSize.first.roundToPx()
+        val sheetHeight = spriteSize.second.roundToPx()
+        val image = measurables.single().measure(Constraints.fixed(sheetWidth, sheetHeight))
+        layout(frameWidth, frameHeight) {
+            image.place(
+                -width.roundToPx() * preview.cellX,
+                -height.roundToPx() * preview.cellY,
+            )
+        }
     }
 }
 

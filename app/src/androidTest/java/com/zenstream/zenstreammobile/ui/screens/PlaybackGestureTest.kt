@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -42,7 +43,6 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = {},
                     onSeekBy = seekBy::add,
-                    onSeekTo = {},
                     onSeekFeedback = {},
                 )
             }
@@ -70,7 +70,6 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = {},
                     onSeekBy = seekBy::add,
-                    onSeekTo = {},
                     onSeekFeedback = {},
                 )
             }
@@ -99,8 +98,8 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = {},
                     onSeekBy = {},
-                    onSeekTo = seekTo::add,
                     onSeekFeedback = feedback::add,
+                    onSurfaceDragEnd = seekTo::add,
                 )
             }
         }
@@ -110,6 +109,40 @@ class PlaybackGestureTest {
         composeRule.runOnIdle {
             assertTrue(seekTo.last() > 50.0)
             assertEquals(SeekDirection.FORWARD, feedback.last().direction)
+        }
+    }
+
+    @Test
+    fun surfaceDragPreviewsWithoutSeekingUntilRelease() {
+        val previewTargets = mutableStateListOf<Double>()
+        val seekTo = mutableStateListOf<Double>()
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                PlaybackGestureLayer(
+                    modifier = Modifier.fillMaxSize().testTag("gesture-layer"),
+                    controlsLocked = false,
+                    positionSeconds = 50.0,
+                    durationSeconds = 100.0,
+                    onToggleControls = {},
+                    onSeekBy = {},
+                    onSeekTo = {},
+                    onSeekFeedback = {},
+                    onSurfaceDragStart = {},
+                    onSurfaceDragChanged = {
+                        assertTrue(seekTo.isEmpty())
+                        previewTargets += it
+                    },
+                    onSurfaceDragEnd = seekTo::add,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("gesture-layer").performTouchInput { swipeRight() }
+
+        composeRule.runOnIdle {
+            assertTrue(previewTargets.isNotEmpty())
+            assertEquals(listOf(previewTargets.last()), seekTo.toList())
         }
     }
 
@@ -127,7 +160,6 @@ class PlaybackGestureTest {
                     durationSeconds = 100.0,
                     onToggleControls = { toggleCount++ },
                     onSeekBy = seekBy::add,
-                    onSeekTo = {},
                     onSeekFeedback = {},
                 )
             }
@@ -162,5 +194,31 @@ class PlaybackGestureTest {
             .targetContext
             .getString(R.string.player_quick_seek_forward, 5)
         composeRule.onNodeWithText(expectedLabel).assertIsDisplayed()
+    }
+
+    @Test
+    fun surfaceTrickplayOverlayShowsTargetDurationAndAccessibleDescription() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                SurfaceTrickplayOverlay(
+                    session = com.zenstream.zenstreammobile.model.AuthSession(
+                        "https://example.com",
+                        "token",
+                        "user",
+                        "Test",
+                    ),
+                    positionSeconds = 65.0,
+                    durationSeconds = 125.0,
+                    preview = null,
+                    onPreviewError = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("surface-trickplay-preview").assertIsDisplayed()
+        composeRule.onNodeWithText("1:05 / 2:05").assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription("Seek preview: 1:05 of 2:05")
+            .assertIsDisplayed()
     }
 }
