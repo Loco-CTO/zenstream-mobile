@@ -100,6 +100,7 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
+import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
@@ -422,7 +423,7 @@ fun SearchScreen(
                 )
 
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -566,14 +567,19 @@ fun LibraryScreen(
 
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
                         state = gridState,
                         contentPadding = PaddingValues(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         items(state.items, key = { it.id }) { item ->
-                            LibraryPosterCard(item, session, onItemClick)
+                            Box(
+                                Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                LibraryPosterCard(item, session, onItemClick)
+                            }
                         }
                         if (state.loadingMore) {
                             item(key = "library-loading-more", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {

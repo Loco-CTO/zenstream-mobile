@@ -53,6 +53,8 @@ import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlin.math.roundToInt
 
+internal val POSTER_CARD_MAX_WIDTH = 140.dp
+
 @Composable
 fun MediaRowView(
     row: MediaRow,
@@ -104,7 +106,7 @@ fun MediaCard(
     onClick: (MediaItem) -> Unit,
     showRating: Boolean = false,
 ) {
-    val width = if (wide) 224.dp else 140.dp
+    val width = if (wide) 224.dp else POSTER_CARD_MAX_WIDTH
     val playDescription = stringResource(R.string.play_description, item.name)
     Column(
         modifier = Modifier

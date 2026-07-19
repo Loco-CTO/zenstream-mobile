@@ -1,11 +1,24 @@
 package com.zenstream.zenstreammobile.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.LibraryDataSource
@@ -17,7 +30,10 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
+import com.zenstream.zenstreammobile.ui.components.MediaCard
+import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -62,6 +78,55 @@ class ContentScreensTest {
         composeRule.onNodeWithContentDescription(
             InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.sort_by)
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun adaptivePosterGridFitsCardsToAvailableWidth() {
+        val items = (1..5).map { MediaItem("item-$it", "Item $it") }
+        val narrowBounds = renderPosterGrid(items, 360)
+        val tabletBounds = renderPosterGrid(items, 800)
+
+        assertEquals(2, narrowBounds.map { it.left }.distinct().size)
+        assertEquals(5, tabletBounds.map { it.left }.distinct().size)
+        items.forEach { item ->
+            composeRule.onNodeWithContentDescription("Play ${item.name}")
+                .assertWidthIsEqualTo(POSTER_CARD_MAX_WIDTH)
+        }
+    }
+
+    private fun renderPosterGrid(
+        items: List<MediaItem>,
+        width: Int,
+    ): List<androidx.compose.ui.unit.DpRect> {
+        composeRule.setContent {
+            ZenStreamTheme {
+                Box(
+                    Modifier
+                        .requiredWidth(width.dp)
+                        .requiredHeight(500.dp)
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MAX_WIDTH),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(items) { item ->
+                            Box(
+                                Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                MediaCard(item, session, wide = false, onClick = { })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        return items.map { item ->
+            composeRule.onNodeWithContentDescription("Play ${item.name}")
+                .getUnclippedBoundsInRoot()
+        }
     }
 }
 
