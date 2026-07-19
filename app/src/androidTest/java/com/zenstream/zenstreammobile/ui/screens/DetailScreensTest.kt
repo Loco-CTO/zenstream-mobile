@@ -35,6 +35,7 @@ class DetailScreensTest {
             similar = emptyList(),
         )
         val session = AuthSession("https://example.com", "token", "user", "name")
+        var selectedSeasonId: String? = null
         composeRule.setContent {
             ZenStreamTheme {
                 DetailContent(
@@ -45,7 +46,7 @@ class DetailScreensTest {
                     actionError = false,
                     onPlay = {},
                     onOpenItem = {},
-                    onSelectSeason = {},
+                    onSelectSeason = { selectedSeasonId = it },
                     onTogglePlayed = {},
                     onToggleFavorite = {},
                 )
@@ -56,6 +57,11 @@ class DetailScreensTest {
         composeRule.onNodeWithText(context.getString(R.string.episodes_label)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.season_number, 1))
             .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.select_season)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.season_number, 2))
+            .performClick()
+        assertEquals("season-2", selectedSeasonId)
         composeRule.onNodeWithText(context.getString(R.string.episode_title, 1, "Pilot"))
             .assertIsDisplayed()
         composeRule.onNodeWithContentDescription(context.getString(R.string.watched_description))

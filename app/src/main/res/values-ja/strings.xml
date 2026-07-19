@@ -74,4 +74,5 @@
     <string name="episode_title">%1$d. %2$s</string>
     <string name="show_more">もっと見る</string>
     <string name="show_less">折りたたむ</string>
+    <string name="select_season">シーズンを選択</string>
 </resources>
