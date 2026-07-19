@@ -27,7 +27,7 @@ internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrume
 private val sessionDataStores = ConcurrentHashMap<String, DataStore<Preferences>>()
 
 private fun sessionDataStore(context: Context, name: String): DataStore<Preferences> {
-    val appContext = context.applicationContext
+    val appContext = context.applicationContext ?: context
     val file = appContext.preferencesDataStoreFile(name)
     return sessionDataStores.computeIfAbsent(file.absolutePath) {
         PreferenceDataStoreFactory.create { file }
