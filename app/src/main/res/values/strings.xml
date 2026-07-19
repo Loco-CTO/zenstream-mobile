@@ -71,4 +71,6 @@
     <string name="season_value">Season %1$d: %2$s</string>
     <string name="no_season">Season</string>
     <string name="episode_title">%1$d. %2$s</string>
+    <string name="show_more">Show more</string>
+    <string name="show_less">Show less</string>
 </resources>
