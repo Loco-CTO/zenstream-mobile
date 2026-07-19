@@ -141,6 +141,7 @@ fun DetailScreen(
                 data = state.data!!,
                 session = session,
                 padding = innerPadding,
+                loading = state.loading,
                 actionBusy = state.actionBusy,
                 actionError = state.actionError,
                 onPlay = onPlay,
@@ -158,6 +159,7 @@ internal fun DetailContent(
     data: DetailData,
     session: AuthSession,
     padding: PaddingValues,
+    loading: Boolean = false,
     actionBusy: Boolean,
     actionError: Boolean,
     onPlay: (MediaItem) -> Unit,
@@ -207,6 +209,7 @@ internal fun DetailContent(
                 EpisodeSection(
                     data = data,
                     session = session,
+                    loading = loading,
                     onSelectSeason = onSelectSeason,
                     onOpenItem = onOpenItem,
                 )
@@ -474,10 +477,12 @@ private fun GenreRow(genres: List<String>) {
 private fun EpisodeSection(
     data: DetailData,
     session: AuthSession,
+    loading: Boolean,
     onSelectSeason: (String) -> Unit,
     onOpenItem: (MediaItem) -> Unit,
 ) {
     val selected = data.seasons.firstOrNull { it.id == data.selectedSeasonId }
+    val loadingDescription = stringResource(R.string.loading)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -494,12 +499,23 @@ private fun EpisodeSection(
             SeasonPicker(
                 seasons = data.seasons,
                 selected = selected,
+                loading = loading,
                 onSelectSeason = onSelectSeason,
             )
         }
     }
     Spacer(Modifier.height(4.dp))
-    if (data.episodes.isEmpty()) {
+    if (loading) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(128.dp)
+                .semantics { contentDescription = loadingDescription },
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+    } else if (data.episodes.isEmpty()) {
         Text(
             stringResource(R.string.no_episodes),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -522,6 +538,7 @@ private fun EpisodeSection(
 private fun SeasonPicker(
     seasons: List<MediaItem>,
     selected: MediaItem?,
+    loading: Boolean,
     onSelectSeason: (String) -> Unit,
 ) {
     var expanded by remember(selected?.id) { mutableStateOf(false) }
@@ -530,7 +547,7 @@ private fun SeasonPicker(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .clickable { expanded = true }
+                .clickable(enabled = !loading) { expanded = true }
                 .semantics { role = Role.Button },
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,

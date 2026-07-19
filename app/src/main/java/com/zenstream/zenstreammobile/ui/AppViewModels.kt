@@ -279,14 +279,26 @@ class DetailViewModel(
     }
 
     fun selectSeason(seasonId: String) {
-        if (_uiState.value.data?.selectedSeasonId == seasonId) return
+        val currentData = _uiState.value.data ?: return
+        if (currentData.selectedSeasonId == seasonId) return
+        _uiState.value = _uiState.value.copy(
+            loading = true,
+            error = false,
+            data = currentData.copy(
+                selectedSeasonId = seasonId,
+                episodes = emptyList(),
+            ),
+        )
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true, error = false)
             runCatching { repository.detail(session, itemId, seasonId) }
                 .onSuccess { _uiState.value = DetailUiState(loading = false, data = it) }
                 .onFailure {
                     if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
-                    _uiState.value = _uiState.value.copy(loading = false, error = true)
+                    _uiState.value = DetailUiState(
+                        loading = false,
+                        data = currentData,
+                        error = true,
+                    )
                 }
         }
     }
