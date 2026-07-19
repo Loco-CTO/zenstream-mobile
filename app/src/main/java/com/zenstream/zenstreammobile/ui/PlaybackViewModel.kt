@@ -69,6 +69,12 @@ data class PlaybackUiState(
         segments.firstOrNull { positionSeconds >= it.startSeconds && positionSeconds < it.endSeconds }
 }
 
+internal fun shouldClearPlayedOnPlaybackStart(
+    isPlaying: Boolean,
+    played: Boolean,
+    resetAlreadyRequested: Boolean,
+): Boolean = isPlaying && played && !resetAlreadyRequested
+
 private data class PlaybackProgressSnapshot(
     val positionSeconds: Double,
     val paused: Boolean,
@@ -96,6 +102,7 @@ class PlaybackViewModel(
     private var subtitleGeneration = 0L
     private var mediaOriginSeconds = 0.0
     private var recovered = false
+    private var playedResetRequested = false
 
     init {
         viewModelScope.launch {
@@ -114,11 +121,37 @@ class PlaybackViewModel(
         engineJob = viewModelScope.launch {
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
+                clearPlayedOnPlaybackStart(state)
                 if (state.error != null && !recovered && _uiState.value.playback?.source?.transcodingUrl == null) {
                     recovered = true
                     loadPlayback(PlaybackOptions(forceTranscoding = true, maxStreamingBitrate = 1_000_000))
                 }
             }
+        }
+    }
+
+    private fun clearPlayedOnPlaybackStart(state: EngineState) {
+        val playback = _uiState.value.playback ?: return
+        if (!shouldClearPlayedOnPlaybackStart(state.isPlaying, playback.item.played, playedResetRequested)) return
+
+        // Set this before launching so the engine ticker cannot enqueue duplicate
+        // DELETE requests while the first request is in flight.
+        playedResetRequested = true
+        viewModelScope.launch {
+            runCatching { repository.setPlayed(session, itemId, false) }
+                .onSuccess {
+                    val current = _uiState.value.playback
+                    if (current?.item?.id == itemId) {
+                        _uiState.value = _uiState.value.copy(
+                            playback = current.copy(item = current.item.copy(played = false)),
+                        )
+                    }
+                }
+                .onFailure {
+                    // Match the web player: a failed reset may be retried on the
+                    // next play-state update.
+                    playedResetRequested = false
+                }
         }
     }
 
