@@ -59,6 +59,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.unit.dp
@@ -116,6 +118,8 @@ fun PlaybackScreen(
     var subtitlePositionSeconds by remember(vm) { mutableStateOf(0.0) }
     var timelineScrub by remember { mutableStateOf<TimelineScrub?>(null) }
     var previewUnavailable by remember { mutableStateOf(false) }
+    var surfaceDragPosition by remember { mutableStateOf<Double?>(null) }
+    var surfacePreviewUnavailable by remember { mutableStateOf(false) }
 
     DisposableEffect(vm, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -176,6 +180,20 @@ fun PlaybackScreen(
             onSeekBy = vm::seekBy,
             onSeekTo = vm::seekTo,
             onSeekFeedback = { seekFeedback = it },
+            onSurfaceDragStart = {
+                seekFeedback = null
+                surfacePreviewUnavailable = false
+                surfaceDragPosition = it
+            },
+            onSurfaceDragChanged = {
+                seekFeedback = null
+                surfaceDragPosition = it
+            },
+            onSurfaceDragEnd = {
+                vm.seekTo(it)
+                surfaceDragPosition = null
+            },
+            onSurfaceDragCancel = { surfaceDragPosition = null },
         )
 
         seekFeedback?.let { feedback ->
@@ -375,6 +393,25 @@ fun PlaybackScreen(
             }
         }
 
+        surfaceDragPosition?.let { targetPosition ->
+            val preview = trickplayPreview(
+                session = session,
+                itemId = itemId,
+                source = state.playback?.source,
+                timeSeconds = state.mediaOriginSeconds + targetPosition,
+            ).takeUnless { surfacePreviewUnavailable }
+            SurfaceTrickplayOverlay(
+                session = session,
+                positionSeconds = targetPosition,
+                durationSeconds = state.engine.durationSeconds,
+                preview = preview,
+                onPreviewError = { surfacePreviewUnavailable = true },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(20f),
+            )
+        }
+
         PlayerBottomSheet(
             sheet = sheet,
             selectedSubtitle = state.selectedSubtitle,
@@ -417,6 +454,10 @@ internal fun PlaybackGestureLayer(
     onSeekBy: (Double) -> Unit,
     onSeekTo: (Double) -> Unit,
     onSeekFeedback: (SeekFeedback) -> Unit,
+    onSurfaceDragStart: (Double) -> Unit = {},
+    onSurfaceDragChanged: (Double) -> Unit = {},
+    onSurfaceDragEnd: (Double) -> Unit = {},
+    onSurfaceDragCancel: () -> Unit = {},
 ) {
     val quickControlsDescription = stringResourceCompat(R.string.player_quick_controls)
     val currentPosition = rememberUpdatedState(positionSeconds)
@@ -432,31 +473,38 @@ internal fun PlaybackGestureLayer(
             .pointerInput(Unit) {
                 var dragStartPosition = 0.0
                 var dragDistancePixels = 0f
+                var dragTargetPosition = 0.0
+                var dragActive = false
 
                 detectHorizontalDragGestures(
                     onDragStart = {
                         dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
                         dragDistancePixels = 0f
+                        dragTargetPosition = dragStartPosition
+                        dragActive = currentDuration.value.isFinite() && currentDuration.value > 0.0
+                        if (dragActive) onSurfaceDragStart(dragTargetPosition)
                     },
                     onHorizontalDrag = { change, dragAmount ->
                         change.consume()
                         dragDistancePixels += dragAmount
                         val duration = currentDuration.value
-                        if (duration.isFinite() && duration > 0.0) {
+                        if (dragActive && duration.isFinite() && duration > 0.0) {
                             val delta = dragSeekDeltaSeconds(
                                 dragDistancePixels = dragDistancePixels,
                                 playerWidthPixels = size.width,
                                 durationSeconds = duration,
                             )
-                            val target = clampSeekTarget(dragStartPosition + delta, duration)
-                            seekTo.value(target)
-                            showFeedback.value(
-                                SeekFeedback(
-                                    direction = if (delta < 0.0) SeekDirection.BACKWARD else SeekDirection.FORWARD,
-                                    seconds = feedbackSeconds(delta),
-                                )
-                            )
+                            dragTargetPosition = clampSeekTarget(dragStartPosition + delta, duration)
+                            onSurfaceDragChanged(dragTargetPosition)
                         }
+                    },
+                    onDragEnd = {
+                        if (dragActive) onSurfaceDragEnd(dragTargetPosition)
+                        dragActive = false
+                    },
+                    onDragCancel = {
+                        if (dragActive) onSurfaceDragCancel()
+                        dragActive = false
                     },
                 )
             }
