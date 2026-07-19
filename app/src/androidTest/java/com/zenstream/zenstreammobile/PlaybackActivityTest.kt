@@ -2,8 +2,9 @@ package com.zenstream.zenstreammobile
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
-import android.content.ComponentName
+import android.os.Build
+import android.app.PictureInPictureParams
+import android.util.Rational
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.test.core.app.ActivityScenario
@@ -12,9 +13,11 @@ import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.model.AuthSession
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -56,14 +59,26 @@ class PlaybackActivityTest {
     }
 
     @Test
-    fun playbackActivitySupportsPictureInPictureWithResizableWindow() {
+    fun playbackActivityCanEnterPictureInPicture() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
-        val activityInfo = context.packageManager.getActivityInfo(
-            ComponentName(context, PlaybackActivity::class.java),
-            PackageManager.GET_META_DATA,
-        )
+        assumeTrue(context.packageManager.hasSystemFeature("android.software.picture_in_picture"))
+        val intent = Intent(context, PlaybackActivity::class.java).apply {
+            putExtra(PlaybackActivityContract.EXTRA_ITEM_ID, "item-1")
+            putExtra(PlaybackActivityContract.EXTRA_ITEM_NAME, "Example")
+        }
 
-        assertEquals(true, activityInfo.supportsPictureInPicture())
-        assertEquals(ActivityInfo.RESIZE_MODE_RESIZEABLE, activityInfo.resizeableMode)
+        ActivityScenario.launch<PlaybackActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(
+                    activity.enterPictureInPictureMode(
+                        PictureInPictureParams.Builder()
+                            .setAspectRatio(Rational(16, 9))
+                            .build(),
+                    ),
+                )
+                assertTrue(activity.isInPictureInPictureMode)
+            }
+        }
     }
 }
