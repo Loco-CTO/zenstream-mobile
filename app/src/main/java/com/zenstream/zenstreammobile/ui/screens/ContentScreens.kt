@@ -89,7 +89,7 @@ fun HomeScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     when {
         state.loading && state.data == null -> CenterLoading(padding)
-        state.error && state.data == null -> ErrorState(
+        state.error -> ErrorState(
             padding,
             R.string.library_load_failed,
             vm::load
