@@ -50,6 +50,9 @@ class AuthScreensTest {
             }
         }
 
+        composeRule.onRoot().printToLog("FEATURE_BAR")
+        composeRule.onNodeWithContentDescription("Show information for Example")
+            .assertExists()
         composeRule.onNodeWithContentDescription("Show information for Example")
             .assertIsDisplayed()
         composeRule.onAllNodesWithText("Info").assertCountEquals(0)
