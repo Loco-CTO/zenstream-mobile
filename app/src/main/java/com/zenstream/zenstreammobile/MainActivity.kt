@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Let the Compose navigation surface provide the color behind the
+            // three-button controls instead of Android adding a lighter scrim.
+            window.isNavigationBarContrastEnforced = false
+        }
         setContent {
             ZenStreamTheme {
                 val appState by appViewModel.uiState.collectAsStateWithLifecycle()

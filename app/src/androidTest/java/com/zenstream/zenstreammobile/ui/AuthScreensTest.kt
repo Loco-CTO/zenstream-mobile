@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.test.platform.app.InstrumentationRegistry
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.ui.screens.FEATURE_BAR_ASPECT_RATIO
@@ -50,10 +52,12 @@ class AuthScreensTest {
             }
         }
 
-        composeRule.onRoot().printToLog("FEATURE_BAR")
-        composeRule.onNodeWithContentDescription("Show information for Example")
+        val infoDescription = InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .getString(R.string.info_description, "Example")
+        composeRule.onNodeWithContentDescription(infoDescription)
             .assertExists()
-        composeRule.onNodeWithContentDescription("Show information for Example")
+        composeRule.onNodeWithContentDescription(infoDescription)
             .assertIsDisplayed()
         composeRule.onAllNodesWithText("Info").assertCountEquals(0)
     }
