@@ -618,6 +618,12 @@ private fun SeasonPicker(
                     )
                     seasons.forEach { season ->
                         val isSelected = season.id == selected?.id
+                        val seasonWatchedLabel = stringResource(
+                            if (season.played) R.string.mark_unwatched else R.string.mark_watched,
+                        )
+                        val seasonFavoriteLabel = stringResource(
+                            if (season.favorite) R.string.remove_favorite else R.string.add_favorite,
+                        )
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -658,10 +664,7 @@ private fun SeasonPicker(
                                     onClick = { onToggleSeasonPlayed(season.id) },
                                     enabled = !loading && !actionBusy,
                                     modifier = Modifier.semantics {
-                                        contentDescription = stringResource(
-                                            if (season.played) R.string.mark_unwatched
-                                            else R.string.mark_watched,
-                                        )
+                                        contentDescription = seasonWatchedLabel
                                     },
                                 ) {
                                     Icon(
@@ -678,10 +681,7 @@ private fun SeasonPicker(
                                     onClick = { onToggleSeasonFavorite(season.id) },
                                     enabled = !loading && !actionBusy,
                                     modifier = Modifier.semantics {
-                                        contentDescription = stringResource(
-                                            if (season.favorite) R.string.remove_favorite
-                                            else R.string.add_favorite,
-                                        )
+                                        contentDescription = seasonFavoriteLabel
                                     },
                                 ) {
                                     Icon(
@@ -693,9 +693,6 @@ private fun SeasonPicker(
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
                                     )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
                                 }
                             }
                         }
