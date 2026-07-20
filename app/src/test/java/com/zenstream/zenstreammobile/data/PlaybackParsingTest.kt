@@ -190,6 +190,27 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun usesRequestedOriginWhenGatewayLeaseHidesStartTime() {
+        val session = com.zenstream.zenstreammobile.model.AuthSession(
+            "https://orchestrator.example", "token", "user", "name"
+        )
+
+        assertEquals(
+            125.0,
+            playbackStreamStartPositionSeconds(
+                session,
+                com.zenstream.zenstreammobile.model.MediaSource(
+                    id = "source-1",
+                    transcodingUrl = "/api/video/item-1/stream?lease=opaque",
+                ),
+                requestedStartSeconds = 125.0,
+                streamStartsAtRequestedPosition = true,
+            ),
+            0.001,
+        )
+    }
+
+    @Test
     fun reloadPositionIsRelativeToTheNewStreamOrigin() {
         assertEquals(15.0, playbackLocalPositionSeconds(140.0, 125.0), 0.001)
         assertEquals(0.0, playbackLocalPositionSeconds(100.0, 125.0), 0.001)

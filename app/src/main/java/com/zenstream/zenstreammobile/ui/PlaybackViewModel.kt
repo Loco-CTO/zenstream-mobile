@@ -241,6 +241,7 @@ class PlaybackViewModel(
                 session,
                 data.source,
                 requestedOrResumeStartSeconds,
+                streamStartsAtRequestedPosition = requestOptions.startTimeTicks > 0L,
             )
             val localStartSeconds =
                 playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)

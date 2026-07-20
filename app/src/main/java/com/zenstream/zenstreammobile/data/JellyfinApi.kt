@@ -852,13 +852,16 @@ fun playbackStreamStartPositionSeconds(
     session: AuthSession,
     source: MediaSource,
     requestedStartSeconds: Double = 0.0,
+    streamStartsAtRequestedPosition: Boolean = false,
 ): Double {
     val negotiated = source.transcodingUrl ?: source.directStreamUrl
     if (negotiated == null) return requestedStartSeconds.coerceAtLeast(0.0)
     val resolved = runCatching { session.serverUrl.toHttpUrl().resolve(negotiated) }.getOrNull()
     val startTicks = resolved?.queryParameter("startTimeTicks")?.toLongOrNull()
         ?: resolved?.queryParameter("StartTimeTicks")?.toLongOrNull()
-    return startTicks?.div(10_000_000.0)?.coerceAtLeast(0.0) ?: 0.0
+    return startTicks?.div(10_000_000.0)?.coerceAtLeast(0.0)
+        ?: requestedStartSeconds.takeIf { streamStartsAtRequestedPosition }?.coerceAtLeast(0.0)
+        ?: 0.0
 }
 
 fun playbackLocalPositionSeconds(
