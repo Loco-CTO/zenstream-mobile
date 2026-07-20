@@ -121,7 +121,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
 
       - name: Create GitHub release and upload APK
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk
           VERSION: ${{ steps.version.outputs.version }}
