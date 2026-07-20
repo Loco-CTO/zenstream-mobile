@@ -11,6 +11,7 @@ import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackLocalPositionSeconds
+import com.zenstream.zenstreammobile.data.playbackMimeType
 import com.zenstream.zenstreammobile.data.playbackStreamStartPositionSeconds
 import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -190,6 +191,7 @@ class PlaybackViewModel(
                     ticks(mediaOriginSeconds)
                 ),
                 currentPosition,
+                playbackMimeType(playback.source, _uiState.value.selectedQuality),
             )
         }
     }
@@ -281,6 +283,7 @@ class PlaybackViewModel(
                     requestOptions.startTimeTicks
                 ),
                 localStartSeconds,
+                playbackMimeType(playbackData.source, bitrate),
             )
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()

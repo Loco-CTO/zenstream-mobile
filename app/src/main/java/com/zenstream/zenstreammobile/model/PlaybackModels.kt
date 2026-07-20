@@ -39,6 +39,8 @@ data class MediaSource(
     val mediaStreams: List<MediaStream> = emptyList(),
     val runTimeTicks: Long? = null,
     val trickplay: Map<String, TrickplayInfo> = emptyMap(),
+    val container: String? = null,
+    val transcodingContainer: String? = null,
 )
 
 data class TrickplayPreview(

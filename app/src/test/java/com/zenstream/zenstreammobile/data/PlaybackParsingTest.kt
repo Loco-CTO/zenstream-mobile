@@ -13,6 +13,27 @@ import com.zenstream.zenstreammobile.model.TrickplayInfo
 
 class PlaybackParsingTest {
     @Test
+    fun identifiesGatewayRewrittenTranscodingUrlAsHls() {
+        assertEquals(
+            "application/x-mpegURL",
+            playbackMimeType(
+                MediaSource(
+                    id = "source-1",
+                    transcodingUrl = "/api/video/item-1/stream?lease=lease-1",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun identifiesDirectMp4SourceFromContainerMetadata() {
+        assertEquals(
+            "video/mp4",
+            playbackMimeType(MediaSource(id = "source-1", container = "mp4")),
+        )
+    }
+
+    @Test
     fun buildsTrickplayPreviewUsingLargestResolutionAndTileCoordinates() {
         val session = AuthSession("https://jellyfin.example", "token", "user", "name")
         val preview = trickplayPreview(

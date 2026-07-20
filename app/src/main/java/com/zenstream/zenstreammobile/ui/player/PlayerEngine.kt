@@ -6,6 +6,7 @@ import android.os.Looper
 import android.view.View
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -85,7 +86,7 @@ interface PlaybackEngine {
     fun currentPositionSeconds(): Double = state.value.positionSeconds
 
     /** Loads the source and starts playback once it is ready. */
-    fun prepare(url: String, startPositionSeconds: Double)
+    fun prepare(url: String, startPositionSeconds: Double, mimeType: String? = null)
     fun play()
     fun pause()
     fun seekTo(positionSeconds: Double)
@@ -154,7 +155,7 @@ class Media3PlaybackEngine : PlaybackEngine {
         player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0)
             ?: _state.value.positionSeconds
 
-    override fun prepare(url: String, startPositionSeconds: Double) {
+    override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
         val current = player
         if (current == null) {
             pending = url to startPositionSeconds
@@ -163,7 +164,13 @@ class Media3PlaybackEngine : PlaybackEngine {
         pending = null
         initialSeek.schedule(startPositionSeconds)
         current.playWhenReady = true
-        current.setMediaItem(MediaItem.fromUri(url))
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .apply {
+                mimeType?.let { setMimeType(it) }
+            }
+            .build()
+        current.setMediaItem(mediaItem)
         current.prepare()
         _state.value = EngineState()
     }
@@ -257,7 +264,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             ?: _state.value.positionSeconds
     }
 
-    override fun prepare(url: String, startPositionSeconds: Double) {
+    override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
         if (released) return
         pending = url to startPositionSeconds
         initialSeek.schedule(startPositionSeconds)

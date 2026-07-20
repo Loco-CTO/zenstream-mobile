@@ -772,6 +772,8 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
         mediaStreams = streams,
         runTimeTicks = source.optLongOrNull("RunTimeTicks"),
         trickplay = parseTrickplaySource(source.optJSONObject("Trickplay")),
+        container = source.optString("Container").ifBlank { null },
+        transcodingContainer = source.optString("TranscodingContainer").ifBlank { null },
     )
 }
 
@@ -792,6 +794,30 @@ internal fun parseTrickplaySource(value: JSONObject?): Map<String, TrickplayInfo
             intervalMillis = info.optLongOrNull("Interval") ?: info.optLongOrNull("interval"),
         )
     }?.toMap().orEmpty()
+
+internal fun playbackMimeType(source: MediaSource, bitrate: Int = 0): String? {
+    val negotiatedUrl = source.transcodingUrl ?: source.directStreamUrl
+    val urlPath = negotiatedUrl
+        ?.substringBefore('?')
+        ?.substringBefore('#')
+        ?.lowercase()
+    if (urlPath?.endsWith(".m3u8") == true || source.transcodingUrl != null || bitrate > 0) {
+        // The gateway deliberately rewrites manifests to /api/video/.../stream,
+        // so Media3 cannot infer HLS from the URL after negotiation.
+        return "application/x-mpegURL"
+    }
+
+    return when (source.container?.lowercase()) {
+        "mp4", "m4v", "mov" -> "video/mp4"
+        "mkv" -> "video/x-matroska"
+        "webm" -> "video/webm"
+        "ts", "m2ts" -> "video/mp2t"
+        "avi" -> "video/avi"
+        "mp3" -> "audio/mpeg"
+        "aac" -> "audio/aac"
+        else -> null
+    }
+}
 
 fun playbackUrl(
     session: AuthSession,
