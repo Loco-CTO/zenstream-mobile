@@ -6,7 +6,6 @@ import android.os.Looper
 import android.view.View
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -80,6 +79,12 @@ internal class InitialSeekController {
     }
 }
 
+private data class PendingPlayback(
+    val url: String,
+    val startPositionSeconds: Double,
+    val mimeType: String?,
+)
+
 interface PlaybackEngine {
     val state: StateFlow<EngineState>
     fun createView(context: Context): View
@@ -100,7 +105,7 @@ class Media3PlaybackEngine : PlaybackEngine {
     override val state: StateFlow<EngineState> = _state
     private val handler = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
-    private var pending: Pair<String, Double>? = null
+    private var pending: PendingPlayback? = null
     private val initialSeek = InitialSeekController()
     private val ticker = object : Runnable {
         override fun run() {
@@ -148,7 +153,7 @@ class Media3PlaybackEngine : PlaybackEngine {
             useController = false
             subtitleView?.visibility = View.GONE
             player = this@Media3PlaybackEngine.player
-        }.also { pending?.let { (url, start) -> prepare(url, start) } }
+        }.also { pending?.let { request -> prepare(request.url, request.startPositionSeconds, request.mimeType) } }
     }
 
     override fun currentPositionSeconds(): Double =
@@ -158,7 +163,7 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
         val current = player
         if (current == null) {
-            pending = url to startPositionSeconds
+            pending = PendingPlayback(url, startPositionSeconds, mimeType)
             return
         }
         pending = null
@@ -210,7 +215,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     override val state: StateFlow<EngineState> = _state
     private val handler = Handler(Looper.getMainLooper())
     private var view: MpvSurfaceView? = null
-    private var pending: Pair<String, Double>? = null
+    private var pending: PendingPlayback? = null
     private val initialSeek = InitialSeekController()
     private var released = false
     private val ticker = object : Runnable {
@@ -253,7 +258,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             }
             handler.post(ticker)
         }
-        return view!!.also { pending?.let { (url, start) -> prepare(url, start) } }
+        return view!!.also { pending?.let { request -> prepare(request.url, request.startPositionSeconds, request.mimeType) } }
     }
 
     override fun currentPositionSeconds(): Double {
@@ -266,7 +271,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
     override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
         if (released) return
-        pending = url to startPositionSeconds
+        pending = PendingPlayback(url, startPositionSeconds, mimeType)
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
