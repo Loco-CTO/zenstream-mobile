@@ -87,11 +87,7 @@ if (releaseBuild && !hasReleaseSigning) {
 
 android {
     namespace = "com.zenstream.zenstreammobile"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.zenstream.zenstreammobile"
