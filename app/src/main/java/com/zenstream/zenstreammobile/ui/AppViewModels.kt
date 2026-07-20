@@ -13,26 +13,24 @@ import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
-import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
-import com.zenstream.zenstreammobile.model.SortOrder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 
 data class AppUiState(
     val loading: Boolean = true,
@@ -161,13 +159,25 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                 launch {
                     loadSection(
                         request = { repository.homeContinueWatching(session) },
-                        apply = { data, items -> data.withRow(RowTitle.ContinueWatching, items, wide = true) },
+                        apply = { data, items ->
+                            data.withRow(
+                                RowTitle.ContinueWatching,
+                                items,
+                                wide = true
+                            )
+                        },
                     )
                 }
                 launch {
                     loadSection(
                         request = { repository.homeNextUp(session) },
-                        apply = { data, items -> data.withRow(RowTitle.NextUp, items, wide = true) },
+                        apply = { data, items ->
+                            data.withRow(
+                                RowTitle.NextUp,
+                                items,
+                                wide = true
+                            )
+                        },
                     )
                 }
                 launch { loadLibraries() }
@@ -188,7 +198,12 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                 launch {
                     loadSection(
                         request = { repository.homeLibraryData(session, library) },
-                        apply = { data, libraryData -> data.withLibraryData(libraries, libraryData) },
+                        apply = { data, libraryData ->
+                            data.withLibraryData(
+                                libraries,
+                                libraryData
+                            )
+                        },
                     )
                 }
             }
@@ -250,12 +265,13 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
 
 private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Boolean): HomeData {
     val globalRows = rows.filter { it.libraryName == null && it.title != title } +
-        listOfNotNull(items.takeIf { it.isNotEmpty() }?.let { MediaRow(title, items = it, wide = wide) })
+            listOfNotNull(items.takeIf { it.isNotEmpty() }
+                ?.let { MediaRow(title, items = it, wide = wide) })
     return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
 }
 
 private fun HomeData.withLibraryData(
-    libraries: List<com.zenstream.zenstreammobile.model.Library>,
+    libraries: List<Library>,
     libraryData: com.zenstream.zenstreammobile.model.LibraryData,
 ): HomeData {
     val byLibrary = rows.filter { it.libraryName != null }
@@ -328,8 +344,9 @@ class LibraryViewModel(
                     )
                     selected?.let { library ->
                         viewModelScope.launch {
-                            val storedSort = repository.cachedLibrarySort(session.userId, library.id)
-                                ?: LibrarySort()
+                            val storedSort =
+                                repository.cachedLibrarySort(session.userId, library.id)
+                                    ?: LibrarySort()
                             if (generation != requestGeneration) return@launch
                             _uiState.update { it.copy(sort = storedSort) }
                             loadFirstPage(library, generation, storedSort)
@@ -652,17 +669,19 @@ class DetailViewModel(
         repository.setFavorite(session, item.id, value)
     }
 
-    fun toggleSeasonPlayed(seasonId: String) = toggleSeasonState(seasonId, playedAction = true) { item, value ->
-        repository.setPlayed(session, item.id, value)
-    }
+    fun toggleSeasonPlayed(seasonId: String) =
+        toggleSeasonState(seasonId, playedAction = true) { item, value ->
+            repository.setPlayed(session, item.id, value)
+        }
 
-    fun toggleSeasonFavorite(seasonId: String) = toggleSeasonState(seasonId, playedAction = false) { item, value ->
-        repository.setFavorite(session, item.id, value)
-    }
+    fun toggleSeasonFavorite(seasonId: String) =
+        toggleSeasonState(seasonId, playedAction = false) { item, value ->
+            repository.setFavorite(session, item.id, value)
+        }
 
     private fun toggleItemState(
         playedAction: Boolean,
-        action: suspend (com.zenstream.zenstreammobile.model.MediaItem, Boolean) -> Unit,
+        action: suspend (MediaItem, Boolean) -> Unit,
     ) {
         val current = _uiState.value.data ?: return
         val previous = current.item
@@ -696,7 +715,7 @@ class DetailViewModel(
     private fun toggleSeasonState(
         seasonId: String,
         playedAction: Boolean,
-        action: suspend (com.zenstream.zenstreammobile.model.MediaItem, Boolean) -> Unit,
+        action: suspend (MediaItem, Boolean) -> Unit,
     ) {
         val current = _uiState.value.data ?: return
         val previous = current.seasons.firstOrNull { it.id == seasonId } ?: return

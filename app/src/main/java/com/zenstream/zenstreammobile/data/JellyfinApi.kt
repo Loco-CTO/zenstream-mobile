@@ -8,13 +8,13 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
-import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -116,7 +116,14 @@ class JellyfinApi(
     ): List<PlaybackSegment> {
         val providerSegments = playbackMarkerPaths(android.net.Uri.encode(itemId)).asSequence()
             .mapNotNull { path ->
-                runCatching { parsePlaybackMarkers(requestMarkerPayload(session, path)) }.getOrNull()
+                runCatching {
+                    parsePlaybackMarkers(
+                        requestMarkerPayload(
+                            session,
+                            path
+                        )
+                    )
+                }.getOrNull()
             }
             .firstOrNull { it.isNotEmpty() }
             .orEmpty()
@@ -147,9 +154,10 @@ class JellyfinApi(
         streamIndex: Int,
     ): String = withContext(Dispatchers.IO) {
         val params = subtitleWebVttQuery(session, itemId, sourceId)
-        val builder = "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
-            .toHttpUrl()
-            .newBuilder()
+        val builder =
+            "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
+                .toHttpUrl()
+                .newBuilder()
         params.forEach { (key, value) -> builder.addQueryParameter(key, value) }
         val request = Request.Builder()
             .url(builder.build())
@@ -158,7 +166,10 @@ class JellyfinApi(
             .get()
             .build()
         httpClient.newCall(request).execute().use {
-            if (!it.isSuccessful) throw JellyfinException(it.code, "Subtitle request failed with ${it.code}")
+            if (!it.isSuccessful) throw JellyfinException(
+                it.code,
+                "Subtitle request failed with ${it.code}"
+            )
             it.body?.string().orEmpty()
         }
     }
@@ -184,7 +195,10 @@ class JellyfinApi(
         )
     }
 
-    internal fun playbackQuery(session: AuthSession, options: PlaybackOptions): Map<String, String> =
+    internal fun playbackQuery(
+        session: AuthSession,
+        options: PlaybackOptions
+    ): Map<String, String> =
         playbackParameters(session, options).mapValues { it.value.toString() }
 
     internal fun playbackBody(session: AuthSession, options: PlaybackOptions): String =
@@ -203,7 +217,10 @@ class JellyfinApi(
             .put("DeviceProfile", deviceProfile(options))
             .toString()
 
-    private fun playbackParameters(session: AuthSession, options: PlaybackOptions): Map<String, Any?> = mapOf(
+    private fun playbackParameters(
+        session: AuthSession,
+        options: PlaybackOptions
+    ): Map<String, Any?> = mapOf(
         "userId" to session.userId,
         "startTimeTicks" to options.startTimeTicks,
         "maxStreamingBitrate" to options.maxStreamingBitrate,
@@ -218,18 +235,29 @@ class JellyfinApi(
     ).filterValues { it != null }
 
     private fun deviceProfile(options: PlaybackOptions): JSONObject {
-        val directPlay = org.json.JSONArray()
-            .put(JSONObject().put("Type", "Video").put("VideoCodec", "h264,h265,vp9,av1").put("AudioCodec", "aac,ac3,opus,vorbis,mp3").put("Container", "mp4,mkv,webm"))
-        val subtitles = org.json.JSONArray()
+        val directPlay = JSONArray()
+            .put(
+                JSONObject().put("Type", "Video").put("VideoCodec", "h264,h265,vp9,av1")
+                    .put("AudioCodec", "aac,ac3,opus,vorbis,mp3").put("Container", "mp4,mkv,webm")
+            )
+        val subtitles = JSONArray()
             .put(JSONObject().put("Format", "vtt").put("Method", "External"))
-        val transcoding = org.json.JSONArray()
-            .put(JSONObject().put("Type", "Video").put("Context", "Streaming").put("Protocol", "hls").put("Container", "ts").put("VideoCodec", "h264").put("AudioCodec", "aac").put("MaxAudioChannels", "2").put("MinSegments", 1).put("BreakOnNonKeyFrames", true))
+        val transcoding = JSONArray()
+            .put(
+                JSONObject().put("Type", "Video").put("Context", "Streaming").put("Protocol", "hls")
+                    .put("Container", "ts").put("VideoCodec", "h264").put("AudioCodec", "aac")
+                    .put("MaxAudioChannels", "2").put("MinSegments", 1)
+                    .put("BreakOnNonKeyFrames", true)
+            )
         return JSONObject()
             .put("Name", "ZenStream Android")
             .put("MaxStreamingBitrate", options.maxStreamingBitrate)
             .put("DirectPlayProfiles", directPlay)
             .put("SubtitleProfiles", subtitles)
-            .put("TranscodingProfiles", if (options.directPlayOnly) org.json.JSONArray() else transcoding)
+            .put(
+                "TranscodingProfiles",
+                if (options.directPlayOnly) JSONArray() else transcoding
+            )
     }
 
     suspend fun fetchHome(session: AuthSession): HomeData = coroutineScope {
@@ -528,7 +556,7 @@ class JellyfinApi(
     private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
         withContext(Dispatchers.IO) {
             val json = requestJson(session, "/Items/$itemId", playbackItemQuery(session.userId))
-            parseMediaItems(JSONObject().put("Items", org.json.JSONArray().put(json))).first()
+            parseMediaItems(JSONObject().put("Items", JSONArray().put(json))).first()
         }
 
     private suspend fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
@@ -573,7 +601,14 @@ class JellyfinApi(
         query: Map<String, String>,
         requestTimeoutMillis: Long? = null,
     ): List<MediaItem> = withContext(Dispatchers.IO) {
-        parseMediaItems(requestJson(session, path, query, requestTimeoutMillis = requestTimeoutMillis))
+        parseMediaItems(
+            requestJson(
+                session,
+                path,
+                query,
+                requestTimeoutMillis = requestTimeoutMillis
+            )
+        )
     }
 
     private fun requestJson(
@@ -614,7 +649,9 @@ class JellyfinApi(
             if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
         )
         val call = httpClient.newCall(requestBuilder.build())
-        requestTimeoutMillis?.let { call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        requestTimeoutMillis?.let {
+            call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS)
+        }
         val response = call.execute()
         response.use {
             if (!it.isSuccessful) throw JellyfinException(
@@ -645,12 +682,13 @@ class JellyfinApi(
             ?.takeIf { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
             ?: "Android"
 
-        private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false) = when (collectionType) {
-            "tvshows" -> if (newlyAdded) "Episode" else "Series"
-            "movies" -> "Movie"
-            "boxsets" -> "BoxSet"
-            else -> "Series,Movie"
-        }
+        private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false) =
+            when (collectionType) {
+                "tvshows" -> if (newlyAdded) "Episode" else "Series"
+                "movies" -> "Movie"
+                "boxsets" -> "BoxSet"
+                else -> "Series,Movie"
+            }
     }
 
 }
@@ -739,12 +777,16 @@ fun playbackUrl(
         val resolved = session.serverUrl.toHttpUrl().resolve(negotiated)
             ?: error("Jellyfin returned an invalid playback URL")
         val url = resolved.newBuilder()
-        if (url.build().queryParameter("api_key") == null && url.build().queryParameter("apiKey") == null) {
+        if (url.build().queryParameter("api_key") == null && url.build()
+                .queryParameter("apiKey") == null
+        ) {
             url.addQueryParameter("api_key", session.token)
         }
         return url.build().toString()
     }
-    val builder = "${session.serverUrl}/Videos/$itemId/${if (bitrate > 0) "stream.mp4" else "stream"}".toHttpUrl().newBuilder()
+    val builder =
+        "${session.serverUrl}/Videos/$itemId/${if (bitrate > 0) "stream.mp4" else "stream"}".toHttpUrl()
+            .newBuilder()
     builder.addQueryParameter("api_key", session.token)
     builder.addQueryParameter("Static", if (bitrate > 0) "false" else "true")
     builder.addQueryParameter("MediaSourceId", source.id ?: itemId)
@@ -767,7 +809,10 @@ fun playbackStreamStartPositionSeconds(
     return startTicks?.div(10_000_000.0)?.coerceAtLeast(0.0) ?: 0.0
 }
 
-fun playbackLocalPositionSeconds(absolutePositionSeconds: Double, streamOriginSeconds: Double): Double =
+fun playbackLocalPositionSeconds(
+    absolutePositionSeconds: Double,
+    streamOriginSeconds: Double
+): Double =
     (absolutePositionSeconds - streamOriginSeconds).coerceAtLeast(0.0)
 
 fun parseMediaItems(json: JSONObject): List<MediaItem> = items(json).mapNotNull { item ->
@@ -833,6 +878,7 @@ internal fun parsePlaybackMarkers(value: Any?): List<PlaybackSegment> {
         is JSONObject -> value.optJSONArray("Items")?.let { items ->
             List(items.length()) { items.optJSONObject(it) }.filterNotNull()
         } ?: listOf(value)
+
         else -> emptyList()
     }
     val typed = normalizePlaybackMarkers(
@@ -934,7 +980,8 @@ private fun chapterNameType(name: String?): PlaybackSegmentType? {
     return when {
         normalized == "op" || normalized == "opening" || normalized.contains("intro") -> PlaybackSegmentType.INTRO
         normalized == "ed" || normalized == "ending" || normalized == "outro" ||
-            normalized.contains("credit") || normalized.contains("closing") -> PlaybackSegmentType.OUTRO
+                normalized.contains("credit") || normalized.contains("closing") -> PlaybackSegmentType.OUTRO
+
         else -> null
     }
 }

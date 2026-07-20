@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +32,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -52,49 +53,46 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
-import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
@@ -107,6 +105,7 @@ import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
+import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun HomeScreen(
@@ -144,7 +143,7 @@ fun HomeScreen(
                             data?.featured.orEmpty(),
                             session,
                             showEmptyLibrary = !state.loading &&
-                                data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                                    data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
                             onItemClick = onItemClick,
                         )
                     }
@@ -230,42 +229,8 @@ internal fun FeaturedHero(
                             contentDescription = openDescription
                         }
                 ) {
-                val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
-                val request = url?.let {
-                    ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
-                        NetworkHeaders.Builder()
-                            .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                            .build()
-                    ).crossfade(true).build()
-                }
-                AsyncImage(
-                    model = request,
-                    contentDescription = stringResource(R.string.backdrop_description, item.name),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(.58f)
-                )
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    Color(0xFF080808)
-                                )
-                            )
-                        )
-                )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
-                    val logoRequest = logoUrl?.let {
+                    val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
+                    val request = url?.let {
                         ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
                             NetworkHeaders.Builder()
                                 .set(
@@ -275,33 +240,73 @@ internal fun FeaturedHero(
                                 .build()
                         ).crossfade(true).build()
                     }
-                    if (logoRequest != null) {
-                        AsyncImage(
-                            model = logoRequest,
-                            contentDescription = stringResource(
-                                R.string.logo_description,
-                                item.name
-                            ),
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(260.dp, 72.dp)
-                                .semantics { heading() },
-                        )
-                    } else {
-                        Text(
-                            item.name,
-                            style = MaterialTheme.typography.headlineLarge,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.semantics { heading() })
-                    }
-                    Text(
-                        itemSubtitle(item),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = .65f)
+                    AsyncImage(
+                        model = request,
+                        contentDescription = stringResource(
+                            R.string.backdrop_description,
+                            item.name
+                        ),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(.58f)
                     )
-                }
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color(0xFF080808)
+                                    )
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
+                        val logoRequest = logoUrl?.let {
+                            ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
+                                NetworkHeaders.Builder()
+                                    .set(
+                                        "Authorization",
+                                        JellyfinApi.authorizationHeader(session.token)
+                                    )
+                                    .build()
+                            ).crossfade(true).build()
+                        }
+                        if (logoRequest != null) {
+                            AsyncImage(
+                                model = logoRequest,
+                                contentDescription = stringResource(
+                                    R.string.logo_description,
+                                    item.name
+                                ),
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(260.dp, 72.dp)
+                                    .semantics { heading() },
+                            )
+                        } else {
+                            Text(
+                                item.name,
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.semantics { heading() })
+                        }
+                        Text(
+                            itemSubtitle(item),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = .65f)
+                        )
+                    }
                 }
             }
         }
@@ -390,7 +395,12 @@ fun SearchScreen(
                 OutlinedTextField(
                     value = state.query,
                     onValueChange = vm::updateQuery,
-                    leadingIcon = { Icon(painterResource(LucideR.drawable.lucide_ic_search), contentDescription = null) },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_search),
+                            contentDescription = null
+                        )
+                    },
                     trailingIcon = {
                         if (state.query.isNotEmpty()) IconButton(onClick = {
                             vm.updateQuery(
@@ -511,7 +521,13 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
-    LaunchedEffect(gridState, state.items.size, state.totalRecordCount, state.loading, state.loadingMore) {
+    LaunchedEffect(
+        gridState,
+        state.items.size,
+        state.totalRecordCount,
+        state.loading,
+        state.loadingMore
+    ) {
         snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
             if (
                 lastVisible >= 0 &&
@@ -599,17 +615,30 @@ fun LibraryScreen(
                             }
                         }
                         if (state.loadingMore) {
-                            item(key = "library-loading-more", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            item(
+                                key = "library-loading-more",
+                                span = {
+                                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                                }) {
                                 Box(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 16.dp),
                                     contentAlignment = Alignment.Center,
-                                ) { CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) }
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
                             }
                         }
                         if (state.loadMoreError) {
-                            item(key = "library-load-more-error", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            item(
+                                key = "library-load-more-error",
+                                span = {
+                                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                                }) {
                                 InlineLoadMoreError(onRetry = vm::loadMore)
                             }
                         }
@@ -621,7 +650,10 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun LibraryHeader(state: com.zenstream.zenstreammobile.ui.LibraryUiState, onSortChanged: (LibrarySort) -> Unit) {
+private fun LibraryHeader(
+    state: com.zenstream.zenstreammobile.ui.LibraryUiState,
+    onSortChanged: (LibrarySort) -> Unit
+) {
     var menuExpanded by remember { mutableStateOf(false) }
     Row(
         Modifier
@@ -684,7 +716,12 @@ private fun LibraryHeader(state: com.zenstream.zenstreammobile.ui.LibraryUiState
                             onSortChanged(state.sort.copy(sortBy = sortBy))
                         },
                         leadingIcon = if (sortBy == state.sort.sortBy) {
-                            { Icon(painterResource(LucideR.drawable.lucide_ic_check), contentDescription = null) }
+                            {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_check),
+                                    contentDescription = null
+                                )
+                            }
                         } else null,
                     )
                 }
@@ -714,11 +751,19 @@ private fun EmptyState(title: String, detail: String) {
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
         Spacer(Modifier.height(8.dp))
-        Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(
+            detail,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
@@ -731,14 +776,21 @@ private fun InlineLoadMoreError(onRetry: () -> Unit) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(stringResource(R.string.library_load_more_failed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            stringResource(R.string.library_load_more_failed),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.width(8.dp))
         Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }
 
 @Composable
-private fun LibraryPosterCard(item: MediaItem, session: AuthSession, onItemClick: (MediaItem) -> Unit) {
+private fun LibraryPosterCard(
+    item: MediaItem,
+    session: AuthSession,
+    onItemClick: (MediaItem) -> Unit
+) {
     com.zenstream.zenstreammobile.ui.components.MediaCard(
         item = item,
         session = session,
@@ -828,7 +880,10 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(painterResource(LucideR.drawable.lucide_ic_refresh_cw), contentDescription = null); Spacer(
+            Icon(
+                painterResource(LucideR.drawable.lucide_ic_refresh_cw),
+                contentDescription = null
+            ); Spacer(
             Modifier.width(6.dp)
         ); Text(stringResource(R.string.retry))
         }

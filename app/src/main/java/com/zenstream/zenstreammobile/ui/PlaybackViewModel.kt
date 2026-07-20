@@ -1,31 +1,32 @@
 package com.zenstream.zenstreammobile.ui
 
-import android.os.SystemClock
 import android.content.Context
+import android.os.SystemClock
+import android.view.View
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
-import com.zenstream.zenstreammobile.data.playbackUrl
+import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackLocalPositionSeconds
 import com.zenstream.zenstreammobile.data.playbackStreamStartPositionSeconds
-import com.zenstream.zenstreammobile.data.parseWebVttCues
+import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
-import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -35,7 +36,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import android.view.View
 
 data class PlaybackUiState(
     val loading: Boolean = true,
@@ -108,7 +108,8 @@ class PlaybackViewModel(
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
             val subtitleStyle = repository.loadSubtitleStyle()
-            _uiState.value = _uiState.value.copy(engineType = engineType, subtitleStyle = subtitleStyle)
+            _uiState.value =
+                _uiState.value.copy(engineType = engineType, subtitleStyle = subtitleStyle)
             createEngine(engineType)
             loadPlayback()
         }
@@ -124,7 +125,12 @@ class PlaybackViewModel(
                 clearPlayedOnPlaybackStart(state)
                 if (state.error != null && !recovered && _uiState.value.playback?.source?.transcodingUrl == null) {
                     recovered = true
-                    loadPlayback(PlaybackOptions(forceTranscoding = true, maxStreamingBitrate = 1_000_000))
+                    loadPlayback(
+                        PlaybackOptions(
+                            forceTranscoding = true,
+                            maxStreamingBitrate = 1_000_000
+                        )
+                    )
                 }
             }
         }
@@ -132,7 +138,12 @@ class PlaybackViewModel(
 
     private fun clearPlayedOnPlaybackStart(state: EngineState) {
         val playback = _uiState.value.playback ?: return
-        if (!shouldClearPlayedOnPlaybackStart(state.isPlaying, playback.item.played, playedResetRequested)) return
+        if (!shouldClearPlayedOnPlaybackStart(
+                state.isPlaying,
+                playback.item.played,
+                playedResetRequested
+            )
+        ) return
 
         // Set this before launching so the engine ticker cannot enqueue duplicate
         // DELETE requests while the first request is in flight.
@@ -171,7 +182,13 @@ class PlaybackViewModel(
         val playback = _uiState.value.playback
         if (playback != null) {
             playbackEngine?.prepare(
-                playbackUrl(session, itemId, playback.source, _uiState.value.selectedQuality, ticks(mediaOriginSeconds)),
+                playbackUrl(
+                    session,
+                    itemId,
+                    playback.source,
+                    _uiState.value.selectedQuality,
+                    ticks(mediaOriginSeconds)
+                ),
                 currentPosition,
             )
         }
@@ -198,7 +215,10 @@ class PlaybackViewModel(
                 repository.playback(session, itemId, requestOptions)
             }.getOrElse {
                 if (loadGeneration == playbackGeneration) {
-                    _uiState.value = _uiState.value.copy(loading = false, error = it.message ?: "Playback failed")
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        error = it.message ?: "Playback failed"
+                    )
                 }
                 return@launch
             }
@@ -209,17 +229,19 @@ class PlaybackViewModel(
                 ?: data.audio.firstOrNull()?.index
             val selectedSubtitle = _uiState.value.selectedSubtitle
                 ?: data.subtitles.firstOrNull { it.isDefault }?.index
-            val requestedOrResumeStartSeconds = if (hasCurrentPlayback || requestOptions.startTimeTicks > 0) {
-                requestedStartSeconds
-            } else {
-                data.item.playbackPositionTicks.orZero() / 10_000_000.0
-            }
+            val requestedOrResumeStartSeconds =
+                if (hasCurrentPlayback || requestOptions.startTimeTicks > 0) {
+                    requestedStartSeconds
+                } else {
+                    data.item.playbackPositionTicks.orZero() / 10_000_000.0
+                }
             val sourceOriginSeconds = playbackStreamStartPositionSeconds(
                 session,
                 data.source,
                 requestedOrResumeStartSeconds,
             )
-            val localStartSeconds = playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
+            val localStartSeconds =
+                playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
             val bitrate = requestOptions.maxStreamingBitrate ?: 0
             mediaOriginSeconds = sourceOriginSeconds
             val previousTrickplay = _uiState.value.playback?.source?.trickplay.orEmpty()
@@ -251,7 +273,13 @@ class PlaybackViewModel(
                 error = null,
             )
             playbackEngine?.prepare(
-                playbackUrl(session, itemId, playbackData.source, bitrate, requestOptions.startTimeTicks),
+                playbackUrl(
+                    session,
+                    itemId,
+                    playbackData.source,
+                    bitrate,
+                    requestOptions.startTimeTicks
+                ),
                 localStartSeconds,
             )
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
@@ -263,7 +291,8 @@ class PlaybackViewModel(
     private fun loadTrickplay(loadGeneration: Long, shouldLoad: Boolean) {
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
-            val bySource = runCatching { repository.trickplay(session, itemId) }.getOrDefault(emptyMap())
+            val bySource =
+                runCatching { repository.trickplay(session, itemId) }.getOrDefault(emptyMap())
             if (loadGeneration != playbackGeneration) return@launch
             val current = _uiState.value.playback ?: return@launch
             val trickplay = bySource[current.source.id.orEmpty()] ?: return@launch
@@ -330,13 +359,17 @@ class PlaybackViewModel(
 
     fun seekBy(deltaSeconds: Double) {
         val state = _uiState.value.engine
-        playbackEngine?.seekTo((currentPlayerPositionSeconds() + deltaSeconds).coerceIn(0.0, state.durationSeconds.takeIf { it > 0 } ?: Double.MAX_VALUE))
+        playbackEngine?.seekTo(
+            (currentPlayerPositionSeconds() + deltaSeconds).coerceIn(
+                0.0,
+                state.durationSeconds.takeIf { it > 0 } ?: Double.MAX_VALUE))
     }
 
     fun seekTo(positionSeconds: Double) = playbackEngine?.seekTo(positionSeconds)
     fun skipSegment(segment: PlaybackSegment) = seekTo(segment.endSeconds)
     fun subtitlePositionSeconds(): Double = playbackEngine?.currentPositionSeconds()
         ?: _uiState.value.engine.positionSeconds
+
     fun setSpeed(value: Float) = playbackEngine?.setSpeed(value)
 
     fun chooseQuality(value: Int) {
@@ -345,13 +378,19 @@ class PlaybackViewModel(
 
     fun chooseAudio(stream: MediaStream) {
         _uiState.value = _uiState.value.copy(selectedAudio = stream.index)
-        loadPlayback(PlaybackOptions(mediaSourceId = _uiState.value.playback?.source?.id, audioStreamIndex = stream.index))
+        loadPlayback(
+            PlaybackOptions(
+                mediaSourceId = _uiState.value.playback?.source?.id,
+                audioStreamIndex = stream.index
+            )
+        )
     }
 
     fun chooseSubtitle(streamIndex: Int?) {
         subtitleJob?.cancel()
         val requestGeneration = ++subtitleGeneration
-        _uiState.value = _uiState.value.copy(selectedSubtitle = streamIndex, subtitleCues = emptyList())
+        _uiState.value =
+            _uiState.value.copy(selectedSubtitle = streamIndex, subtitleCues = emptyList())
         if (streamIndex != null) loadSubtitle(playbackGeneration, requestGeneration)
     }
 
@@ -379,7 +418,9 @@ class PlaybackViewModel(
         }
     }
 
-    fun setSubtitleOffset(value: Double) { _uiState.value = _uiState.value.copy(subtitleOffset = value) }
+    fun setSubtitleOffset(value: Double) {
+        _uiState.value = _uiState.value.copy(subtitleOffset = value)
+    }
 
     fun updateSubtitleStyle(change: SubtitleStyle.() -> SubtitleStyle) {
         val next = change(_uiState.value.subtitleStyle)

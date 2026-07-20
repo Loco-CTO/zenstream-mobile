@@ -2,10 +2,10 @@ package com.zenstream.zenstreammobile.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
@@ -13,17 +13,17 @@ import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.SubtitleStyle
-import org.json.JSONObject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
-import kotlinx.coroutines.delay
-import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONObject
 import java.security.KeyStoreException
 import java.security.UnrecoverableKeyException
+import java.util.concurrent.ConcurrentHashMap
 
 internal const val DEFAULT_SESSION_DATA_STORE_NAME = "zenstream_session"
 internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrumentation"
@@ -66,7 +66,11 @@ class SessionStore(
         .distinctUntilChanged()
 
     val playerEngine: Flow<PlayerEngine> = dataStore.data
-        .map { value -> runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }.getOrDefault(PlayerEngine.MEDIA3) }
+        .map { value ->
+            runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }.getOrDefault(
+                PlayerEngine.MEDIA3
+            )
+        }
         .distinctUntilChanged()
 
     val session: Flow<AuthSession?> = dataStore.data

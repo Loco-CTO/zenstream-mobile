@@ -4,12 +4,12 @@ import android.app.Activity
 import android.app.PictureInPictureParams
 import android.os.Build
 import android.util.Rational
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,18 +20,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,51 +53,47 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.selection.selectable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.composables.icons.lucide.R as LucideR
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.JellyfinApi
+import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.TrickplayPreview
-import coil3.compose.AsyncImage
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
-import coil3.request.ImageRequest
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun PlaybackScreen(
@@ -135,7 +134,13 @@ fun PlaybackScreen(
     }
 
     LaunchedEffect(controlsVisible, controlsLocked, sheet, state.engine.isPlaying) {
-        if (shouldAutoHidePlaybackControls(controlsVisible, controlsLocked, sheet != null, state.engine.isPlaying)) {
+        if (shouldAutoHidePlaybackControls(
+                controlsVisible,
+                controlsLocked,
+                sheet != null,
+                state.engine.isPlaying
+            )
+        ) {
             delay(4_500)
             controlsVisible = false
         }
@@ -217,11 +222,17 @@ fun PlaybackScreen(
         }
         if (state.error != null && !state.loading) {
             Column(
-                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(state.error ?: stringResourceCompat(R.string.media_playback_failed), color = Color.White, textAlign = TextAlign.Center)
+                Text(
+                    state.error ?: stringResourceCompat(R.string.media_playback_failed),
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
                 Button(onClick = onBack) { Text(stringResourceCompat(R.string.back)) }
             }
         }
@@ -243,7 +254,11 @@ fun PlaybackScreen(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     IconButton(onClick = { vm.flushProgress(); onBack() }) {
-                        Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResourceCompat(R.string.back), tint = Color.White)
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                            stringResourceCompat(R.string.back),
+                            tint = Color.White
+                        )
                     }
                     Text(
                         playbackTitle(state, initialItemName),
@@ -264,15 +279,31 @@ fun PlaybackScreen(
                             )
                         }
                         if (!controlsLocked) {
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_picture_in_picture, stringResourceCompat(R.string.player_pip), enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { enterPip(context) }
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_gauge, stringResourceCompat(R.string.player_speed)) { sheet = PlayerSheet.Speed }
+                            PlayerMenuButton(
+                                LucideR.drawable.lucide_ic_picture_in_picture,
+                                stringResourceCompat(R.string.player_pip),
+                                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                            ) { enterPip(context) }
+                            PlayerMenuButton(
+                                LucideR.drawable.lucide_ic_gauge,
+                                stringResourceCompat(R.string.player_speed)
+                            ) { sheet = PlayerSheet.Speed }
                             if (shouldShowAudioSelector(state.playback?.audio.orEmpty().size)) {
-                                PlayerMenuButton(LucideR.drawable.lucide_ic_audio_lines, stringResourceCompat(R.string.audio_track)) { sheet = PlayerSheet.Audio }
+                                PlayerMenuButton(
+                                    LucideR.drawable.lucide_ic_audio_lines,
+                                    stringResourceCompat(R.string.audio_track)
+                                ) { sheet = PlayerSheet.Audio }
                             }
                             if (shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)) {
-                                PlayerMenuButton(LucideR.drawable.lucide_ic_captions, stringResourceCompat(R.string.subtitle_track)) { sheet = PlayerSheet.Subtitles }
+                                PlayerMenuButton(
+                                    LucideR.drawable.lucide_ic_captions,
+                                    stringResourceCompat(R.string.subtitle_track)
+                                ) { sheet = PlayerSheet.Subtitles }
                             }
-                            PlayerMenuButton(LucideR.drawable.lucide_ic_settings, stringResourceCompat(R.string.player_quality)) { sheet = PlayerSheet.Quality }
+                            PlayerMenuButton(
+                                LucideR.drawable.lucide_ic_settings,
+                                stringResourceCompat(R.string.player_quality)
+                            ) { sheet = PlayerSheet.Quality }
                         }
                     }
                 }
@@ -283,8 +314,15 @@ fun PlaybackScreen(
                     horizontalArrangement = Arrangement.spacedBy(22.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_back, stringResourceCompat(R.string.player_previous), enabled = false) {}
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_rewind, stringResourceCompat(R.string.player_seek_back)) { vm.seekBy(-10.0) }
+                    PlayerMenuButton(
+                        LucideR.drawable.lucide_ic_skip_back,
+                        stringResourceCompat(R.string.player_previous),
+                        enabled = false
+                    ) {}
+                    PlayerMenuButton(
+                        LucideR.drawable.lucide_ic_rewind,
+                        stringResourceCompat(R.string.player_seek_back)
+                    ) { vm.seekBy(-10.0) }
                     Surface(
                         onClick = vm::togglePlay,
                         modifier = Modifier.size(64.dp),
@@ -301,8 +339,15 @@ fun PlaybackScreen(
                             )
                         }
                     }
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_fast_forward, stringResourceCompat(R.string.player_seek_forward)) { vm.seekBy(10.0) }
-                    PlayerMenuButton(LucideR.drawable.lucide_ic_skip_forward, stringResourceCompat(R.string.player_next), enabled = false) {}
+                    PlayerMenuButton(
+                        LucideR.drawable.lucide_ic_fast_forward,
+                        stringResourceCompat(R.string.player_seek_forward)
+                    ) { vm.seekBy(10.0) }
+                    PlayerMenuButton(
+                        LucideR.drawable.lucide_ic_skip_forward,
+                        stringResourceCompat(R.string.player_next),
+                        enabled = false
+                    ) {}
                 }
                 Column(
                     modifier = Modifier
@@ -315,7 +360,8 @@ fun PlaybackScreen(
                         )
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                 ) {
-                    val displayedPosition = timelineScrub?.positionSeconds ?: state.engine.positionSeconds
+                    val displayedPosition =
+                        timelineScrub?.positionSeconds ?: state.engine.positionSeconds
                     val preview = timelineScrub?.let { scrub ->
                         trickplayPreview(
                             session = session,
@@ -484,7 +530,8 @@ internal fun PlaybackGestureLayer(
                                 playerWidthPixels = size.width,
                                 durationSeconds = duration,
                             )
-                            dragTargetPosition = clampSeekTarget(dragStartPosition + delta, duration)
+                            dragTargetPosition =
+                                clampSeekTarget(dragStartPosition + delta, duration)
                             onSurfaceDragChanged(dragTargetPosition)
                         }
                     },
@@ -626,6 +673,7 @@ private fun PlaybackProgress(
                             fraction = fraction,
                         )
                     }
+
                     var latest = scrubFrom(down.position.x)
                     onScrubStart(latest)
                     drag(down.id) { change ->
@@ -888,7 +936,11 @@ private fun PlayerMenuButton(
     onClick: () -> Unit,
 ) {
     IconButton(onClick = onClick, enabled = enabled) {
-        Icon(painterResource(icon), label, tint = if (enabled) Color.White else Color.White.copy(alpha = .3f))
+        Icon(
+            painterResource(icon),
+            label,
+            tint = if (enabled) Color.White else Color.White.copy(alpha = .3f)
+        )
     }
 }
 
@@ -991,6 +1043,7 @@ internal fun PlayerBottomSheet(
                                 onClick = { onAudio(stream) },
                             )
                         }
+
                         PlayerSheet.Subtitles -> {
                             PlayerOptionRow(
                                 label = stringResourceCompat(R.string.subtitles_off),
@@ -999,12 +1052,16 @@ internal fun PlayerBottomSheet(
                             )
                             subtitles.forEach { stream ->
                                 PlayerOptionRow(
-                                    label = streamTitle(stream, R.string.player_subtitle_track_format),
+                                    label = streamTitle(
+                                        stream,
+                                        R.string.player_subtitle_track_format
+                                    ),
                                     selected = selectedSubtitle == stream.index,
                                     onClick = { onSubtitle(stream.index) },
                                 )
                             }
                         }
+
                         PlayerSheet.Speed -> playbackSpeedOptions.forEach { value ->
                             PlayerOptionRow(
                                 label = playbackSpeedLabel(value),
@@ -1012,6 +1069,7 @@ internal fun PlayerBottomSheet(
                                 onClick = { onSpeed(value) },
                             )
                         }
+
                         PlayerSheet.Quality -> qualities.forEach { value ->
                             PlayerOptionRow(
                                 label = playbackQualityLabel(value),

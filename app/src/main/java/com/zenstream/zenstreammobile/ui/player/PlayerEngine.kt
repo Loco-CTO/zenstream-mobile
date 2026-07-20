@@ -83,6 +83,7 @@ interface PlaybackEngine {
     val state: StateFlow<EngineState>
     fun createView(context: Context): View
     fun currentPositionSeconds(): Double = state.value.positionSeconds
+
     /** Loads the source and starts playback once it is ready. */
     fun prepare(url: String, startPositionSeconds: Double)
     fun play()
@@ -172,13 +173,23 @@ class Media3PlaybackEngine : PlaybackEngine {
         player?.seekTo((positionSeconds * 1000).toLong())
     }
 
-    override fun play() { player?.play() }
-    override fun pause() { player?.pause() }
+    override fun play() {
+        player?.play()
+    }
+
+    override fun pause() {
+        player?.pause()
+    }
+
     override fun seekTo(positionSeconds: Double) {
         initialSeek.cancel()
         player?.seekTo(max(0.0, positionSeconds).times(1000).toLong())
     }
-    override fun setSpeed(value: Float) { player?.setPlaybackSpeed(value.coerceIn(.25f, 3f)) }
+
+    override fun setSpeed(value: Float) {
+        player?.setPlaybackSpeed(value.coerceIn(.25f, 3f))
+    }
+
     override fun release() {
         handler.removeCallbacks(ticker)
         initialSeek.cancel()
@@ -217,7 +228,8 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
                 isBuffering = runCatching {
                     MPVLib.getPropertyBoolean("paused-for-cache") == true
                 }.getOrDefault(false),
-                speed = (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull() ?: 1.0).toFloat(),
+                speed = (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull()
+                    ?: 1.0).toFloat(),
                 ready = duration > 0,
             )
             handler.postDelayed(this, 250L)
@@ -259,9 +271,11 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     override fun play() {
         if (!released && view != null) MPVLib.setPropertyBoolean("pause", false)
     }
+
     override fun pause() {
         if (!released && view != null) MPVLib.setPropertyBoolean("pause", true)
     }
+
     override fun seekTo(positionSeconds: Double) {
         if (released) return
         initialSeek.cancel()
@@ -269,11 +283,13 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             MPVLib.command(arrayOf("seek", max(0.0, positionSeconds).toString(), "absolute+exact"))
         }
     }
+
     override fun setSpeed(value: Float) {
         if (!released && view != null) {
             MPVLib.setPropertyDouble("speed", value.coerceIn(.25f, 3f).toDouble())
         }
     }
+
     override fun release() {
         if (released) return
         released = true
@@ -315,7 +331,12 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             }
         }
 
-        override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
+        override fun surfaceChanged(
+            holder: android.view.SurfaceHolder,
+            format: Int,
+            width: Int,
+            height: Int
+        ) {
             if (lifecycle.canUseSurface()) super.surfaceChanged(holder, format, width, height)
         }
 

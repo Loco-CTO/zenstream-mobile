@@ -1,11 +1,10 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.model.MediaSource
-import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
@@ -32,6 +31,7 @@ interface LibraryDataSource {
         limit: Int,
         sort: LibrarySort,
     ): PagedLibrary
+
     suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort?
     suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort)
 }
@@ -77,7 +77,9 @@ class JellyfinRepository(
     suspend fun clearAll() = sessionStore.clearAll()
 
     override suspend fun homeFeatured(session: AuthSession) = api.fetchHomeFeatured(session)
-    override suspend fun homeContinueWatching(session: AuthSession) = api.fetchHomeContinueWatching(session)
+    override suspend fun homeContinueWatching(session: AuthSession) =
+        api.fetchHomeContinueWatching(session)
+
     override suspend fun homeNextUp(session: AuthSession) = api.fetchHomeNextUp(session)
     override suspend fun homeLibraries(session: AuthSession) =
         api.getLibraries(session, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
@@ -90,7 +92,7 @@ class JellyfinRepository(
     override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
     suspend fun library(
         session: AuthSession,
-        library: com.zenstream.zenstreammobile.model.Library
+        library: Library
     ) = api.fetchLibraryData(session, library)
 
     override suspend fun libraryPage(
@@ -108,6 +110,7 @@ class JellyfinRepository(
 
     override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) =
         sessionStore.cacheLibrarySort(userId, libraryId, sort)
+
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 
@@ -117,7 +120,11 @@ class JellyfinRepository(
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
         api.setPlayed(session, itemId, played)
 
-    suspend fun playback(session: AuthSession, itemId: String, options: PlaybackOptions = PlaybackOptions()): PlaybackData =
+    suspend fun playback(
+        session: AuthSession,
+        itemId: String,
+        options: PlaybackOptions = PlaybackOptions()
+    ): PlaybackData =
         api.playback(session, itemId, options)
 
     suspend fun trickplay(session: AuthSession, itemId: String) = api.trickplay(session, itemId)

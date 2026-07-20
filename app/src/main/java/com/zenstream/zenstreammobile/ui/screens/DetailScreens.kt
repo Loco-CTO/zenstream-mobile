@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -24,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,8 +53,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -63,7 +64,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -71,7 +71,6 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
@@ -87,6 +86,7 @@ import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
 import java.util.Locale
+import com.composables.icons.lucide.R as LucideR
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -183,64 +183,64 @@ internal fun DetailContent(
             contentPadding = PaddingValues(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-        item {
-            DetailHero(mediaItem, data.parentSeries, session)
-        }
-        item {
-            DetailActions(
-                item = mediaItem,
-                busy = actionBusy,
-                onPlay = { onPlay(playTarget(data)) },
-                onTogglePlayed = onTogglePlayed,
-                onToggleFavorite = onToggleFavorite,
-            )
-            if (actionError) {
-                Text(
-                    stringResource(R.string.detail_action_failed),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            item {
+                DetailHero(mediaItem, data.parentSeries, session)
+            }
+            item {
+                DetailActions(
+                    item = mediaItem,
+                    busy = actionBusy,
+                    onPlay = { onPlay(playTarget(data)) },
+                    onTogglePlayed = onTogglePlayed,
+                    onToggleFavorite = onToggleFavorite,
                 )
+                if (actionError) {
+                    Text(
+                        stringResource(R.string.detail_action_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
             }
-        }
-        if (mediaItem.genres.isNotEmpty()) {
-            item { GenreRow(mediaItem.genres) }
-        }
-        mediaItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-            item {
-                ExpandableOverview(overview)
+            if (mediaItem.genres.isNotEmpty()) {
+                item { GenreRow(mediaItem.genres) }
             }
-        }
-        if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
-            item {
-                EpisodeSection(
-                    data = data,
-                    session = session,
-                    loading = loading,
-                    actionBusy = actionBusy,
-                    onSelectSeason = onSelectSeason,
-                    onToggleSeasonPlayed = onToggleSeasonPlayed,
-                    onToggleSeasonFavorite = onToggleSeasonFavorite,
-                    onOpenItem = onOpenItem,
-                )
+            mediaItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                item {
+                    ExpandableOverview(overview)
+                }
             }
-        }
-        if (mediaItem.people.isNotEmpty()) {
-            item { PeopleSection(mediaItem.people, session) }
-        }
-        if (data.similar.isNotEmpty()) {
-            item {
-                SectionTitle(R.string.more_like_this)
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(data.similar, key = { it.id }) { similar ->
-                        MediaCard(similar, session, wide = false, onClick = onOpenItem)
+            if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
+                item {
+                    EpisodeSection(
+                        data = data,
+                        session = session,
+                        loading = loading,
+                        actionBusy = actionBusy,
+                        onSelectSeason = onSelectSeason,
+                        onToggleSeasonPlayed = onToggleSeasonPlayed,
+                        onToggleSeasonFavorite = onToggleSeasonFavorite,
+                        onOpenItem = onOpenItem,
+                    )
+                }
+            }
+            if (mediaItem.people.isNotEmpty()) {
+                item { PeopleSection(mediaItem.people, session) }
+            }
+            if (data.similar.isNotEmpty()) {
+                item {
+                    SectionTitle(R.string.more_like_this)
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(data.similar, key = { it.id }) { similar ->
+                            MediaCard(similar, session, wide = false, onClick = onOpenItem)
+                        }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -251,7 +251,11 @@ private fun playTarget(data: DetailData): MediaItem = detailPlaybackTarget(data.
 private fun ExpandableOverview(overview: String) {
     var expanded by remember(overview) { mutableStateOf(false) }
     var canExpand by remember(overview) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
         Text(
             overview,
             maxLines = if (expanded) Int.MAX_VALUE else OVERVIEW_COLLAPSED_LINES,
@@ -263,7 +267,7 @@ private fun ExpandableOverview(overview: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (canExpand || expanded) {
-            androidx.compose.material3.TextButton(
+            TextButton(
                 onClick = { expanded = !expanded },
                 contentPadding = PaddingValues(horizontal = 0.dp),
             ) {
@@ -310,7 +314,10 @@ internal fun DetailTopBar(
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), stringResource(R.string.back))
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                    stringResource(R.string.back)
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -436,7 +443,10 @@ private fun DetailActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Button(onClick = onPlay, enabled = !busy) {
-            Icon(painterResource(LucideR.drawable.lucide_ic_play), stringResource(R.string.play_description, item.name))
+            Icon(
+                painterResource(LucideR.drawable.lucide_ic_play),
+                stringResource(R.string.play_description, item.name)
+            )
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.play))
         }
@@ -730,10 +740,12 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                 .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(Modifier
-                .width(128.dp)
-                .height(72.dp)
-                .clip(RoundedCornerShape(6.dp))) {
+            Box(
+                Modifier
+                    .width(128.dp)
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(6.dp))
+            ) {
                 AuthenticatedImage(
                     url,
                     session,
@@ -872,9 +884,11 @@ private fun AuthenticatedImage(
 
 @Composable
 private fun CenterLoading(padding: PaddingValues) {
-    Box(Modifier
-        .fillMaxSize()
-        .padding(padding), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(padding), contentAlignment = Alignment.Center
+    ) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
@@ -896,7 +910,10 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
-            Icon(painterResource(LucideR.drawable.lucide_ic_refresh_cw), stringResource(R.string.retry))
+            Icon(
+                painterResource(LucideR.drawable.lucide_ic_refresh_cw),
+                stringResource(R.string.retry)
+            )
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.retry))
         }

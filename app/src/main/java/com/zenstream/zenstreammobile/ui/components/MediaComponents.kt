@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,8 +29,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -42,7 +42,6 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.imageUrl
@@ -53,6 +52,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlin.math.roundToInt
+import com.composables.icons.lucide.R as LucideR
 
 internal val POSTER_CARD_MIN_WIDTH = 140.dp
 internal val POSTER_CARD_MAX_WIDTH = 180.dp

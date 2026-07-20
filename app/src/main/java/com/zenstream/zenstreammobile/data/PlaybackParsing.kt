@@ -5,9 +5,9 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.TrickplayPreview
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.math.floor
 import kotlin.math.max
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
     val lines = input.replace("\r\n", "\n").replace('\r', '\n').split('\n')
@@ -52,8 +52,8 @@ internal fun isCurrentSubtitleRequest(
     requestedSourceId: String?,
     currentSourceId: String?,
 ): Boolean = requestGeneration == currentGeneration &&
-    requestedTrack == currentTrack &&
-    requestedSourceId == currentSourceId
+        requestedTrack == currentTrack &&
+        requestedSourceId == currentSourceId
 
 fun playbackSessionId(session: AuthSession, source: MediaSource): String? {
     val negotiated = source.transcodingUrl ?: source.directStreamUrl ?: return null

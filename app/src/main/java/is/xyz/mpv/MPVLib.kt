@@ -162,8 +162,10 @@ object MPVLib {
         const val MPV_EVENT_START_FILE: Int = 6
         const val MPV_EVENT_END_FILE: Int = 7
         const val MPV_EVENT_FILE_LOADED: Int = 8
+
         @Deprecated("")
         const val MPV_EVENT_IDLE: Int = 11
+
         @Deprecated("")
         const val MPV_EVENT_TICK: Int = 14
         const val MPV_EVENT_CLIENT_MESSAGE: Int = 16

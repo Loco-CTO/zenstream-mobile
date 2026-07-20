@@ -12,11 +12,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
+import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.JellyfinApi
 import com.zenstream.zenstreammobile.data.JellyfinRepository
 import com.zenstream.zenstreammobile.data.SessionStore
-import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
-import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
@@ -70,7 +70,10 @@ class PlaybackActivity : ComponentActivity() {
         } else {
             DEFAULT_SESSION_DATA_STORE_NAME
         }
-        JellyfinRepository(JellyfinApi(), SessionStore(applicationContext, dataStoreName = dataStoreName))
+        JellyfinRepository(
+            JellyfinApi(),
+            SessionStore(applicationContext, dataStoreName = dataStoreName)
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,7 +122,8 @@ class PlaybackActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !isInPictureInPictureMode) applyImmersiveMode() else immersiveModeApplied = false
+        if (hasFocus && !isInPictureInPictureMode) applyImmersiveMode() else immersiveModeApplied =
+            false
     }
 
     override fun onPictureInPictureModeChanged(

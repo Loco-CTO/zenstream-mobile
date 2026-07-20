@@ -37,10 +37,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import com.composables.icons.lucide.R as LucideR
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
@@ -50,19 +49,18 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.R
-import androidx.compose.ui.res.painterResource
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
-import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
-import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
+import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
+import com.composables.icons.lucide.R as LucideR
 
 private const val HOME = "home"
 private const val SEARCH = "search"
@@ -78,6 +76,7 @@ fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewMo
             initialServerUrl = appState.orchestratorUrl,
             onConfigured = appViewModel::configureServer,
         )
+
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
         appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
         else -> LoadingScreen()
@@ -179,7 +178,11 @@ private fun MainScaffold(
                         exit = shrinkVertically(shrinkTowards = Alignment.Top) +
                                 slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                     ) {
-                        MainTopBar(onSettings = { navController.navigate(SETTINGS) { launchSingleTop = true } })
+                        MainTopBar(onSettings = {
+                            navController.navigate(SETTINGS) {
+                                launchSingleTop = true
+                            }
+                        })
                     }
                 }
             }
