@@ -76,6 +76,19 @@ internal fun shouldClearPlayedOnPlaybackStart(
     resetAlreadyRequested: Boolean,
 ): Boolean = isPlaying && played && !resetAlreadyRequested
 
+internal fun selectSubtitleTrack(
+    currentTrack: Int?,
+    selectionInitialized: Boolean,
+    subtitles: List<MediaStream>,
+): Int? {
+    if (selectionInitialized) {
+        return currentTrack?.takeIf { selected -> subtitles.any { it.index == selected } }
+    }
+    return currentTrack
+        ?: subtitles.firstOrNull { it.isDefault }?.index
+        ?: subtitles.firstOrNull()?.index
+}
+
 private data class PlaybackProgressSnapshot(
     val positionSeconds: Double,
     val paused: Boolean,
@@ -104,6 +117,7 @@ class PlaybackViewModel(
     private var mediaOriginSeconds = 0.0
     private var recovered = false
     private var playedResetRequested = false
+    private var subtitleSelectionInitialized = false
 
     init {
         viewModelScope.launch {
@@ -229,8 +243,11 @@ class PlaybackViewModel(
             val selectedAudio = requestOptions.audioStreamIndex
                 ?: data.audio.firstOrNull { it.isDefault }?.index
                 ?: data.audio.firstOrNull()?.index
-            val selectedSubtitle = _uiState.value.selectedSubtitle
-                ?: data.subtitles.firstOrNull { it.isDefault }?.index
+            val selectedSubtitle = selectSubtitleTrack(
+                currentTrack = _uiState.value.selectedSubtitle,
+                selectionInitialized = subtitleSelectionInitialized,
+                subtitles = data.subtitles,
+            )
             val requestedOrResumeStartSeconds =
                 if (hasCurrentPlayback || requestOptions.startTimeTicks > 0) {
                     requestedStartSeconds
@@ -393,6 +410,7 @@ class PlaybackViewModel(
     fun chooseSubtitle(streamIndex: Int?) {
         subtitleJob?.cancel()
         val requestGeneration = ++subtitleGeneration
+        subtitleSelectionInitialized = true
         _uiState.value =
             _uiState.value.copy(selectedSubtitle = streamIndex, subtitleCues = emptyList())
         if (streamIndex != null) loadSubtitle(playbackGeneration, requestGeneration)

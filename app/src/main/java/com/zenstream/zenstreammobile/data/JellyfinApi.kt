@@ -742,15 +742,18 @@ internal fun subtitleWebVttQuery(
     session: AuthSession,
     itemId: String,
     sourceId: String?,
-): Map<String, String> = mapOf(
-    "MediaSourceId" to (sourceId ?: itemId),
-    "format" to "vtt",
-    "addVttTimeMap" to "false",
-    "copyTimestamps" to "false",
+): Map<String, String> = buildMap {
+    put("MediaSourceId", sourceId ?: itemId)
+    put("format", "vtt")
+    put("addVttTimeMap", "false")
+    put("copyTimestamps", "false")
     // Keep cue timestamps on the item's absolute media timeline. The player
     // applies the playback source origin exactly once when selecting cues.
-    "startPositionTicks" to "0",
-)
+    put("startPositionTicks", "0")
+    // The web client adds this ticket to subtitle requests. Without it the
+    // gateway's upstream subtitle request can fail even though playback works.
+    session.resourceTicket?.let { put("access", it) }
+}
 
 private fun parseMediaSource(source: JSONObject): MediaSource {
     val streams = source.optJSONArray("MediaStreams")?.let { array ->

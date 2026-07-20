@@ -232,6 +232,23 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun subtitleRequestIncludesResourceTicketWhenAvailable() {
+        val query = subtitleWebVttQuery(
+            com.zenstream.zenstreammobile.model.AuthSession(
+                "https://orchestrator.example",
+                "token",
+                "user",
+                "name",
+                resourceTicket = "ticket",
+            ),
+            "item-1",
+            "source-1",
+        )
+
+        assertEquals("ticket", query["access"])
+    }
+
+    @Test
     fun parsesWebVttCuesAndStripsMarkup() {
         val cues = parseWebVttCues(
             "WEBVTT\n\n00:01.500 --> 00:03.000\n<00:01.500>Hello <b>world</b>!\n"
