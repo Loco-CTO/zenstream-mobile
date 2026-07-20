@@ -242,6 +242,20 @@ class PlaybackParsingTest {
     }
 
     @Test
+    fun parsesFlexibleWebVttTimingAndAuthoredTextMarkup() {
+        val cues = parseWebVttCues(
+            "\uFEFFWEBVTT\r\n\r\n" +
+                "00:00:01.000-->00:00:03.500 align:start\r\n" +
+                "{\\bord4}Hello<br>world &amp; friends\r\n",
+        )
+
+        assertEquals(1, cues.size)
+        assertEquals(1.0, cues.first().startSeconds, 0.001)
+        assertEquals(3.5, cues.first().endSeconds, 0.001)
+        assertEquals("Hello\nworld & friends", cues.first().text)
+    }
+
+    @Test
     fun normalizesSubtitleStyleRangesAndFont() {
         val style = normalizeSubtitleStyle(
             com.zenstream.zenstreammobile.model.SubtitleStyle(

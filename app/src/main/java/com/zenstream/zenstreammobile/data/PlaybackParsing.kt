@@ -10,24 +10,34 @@ import kotlin.math.floor
 import kotlin.math.max
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
-    val lines = input.replace("\r\n", "\n").replace('\r', '\n').split('\n')
+    val lines = input.removePrefix("\uFEFF")
+        .replace("\r\n", "\n")
+        .replace('\r', '\n')
+        .split('\n')
     var index = 0
     while (index < lines.size) {
-        val line = lines[index].trim()
-        if (!line.contains(" --> ")) {
+        val timing = Regex("^\\s*(\\S+?)\\s*-->\\s*(\\S+)").find(lines[index])
+        if (timing == null) {
             index++
             continue
         }
-        val timing = line.split(" --> ", limit = 2)
-        val start = parseVttTimestamp(timing[0])
-        val end = parseVttTimestamp(timing[1].substringBefore(' '))
+        val start = parseVttTimestamp(timing.groupValues[1])
+        val end = parseVttTimestamp(timing.groupValues[2])
         index++
         val text = buildList {
             while (index < lines.size && lines[index].isNotBlank()) {
-                add(lines[index].replace(Regex("<[^>]+>"), ""))
+                add(lines[index])
                 index++
             }
-        }.joinToString("\n").trim()
+        }.joinToString("\n")
+            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("<[^>]+>"), "")
+            .replace(Regex("\\{\\\\[^}]*}"), "")
+            .replace("&amp;", "&", ignoreCase = true)
+            .replace("&lt;", "<", ignoreCase = true)
+            .replace("&gt;", ">", ignoreCase = true)
+            .replace("&nbsp;", " ", ignoreCase = true)
+            .trim()
         if (start != null && end != null && end > start && text.isNotBlank()) {
             add(SubtitleCue(start, end, text))
         }
