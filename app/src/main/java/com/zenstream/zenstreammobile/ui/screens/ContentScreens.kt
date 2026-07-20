@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -67,6 +68,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,7 +113,7 @@ fun HomeScreen(
     repository: JellyfinRepository,
     session: AuthSession,
     padding: PaddingValues,
-    onPlay: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit
 ) {
     val vm: HomeViewModel = viewModel(
         key = "home-${session.userId}",
@@ -141,6 +145,7 @@ fun HomeScreen(
                             session,
                             showEmptyLibrary = !state.loading &&
                                 data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                            onItemClick = onItemClick,
                         )
                     }
                     items(
@@ -149,7 +154,7 @@ fun HomeScreen(
                         MediaRowView(
                             row,
                             session,
-                            onPlay
+                            onItemClick
                         )
                     }
                 }
@@ -167,6 +172,7 @@ internal fun FeaturedHero(
     items: List<MediaItem>,
     session: AuthSession,
     showEmptyLibrary: Boolean,
+    onItemClick: (MediaItem) -> Unit = {},
 ) {
     if (items.isEmpty()) {
         if (!showEmptyLibrary) {
@@ -211,7 +217,19 @@ internal fun FeaturedHero(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val item = items[page]
-                Box(Modifier.fillMaxSize()) {
+                val openDescription = stringResource(
+                    R.string.open_details_description,
+                    item.name,
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clickable { onItemClick(item) }
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            contentDescription = openDescription
+                        }
+                ) {
                 val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
                 val request = url?.let {
                     ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(

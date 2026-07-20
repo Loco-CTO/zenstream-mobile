@@ -250,7 +250,7 @@ private fun MainScaffold(
                     repository,
                     session,
                     padding,
-                    onPlay = { item -> navigateToDetail(navController, item.id) })
+                    onItemClick = { item -> navigateToDetail(navController, item.id) })
             }
             composable(SEARCH) {
                 SearchScreen(

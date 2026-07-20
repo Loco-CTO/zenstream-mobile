@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -76,6 +77,37 @@ class AuthScreensTest {
             .assertIsDisplayed()
         composeRule.onAllNodesWithText("Play").assertCountEquals(0)
         composeRule.onAllNodesWithText("Info").assertCountEquals(0)
+    }
+
+    @Test
+    fun pressingFeatureBarOpensItsItem() {
+        val item = MediaItem(
+            id = "movie-1",
+            name = "Example Movie",
+            type = "Movie",
+            imageTags = mapOf("Logo" to "logo-tag"),
+            backdropImageTags = listOf("backdrop-tag"),
+        )
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        var opened: MediaItem? = null
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                FeaturedHero(
+                    items = listOf(item),
+                    session = session,
+                    showEmptyLibrary = false,
+                    onItemClick = { opened = it },
+                )
+            }
+        }
+
+        val description = InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .getString(R.string.open_details_description, item.name)
+        composeRule.onNodeWithContentDescription(description).performClick()
+
+        assertEquals(item, opened)
     }
 
     @Test

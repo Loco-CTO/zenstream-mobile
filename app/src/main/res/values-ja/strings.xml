@@ -46,6 +46,7 @@
     <string name="backdrop_description">%1$sの背景画像</string>
     <string name="logo_description">%1$sのロゴ</string>
     <string name="play_description">%1$sを再生</string>
+    <string name="open_details_description">%1$sの詳細を開く</string>
     <string name="info_description">%1$sの情報を表示</string>
     <string name="navigation_description">メインナビゲーション</string>
     <string name="app_logo_description">ZenStreamのロゴ</string>

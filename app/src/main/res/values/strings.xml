@@ -64,6 +64,7 @@
     <string name="backdrop_description">Backdrop for %1$s</string>
     <string name="logo_description">Logo for %1$s</string>
     <string name="play_description">Play %1$s</string>
+    <string name="open_details_description">Open details for %1$s</string>
     <string name="info_description">Show information for %1$s</string>
     <string name="navigation_description">Main navigation</string>
     <string name="app_logo_description">ZenStream logo</string>
