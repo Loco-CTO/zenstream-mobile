@@ -60,8 +60,8 @@ class JellyfinRepository(
         // config endpoint is temporarily unavailable, the next launch can
         // keep the configured address instead of presenting a blank form.
         sessionStore.saveOrchestratorUrl(orchestrator)
-        val jellyfin = orchestratorApi.fetchJellyfinUrl(orchestrator)
-        sessionStore.saveServerConfig(orchestrator, jellyfin)
+        orchestratorApi.fetchConfig(orchestrator)
+        sessionStore.saveServerConfig(orchestrator)
     }
 
     suspend fun authenticate(username: String, password: String): AuthSession {

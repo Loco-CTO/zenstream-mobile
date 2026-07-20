@@ -43,7 +43,7 @@ class JellyfinApiHttpTest {
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/Sessions/Playing/Progress", request.path)
+        assertEquals("/api/playback/progress", request.path)
         assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
         val payload = JSONObject(request.body.readUtf8())
         assertEquals("item-1", payload.getString("ItemId"))
@@ -65,7 +65,7 @@ class JellyfinApiHttpTest {
         val result = JellyfinApi(deviceId = "device-id").trickplay(session, "episode-1")
 
         val request = server.takeRequest()
-        assertEquals("/Items/episode-1?fields=Trickplay", request.path)
+        assertEquals("/api/content/items/episode-1/trickplay?fields=Trickplay", request.path)
         assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
         assertEquals(320, result["source-1"]?.get("320")?.width)
         assertEquals(10_000L, result["source-1"]?.get("320")?.intervalMillis)

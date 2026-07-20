@@ -235,7 +235,8 @@ fun MediaImage(
             .data(it)
             .httpHeaders(
                 NetworkHeaders.Builder()
-                    .set("Authorization", JellyfinApi.authorizationHeader(session.token)).build()
+                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                    .set("X-Jellyfin-Token", session.token).build()
             )
             .crossfade(true)
             .build()

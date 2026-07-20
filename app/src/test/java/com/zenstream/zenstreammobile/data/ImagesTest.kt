@@ -17,7 +17,7 @@ class ImagesTest {
     fun landscapePrefersThumbThenBackdropThenPrimary() {
         assertEquals("Thumb", landscapeImageType(item))
         assertEquals(
-            "https://server/Items/movie-1/Images/Thumb?fillWidth=448&fillHeight=252&quality=90&tag=thumb-tag",
+            "https://server/api/assets/items/movie-1/images/Thumb?fillWidth=448&fillHeight=252&quality=90&tag=thumb-tag",
             imageUrl("https://server", item, "Thumb", 448, 252)
         )
         assertEquals(

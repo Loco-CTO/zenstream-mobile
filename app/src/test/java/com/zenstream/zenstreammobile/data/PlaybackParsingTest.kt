@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -31,7 +32,7 @@ class PlaybackParsingTest {
         assertEquals(1, preview?.cellX)
         assertEquals(0, preview?.cellY)
         assertEquals(640, preview?.width)
-        assertTrue(preview?.url.orEmpty().contains("/Videos/episode%2F1/Trickplay/640/2.jpg"))
+        assertTrue(preview?.url.orEmpty().contains("/api/video/episode%2F1/trickplay/640/2"))
         assertTrue(preview?.url.orEmpty().contains("MediaSourceId=source-1"))
         assertFalse(preview?.url.orEmpty().contains("api_key"))
     }
@@ -92,11 +93,25 @@ class PlaybackParsingTest {
             "item-1",
             com.zenstream.zenstreammobile.model.MediaSource(
                 id = "source-1",
-                transcodingUrl = "/video/master.m3u8?MediaSourceId=source-1",
+                transcodingUrl = "/api/video/item-1/stream?MediaSourceId=source-1&lease=lease-1",
             )
         )
-        assertTrue(url.startsWith("https://jellyfin.example/video/master.m3u8"))
-        assertTrue(url.contains("api_key=token"))
+        assertTrue(url.startsWith("https://jellyfin.example/api/video/item-1/stream"))
+        assertTrue(url.contains("MediaSourceId=source-1"))
+    }
+
+    @Test
+    fun fallbackPlaybackCarriesTheOrchestratorResourceTicket() {
+        val session = com.zenstream.zenstreammobile.model.AuthSession(
+            "https://orchestrator.example", "token", "user", "name", "resource-ticket"
+        )
+        val url = playbackUrl(
+            session,
+            "item-1",
+            com.zenstream.zenstreammobile.model.MediaSource(id = "source-1"),
+        )
+
+        assertEquals("resource-ticket", url.toHttpUrl().queryParameter("access"))
     }
 
     @Test
@@ -285,9 +300,7 @@ class PlaybackParsingTest {
     fun followsTheWebMarkerProviderOrder() {
         assertEquals(
             listOf(
-                "/Episode/episode-1/IntroSkipperSegments",
-                "/Episode/episode-1/Timestamps",
-                "/MediaSegments/episode-1",
+                "/api/playback/markers/episode-1",
             ),
             playbackMarkerPaths("episode-1"),
         )

@@ -813,7 +813,7 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
             people.filter { it.type == "Actor" || it.type == "Director" }.take(20),
             key = { "${it.name}-${it.role}" }) { person ->
             val url = person.primaryImageTag?.let {
-                "${session.serverUrl.trimEnd('/')}/Persons/${Uri.encode(person.name)}/Images/Primary?maxWidth=144&quality=90&tag=${
+                "${session.serverUrl.trimEnd('/')}/api/assets/people/${Uri.encode(person.name)}/image?maxWidth=144&quality=90&tag=${
                     Uri.encode(
                         it
                     )
@@ -871,7 +871,8 @@ private fun AuthenticatedImage(
     val request = url?.let {
         ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
             NetworkHeaders.Builder()
-                .set("Authorization", JellyfinApi.authorizationHeader(session.token)).build(),
+                .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                .set("X-Jellyfin-Token", session.token).build(),
         ).crossfade(true).build()
     }
     AsyncImage(

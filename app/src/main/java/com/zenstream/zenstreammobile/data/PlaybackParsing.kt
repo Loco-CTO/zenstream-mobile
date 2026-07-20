@@ -113,11 +113,12 @@ fun trickplayPreview(
     val tileIndex = thumbnail / tileSize
     val tileOffset = thumbnail % tileSize
     val url = session.serverUrl.toHttpUrl().newBuilder()
-        .addPathSegment("Videos")
+        .addPathSegment("api")
+        .addPathSegment("video")
         .addPathSegment(itemId)
-        .addPathSegment("Trickplay")
+        .addPathSegment("trickplay")
         .addPathSegment(widthKey)
-        .addPathSegment("$tileIndex.jpg")
+        .addPathSegment(tileIndex.toString())
         .addQueryParameter("MediaSourceId", source.id ?: itemId)
         .build()
         .toString()

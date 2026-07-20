@@ -63,7 +63,8 @@ class JellyfinApi(
                 server,
                 token,
                 userId,
-                user?.optString("Name").orEmpty().ifBlank { username.trim() })
+                user?.optString("Name").orEmpty().ifBlank { username.trim() },
+                json.optString("ResourceTicket").takeIf { it.isNotBlank() })
         }
 
     suspend fun playback(
@@ -155,7 +156,7 @@ class JellyfinApi(
     ): String = withContext(Dispatchers.IO) {
         val params = subtitleWebVttQuery(session, itemId, sourceId)
         val builder =
-            "${session.serverUrl}/Videos/$itemId/${sourceId ?: itemId}/Subtitles/$streamIndex/Stream.vtt"
+            "${session.serverUrl}/api/video/$itemId/subtitles/${sourceId ?: itemId}/$streamIndex"
                 .toHttpUrl()
                 .newBuilder()
         params.forEach { (key, value) -> builder.addQueryParameter(key, value) }
@@ -163,6 +164,7 @@ class JellyfinApi(
             .url(builder.build())
             .header("Accept", "text/vtt")
             .header("Authorization", authorizationHeader(session.token, deviceId))
+            .header("X-Jellyfin-Token", session.token)
             .get()
             .build()
         httpClient.newCall(request).execute().use {
@@ -637,13 +639,15 @@ class JellyfinApi(
         body: String? = null,
         requestTimeoutMillis: Long? = null,
     ): JSONObject {
-        val urlBuilder = "$server${path}".toHttpUrl().newBuilder()
+        val gateway = gatewayPath(path)
+        val urlBuilder = "$server$gateway".toHttpUrl().newBuilder()
         query.forEach { (key, value) -> urlBuilder.addQueryParameter(key, value) }
         val requestBuilder = Request.Builder()
             .url(urlBuilder.build())
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("Authorization", authorizationHeader(token, deviceId))
+            .header("X-Jellyfin-Token", token.orEmpty())
         requestBuilder.method(
             method,
             if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
@@ -660,6 +664,31 @@ class JellyfinApi(
             )
             return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
         }
+    }
+
+    private fun gatewayPath(path: String): String {
+        val parsed = "https://zenstream.invalid$path".toHttpUrl()
+        val original = parsed.encodedPath
+        val segments = original.trim('/').split('/').filter(String::isNotBlank)
+        val mapped = when {
+            original == "/Items" -> "/api/content/items"
+            original == "/UserItems/Resume" -> "/api/content/resume"
+            original == "/Shows/NextUp" -> "/api/content/next-up"
+            original == "/Sessions/Playing/Progress" -> "/api/playback/progress"
+            original == "/Users/${segments.getOrNull(1)}/Views" -> "/api/content/views"
+            segments.size == 2 && segments[0] == "Items" && parsed.queryParameter("fields") == "Trickplay" -> "/api/content/items/${segments[1]}/trickplay"
+            segments.size == 2 && segments[0] == "Items" -> "/api/content/items/${segments[1]}"
+            segments.size == 3 && segments[0] == "Items" && segments[2] == "PlaybackInfo" -> "/api/content/items/${segments[1]}/playback"
+            segments.size == 3 && segments[0] == "Items" && segments[2] == "Similar" -> "/api/content/items/${segments[1]}/similar"
+            segments.size == 3 && segments[0] == "Items" && segments[2] == "LocalTrailers" -> "/api/content/items/${segments[1]}/local-trailers"
+            segments.size == 3 && segments[0] == "Shows" && segments[2] == "Seasons" -> "/api/content/shows/${segments[1]}/seasons"
+            segments.size == 3 && segments[0] == "Shows" && segments[2] == "Episodes" -> "/api/content/shows/${segments[1]}/episodes"
+            segments.size == 2 && segments[0] == "UserFavoriteItems" -> "/api/user/items/${segments[1]}/favorite"
+            segments.size == 2 && segments[0] == "UserPlayedItems" -> "/api/user/items/${segments[1]}/played"
+            segments.size == 2 && segments[0] == "Users" && segments[1] == "AuthenticateByName" -> "/api/auth/login"
+            else -> original
+        }
+        return if (parsed.encodedQuery.isNullOrBlank()) mapped else "$mapped?${parsed.encodedQuery}"
     }
 
     companion object {
@@ -714,7 +743,6 @@ internal fun subtitleWebVttQuery(
     itemId: String,
     sourceId: String?,
 ): Map<String, String> = mapOf(
-    "api_key" to session.token,
     "MediaSourceId" to (sourceId ?: itemId),
     "format" to "vtt",
     "addVttTimeMap" to "false",
@@ -774,25 +802,23 @@ fun playbackUrl(
 ): String {
     val negotiated = source.transcodingUrl ?: source.directStreamUrl
     if (negotiated != null) {
-        val resolved = session.serverUrl.toHttpUrl().resolve(negotiated)
-            ?: error("Jellyfin returned an invalid playback URL")
-        val url = resolved.newBuilder()
-        if (url.build().queryParameter("api_key") == null && url.build()
-                .queryParameter("apiKey") == null
+        val gateway = session.serverUrl.toHttpUrl()
+        val resolved = gateway.resolve(negotiated)
+        if (resolved != null && resolved.scheme == gateway.scheme &&
+            resolved.host == gateway.host && resolved.port == gateway.port
         ) {
-            url.addQueryParameter("api_key", session.token)
+            return resolved.toString()
         }
-        return url.build().toString()
     }
     val builder =
-        "${session.serverUrl}/Videos/$itemId/${if (bitrate > 0) "stream.mp4" else "stream"}".toHttpUrl()
+        "${session.serverUrl}/api/video/$itemId/stream".toHttpUrl()
             .newBuilder()
-    builder.addQueryParameter("api_key", session.token)
     builder.addQueryParameter("Static", if (bitrate > 0) "false" else "true")
     builder.addQueryParameter("MediaSourceId", source.id ?: itemId)
     if (startTimeTicks > 0) builder.addQueryParameter("startTimeTicks", startTimeTicks.toString())
     if (bitrate > 0) builder.addQueryParameter("TranscodingMaxBitrate", bitrate.toString())
     builder.addQueryParameter("TranscodingMaxAudioChannels", "2")
+    session.resourceTicket?.let { builder.addQueryParameter("access", it) }
     return builder.build().toString()
 }
 
@@ -997,9 +1023,7 @@ internal fun mergePlaybackSegments(
 }
 
 internal fun playbackMarkerPaths(itemId: String): List<String> = listOf(
-    "/Episode/$itemId/IntroSkipperSegments",
-    "/Episode/$itemId/Timestamps",
-    "/MediaSegments/$itemId",
+    "/api/playback/markers/$itemId",
 )
 
 private fun stringArray(item: JSONObject, key: String): List<String> =

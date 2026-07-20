@@ -895,6 +895,7 @@ private fun TrickplaySpriteFrame(
             .httpHeaders(
                 NetworkHeaders.Builder()
                     .set("Authorization", JellyfinApi.authorizationHeader(session.token))
+                    .set("X-Jellyfin-Token", session.token)
                     .build(),
             )
             .build()

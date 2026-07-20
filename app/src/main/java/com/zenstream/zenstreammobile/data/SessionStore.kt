@@ -49,6 +49,7 @@ class SessionStore(
         val orchestratorUrl = stringPreferencesKey("orchestrator_url")
         val serverUrl = stringPreferencesKey("server_url")
         val token = stringPreferencesKey("encrypted_token")
+        val resourceTicket = stringPreferencesKey("encrypted_resource_ticket")
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val locale = stringPreferencesKey("locale")
@@ -57,7 +58,10 @@ class SessionStore(
         val librarySorts = stringPreferencesKey("library_sorts")
     }
 
-    val serverUrl: Flow<String?> = dataStore.data.map { it[Keys.serverUrl] }
+    // `server_url` is retained as a migration key, but it now always contains
+    // the orchestrator origin. Older installs already have the orchestrator
+    // origin in its dedicated key.
+    val serverUrl: Flow<String?> = dataStore.data.map { it[Keys.orchestratorUrl] ?: it[Keys.serverUrl] }
 
     val orchestratorUrl: Flow<String?> = dataStore.data.map { it[Keys.orchestratorUrl] }
 
@@ -75,7 +79,7 @@ class SessionStore(
 
     val session: Flow<AuthSession?> = dataStore.data
         .map { prefs ->
-            val server = prefs[Keys.serverUrl]
+            val server = prefs[Keys.orchestratorUrl] ?: prefs[Keys.serverUrl]
             val encryptedToken = prefs[Keys.token]
             val userId = prefs[Keys.userId]
             if (server.isNullOrBlank() || encryptedToken.isNullOrBlank() || userId.isNullOrBlank()) {
@@ -85,7 +89,8 @@ class SessionStore(
                 server,
                 cipher.decrypt(encryptedToken),
                 userId,
-                prefs[Keys.username].orEmpty().ifBlank { "ZenStream" })
+                prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
+                prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) })
         }
         // Android Keystore can be briefly unavailable while the device is
         // restoring/unlocking. Do not turn that transient condition into a
@@ -107,10 +112,10 @@ class SessionStore(
         dataStore.edit { it[Keys.serverUrl] = normalizeServerUrl(server) }
     }
 
-    suspend fun saveServerConfig(orchestrator: String, jellyfin: String) {
+    suspend fun saveServerConfig(orchestrator: String, @Suppress("UNUSED_PARAMETER") jellyfin: String? = null) {
         dataStore.edit {
             it[Keys.orchestratorUrl] = normalizeServerUrl(orchestrator)
-            it[Keys.serverUrl] = normalizeServerUrl(jellyfin)
+            it[Keys.serverUrl] = normalizeServerUrl(orchestrator)
         }
     }
 
@@ -124,6 +129,9 @@ class SessionStore(
         dataStore.edit {
             it[Keys.serverUrl] = session.serverUrl
             it[Keys.token] = cipher.encrypt(session.token)
+            session.resourceTicket?.let { ticket ->
+                it[Keys.resourceTicket] = cipher.encrypt(ticket)
+            } ?: it.remove(Keys.resourceTicket)
             it[Keys.userId] = session.userId
             it[Keys.username] = session.username
         }
@@ -173,6 +181,7 @@ class SessionStore(
     suspend fun clearSession() {
         dataStore.edit {
             it.remove(Keys.token)
+            it.remove(Keys.resourceTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.locale)
@@ -184,6 +193,7 @@ class SessionStore(
             it.remove(Keys.orchestratorUrl)
             it.remove(Keys.serverUrl)
             it.remove(Keys.token)
+            it.remove(Keys.resourceTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.locale)

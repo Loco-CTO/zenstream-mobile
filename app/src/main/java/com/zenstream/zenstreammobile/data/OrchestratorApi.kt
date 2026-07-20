@@ -10,7 +10,7 @@ import org.json.JSONObject
 class OrchestratorApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
 ) {
-    suspend fun fetchJellyfinUrl(orchestratorUrl: String): String = withContext(Dispatchers.IO) {
+    suspend fun fetchConfig(orchestratorUrl: String) = withContext(Dispatchers.IO) {
         val orchestrator = normalizeServerUrl(orchestratorUrl)
         val request = Request.Builder()
             .url("$orchestrator/api/config".toHttpUrl())
@@ -23,7 +23,7 @@ class OrchestratorApi(
                 it.code,
                 "Orchestrator request failed with ${it.code}"
             )
-            parseMobileConfig(it.body?.string().orEmpty())
+            parseProxyConfig(it.body?.string().orEmpty())
         }
     }
 
@@ -48,12 +48,24 @@ class OrchestratorApi(
 
 }
 
-fun parseMobileConfig(body: String): String {
-    val jellyfinUrl = JSONObject(body).optString("jellyfinUrl").takeIf { it.isNotBlank() }
-        ?: error("Orchestrator did not return a Jellyfin URL")
-    return normalizeConfiguredJellyfinUrl(jellyfinUrl)
+fun parseProxyConfig(body: String) {
+    val proxyVersion = Regex("\\\"proxyVersion\\\"\\s*:\\s*(\\d+)")
+        .find(body)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+        ?: 0
+    if (proxyVersion < 1) error("Orchestrator does not support the media gateway")
 }
 
+@Deprecated("The client no longer uses a Jellyfin URL from orchestrator config")
+fun parseMobileConfig(body: String): String {
+    val value = JSONObject(body).optString("jellyfinUrl").takeIf { it.isNotBlank() }
+        ?: error("Orchestrator did not return a legacy server URL")
+    return normalizeServerUrl(value)
+}
+
+@Deprecated("The client no longer stores a separate Jellyfin URL")
 fun normalizeConfiguredJellyfinUrl(value: String): String = normalizeServerUrl(value)
 
 fun parseLocale(body: String): String {

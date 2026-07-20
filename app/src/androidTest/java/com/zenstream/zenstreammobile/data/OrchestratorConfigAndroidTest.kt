@@ -9,6 +9,11 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class OrchestratorConfigAndroidTest {
     @Test
+    fun parsesProxyCapability() {
+        parseProxyConfig("{\"proxyVersion\":1}")
+    }
+
+    @Test
     fun parsesAndNormalizesJellyfinUrl() {
         assertEquals(
             "https://jellyfin.example",

@@ -6,6 +6,16 @@ import org.junit.Test
 
 class OrchestratorConfigTest {
     @Test
+    fun acceptsTheProxyCapabilityResponse() {
+        parseProxyConfig("{\"proxyVersion\":1}")
+    }
+
+    @Test
+    fun rejectsAnOrchestratorWithoutTheProxy() {
+        assertThrows(IllegalStateException::class.java) { parseProxyConfig("{}") }
+    }
+
+    @Test
     fun normalizesConfiguredJellyfinUrl() {
         assertEquals(
             "https://jellyfin.example",

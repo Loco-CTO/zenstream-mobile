@@ -29,7 +29,7 @@ fun imageUrl(serverUrl: String, item: MediaItem, type: String, width: Int, heigh
     else if (imageType == "Backdrop") item.backdropImageTags.firstOrNull()
     else item.imageTags[imageType]
     if (id.isNullOrBlank() || tag.isNullOrBlank()) return null
-    val index = if (imageType == "Backdrop") "/0" else ""
+    val index = if (imageType == "Backdrop") "&index=0" else ""
     val encodedTag = URLEncoder.encode(tag, StandardCharsets.UTF_8.toString())
-    return "${serverUrl.trimEnd('/')}/Items/$id/Images/$imageType$index?fillWidth=$width&fillHeight=$height&quality=90&tag=$encodedTag"
+    return "${serverUrl.trimEnd('/')}/api/assets/items/$id/images/$imageType?fillWidth=$width&fillHeight=$height&quality=90&tag=$encodedTag$index"
 }

@@ -237,6 +237,7 @@ internal fun FeaturedHero(
                                     "Authorization",
                                     JellyfinApi.authorizationHeader(session.token)
                                 )
+                                .set("X-Jellyfin-Token", session.token)
                                 .build()
                         ).crossfade(true).build()
                     }
@@ -277,6 +278,7 @@ internal fun FeaturedHero(
                                         "Authorization",
                                         JellyfinApi.authorizationHeader(session.token)
                                     )
+                                    .set("X-Jellyfin-Token", session.token)
                                     .build()
                             ).crossfade(true).build()
                         }
