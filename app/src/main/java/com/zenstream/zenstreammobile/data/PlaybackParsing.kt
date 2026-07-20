@@ -16,13 +16,19 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
         .split('\n')
     var index = 0
     while (index < lines.size) {
-        val timing = Regex("^\\s*(\\S+?)\\s*-->\\s*(\\S+)").find(lines[index])
-        if (timing == null) {
+        // Do not use a timing-line regex here. Android's regex implementation
+        // rejects some patterns that pass on the JVM, and a malformed cue must
+        // never be able to crash playback.
+        val timingLine = lines[index]
+        val arrowIndex = timingLine.indexOf("-->")
+        if (arrowIndex < 0) {
             index++
             continue
         }
-        val start = parseVttTimestamp(timing.groupValues[1])
-        val end = parseVttTimestamp(timing.groupValues[2])
+        val start = parseVttTimestamp(timingLine.substring(0, arrowIndex).trim())
+        val end = parseVttTimestamp(
+            timingLine.substring(arrowIndex + 3).trim().substringBefore(' ').trim(),
+        )
         index++
         val text = buildList {
             while (index < lines.size && lines[index].isNotBlank()) {
@@ -30,9 +36,9 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
                 index++
             }
         }.joinToString("\n")
-            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<[^>]+>"), "")
-            .replace(Regex("\\{\\\\[^}]*}"), "")
+            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("""<[^>]+>"""), "")
+            .replace(Regex("""\{\\[^}]*}"""), "")
             .replace("&amp;", "&", ignoreCase = true)
             .replace("&lt;", "<", ignoreCase = true)
             .replace("&gt;", ">", ignoreCase = true)
