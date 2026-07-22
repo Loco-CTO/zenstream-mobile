@@ -46,7 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.composables.icons.lucide.R as LucideR
@@ -54,7 +54,7 @@ import com.composables.icons.lucide.R as LucideR
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    repository: JellyfinRepository,
+    repository: CatalogRepository,
     onBack: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -74,6 +74,7 @@ fun SettingsScreen(
                     Text(
                         when (section) {
                             SettingsSection.Root -> stringResource(R.string.settings)
+							SettingsSection.Appearance -> stringResource(R.string.appearance_group)
                             SettingsSection.Player -> stringResource(R.string.player_group)
                             SettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
                             SettingsSection.Version -> stringResource(R.string.settings_version)
@@ -122,6 +123,18 @@ fun SettingsScreen(
                         }
                     }
 
+					SettingsSection.Appearance -> item {
+						Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))) {
+							MetadataLanguageSelector(
+								languages = state.metadataLanguages,
+								selected = state.metadataLanguage,
+								effective = state.effectiveMetadataLanguage,
+								onChange = vm::setMetadataLanguage,
+							)
+							if (state.metadataSaveError) Text(stringResource(R.string.metadata_language_save_failed), color = MaterialThemeError, modifier = Modifier.padding(16.dp))
+						}
+					}
+
                     SettingsSection.Subtitles -> item {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
@@ -156,7 +169,7 @@ fun SettingsScreen(
     }
 }
 
-internal enum class SettingsSection { Root, Player, Subtitles, Version }
+internal enum class SettingsSection { Root, Appearance, Player, Subtitles, Version }
 
 @Composable
 internal fun SettingsRootContent(
@@ -167,6 +180,7 @@ internal fun SettingsRootContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
+		SettingsMenuItem(stringResource(R.string.appearance_group)) { onOpenSection(SettingsSection.Appearance) }
         SettingsMenuItem(stringResource(R.string.player_group)) { onOpenSection(SettingsSection.Player) }
         SettingsMenuItem(stringResource(R.string.subtitles_group)) { onOpenSection(SettingsSection.Subtitles) }
         SettingsMenuItem(stringResource(R.string.settings_version)) { onOpenSection(SettingsSection.Version) }
@@ -181,6 +195,27 @@ internal fun SettingsRootContent(
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+@Composable
+private fun MetadataLanguageSelector(
+	languages: List<String>,
+	selected: String?,
+	effective: String,
+	onChange: (String?) -> Unit,
+) {
+	var expanded by remember { mutableStateOf(false) }
+	ListItem(
+		headlineContent = { Text(stringResource(R.string.preferred_metadata_language)) },
+		supportingContent = { Text(selected ?: stringResource(R.string.metadata_language_automatic, effective)) },
+		modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+	)
+	DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+		DropdownMenuItem(text = { Text(stringResource(R.string.metadata_language_automatic, effective)) }, onClick = { onChange(null); expanded = false })
+		languages.forEach { language ->
+			DropdownMenuItem(text = { Text(language) }, onClick = { onChange(language); expanded = false })
+		}
+	}
 }
 
 @Composable
@@ -356,3 +391,4 @@ private fun ColorField(label: String, value: String, onChange: (String) -> Unit)
 }
 
 private val MaterialThemeError = Color(0xFFFF8A80)
+

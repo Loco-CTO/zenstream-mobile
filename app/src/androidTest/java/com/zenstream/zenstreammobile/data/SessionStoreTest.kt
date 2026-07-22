@@ -22,12 +22,12 @@ class SessionStoreTest {
         store.clearAll()
         store.saveOrchestratorUrl("https://orchestrator.example")
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
-        store.saveServerConfig("https://orchestrator.example", "https://jellyfin.example")
-        store.saveSession(AuthSession("https://jellyfin.example", "secret-token", "user-1", "User"))
+        store.saveServerConfig("https://orchestrator.example")
+        store.saveSession(AuthSession("https://orchestrator.example", "secret-token", "user-1", "User"))
         assertEquals("secret-token", store.session.first()!!.token)
         store.clearSession()
         assertNull(store.session.first())
-        assertEquals("https://jellyfin.example", store.serverUrl.first())
+        assertEquals("https://orchestrator.example", store.serverUrl.first())
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.clearAll()
         assertNull(store.orchestratorUrl.first())
@@ -49,3 +49,4 @@ class SessionStoreTest {
         assertEquals(style, store.cachedSubtitleStyle())
     }
 }
+

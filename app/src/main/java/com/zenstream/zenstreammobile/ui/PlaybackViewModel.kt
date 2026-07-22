@@ -6,7 +6,7 @@ import android.view.View
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
 import com.zenstream.zenstreammobile.data.parseWebVttCues
@@ -91,13 +91,14 @@ internal fun selectSubtitleTrack(
 
 private data class PlaybackProgressSnapshot(
     val positionSeconds: Double,
+	val durationSeconds: Double,
     val paused: Boolean,
     val playSessionId: String?,
     val playbackGeneration: Long,
 )
 
 class PlaybackViewModel(
-    private val repository: JellyfinRepository,
+    private val repository: CatalogRepository,
     private val session: AuthSession,
     private val itemId: String,
     private val appContext: Context,
@@ -357,6 +358,7 @@ class PlaybackViewModel(
                 snapshot.positionSeconds,
                 snapshot.paused,
                 snapshot.playSessionId,
+				snapshot.durationSeconds,
             )
         }
     }
@@ -367,6 +369,7 @@ class PlaybackViewModel(
         return position.takeIf { it > 0 }?.let {
             PlaybackProgressSnapshot(
                 positionSeconds = it,
+				durationSeconds = state.durationSeconds,
                 paused = !state.isPlaying,
                 playSessionId = _uiState.value.playback?.playSessionId,
                 playbackGeneration = playbackGeneration,
@@ -484,7 +487,7 @@ class PlaybackViewModel(
     }
 
     class Factory(
-        private val repository: JellyfinRepository,
+        private val repository: CatalogRepository,
         private val session: AuthSession,
         private val itemId: String,
         private val context: Context,
@@ -495,3 +498,4 @@ class PlaybackViewModel(
         ) as T
     }
 }
+

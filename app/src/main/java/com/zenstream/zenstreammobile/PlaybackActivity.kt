@@ -14,8 +14,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
-import com.zenstream.zenstreammobile.data.JellyfinApi
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogApi
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
@@ -70,8 +70,8 @@ class PlaybackActivity : ComponentActivity() {
         } else {
             DEFAULT_SESSION_DATA_STORE_NAME
         }
-        JellyfinRepository(
-            JellyfinApi(),
+        CatalogRepository(
+            CatalogApi(),
             SessionStore(applicationContext, dataStoreName = dataStoreName)
         )
     }
@@ -159,3 +159,4 @@ class PlaybackActivity : ComponentActivity() {
         }
     }
 }
+

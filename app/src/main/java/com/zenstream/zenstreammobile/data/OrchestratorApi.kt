@@ -5,6 +5,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 class OrchestratorApi(
@@ -33,7 +35,7 @@ class OrchestratorApi(
             val request = Request.Builder()
                 .url("$orchestrator/api/preferences/locale".toHttpUrl())
                 .header("Accept", "application/json")
-                .header("X-Jellyfin-Token", token)
+                .header("Authorization", "Bearer $token")
                 .get()
                 .build()
             val response = httpClient.newCall(request).execute()
@@ -46,27 +48,54 @@ class OrchestratorApi(
             }
         }
 
+	suspend fun fetchMetadataPreference(orchestratorUrl: String, token: String): MetadataPreference =
+		withContext(Dispatchers.IO) {
+			val languages = authenticatedJson(orchestratorUrl, token, "/api/metadata/languages")
+			val preference = authenticatedJson(orchestratorUrl, token, "/api/preferences/metadata-language")
+			MetadataPreference(
+				languages = languages.optJSONArray("languages")?.let { array -> List(array.length()) { array.optString(it) } }.orEmpty(),
+				explicitLanguage = preference.optString("language").takeIf { preference.optString("mode") == "explicit" },
+				effectiveLanguage = preference.optString("language").ifBlank { "en" },
+			)
+		}
+
+	suspend fun setMetadataPreference(orchestratorUrl: String, token: String, language: String?): MetadataPreference =
+		withContext(Dispatchers.IO) {
+			val body = JSONObject().put("language", language ?: JSONObject.NULL).toString()
+			val value = authenticatedJson(orchestratorUrl, token, "/api/preferences/metadata-language", "PATCH", body)
+			val languages = authenticatedJson(orchestratorUrl, token, "/api/metadata/languages")
+			MetadataPreference(
+				languages = languages.optJSONArray("languages")?.let { array -> List(array.length()) { array.optString(it) } }.orEmpty(),
+				explicitLanguage = value.optString("language").takeIf { value.optString("mode") == "explicit" },
+				effectiveLanguage = value.optString("language").ifBlank { "en" },
+			)
+		}
+
+	private fun authenticatedJson(serverUrl: String, token: String, path: String, method: String = "GET", body: String? = null): JSONObject {
+		val request = Request.Builder()
+			.url("${normalizeServerUrl(serverUrl)}$path".toHttpUrl())
+			.header("Accept", "application/json")
+			.header("Authorization", "Bearer $token")
+			.method(method, if (method == "GET") null else (body ?: "{}").toRequestBody("application/json".toMediaType()))
+			.build()
+		httpClient.newCall(request).execute().use {
+			if (!it.isSuccessful) throw OrchestratorException(it.code, "Orchestrator request failed with ${it.code}")
+			return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
+		}
+	}
+
 }
+
+data class MetadataPreference(
+	val languages: List<String>,
+	val explicitLanguage: String?,
+	val effectiveLanguage: String,
+)
 
 fun parseProxyConfig(body: String) {
-    val proxyVersion = Regex("\\\"proxyVersion\\\"\\s*:\\s*(\\d+)")
-        .find(body)
-        ?.groupValues
-        ?.getOrNull(1)
-        ?.toIntOrNull()
-        ?: 0
-    if (proxyVersion < 1) error("Orchestrator does not support the media gateway")
+	if (!Regex("\\\"catalog\\\"\\s*:\\s*true").containsMatchIn(body))
+		error("Orchestrator does not support the catalog")
 }
-
-@Deprecated("The client no longer uses a Jellyfin URL from orchestrator config")
-fun parseMobileConfig(body: String): String {
-    val value = JSONObject(body).optString("jellyfinUrl").takeIf { it.isNotBlank() }
-        ?: error("Orchestrator did not return a legacy server URL")
-    return normalizeServerUrl(value)
-}
-
-@Deprecated("The client no longer stores a separate Jellyfin URL")
-fun normalizeConfiguredJellyfinUrl(value: String): String = normalizeServerUrl(value)
 
 fun parseLocale(body: String): String {
     val locale = JSONObject(body).optString("locale").takeIf { it.isNotBlank() }
@@ -76,3 +105,4 @@ fun parseLocale(body: String): String {
 }
 
 class OrchestratorException(val statusCode: Int, message: String) : Exception(message)
+

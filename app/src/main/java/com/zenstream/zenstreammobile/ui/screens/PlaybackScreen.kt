@@ -81,8 +81,8 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinApi
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogApi
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -97,7 +97,7 @@ import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun PlaybackScreen(
-    repository: JellyfinRepository,
+    repository: CatalogRepository,
     session: AuthSession,
     itemId: String,
     initialItemName: String = "",
@@ -894,8 +894,7 @@ private fun TrickplaySpriteFrame(
             .data(preview.url)
             .httpHeaders(
                 NetworkHeaders.Builder()
-                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                    .set("X-Jellyfin-Token", session.token)
+                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
                     .build(),
             )
             .build()

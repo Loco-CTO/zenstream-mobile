@@ -1,21 +1,14 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.MediaItem
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-
 fun landscapeImageType(item: MediaItem): String? = when {
-    item.imageTags["Thumb"] != null -> "Thumb"
+	item.type == "Episode" && item.imageTags["Primary"] != null -> "Primary"
     item.backdropImageTags.isNotEmpty() -> "Backdrop"
-    item.imageTags["Primary"] != null -> "Primary"
     else -> null
 }
 
 fun posterImageType(item: MediaItem): String? = when {
-    item.type == "Episode" && item.seriesId != null && item.seriesPrimaryImageTag != null -> "SeriesPrimary"
     item.imageTags["Primary"] != null -> "Primary"
-    item.backdropImageTags.isNotEmpty() -> "Backdrop"
-    item.imageTags["Thumb"] != null -> "Thumb"
     else -> null
 }
 
@@ -29,7 +22,6 @@ fun imageUrl(serverUrl: String, item: MediaItem, type: String, width: Int, heigh
     else if (imageType == "Backdrop") item.backdropImageTags.firstOrNull()
     else item.imageTags[imageType]
     if (id.isNullOrBlank() || tag.isNullOrBlank()) return null
-    val index = if (imageType == "Backdrop") "&index=0" else ""
-    val encodedTag = URLEncoder.encode(tag, StandardCharsets.UTF_8.toString())
-    return "${serverUrl.trimEnd('/')}/api/assets/items/$id/images/$imageType?fillWidth=$width&fillHeight=$height&quality=90&tag=$encodedTag$index"
+	if (tag.startsWith("/api/")) return "${serverUrl.trimEnd('/')}$tag"
+	return null
 }

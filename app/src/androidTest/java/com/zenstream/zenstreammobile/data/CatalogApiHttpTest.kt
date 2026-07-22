@@ -14,7 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class JellyfinApiHttpTest {
+class CatalogApiHttpTest {
     private lateinit var server: MockWebServer
 
     @Before
@@ -33,7 +33,7 @@ class JellyfinApiHttpTest {
         server.enqueue(MockResponse().setResponseCode(204))
         val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
-        JellyfinApi(deviceId = "device-id").reportPlayback(
+        CatalogApi(deviceId = "device-id").reportPlayback(
             session = session,
             itemId = "item-1",
             positionSeconds = 12.5,
@@ -62,7 +62,7 @@ class JellyfinApiHttpTest {
         )
         val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
-        val result = JellyfinApi(deviceId = "device-id").trickplay(session, "episode-1")
+        val result = CatalogApi(deviceId = "device-id").trickplay(session, "episode-1")
 
         val request = server.takeRequest()
         assertEquals("/api/content/items/episode-1/trickplay?fields=Trickplay", request.path)
@@ -71,3 +71,5 @@ class JellyfinApiHttpTest {
         assertEquals(10_000L, result["source-1"]?.get("320")?.intervalMillis)
     }
 }
+
+

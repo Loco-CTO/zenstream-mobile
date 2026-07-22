@@ -43,7 +43,7 @@ import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinApi
+import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
@@ -235,8 +235,7 @@ fun MediaImage(
             .data(it)
             .httpHeaders(
                 NetworkHeaders.Builder()
-                    .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                    .set("X-Jellyfin-Token", session.token).build()
+					.set("Authorization", CatalogApi.authorizationHeader(session.token)).build()
             )
             .crossfade(true)
             .build()

@@ -72,8 +72,8 @@ import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinApi
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogApi
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
@@ -91,7 +91,7 @@ import com.composables.icons.lucide.R as LucideR
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
-    repository: JellyfinRepository,
+    repository: CatalogRepository,
     session: AuthSession,
     itemId: String,
     outerPadding: PaddingValues,
@@ -414,7 +414,7 @@ private fun Metadata(item: MediaItem) {
     }
     if (parts.isNotEmpty()) {
         Text(
-            parts.joinToString("  •  "),
+            parts.joinToString("  â€¢  "),
             color = Color.White.copy(alpha = .65f),
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
@@ -812,13 +812,7 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
         items(
             people.filter { it.type == "Actor" || it.type == "Director" }.take(20),
             key = { "${it.name}-${it.role}" }) { person ->
-            val url = person.primaryImageTag?.let {
-                "${session.serverUrl.trimEnd('/')}/api/assets/people/${Uri.encode(person.name)}/image?maxWidth=144&quality=90&tag=${
-                    Uri.encode(
-                        it
-                    )
-                }"
-            }
+			val url: String? = null
             Column(Modifier.width(96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 AuthenticatedImage(
                     url,
@@ -871,8 +865,7 @@ private fun AuthenticatedImage(
     val request = url?.let {
         ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
             NetworkHeaders.Builder()
-                .set("Authorization", JellyfinApi.authorizationHeader(session.token))
-                .set("X-Jellyfin-Token", session.token).build(),
+				.set("Authorization", CatalogApi.authorizationHeader(session.token)).build(),
         ).crossfade(true).build()
     }
     AsyncImage(
@@ -920,3 +913,4 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         }
     }
 }
+

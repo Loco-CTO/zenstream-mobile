@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.normalizeServerUrl
 import com.zenstream.zenstreammobile.ui.LoginViewModel
 import kotlinx.coroutines.launch
@@ -120,7 +120,7 @@ fun ServerSetupScreen(
 }
 
 @Composable
-fun LoginScreen(repository: JellyfinRepository, onChangeServer: () -> Unit) {
+fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
     val vm: LoginViewModel = viewModel(factory = LoginViewModel.Factory(repository))
     val state by vm.uiState.collectAsStateWithLifecycle()
     var password by remember { mutableStateOf("") }
@@ -221,3 +221,4 @@ private fun AuthContainer(content: @Composable ColumnScope.() -> Unit) {
         )
     }
 }
+

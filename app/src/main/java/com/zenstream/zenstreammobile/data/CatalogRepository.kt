@@ -11,6 +11,7 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 interface HomeDataSource {
     suspend fun clearSession()
@@ -41,8 +42,8 @@ interface SearchDataSource {
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
 
-class JellyfinRepository(
-    private val api: JellyfinApi,
+class CatalogRepository(
+    private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
 ) : HomeDataSource, LibraryDataSource, SearchDataSource {
@@ -50,6 +51,7 @@ class JellyfinRepository(
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
     val locale: Flow<String> = sessionStore.locale
+	val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
@@ -71,7 +73,23 @@ class JellyfinRepository(
 
     suspend fun refreshLocale(orchestratorUrl: String, token: String) {
         sessionStore.saveLocale(orchestratorApi.fetchLocale(orchestratorUrl, token))
+		runCatching { orchestratorApi.fetchMetadataPreference(orchestratorUrl, token) }
+			.onSuccess { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
     }
+
+	suspend fun loadMetadataPreference(): MetadataPreference {
+		val current = session.first() ?: error("Authentication required")
+		return orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token).also {
+			sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+		}
+	}
+
+	suspend fun saveMetadataPreference(language: String?): MetadataPreference {
+		val current = session.first() ?: error("Authentication required")
+		return orchestratorApi.setMetadataPreference(current.serverUrl, current.token, language).also {
+			sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+		}
+	}
 
     override suspend fun clearSession() = sessionStore.clearSession()
     suspend fun clearAll() = sessionStore.clearAll()
@@ -82,12 +100,12 @@ class JellyfinRepository(
 
     override suspend fun homeNextUp(session: AuthSession) = api.fetchHomeNextUp(session)
     override suspend fun homeLibraries(session: AuthSession) =
-        api.getLibraries(session, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
+        api.getLibraries(session, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun homeLibraryData(
         session: AuthSession,
         library: Library,
-    ) = api.fetchLibraryData(session, library, JellyfinApi.HOME_REQUEST_TIMEOUT_MILLIS)
+    ) = api.fetchLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
     suspend fun library(
@@ -142,7 +160,8 @@ class JellyfinRepository(
         positionSeconds: Double,
         isPaused: Boolean,
         playSessionId: String?,
-    ) = api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId)
+		durationSeconds: Double? = null,
+	) = api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId, durationSeconds)
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
 
@@ -155,3 +174,5 @@ class JellyfinRepository(
         return normalized
     }
 }
+
+

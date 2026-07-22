@@ -88,8 +88,8 @@ import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.JellyfinApi
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogApi
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.imageUrl
@@ -109,7 +109,7 @@ import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun HomeScreen(
-    repository: JellyfinRepository,
+    repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
     onItemClick: (MediaItem) -> Unit
@@ -235,9 +235,8 @@ internal fun FeaturedHero(
                             NetworkHeaders.Builder()
                                 .set(
                                     "Authorization",
-                                    JellyfinApi.authorizationHeader(session.token)
+                                    CatalogApi.authorizationHeader(session.token)
                                 )
-                                .set("X-Jellyfin-Token", session.token)
                                 .build()
                         ).crossfade(true).build()
                     }
@@ -276,9 +275,8 @@ internal fun FeaturedHero(
                                 NetworkHeaders.Builder()
                                     .set(
                                         "Authorization",
-                                        JellyfinApi.authorizationHeader(session.token)
+                                        CatalogApi.authorizationHeader(session.token)
                                     )
-                                    .set("X-Jellyfin-Token", session.token)
                                     .build()
                             ).crossfade(true).build()
                         }
@@ -891,3 +889,4 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         }
     }
 }
+

@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.HomeDataSource
-import com.zenstream.zenstreammobile.data.JellyfinException
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogException
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -44,7 +44,7 @@ data class AppUiState(
     val showMain get() = !loading && !showSetup && session != null
 }
 
-class AppViewModel(private val repository: JellyfinRepository) : ViewModel() {
+class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
     val uiState: StateFlow<AppUiState> = combine(
         repository.orchestratorUrl,
         repository.serverUrl,
@@ -76,7 +76,7 @@ class AppViewModel(private val repository: JellyfinRepository) : ViewModel() {
     fun logout() = viewModelScope.launch { repository.clearSession() }
     fun changeServer() = viewModelScope.launch { repository.clearAll() }
 
-    class Factory(private val repository: JellyfinRepository) : ViewModelProvider.Factory {
+    class Factory(private val repository: CatalogRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = AppViewModel(repository) as T
     }
@@ -88,7 +88,7 @@ data class LoginUiState(
     val error: String? = null
 )
 
-class LoginViewModel(private val repository: JellyfinRepository) : ViewModel() {
+class LoginViewModel(private val repository: CatalogRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -107,7 +107,7 @@ class LoginViewModel(private val repository: JellyfinRepository) : ViewModel() {
         }
     }
 
-    class Factory(private val repository: JellyfinRepository) : ViewModelProvider.Factory {
+    class Factory(private val repository: CatalogRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             LoginViewModel(repository) as T
@@ -235,7 +235,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     }
 
     private suspend fun handleFailure(error: Throwable) {
-        if ((error as? JellyfinException)?.statusCode == 401) repository.clearSession()
+        if ((error as? CatalogException)?.statusCode == 401) repository.clearSession()
     }
 
     private fun addPendingSections(count: Int) {
@@ -255,7 +255,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
         }
     }
 
-    class Factory(private val repository: JellyfinRepository, private val session: AuthSession) :
+    class Factory(private val repository: CatalogRepository, private val session: AuthSession) :
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -354,7 +354,7 @@ class LibraryViewModel(
                     }
                 }
                 .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = _uiState.value.copy(loading = false, error = true)
                 }
         }
@@ -435,7 +435,7 @@ class LibraryViewModel(
                 }
                 .onFailure {
                     if (generation != requestGeneration) return@onFailure
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.update { current ->
                         current.copy(loadingMore = false, loadMoreError = true)
                     }
@@ -471,7 +471,7 @@ class LibraryViewModel(
             }
             .onFailure {
                 if (generation != requestGeneration) return@onFailure
-                if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                 _uiState.update { current -> current.copy(loading = false, error = true) }
             }
     }
@@ -545,7 +545,7 @@ class SearchViewModel(
             }
             .onFailure {
                 if (generation != requestGeneration) return@onFailure
-                if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                 _uiState.value = _uiState.value.copy(loading = false, error = true)
             }
     }
@@ -594,7 +594,7 @@ data class DetailUiState(
 )
 
 class DetailViewModel(
-    private val repository: JellyfinRepository,
+    private val repository: CatalogRepository,
     private val session: AuthSession,
     private val itemId: String,
 ) : ViewModel() {
@@ -623,7 +623,7 @@ class DetailViewModel(
                     _uiState.value = DetailUiState(loading = false, data = it)
                 }
                 .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = _uiState.value.copy(
                         loading = false,
                         seasonLoading = false,
@@ -651,7 +651,7 @@ class DetailViewModel(
                     _uiState.value = DetailUiState(loading = false, data = it)
                 }
                 .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = DetailUiState(
                         loading = false,
                         data = currentData,
@@ -699,7 +699,7 @@ class DetailViewModel(
             )
             runCatching { action(previous, targetValue) }
                 .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = _uiState.value.copy(
                         data = current,
                         actionBusy = false,
@@ -737,7 +737,7 @@ class DetailViewModel(
             )
             runCatching { action(previous, targetValue) }
                 .onFailure {
-                    if ((it as? JellyfinException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = _uiState.value.copy(
                         data = current,
                         actionBusy = false,
@@ -751,7 +751,7 @@ class DetailViewModel(
     }
 
     class Factory(
-        private val repository: JellyfinRepository,
+        private val repository: CatalogRepository,
         private val session: AuthSession,
         private val itemId: String,
     ) : ViewModelProvider.Factory {
@@ -760,3 +760,4 @@ class DetailViewModel(
             DetailViewModel(repository, session, itemId) as T
     }
 }
+

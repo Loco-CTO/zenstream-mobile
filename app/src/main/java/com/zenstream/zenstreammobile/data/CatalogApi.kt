@@ -8,6 +8,7 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
@@ -36,7 +37,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.util.UUID
 
-class JellyfinApi(
+class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
     private val deviceId: String = UUID.randomUUID().toString(),
 ) {
@@ -44,27 +45,29 @@ class JellyfinApi(
         withContext(Dispatchers.IO) {
             val server = normalizeServerUrl(serverUrl)
             val body = JSONObject()
-                .put("Username", username.trim())
-                .put("Pw", password)
+                .put("username", username.trim())
+                .put("password", password)
                 .toString()
             val json = requestJson(
                 server = server,
-                path = "/Users/AuthenticateByName",
+                path = "/api/auth/login",
                 token = null,
                 method = "POST",
                 body = body,
             )
-            val user = json.optJSONObject("User")
-            val token = json.optString("AccessToken").takeIf { it.isNotBlank() }
+            val user = json.optJSONObject("user")
+            val token = json.optString("token").takeIf { it.isNotBlank() }
                 ?: error("Server did not return an access token")
-            val userId = user?.optString("Id").orEmpty().takeIf { it.isNotBlank() }
+            val userId = user?.optString("id").orEmpty().takeIf { it.isNotBlank() }
                 ?: error("Server did not return a user ID")
+            val ticket = requestJson(server, "/api/auth/resource-ticket", token = token)
+                .optString("ticket").takeIf { it.isNotBlank() }
             AuthSession(
                 server,
                 token,
                 userId,
-                user?.optString("Name").orEmpty().ifBlank { username.trim() },
-                json.optString("ResourceTicket").takeIf { it.isNotBlank() })
+                user?.optString("username").orEmpty().ifBlank { username.trim() },
+                ticket)
         }
 
     suspend fun playback(
@@ -75,19 +78,21 @@ class JellyfinApi(
         val item = getItem(session, itemId)
         val json = requestJson(
             session,
-            "/Items/$itemId/PlaybackInfo",
-            playbackQuery(session, options),
+            "/api/playback/items/$itemId/negotiate",
             method = "POST",
-            body = playbackBody(session, options),
+            body = JSONObject()
+                .put("engine", "media3")
+                .put("containers", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("mp4", "webm")))
+                .put("videoCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("h264", "vp9", "av1")))
+                .put("audioCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("aac", "opus", "vorbis")))
+                .put("maxStreamingBitrate", options.maxStreamingBitrate)
+                .put("audioStreamIndex", options.audioStreamIndex)
+                .toString(),
         )
-        val sourceJson = json.optJSONArray("MediaSources")?.optJSONObject(0)
-            ?: error("Jellyfin did not return a media source")
+        val sourcePayload = json.optJSONObject("source") ?: error("Server did not return a media source")
+        val sourceJson = playbackSource(json, sourcePayload)
         val source = parseMediaSource(sourceJson)
-        val playSessionId = playbackSessionIdFromInfo(
-            json.optString("PlaySessionId"),
-            session,
-            source,
-        )
+        val playSessionId = json.optString("sessionId").ifBlank { null }
         PlaybackData(
             item = item,
             source = source,
@@ -101,14 +106,7 @@ class JellyfinApi(
     suspend fun trickplay(
         session: AuthSession,
         itemId: String,
-    ): Map<String, Map<String, TrickplayInfo>> = withContext(Dispatchers.IO) {
-        val json = requestJson(
-            session,
-            "/Items/${android.net.Uri.encode(itemId)}",
-            mapOf("fields" to "Trickplay"),
-        )
-        parseTrickplayBySource(json.optJSONObject("Trickplay"))
-    }
+    ): Map<String, Map<String, TrickplayInfo>> = emptyMap()
 
     private fun getPlaybackSegments(
         session: AuthSession,
@@ -135,13 +133,13 @@ class JellyfinApi(
         val request = Request.Builder()
             .url("${session.serverUrl}$path".toHttpUrl())
             .header("Accept", "application/json")
-            .header("Authorization", authorizationHeader(session.token, deviceId))
+            .header("Authorization", "Bearer ${session.token}")
             .get()
             .build()
         httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw JellyfinException(
+            if (!response.isSuccessful) throw CatalogException(
                 response.code,
-                "Jellyfin marker request failed with ${response.code}",
+                "ZenStream marker request failed with ${response.code}",
             )
             val body = response.body?.string().orEmpty().ifBlank { return null }
             return JSONTokener(body).nextValue()
@@ -154,21 +152,29 @@ class JellyfinApi(
         sourceId: String?,
         streamIndex: Int,
     ): String = withContext(Dispatchers.IO) {
-        val params = subtitleWebVttQuery(session, itemId, sourceId)
-        val builder =
-            "${session.serverUrl}/api/video/$itemId/subtitles/${sourceId ?: itemId}/$streamIndex"
-                .toHttpUrl()
-                .newBuilder()
-        params.forEach { (key, value) -> builder.addQueryParameter(key, value) }
+		val negotiated = requestJson(
+			session,
+			"/api/playback/items/$itemId/negotiate",
+			method = "POST",
+			body = JSONObject().put("engine", "mpv").toString(),
+		)
+		val streams = negotiated.optJSONObject("source")?.optJSONArray("streams")
+		val mediaFileId = streams?.let { array ->
+			(0 until array.length()).asSequence().mapNotNull { array.optJSONObject(it) }
+				.firstOrNull { it.optInt("index", -1) == streamIndex }
+				?.optString("fileId")?.takeIf { it.isNotBlank() }
+		} ?: error("Subtitle track is not an external text subtitle")
+		val builder = "${session.serverUrl}/api/playback/items/$itemId/subtitles/$mediaFileId.vtt"
+			.toHttpUrl().newBuilder()
+		session.resourceTicket?.let { builder.addQueryParameter("access", it) }
         val request = Request.Builder()
             .url(builder.build())
             .header("Accept", "text/vtt")
-            .header("Authorization", authorizationHeader(session.token, deviceId))
-            .header("X-Jellyfin-Token", session.token)
+            .header("Authorization", "Bearer ${session.token}")
             .get()
             .build()
         httpClient.newCall(request).execute().use {
-            if (!it.isSuccessful) throw JellyfinException(
+            if (!it.isSuccessful) throw CatalogException(
                 it.code,
                 "Subtitle request failed with ${it.code}"
             )
@@ -182,17 +188,15 @@ class JellyfinApi(
         positionSeconds: Double,
         isPaused: Boolean,
         playSessionId: String?,
+		durationSeconds: Double? = null,
     ) = withContext(Dispatchers.IO) {
         val body = JSONObject()
-            .put("ItemId", itemId)
-            .put("PositionTicks", (positionSeconds.coerceAtLeast(0.0) * 10_000_000.0).toLong())
-            .put("IsPaused", isPaused)
-            .put("PlayMethod", "DirectStream")
-        playSessionId?.takeIf { it.isNotBlank() }?.let { body.put("PlaySessionId", it) }
+			.put("positionSeconds", positionSeconds.coerceAtLeast(0.0))
+		durationSeconds?.takeIf { it.isFinite() && it > 0 }?.let { body.put("durationSeconds", it) }
         requestJson(
             session,
-            "/Sessions/Playing/Progress",
-            method = "POST",
+			"/api/catalog/items/$itemId/state",
+			method = "PATCH",
             body = body.toString(),
         )
     }
@@ -290,32 +294,14 @@ class JellyfinApi(
     }
 
     suspend fun fetchHomeFeatured(session: AuthSession): List<MediaItem> =
-        getItems(
-            session,
-            "/Items",
-            latestItemsQuery(session.userId),
-            HOME_REQUEST_TIMEOUT_MILLIS,
-        ).filter { it.backdropImageTags.isNotEmpty() }.take(5)
+        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "latestItems")
+            .filter { it.backdropImageTags.isNotEmpty() }.take(5)
 
     suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> =
-        getItems(
-            session,
-            "/UserItems/Resume",
-            mapOf(
-                "userId" to session.userId,
-                "limit" to "18",
-                "includeItemTypes" to "Episode,Movie"
-            ),
-            HOME_REQUEST_TIMEOUT_MILLIS,
-        )
+        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "continueWatching")
 
     suspend fun fetchHomeNextUp(session: AuthSession): List<MediaItem> =
-        getItems(
-            session,
-            "/Shows/NextUp",
-            nextUpItemsQuery(session.userId),
-            HOME_REQUEST_TIMEOUT_MILLIS,
-        )
+        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "nextUp")
 
     internal fun nextUpItemsQuery(userId: String): Map<String, String> = mapOf(
         "userId" to userId,
@@ -351,18 +337,13 @@ class JellyfinApi(
         session: AuthSession,
         requestTimeoutMillis: Long? = null,
     ): List<Library> = withContext(Dispatchers.IO) {
-        val json = requestJson(
-            session,
-            "/Users/${session.userId}/Views",
-            mapOf("fields" to "CollectionType"),
-            requestTimeoutMillis = requestTimeoutMillis,
-        )
-        items(json).mapNotNull { item ->
-            item.optString("Id").takeIf { it.isNotBlank() }?.let { id ->
+        val json = requestJson(session, "/api/catalog/libraries", requestTimeoutMillis = requestTimeoutMillis)
+        jsonArray(json, "libraries").mapNotNull { item ->
+            item.optString("id").takeIf { it.isNotBlank() }?.let { id ->
                 Library(
                     id,
-                    item.optString("Name").ifBlank { "Library" },
-                    item.optString("CollectionType").ifBlank { null })
+                    item.optString("name").ifBlank { "Library" },
+                    when (item.optString("type")) { "tv_series" -> "tvshows"; "movies" -> "movies"; "collection" -> "boxsets"; else -> null })
             }
         }
             .filter { it.collectionType == "tvshows" || it.collectionType == "movies" || it.collectionType == "boxsets" }
@@ -374,44 +355,10 @@ class JellyfinApi(
         requestTimeoutMillis: Long? = null,
     ): LibraryData =
         coroutineScope {
-            val common = mapOf(
-                "userId" to session.userId,
-                "parentId" to library.id,
-                "recursive" to "true",
-                "limit" to "18"
-            )
-            val recent = async {
-                getItems(
-                    session,
-                    "/Items",
-                    common + newlyAddedItemsQuery(library.collectionType),
-                    requestTimeoutMillis,
-                )
-            }
-            val topRated = async {
-                getItems(
-                    session,
-                    "/Items",
-                    common + mapOf(
-                        "sortBy" to "CommunityRating",
-                        "sortOrder" to "Descending",
-                        "includeItemTypes" to itemTypes(library.collectionType)
-                    ),
-                    requestTimeoutMillis,
-                )
-            }
-            val newReleases = async {
-                getItems(
-                    session,
-                    "/Items",
-                    common + mapOf(
-                        "sortBy" to "PremiereDate",
-                        "sortOrder" to "Descending",
-                        "includeItemTypes" to itemTypes(library.collectionType)
-                    ),
-                    requestTimeoutMillis,
-                )
-            }
+			fun path(sortBy: String) = "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=$sortBy&sortOrder=descending"
+			val recent = async { catalogItems(requestJson(session, path("dateAdded"), requestTimeoutMillis = requestTimeoutMillis)) }
+			val topRated = async { catalogItems(requestJson(session, path("rating"), requestTimeoutMillis = requestTimeoutMillis)) }
+			val newReleases = async { catalogItems(requestJson(session, path("releaseDate"), requestTimeoutMillis = requestTimeoutMillis)) }
             LibraryData(
                 library, listOf(
                     MediaRow(RowTitle.NewlyAdded, library.name, recent.await()),
@@ -427,29 +374,21 @@ class JellyfinApi(
         limit: Int,
         sort: LibrarySort,
     ): PagedLibrary = withContext(Dispatchers.IO) {
-        val json = requestJson(
-            session,
-            "/Items",
-            libraryItemsQuery(
-                userId = session.userId,
-                library = library,
-                startIndex = startIndex,
-                limit = limit,
-                sort = sort,
-            ),
-        )
-        val parsed = parseMediaItems(json)
+        val page = startIndex / limit + 1
+		val sortBy = catalogSort(sort.sortBy)
+		val json = requestJson(session, "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&page=$page&pageSize=$limit&sortBy=$sortBy&sortOrder=${sort.sortOrder.apiValue.lowercase()}")
+		val parsed = catalogItems(json)
         PagedLibrary(
             library = library,
             items = parsed,
-            totalRecordCount = json.optInt("TotalRecordCount", parsed.size),
+            totalRecordCount = json.optInt("total", parsed.size),
         )
     }
 
     suspend fun search(session: AuthSession, query: String): List<MediaItem> =
         withContext(Dispatchers.IO) {
             if (query.trim().length < 2) return@withContext emptyList()
-            getItems(session, "/Items", searchQuery(session.userId, query))
+			catalogItems(requestJson(session, "/api/catalog/search?query=${android.net.Uri.encode(query.trim())}&pageSize=40"))
         }
 
     internal fun searchQuery(userId: String, query: String): Map<String, String> = mapOf(
@@ -528,90 +467,35 @@ class JellyfinApi(
         "enableUserData" to "true",
     )
 
-    private fun playbackItemQuery(userId: String): Map<String, String> =
-        detailItemQuery(userId) + ("fields" to "$ITEM_FIELDS,Chapters")
-
-    internal fun newlyAddedItemsQuery(collectionType: String?): Map<String, String> = mapOf(
-        "sortBy" to "DateCreated",
-        "sortOrder" to "Descending",
-        "includeItemTypes" to itemTypes(collectionType, newlyAdded = true),
-    )
-
     suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
         withContext(Dispatchers.IO) {
-            requestJson(
-                session,
-                "/UserFavoriteItems/$itemId",
-                method = if (favorite) "POST" else "DELETE",
-            )
+            requestJson(session, "/api/catalog/items/$itemId/state", method = "PATCH", body = JSONObject().put("favorite", favorite).toString())
         }
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
         withContext(Dispatchers.IO) {
-            requestJson(
-                session,
-                "/UserPlayedItems/$itemId",
-                method = if (played) "POST" else "DELETE",
-            )
+            requestJson(session, "/api/catalog/items/$itemId/state", method = "PATCH", body = JSONObject().put("played", played).toString())
         }
 
-    private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
-        withContext(Dispatchers.IO) {
-            val json = requestJson(session, "/Items/$itemId", playbackItemQuery(session.userId))
-            parseMediaItems(JSONObject().put("Items", JSONArray().put(json))).first()
-        }
+    private fun getItem(session: AuthSession, itemId: String): MediaItem =
+        catalogMediaItem(requestJson(session, "/api/catalog/items/$itemId"))
 
-    private suspend fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
-        withContext(Dispatchers.IO) {
-            parseMediaItems(
-                requestJson(
-                    session,
-                    "/Shows/$seriesId/Seasons",
-                    detailItemQuery(session.userId),
-                )
-            )
-        }
-
-    private suspend fun getEpisodes(
-        session: AuthSession,
-        seriesId: String,
-        seasonId: String,
-    ): List<MediaItem> = withContext(Dispatchers.IO) {
-        parseMediaItems(
-            requestJson(
-                session,
-                "/Shows/$seriesId/Episodes",
-                detailItemQuery(session.userId) + mapOf("seasonId" to seasonId),
-            )
-        ).sortedWith(compareBy(nullsLast()) { it.indexNumber })
+    private fun getChildren(session: AuthSession, parent: MediaItem): List<MediaItem> {
+        val libraryId = parent.libraryId ?: return emptyList()
+        val path = "/api/catalog/items?libraryId=${android.net.Uri.encode(libraryId)}&parentId=${android.net.Uri.encode(parent.id)}&pageSize=100"
+        return catalogItems(requestJson(session, path))
     }
 
-    private suspend fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
-        withContext(Dispatchers.IO) {
-            parseMediaItems(
-                requestJson(
-                    session,
-                    "/Items/$itemId/Similar",
-                    detailItemQuery(session.userId) + mapOf("limit" to "8"),
-                )
-            )
-        }
+    private fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
+        getChildren(session, getItem(session, seriesId))
 
-    private suspend fun getItems(
-        session: AuthSession,
-        path: String,
-        query: Map<String, String>,
-        requestTimeoutMillis: Long? = null,
-    ): List<MediaItem> = withContext(Dispatchers.IO) {
-        parseMediaItems(
-            requestJson(
-                session,
-                path,
-                query,
-                requestTimeoutMillis = requestTimeoutMillis
-            )
-        )
+    private fun getEpisodes(session: AuthSession, seriesId: String, seasonId: String): List<MediaItem> {
+        @Suppress("UNUSED_VARIABLE") val ignoredSeriesId = seriesId
+        return getChildren(session, getItem(session, seasonId)).sortedWith(compareBy(nullsLast()) { it.indexNumber })
     }
+
+    private fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
+        catalogItems(requestJson(session, "/api/catalog/items/$itemId/similar"))
 
     private fun requestJson(
         session: AuthSession,
@@ -620,15 +504,7 @@ class JellyfinApi(
         method: String = "GET",
         body: String? = null,
         requestTimeoutMillis: Long? = null,
-    ): JSONObject = requestJson(
-        session.serverUrl,
-        path,
-        query,
-        session.token,
-        method,
-        body,
-        requestTimeoutMillis,
-    )
+    ): JSONObject = requestJson(session.serverUrl, path, query, session.token, method, body, requestTimeoutMillis)
 
     private fun requestJson(
         server: String,
@@ -639,87 +515,120 @@ class JellyfinApi(
         body: String? = null,
         requestTimeoutMillis: Long? = null,
     ): JSONObject {
-        val gateway = gatewayPath(path)
-        val urlBuilder = "$server$gateway".toHttpUrl().newBuilder()
+        val urlBuilder = "$server$path".toHttpUrl().newBuilder()
         query.forEach { (key, value) -> urlBuilder.addQueryParameter(key, value) }
-        val requestBuilder = Request.Builder()
+        val request = Request.Builder()
             .url(urlBuilder.build())
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
-            .header("Authorization", authorizationHeader(token, deviceId))
-            .header("X-Jellyfin-Token", token.orEmpty())
-        requestBuilder.method(
-            method,
-            if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
-        )
-        val call = httpClient.newCall(requestBuilder.build())
-        requestTimeoutMillis?.let {
-            call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS)
-        }
-        val response = call.execute()
-        response.use {
-            if (!it.isSuccessful) throw JellyfinException(
-                it.code,
-                "Jellyfin request failed with ${it.code}"
-            )
+            .apply { token?.takeIf(String::isNotBlank)?.let { header("Authorization", "Bearer $it") } }
+            .method(method, if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        val call = httpClient.newCall(request)
+        requestTimeoutMillis?.let { call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        call.execute().use {
+            if (!it.isSuccessful) throw CatalogException(it.code, "ZenStream request failed with ${it.code}")
             return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
         }
     }
 
-    private fun gatewayPath(path: String): String {
-        val parsed = "https://zenstream.invalid$path".toHttpUrl()
-        val original = parsed.encodedPath
-        val segments = original.trim('/').split('/').filter(String::isNotBlank)
-        val mapped = when {
-            original == "/Items" -> "/api/content/items"
-            original == "/UserItems/Resume" -> "/api/content/resume"
-            original == "/Shows/NextUp" -> "/api/content/next-up"
-            original == "/Sessions/Playing/Progress" -> "/api/playback/progress"
-            original == "/Users/${segments.getOrNull(1)}/Views" -> "/api/content/views"
-            segments.size == 2 && segments[0] == "Items" && parsed.queryParameter("fields") == "Trickplay" -> "/api/content/items/${segments[1]}/trickplay"
-            segments.size == 2 && segments[0] == "Items" -> "/api/content/items/${segments[1]}"
-            segments.size == 3 && segments[0] == "Items" && segments[2] == "PlaybackInfo" -> "/api/content/items/${segments[1]}/playback"
-            segments.size == 3 && segments[0] == "Items" && segments[2] == "Similar" -> "/api/content/items/${segments[1]}/similar"
-            segments.size == 3 && segments[0] == "Items" && segments[2] == "LocalTrailers" -> "/api/content/items/${segments[1]}/local-trailers"
-            segments.size == 3 && segments[0] == "Shows" && segments[2] == "Seasons" -> "/api/content/shows/${segments[1]}/seasons"
-            segments.size == 3 && segments[0] == "Shows" && segments[2] == "Episodes" -> "/api/content/shows/${segments[1]}/episodes"
-            segments.size == 2 && segments[0] == "UserFavoriteItems" -> "/api/user/items/${segments[1]}/favorite"
-            segments.size == 2 && segments[0] == "UserPlayedItems" -> "/api/user/items/${segments[1]}/played"
-            segments.size == 2 && segments[0] == "Users" && segments[1] == "AuthenticateByName" -> "/api/auth/login"
-            else -> original
-        }
-        return if (parsed.encodedQuery.isNullOrBlank()) mapped else "$mapped?${parsed.encodedQuery}"
-    }
-
     companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        private const val ITEM_FIELDS =
-            "Overview,Genres,PrimaryImageAspectRatio,CommunityRating,ProductionYear,PremiereDate,RecursiveItemCount,ParentId,ImageTags,BackdropImageTags,ImageBlurHashes,UserData,SeriesPrimaryImage,People,Studios,ChildCount"
-        private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"
+        private const val ITEM_FIELDS = "Overview,Genres,CommunityRating,ProductionYear,PremiereDate,People,Studios,Chapters"
+        private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Banner"
         internal const val HOME_REQUEST_TIMEOUT_MILLIS = 30_000L
 
-        fun authorizationHeader(token: String?, deviceId: String = "ZenStreamMobile") = listOf(
-            token?.let { "Token=\"$it\"" },
-            "Client=\"ZenStream\"",
-            "Device=\"${deviceName()}\"",
-            "DeviceId=\"$deviceId\"",
-            "Version=\"${BuildConfig.ZENSTREAM_VERSION}\"",
-        ).filterNotNull().joinToString(", ").let { "MediaBrowser $it" }
-
-        private fun deviceName(): String = Build.MODEL
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
-            ?: "Android"
-
-        private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false) =
-            when (collectionType) {
-                "tvshows" -> if (newlyAdded) "Episode" else "Series"
-                "movies" -> "Movie"
-                "boxsets" -> "BoxSet"
-                else -> "Series,Movie"
-            }
+        fun authorizationHeader(token: String) = "Bearer $token"
     }
 
+}
+
+private fun catalogSort(value: LibrarySortBy): String = when (value) {
+    LibrarySortBy.DateCreated, LibrarySortBy.DateLastContentAdded -> "dateAdded"
+    LibrarySortBy.PremiereDate, LibrarySortBy.ProductionYear -> "releaseDate"
+    LibrarySortBy.CommunityRating, LibrarySortBy.CriticRating -> "rating"
+    LibrarySortBy.Runtime -> "runtime"
+    else -> "title"
+}
+
+private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false): String {
+    if (newlyAdded && collectionType == "tvshows") return "Episode"
+    return when (collectionType) {
+        "tvshows" -> "Series"
+        "movies" -> "Movie"
+        "boxsets" -> "BoxSet"
+        else -> "Series,Movie"
+    }
+}
+
+private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
+	root.optJSONArray(key)?.let { array ->
+		List(array.length()) { array.optJSONObject(it) ?: JSONObject() }
+	}.orEmpty()
+
+internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
+	jsonArray(root, key).map(::catalogMediaItem)
+
+internal fun catalogMediaItem(item: JSONObject): MediaItem {
+	val metadata = item.optJSONObject("metadata") ?: JSONObject()
+	val state = item.optJSONObject("userState") ?: JSONObject()
+	val images = metadata.optJSONObject("images") ?: JSONObject()
+	fun image(category: String) = images.optJSONObject(category)?.optString("url")?.takeIf { it.isNotBlank() }
+	val type = when (item.optString("type")) {
+		"movie" -> "Movie"; "series" -> "Series"; "season" -> "Season"
+		"episode" -> "Episode"; "collection" -> "BoxSet"; else -> item.optString("type")
+	}
+	val people = metadata.optJSONArray("people")?.let { array ->
+		List(array.length()) { index ->
+			val person = array.optJSONObject(index) ?: JSONObject()
+			MediaPerson(person.optString("name"), person.optString("role").ifBlank { null }, person.optString("department").ifBlank { null })
+		}.filter { it.name.isNotBlank() }
+	}.orEmpty()
+	val genres = metadata.optJSONArray("genres") ?: metadata.optJSONArray("tags")
+	return MediaItem(
+		id = item.optString("id"),
+		name = metadata.optString("title").ifBlank { item.optString("name").ifBlank { "Untitled" } },
+		type = type,
+		seriesId = item.optString("seriesId").ifBlank { null },
+		seasonId = item.optString("seasonId").ifBlank { null },
+		parentId = item.optString("parentId").ifBlank { null },
+		libraryId = item.optString("libraryId").ifBlank { null },
+		parentIndexNumber = item.optIntOrNull("seasonNumber"),
+		indexNumber = item.optIntOrNull("episodeNumber"),
+		overview = metadata.optString("overview").ifBlank { metadata.optString("description").ifBlank { null } },
+		premiereDate = metadata.optString("date").ifBlank { metadata.optString("releaseDate").ifBlank { null } },
+		productionYear = metadata.optIntOrNull("year"),
+		communityRating = metadata.optDoubleOrNull("communityRating"),
+		genres = genres?.let { array -> List(array.length()) { array.optString(it) }.filter(String::isNotBlank) }.orEmpty(),
+		people = people,
+		runtimeTicks = metadata.optDoubleOrNull("runtimeMinutes")?.let { (it * 60.0 * 10_000_000.0).toLong() },
+		imageTags = buildMap { image("Primary")?.let { put("Primary", it) }; image("Logo")?.let { put("Logo", it) }; image("Banner")?.let { put("Banner", it) } },
+		backdropImageTags = image("Backdrop")?.let(::listOf).orEmpty(),
+		played = state.optBoolean("played", false),
+		favorite = state.optBoolean("favorite", false),
+		playedPercentage = state.optDoubleOrNull("playedPercentage"),
+		playbackPositionTicks = state.optDoubleOrNull("positionSeconds")?.let { (it * 10_000_000.0).toLong() },
+	)
+}
+
+private fun playbackSource(root: JSONObject, source: JSONObject): JSONObject {
+	val streams = source.optJSONArray("streams") ?: JSONArray()
+	val mappedStreams = JSONArray()
+	for (index in 0 until streams.length()) {
+		val stream = streams.optJSONObject(index) ?: continue
+		val type = stream.optString("codec_type").replaceFirstChar { it.uppercase() }
+		mappedStreams.put(JSONObject()
+			.put("Index", stream.optInt("index", index))
+			.put("Type", type)
+			.put("Language", stream.optJSONObject("tags")?.optString("language"))
+			.put("IsDefault", stream.optJSONObject("disposition")?.optInt("default", 0) == 1))
+	}
+	return JSONObject()
+		.put("Id", source.optString("id"))
+		.put("Container", source.optString("container"))
+		.put("RunTimeTicks", (source.optDouble("durationSeconds", 0.0) * 10_000_000.0).toLong())
+		.put("MediaStreams", mappedStreams)
+		.put(if (root.optString("mode") == "hls") "TranscodingUrl" else "DirectStreamUrl", root.optString("url"))
 }
 
 internal fun selectInitialSeason(
@@ -731,7 +640,7 @@ internal fun selectInitialSeason(
     ?: seasons.find { it.indexNumber == 1 }
     ?: seasons.firstOrNull()
 
-class JellyfinException(val statusCode: Int, message: String) : Exception(message)
+class CatalogException(val statusCode: Int, message: String) : Exception(message)
 
 private fun items(json: JSONObject): List<JSONObject> {
     val array = json.optJSONArray("Items") ?: return emptyList()
@@ -839,8 +748,8 @@ fun playbackUrl(
             return resolved.toString()
         }
     }
-    val builder =
-        "${session.serverUrl}/api/video/$itemId/stream".toHttpUrl()
+	val builder =
+		"${session.serverUrl}/api/playback/items/$itemId/stream".toHttpUrl()
             .newBuilder()
     builder.addQueryParameter("Static", if (bitrate > 0) "false" else "true")
     builder.addQueryParameter("MediaSourceId", source.id ?: itemId)
@@ -1092,3 +1001,4 @@ private fun JSONObject.optLongOrNull(key: String): Long? =
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (has(key) && !isNull(key)) optDouble(key) else null
+

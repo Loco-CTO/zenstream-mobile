@@ -19,7 +19,7 @@ class PlaybackParsingTest {
             playbackMimeType(
                 MediaSource(
                     id = "source-1",
-                    transcodingUrl = "/api/video/item-1/stream?lease=lease-1",
+                    transcodingUrl = "/api/playback/items/item-1/stream?lease=lease-1",
                 ),
             ),
         )
@@ -35,7 +35,7 @@ class PlaybackParsingTest {
 
     @Test
     fun buildsTrickplayPreviewUsingLargestResolutionAndTileCoordinates() {
-        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
         val preview = trickplayPreview(
             session,
             "episode/1",
@@ -61,7 +61,7 @@ class PlaybackParsingTest {
     @Test
     fun trickplayPreviewUsesWebDefaultsWhenGeometryIsMissing() {
         val preview = trickplayPreview(
-            AuthSession("https://jellyfin.example", "token", "user", "name"),
+            AuthSession("https://orchestrator.example", "token", "user", "name"),
             "item-1",
             MediaSource(
                 id = "source-1",
@@ -81,7 +81,7 @@ class PlaybackParsingTest {
 
     @Test
     fun prefersPlaybackInfoSessionId() {
-        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
         val source = MediaSource(
             id = "source-1",
             transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
@@ -95,7 +95,7 @@ class PlaybackParsingTest {
 
     @Test
     fun fallsBackToNegotiatedPlaybackUrlSessionId() {
-        val session = AuthSession("https://jellyfin.example", "token", "user", "name")
+        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
         val source = MediaSource(
             id = "source-1",
             transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
@@ -107,17 +107,17 @@ class PlaybackParsingTest {
     @Test
     fun resolvesRelativeNegotiatedPlaybackUrlAgainstServer() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
-            "https://jellyfin.example", "token", "user", "name"
+            "https://orchestrator.example", "token", "user", "name"
         )
         val url = playbackUrl(
             session,
             "item-1",
             com.zenstream.zenstreammobile.model.MediaSource(
                 id = "source-1",
-                transcodingUrl = "/api/video/item-1/stream?MediaSourceId=source-1&lease=lease-1",
+                transcodingUrl = "/api/playback/items/item-1/stream?MediaSourceId=source-1&lease=lease-1",
             )
         )
-        assertTrue(url.startsWith("https://jellyfin.example/api/video/item-1/stream"))
+        assertTrue(url.startsWith("https://orchestrator.example/api/playback/items/item-1/stream"))
         assertTrue(url.contains("MediaSourceId=source-1"))
     }
 
@@ -138,7 +138,7 @@ class PlaybackParsingTest {
     @Test
     fun readsNegotiatedStreamTimelineOriginFromStartTimeTicks() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
-            "https://jellyfin.example", "token", "user", "name"
+            "https://orchestrator.example", "token", "user", "name"
         )
         val origin = playbackStreamStartPositionSeconds(
             session,
@@ -155,7 +155,7 @@ class PlaybackParsingTest {
     @Test
     fun fallbackPlaybackUsesRequestedStartAsItsTimelineOrigin() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
-            "https://jellyfin.example", "token", "user", "name"
+            "https://orchestrator.example", "token", "user", "name"
         )
 
         assertEquals(
@@ -172,7 +172,7 @@ class PlaybackParsingTest {
     @Test
     fun fullLengthNegotiatedPlaybackKeepsZeroAsTheTimelineOrigin() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
-            "https://jellyfin.example", "token", "user", "name"
+            "https://orchestrator.example", "token", "user", "name"
         )
 
         assertEquals(
@@ -201,7 +201,7 @@ class PlaybackParsingTest {
                 session,
                 com.zenstream.zenstreammobile.model.MediaSource(
                     id = "source-1",
-                    transcodingUrl = "/api/video/item-1/stream?lease=opaque",
+                    transcodingUrl = "/api/playback/items/item-1/stream?lease=opaque",
                 ),
                 requestedStartSeconds = 125.0,
                 streamStartsAtRequestedPosition = true,
@@ -220,7 +220,7 @@ class PlaybackParsingTest {
     fun subtitleRequestUsesAbsoluteTimestampsFromTheItemTimeline() {
         val query = subtitleWebVttQuery(
             com.zenstream.zenstreammobile.model.AuthSession(
-                "https://jellyfin.example", "token", "user", "name"
+                "https://orchestrator.example", "token", "user", "name"
             ),
             "item-1",
             "source-1",
@@ -454,3 +454,4 @@ class PlaybackParsingTest {
     }
 
 }
+

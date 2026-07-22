@@ -53,6 +53,7 @@ class SessionStore(
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val locale = stringPreferencesKey("locale")
+		val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
@@ -68,6 +69,10 @@ class SessionStore(
     val locale: Flow<String> = dataStore.data
         .map { normalizeLocale(it[Keys.locale]) }
         .distinctUntilChanged()
+
+	val metadataLanguage: Flow<String> = dataStore.data
+		.map { it[Keys.metadataLanguage] ?: "en" }
+		.distinctUntilChanged()
 
     val playerEngine: Flow<PlayerEngine> = dataStore.data
         .map { value ->
@@ -112,7 +117,7 @@ class SessionStore(
         dataStore.edit { it[Keys.serverUrl] = normalizeServerUrl(server) }
     }
 
-    suspend fun saveServerConfig(orchestrator: String, @Suppress("UNUSED_PARAMETER") jellyfin: String? = null) {
+    suspend fun saveServerConfig(orchestrator: String) {
         dataStore.edit {
             it[Keys.orchestratorUrl] = normalizeServerUrl(orchestrator)
             it[Keys.serverUrl] = normalizeServerUrl(orchestrator)
@@ -140,6 +145,10 @@ class SessionStore(
     suspend fun saveLocale(locale: String) {
         dataStore.edit { it[Keys.locale] = normalizeLocale(locale) }
     }
+
+	suspend fun saveMetadataLanguage(language: String) {
+		dataStore.edit { it[Keys.metadataLanguage] = language.ifBlank { "en" } }
+	}
 
     suspend fun savePlayerEngine(engine: PlayerEngine) {
         dataStore.edit { it[Keys.playerEngine] = engine.name }
@@ -185,6 +194,7 @@ class SessionStore(
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.locale)
+			it.remove(Keys.metadataLanguage)
         }
     }
 
@@ -197,6 +207,7 @@ class SessionStore(
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.locale)
+			it.remove(Keys.metadataLanguage)
             it.remove(Keys.librarySorts)
         }
     }
@@ -231,3 +242,4 @@ internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =
             }
         }
         .firstOrNull()
+

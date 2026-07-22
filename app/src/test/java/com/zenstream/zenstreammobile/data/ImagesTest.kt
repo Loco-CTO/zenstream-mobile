@@ -9,35 +9,24 @@ class ImagesTest {
     private val item = MediaItem(
         id = "movie-1",
         name = "Movie",
-        imageTags = mapOf("Primary" to "primary-tag", "Thumb" to "thumb-tag"),
-        backdropImageTags = listOf("backdrop-tag"),
+		imageTags = mapOf("Primary" to "/api/catalog/items/movie-1/images/Primary?language=en"),
+		backdropImageTags = listOf("/api/catalog/items/movie-1/images/Backdrop?language=en"),
     )
 
     @Test
-    fun landscapePrefersThumbThenBackdropThenPrimary() {
-        assertEquals("Thumb", landscapeImageType(item))
+	fun landscapeUsesBackdropWithoutCrossCategoryFallback() {
+		assertEquals("Backdrop", landscapeImageType(item))
         assertEquals(
-            "https://server/api/assets/items/movie-1/images/Thumb?fillWidth=448&fillHeight=252&quality=90&tag=thumb-tag",
-            imageUrl("https://server", item, "Thumb", 448, 252)
+			"https://server/api/catalog/items/movie-1/images/Backdrop?language=en",
+			imageUrl("https://server", item, "Backdrop", 448, 252)
         )
-        assertEquals(
-            "Backdrop",
-            landscapeImageType(item.copy(imageTags = mapOf("Primary" to "primary-tag")))
-        )
-        assertEquals(
-            "Primary",
-            landscapeImageType(
-                item.copy(
-                    imageTags = mapOf("Primary" to "primary-tag"),
-                    backdropImageTags = emptyList()
-                )
-            )
-        )
+		assertNull(landscapeImageType(item.copy(backdropImageTags = emptyList())))
+		assertEquals("Primary", landscapeImageType(item.copy(type = "Episode", backdropImageTags = emptyList())))
     }
 
     @Test
     fun heroDoesNotFallBackToPoster() {
         val noBackdrop = item.copy(backdropImageTags = emptyList())
-        assertNull(imageUrl("https://server", noBackdrop, "Backdrop", 1280, 720))
+		assertNull(imageUrl("https://server", noBackdrop, "Backdrop", 1280, 720))
     }
 }

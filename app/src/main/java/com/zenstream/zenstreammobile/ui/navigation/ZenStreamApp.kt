@@ -48,7 +48,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.AppUiState
@@ -69,7 +69,7 @@ private const val DETAIL = "detail/{itemId}"
 private const val SETTINGS = "settings"
 
 @Composable
-fun ZenStreamApp(appState: AppUiState, repository: JellyfinRepository, appViewModel: AppViewModel) {
+fun ZenStreamApp(appState: AppUiState, repository: CatalogRepository, appViewModel: AppViewModel) {
     when {
         appState.loading -> LoadingScreen()
         appState.showSetup -> ServerSetupScreen(
@@ -93,7 +93,7 @@ private fun LoadingScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScaffold(
-    repository: JellyfinRepository,
+    repository: CatalogRepository,
     session: AuthSession,
     onLogout: () -> Unit
 ) {
@@ -409,3 +409,4 @@ internal class ScrollVisibilityController(
 
 private const val HIDE_DISTANCE_DP = 56f
 private const val REVEAL_DISTANCE_DP = 64f
+

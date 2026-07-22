@@ -8,8 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.zenstream.zenstreammobile.data.JellyfinApi
-import com.zenstream.zenstreammobile.data.JellyfinRepository
+import com.zenstream.zenstreammobile.data.CatalogApi
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
@@ -18,7 +18,7 @@ import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 
 class MainActivity : ComponentActivity() {
     private val repository by lazy {
-        JellyfinRepository(JellyfinApi(), SessionStore(applicationContext))
+        CatalogRepository(CatalogApi(), SessionStore(applicationContext))
     }
     private val appViewModel by viewModels<AppViewModel> { AppViewModel.Factory(repository) }
 
@@ -40,3 +40,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

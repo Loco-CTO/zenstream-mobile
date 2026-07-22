@@ -21,6 +21,7 @@ data class MediaItem(
     val seriesId: String? = null,
     val seasonId: String? = null,
     val parentId: String? = null,
+    val libraryId: String? = null,
     val parentIndexNumber: Int? = null,
     val indexNumber: Int? = null,
     val overview: String? = null,

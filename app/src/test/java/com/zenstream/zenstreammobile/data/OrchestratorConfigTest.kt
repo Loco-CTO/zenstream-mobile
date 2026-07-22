@@ -6,26 +6,26 @@ import org.junit.Test
 
 class OrchestratorConfigTest {
     @Test
-    fun acceptsTheProxyCapabilityResponse() {
-        parseProxyConfig("{\"proxyVersion\":1}")
+	fun acceptsTheCatalogCapabilityResponse() {
+		parseProxyConfig("{\"catalog\":true}")
     }
 
     @Test
-    fun rejectsAnOrchestratorWithoutTheProxy() {
+	fun rejectsAnOrchestratorWithoutTheCatalog() {
         assertThrows(IllegalStateException::class.java) { parseProxyConfig("{}") }
     }
 
     @Test
-    fun normalizesConfiguredJellyfinUrl() {
+    fun normalizesConfiguredZenStreamUrl() {
         assertEquals(
-            "https://jellyfin.example",
-            normalizeConfiguredJellyfinUrl(" https://jellyfin.example/ ")
+            "https://orchestrator.example",
+			normalizeServerUrl(" https://orchestrator.example/ ")
         )
     }
 
     @Test
-    fun rejectsMissingJellyfinUrl() {
-        assertThrows(IllegalArgumentException::class.java) { normalizeConfiguredJellyfinUrl("http://remote.example") }
+    fun rejectsMissingZenStreamUrl() {
+		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("http://remote.example") }
     }
 
     @Test
@@ -35,3 +35,4 @@ class OrchestratorConfigTest {
         assertEquals("en", normalizeLocale("fr"))
     }
 }
+

@@ -10,20 +10,20 @@ import org.junit.runner.RunWith
 class OrchestratorConfigAndroidTest {
     @Test
     fun parsesProxyCapability() {
-        parseProxyConfig("{\"proxyVersion\":1}")
+		parseProxyConfig("{\"catalog\":true}")
     }
 
     @Test
-    fun parsesAndNormalizesJellyfinUrl() {
+	fun normalizesOrchestratorUrl() {
         assertEquals(
-            "https://jellyfin.example",
-            parseMobileConfig("{\"jellyfinUrl\":\" https://jellyfin.example/ \"}")
+            "https://orchestrator.example",
+			normalizeServerUrl(" https://orchestrator.example/ ")
         )
     }
 
     @Test
-    fun rejectsMissingJellyfinUrl() {
-        assertThrows(IllegalStateException::class.java) { parseMobileConfig("{}") }
+	fun rejectsInsecureRemoteOrchestratorUrl() {
+		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("http://remote.example") }
     }
 
     @Test
@@ -33,3 +33,4 @@ class OrchestratorConfigAndroidTest {
         assertThrows(IllegalStateException::class.java) { parseLocale("{\"locale\":\"fr\"}") }
     }
 }
+

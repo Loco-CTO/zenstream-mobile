@@ -147,4 +147,8 @@
     <string name="show_more">Show more</string>
     <string name="show_less">Show less</string>
     <string name="select_season">Select season</string>
+	<string name="appearance_group">Appearance</string>
+	<string name="preferred_metadata_language">Preferred metadata language</string>
+	<string name="metadata_language_automatic">Automatic (%1$s)</string>
+	<string name="metadata_language_save_failed">Metadata language could not be saved.</string>
 </resources>

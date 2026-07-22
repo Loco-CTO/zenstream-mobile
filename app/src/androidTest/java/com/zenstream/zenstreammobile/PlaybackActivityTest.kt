@@ -33,8 +33,8 @@ class PlaybackActivityTest {
             dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
         )
         sessionStore.clearAll()
-        sessionStore.saveServerConfig("https://orchestrator.example", "https://jellyfin.example")
-        sessionStore.saveSession(AuthSession("https://jellyfin.example", "test-token", "user-1", "Test"))
+        sessionStore.saveServerConfig("https://orchestrator.example")
+        sessionStore.saveSession(AuthSession("https://orchestrator.example", "test-token", "user-1", "Test"))
     }
 
     @After
@@ -94,3 +94,4 @@ class PlaybackActivityTest {
         }
     }
 }
+
