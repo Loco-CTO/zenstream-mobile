@@ -24,8 +24,8 @@ class OrchestratorConfigTest {
     }
 
     @Test
-    fun rejectsMissingZenStreamUrl() {
-		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("http://remote.example") }
+    fun rejectsUnsupportedZenStreamUrl() {
+		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("ftp://remote.example") }
     }
 
     @Test
@@ -35,4 +35,3 @@ class OrchestratorConfigTest {
         assertEquals("en", normalizeLocale("fr"))
     }
 }
-
