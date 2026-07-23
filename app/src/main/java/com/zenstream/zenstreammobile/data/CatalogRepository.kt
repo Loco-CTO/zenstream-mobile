@@ -10,8 +10,11 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.model.HomeData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 interface HomeDataSource {
     suspend fun clearSession()
@@ -47,6 +50,8 @@ class CatalogRepository(
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
 ) : HomeDataSource, LibraryDataSource, SearchDataSource {
+    private val homeMutex = Mutex()
+    private var homeCache: Pair<Long, HomeData>? = null
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -91,14 +96,18 @@ class CatalogRepository(
 		}
 	}
 
-    override suspend fun clearSession() = sessionStore.clearSession()
+    override suspend fun clearSession() {
+        homeMutex.withLock { homeCache = null }
+        sessionStore.clearSession()
+    }
     suspend fun clearAll() = sessionStore.clearAll()
 
-    override suspend fun homeFeatured(session: AuthSession) = api.fetchHomeFeatured(session)
+    override suspend fun homeFeatured(session: AuthSession) = home(session).featured
     override suspend fun homeContinueWatching(session: AuthSession) =
-        api.fetchHomeContinueWatching(session)
+        home(session).rows.firstOrNull { it.title == com.zenstream.zenstreammobile.model.RowTitle.ContinueWatching }?.items.orEmpty()
 
-    override suspend fun homeNextUp(session: AuthSession) = api.fetchHomeNextUp(session)
+    override suspend fun homeNextUp(session: AuthSession) =
+        home(session).rows.firstOrNull { it.title == com.zenstream.zenstreammobile.model.RowTitle.NextUp }?.items.orEmpty()
     override suspend fun homeLibraries(session: AuthSession) =
         api.getLibraries(session, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
@@ -173,6 +182,9 @@ class CatalogRepository(
         sessionStore.cacheSubtitleStyle(normalized)
         return normalized
     }
+    suspend fun home(session: AuthSession): HomeData = homeMutex.withLock {
+        val cached = homeCache
+        if (cached != null && cached.first > System.currentTimeMillis() - 30_000) return@withLock cached.second
+        api.fetchHome(session).also { homeCache = System.currentTimeMillis() to it }
+    }
 }
-
-

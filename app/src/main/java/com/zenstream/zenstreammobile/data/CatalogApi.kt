@@ -269,28 +269,22 @@ class CatalogApi(
     }
 
     suspend fun fetchHome(session: AuthSession): HomeData = coroutineScope {
-        val latest = async {
-            fetchHomeFeatured(session)
-        }
-        val resume = async {
-            fetchHomeContinueWatching(session)
-        }
-        val nextUp = async {
-            fetchHomeNextUp(session)
+        val home = async {
+            requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS)
         }
         val libraries = async { getLibraries(session, HOME_REQUEST_TIMEOUT_MILLIS) }
         val libraryData = libraries.await().flatMap { library ->
             if (library.collectionType != "tvshows" && library.collectionType != "movies") emptyList()
             else listOf(async { fetchLibraryData(session, library, HOME_REQUEST_TIMEOUT_MILLIS) })
         }.awaitAll()
-        val latestItems = latest.await()
+        val payload = home.await()
         val rows = buildList {
-            add(MediaRow(RowTitle.ContinueWatching, items = resume.await(), wide = true))
-            add(MediaRow(RowTitle.NextUp, items = nextUp.await(), wide = true))
+            add(MediaRow(RowTitle.ContinueWatching, items = catalogItems(payload, "continueWatching"), wide = true))
+            add(MediaRow(RowTitle.NextUp, items = catalogItems(payload, "nextUp"), wide = true))
             libraryData.flatMapTo(this) { it.rows }
         }.filter { it.items.isNotEmpty() }
         HomeData(
-            featured = latestItems.filter { it.backdropImageTags.isNotEmpty() }.take(5),
+            featured = catalogItems(payload, "latestItems").filter { it.backdropImageTags.isNotEmpty() }.take(5),
             rows = rows
         )
     }
