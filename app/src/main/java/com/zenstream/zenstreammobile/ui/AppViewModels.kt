@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
@@ -344,9 +345,11 @@ class LibraryViewModel(
                     )
                     selected?.let { library ->
                         viewModelScope.launch {
-                            val storedSort =
+                            val storedSort = normalizeLibrarySort(
+                                library,
                                 repository.cachedLibrarySort(session.userId, library.id)
-                                    ?: LibrarySort()
+                                    ?: LibrarySort(),
+                            )
                             if (generation != requestGeneration) return@launch
                             _uiState.update { it.copy(sort = storedSort) }
                             loadFirstPage(library, generation, storedSort)
@@ -376,8 +379,10 @@ class LibraryViewModel(
             sort = LibrarySort(),
         )
         requestJob = viewModelScope.launch {
-            val storedSort = repository.cachedLibrarySort(session.userId, library.id)
-                ?: LibrarySort()
+            val storedSort = normalizeLibrarySort(
+                library,
+                repository.cachedLibrarySort(session.userId, library.id) ?: LibrarySort(),
+            )
             if (generation != requestGeneration) return@launch
             _uiState.update { it.copy(sort = storedSort) }
             loadFirstPage(library, generation, storedSort)
@@ -488,6 +493,13 @@ class LibraryViewModel(
             LibraryViewModel(repository, session) as T
     }
 }
+
+private fun normalizeLibrarySort(library: Library, sort: LibrarySort): LibrarySort =
+    if (!library.supportsLastAdded && sort.sortBy == LibrarySortBy.LastAdded) {
+        sort.copy(sortBy = LibrarySortBy.Added)
+    } else {
+        sort
+    }
 
 data class SearchUiState(
     val query: String = "",
@@ -760,4 +772,3 @@ class DetailViewModel(
             DetailViewModel(repository, session, itemId) as T
     }
 }
-

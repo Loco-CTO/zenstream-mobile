@@ -56,6 +56,7 @@ data class Library(
     val id: String,
     val name: String,
     val collectionType: String?,
+    val supportsLastAdded: Boolean = false,
 )
 
 data class MediaRow(
@@ -78,16 +79,12 @@ data class LibraryData(
 )
 
 enum class LibrarySortBy(val apiValue: String) {
-    CommunityRating("CommunityRating"),
-    SortName("SortName"),
-    DateCreated("DateCreated"),
-    DateLastContentAdded("DateLastContentAdded"),
-    PremiereDate("PremiereDate"),
-    ProductionYear("ProductionYear"),
-    CriticRating("CriticRating"),
-    Runtime("Runtime"),
-    DatePlayed("DatePlayed"),
-    PlayCount("PlayCount"),
+    Rating("rating"),
+    Title("title"),
+    Added("added"),
+    LastAdded("lastAdded"),
+    Release("release"),
+    Runtime("runtime"),
 }
 
 enum class SortOrder(val apiValue: String) {
@@ -96,7 +93,7 @@ enum class SortOrder(val apiValue: String) {
 }
 
 data class LibrarySort(
-    val sortBy: LibrarySortBy = LibrarySortBy.CommunityRating,
+    val sortBy: LibrarySortBy = LibrarySortBy.LastAdded,
     val sortOrder: SortOrder = SortOrder.Descending,
 )
 

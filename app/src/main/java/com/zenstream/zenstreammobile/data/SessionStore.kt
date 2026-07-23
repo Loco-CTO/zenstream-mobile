@@ -224,7 +224,7 @@ private fun librarySortToJson(sort: LibrarySort): JSONObject = JSONObject()
 private fun librarySortFromJson(value: JSONObject): LibrarySort = LibrarySort(
     sortBy = runCatching {
         LibrarySortBy.valueOf(value.optString("sortBy"))
-    }.getOrDefault(LibrarySortBy.CommunityRating),
+    }.getOrDefault(LibrarySortBy.LastAdded),
     sortOrder = runCatching {
         SortOrder.valueOf(value.optString("sortOrder"))
     }.getOrDefault(SortOrder.Descending),
@@ -242,4 +242,3 @@ internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =
             }
         }
         .firstOrNull()
-

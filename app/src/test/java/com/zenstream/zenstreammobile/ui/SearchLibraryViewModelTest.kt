@@ -126,7 +126,7 @@ class SearchLibraryViewModelTest {
     @Test
     fun librarySortIsRestoredAndChangesReloadAndPersist() = runTest {
         val shows = Library("shows", "Shows", "tvshows")
-        val restored = LibrarySort(LibrarySortBy.SortName, SortOrder.Ascending)
+        val restored = LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
         val source = FakeLibraryDataSource(
             libraries = listOf(shows),
             storedSort = restored,
@@ -136,7 +136,7 @@ class SearchLibraryViewModelTest {
         advanceUntilIdle()
         assertEquals(restored, viewModel.uiState.value.sort)
 
-        val nextSort = LibrarySort(LibrarySortBy.ProductionYear, SortOrder.Descending)
+        val nextSort = LibrarySort(LibrarySortBy.Release, SortOrder.Descending)
         viewModel.setSort(nextSort)
         advanceUntilIdle()
 

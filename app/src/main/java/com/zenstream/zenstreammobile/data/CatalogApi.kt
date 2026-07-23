@@ -324,7 +324,7 @@ class CatalogApi(
         "limit" to "25",
         "recursive" to "true",
         "includeItemTypes" to "Series,Movie",
-        "sortBy" to "DateCreated",
+        "sortBy" to "added",
         "sortOrder" to "Descending",
         "fields" to ITEM_FIELDS,
         "enableImages" to "true",
@@ -343,7 +343,8 @@ class CatalogApi(
                 Library(
                     id,
                     item.optString("name").ifBlank { "Library" },
-                    when (item.optString("type")) { "tv_series" -> "tvshows"; "movies" -> "movies"; "collection" -> "boxsets"; else -> null })
+                    when (item.optString("type")) { "tv_series" -> "tvshows"; "movies" -> "movies"; "collection" -> "boxsets"; else -> null },
+                    item.optBoolean("supportsLastAdded", item.optString("type") != "movies"))
             }
         }
             .filter { it.collectionType == "tvshows" || it.collectionType == "movies" || it.collectionType == "boxsets" }
@@ -356,9 +357,9 @@ class CatalogApi(
     ): LibraryData =
         coroutineScope {
 			fun path(sortBy: String) = "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=$sortBy&sortOrder=descending"
-			val recent = async { catalogItems(requestJson(session, path("dateAdded"), requestTimeoutMillis = requestTimeoutMillis)) }
+			val recent = async { catalogItems(requestJson(session, path(if (library.supportsLastAdded) "lastAdded" else "added"), requestTimeoutMillis = requestTimeoutMillis)) }
 			val topRated = async { catalogItems(requestJson(session, path("rating"), requestTimeoutMillis = requestTimeoutMillis)) }
-			val newReleases = async { catalogItems(requestJson(session, path("releaseDate"), requestTimeoutMillis = requestTimeoutMillis)) }
+			val newReleases = async { catalogItems(requestJson(session, path("release"), requestTimeoutMillis = requestTimeoutMillis)) }
             LibraryData(
                 library, listOf(
                     MediaRow(RowTitle.NewlyAdded, library.name, recent.await()),
@@ -543,13 +544,7 @@ class CatalogApi(
 
 }
 
-private fun catalogSort(value: LibrarySortBy): String = when (value) {
-    LibrarySortBy.DateCreated, LibrarySortBy.DateLastContentAdded -> "dateAdded"
-    LibrarySortBy.PremiereDate, LibrarySortBy.ProductionYear -> "releaseDate"
-    LibrarySortBy.CommunityRating, LibrarySortBy.CriticRating -> "rating"
-    LibrarySortBy.Runtime -> "runtime"
-    else -> "title"
-}
+private fun catalogSort(value: LibrarySortBy): String = value.apiValue
 
 private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false): String {
     if (newlyAdded && collectionType == "tvshows") return "Episode"
@@ -1001,4 +996,3 @@ private fun JSONObject.optLongOrNull(key: String): Long? =
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (has(key) && !isNull(key)) optDouble(key) else null
-

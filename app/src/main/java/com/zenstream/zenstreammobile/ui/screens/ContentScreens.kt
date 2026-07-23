@@ -708,7 +708,9 @@ private fun LibraryHeader(
                 )
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                LibrarySortBy.entries.forEach { sortBy ->
+                LibrarySortBy.entries
+                    .filter { it != LibrarySortBy.LastAdded || state.selected?.supportsLastAdded == true }
+                    .forEach { sortBy ->
                     DropdownMenuItem(
                         text = { Text(sortLabel(sortBy)) },
                         onClick = {
@@ -732,16 +734,12 @@ private fun LibraryHeader(
 
 @Composable
 private fun sortLabel(sortBy: LibrarySortBy): String = when (sortBy) {
-    LibrarySortBy.CommunityRating -> stringResource(R.string.sort_rating)
-    LibrarySortBy.SortName -> stringResource(R.string.sort_title)
-    LibrarySortBy.DateCreated -> stringResource(R.string.sort_date_added)
-    LibrarySortBy.DateLastContentAdded -> stringResource(R.string.sort_last_added)
-    LibrarySortBy.PremiereDate -> stringResource(R.string.sort_release_date)
-    LibrarySortBy.ProductionYear -> stringResource(R.string.sort_year)
-    LibrarySortBy.CriticRating -> stringResource(R.string.sort_critic_rating)
+    LibrarySortBy.Rating -> stringResource(R.string.sort_rating)
+    LibrarySortBy.Title -> stringResource(R.string.sort_title)
+    LibrarySortBy.Added -> stringResource(R.string.sort_date_added)
+    LibrarySortBy.LastAdded -> stringResource(R.string.sort_last_added)
+    LibrarySortBy.Release -> stringResource(R.string.sort_release_date)
     LibrarySortBy.Runtime -> stringResource(R.string.sort_runtime)
-    LibrarySortBy.DatePlayed -> stringResource(R.string.sort_last_played)
-    LibrarySortBy.PlayCount -> stringResource(R.string.sort_play_count)
 }
 
 @Composable
@@ -889,4 +887,3 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         }
     }
 }
-

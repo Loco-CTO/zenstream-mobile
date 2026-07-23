@@ -52,11 +52,7 @@
     <string name="sort_date_added">Date added</string>
     <string name="sort_last_added">Last added</string>
     <string name="sort_release_date">Release date</string>
-    <string name="sort_year">Year</string>
-    <string name="sort_critic_rating">Critic rating</string>
     <string name="sort_runtime">Runtime</string>
-    <string name="sort_last_played">Last played</string>
-    <string name="sort_play_count">Play count</string>
     <string name="rating_description">Rating for %1$s</string>
     <string name="episodes_unwatched">%1$d</string>
     <string name="progress">%1$d%%</string>
