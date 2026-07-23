@@ -296,7 +296,9 @@ private fun MainScaffold(
 }
 
 private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
-    navController.navigate("detail/${Uri.encode(itemId)}")
+	navController.navigate("detail/${Uri.encode(itemId)}") {
+		launchSingleTop = true
+	}
 }
 
 private fun navigateToPlayback(
@@ -409,4 +411,3 @@ internal class ScrollVisibilityController(
 
 private const val HIDE_DISTANCE_DP = 56f
 private const val REVEAL_DISTANCE_DP = 64f
-
