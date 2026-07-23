@@ -82,6 +82,8 @@ class CatalogApi(
             method = "POST",
             body = JSONObject()
                 .put("engine", "media3")
+                .put("mediaSourceId", options.mediaSourceId)
+                .put("forceTranscoding", options.forceTranscoding)
                 .put("containers", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("mp4", "webm")))
                 .put("videoCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("h264", "vp9", "av1")))
                 .put("audioCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("aac", "opus", "vorbis")))
