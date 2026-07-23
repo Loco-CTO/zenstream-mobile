@@ -160,25 +160,13 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                 launch {
                     loadSection(
                         request = { repository.homeContinueWatching(session) },
-                        apply = { data, items ->
-                            data.withRow(
-                                RowTitle.ContinueWatching,
-                                items,
-                                wide = true
-                            )
-                        },
+                        apply = { data, items -> data.withRow(RowTitle.ContinueWatching, items, wide = true) },
                     )
                 }
                 launch {
                     loadSection(
                         request = { repository.homeNextUp(session) },
-                        apply = { data, items ->
-                            data.withRow(
-                                RowTitle.NextUp,
-                                items,
-                                wide = true
-                            )
-                        },
+                        apply = { data, items -> data.withRow(RowTitle.NextUp, items, wide = true) },
                     )
                 }
                 launch { loadLibraries() }
