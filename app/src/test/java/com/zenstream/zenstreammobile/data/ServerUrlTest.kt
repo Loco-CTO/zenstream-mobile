@@ -11,13 +11,13 @@ class ServerUrlTest {
     }
 
     @Test
-    fun permitsEmulatorLoopbackHttp() {
-        assertEquals("http://10.0.2.2:9090", normalizeServerUrl("http://10.0.2.2:9090/"))
+    fun permitsRemoteHttp() {
+        assertEquals("http://example.com:9090", normalizeServerUrl("http://example.com:9090/"))
     }
 
     @Test
-    fun rejectsNonTlsRemoteServer() {
-        assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("http://example.com") }
+    fun rejectsUnsupportedSchemes() {
+        assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("ftp://example.com") }
     }
 
     @Test

@@ -7,7 +7,7 @@
     <string name="server_url_hint">https://zso.example.com</string>
     <string name="continue_label">続行</string>
     <string name="server_url_required">サーバーURLを入力してください。</string>
-    <string name="server_url_invalid">HTTPSのサーバーURLを使用してください。</string>
+    <string name="server_url_invalid">HTTPまたはHTTPSのサーバーURLを使用してください。</string>
     <string name="welcome">おかえりなさい</string>
     <string name="login_description">ライブラリにサインインします。</string>
     <string name="username">ユーザー名</string>

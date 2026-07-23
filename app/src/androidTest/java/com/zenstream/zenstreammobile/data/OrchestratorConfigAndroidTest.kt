@@ -22,8 +22,8 @@ class OrchestratorConfigAndroidTest {
     }
 
     @Test
-	fun rejectsInsecureRemoteOrchestratorUrl() {
-		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("http://remote.example") }
+	fun acceptsHttpOrchestratorUrl() {
+		assertEquals("http://remote.example", normalizeServerUrl("http://remote.example/"))
     }
 
     @Test
@@ -33,4 +33,3 @@ class OrchestratorConfigAndroidTest {
         assertThrows(IllegalStateException::class.java) { parseLocale("{\"locale\":\"fr\"}") }
     }
 }
-
