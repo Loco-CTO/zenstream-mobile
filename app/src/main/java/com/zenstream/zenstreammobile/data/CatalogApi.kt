@@ -612,6 +612,8 @@ private fun playbackSource(root: JSONObject, source: JSONObject): JSONObject {
 			.put("Index", stream.optInt("index", index))
 			.put("Type", type)
 			.put("Language", stream.optJSONObject("tags")?.optString("language"))
+			.put("DisplayTitle", stream.optJSONObject("tags")?.optString("title"))
+			.put("Kind", stream.optString("kind"))
 			.put("IsDefault", stream.optJSONObject("disposition")?.optInt("default", 0) == 1))
 	}
 	return JSONObject()
@@ -663,8 +665,9 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
                 index = stream.optInt("Index", -1),
                 type = stream.optString("Type"),
                 displayTitle = stream.optString("DisplayTitle").ifBlank { null },
-                language = stream.optString("Language").ifBlank { null },
-                isDefault = stream.optBoolean("IsDefault", false),
+				language = stream.optString("Language").ifBlank { null },
+				isDefault = stream.optBoolean("IsDefault", false),
+				isLyrics = stream.optString("Kind") == "lyrics" || stream.optString("DisplayTitle") == "Lyrics",
             )
         }.filter { it.index >= 0 }
     } ?: emptyList()

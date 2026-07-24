@@ -22,6 +22,7 @@ data class MediaStream(
     val displayTitle: String? = null,
     val language: String? = null,
     val isDefault: Boolean = false,
+    val isLyrics: Boolean = false,
 )
 
 data class TrickplayInfo(
