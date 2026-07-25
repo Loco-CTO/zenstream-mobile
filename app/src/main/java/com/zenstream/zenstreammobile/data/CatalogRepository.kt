@@ -141,11 +141,15 @@ class CatalogRepository(
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 
-    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
         api.setFavorite(session, itemId, favorite)
+        invalidateHomeCache()
+    }
 
-    suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) =
+    suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) {
         api.setPlayed(session, itemId, played)
+        invalidateHomeCache()
+    }
 
     suspend fun playback(
         session: AuthSession,
@@ -170,7 +174,10 @@ class CatalogRepository(
         isPaused: Boolean,
         playSessionId: String?,
 		durationSeconds: Double? = null,
-	) = api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId, durationSeconds)
+	) {
+		api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId, durationSeconds)
+		invalidateHomeCache()
+	}
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
 
@@ -186,5 +193,9 @@ class CatalogRepository(
         val cached = homeCache
         if (cached != null && cached.first > System.currentTimeMillis() - 30_000) return@withLock cached.second
         api.fetchHome(session).also { homeCache = System.currentTimeMillis() to it }
+    }
+
+    private suspend fun invalidateHomeCache() {
+        homeMutex.withLock { homeCache = null }
     }
 }
