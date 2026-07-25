@@ -576,6 +576,14 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
 		}.filter { it.name.isNotBlank() }
 	}.orEmpty()
 	val genres = metadata.optJSONArray("genres") ?: metadata.optJSONArray("tags")
+	val studios = metadata.optJSONArray("studios")?.let { array ->
+		List(array.length()) { index ->
+			when (val value = array.opt(index)) {
+				is JSONObject -> value.optString("name")
+				else -> value?.toString().orEmpty()
+			}
+		}.filter(String::isNotBlank)
+	}.orEmpty()
 	return MediaItem(
 		id = item.optString("id"),
 		name = metadata.optString("title").ifBlank { item.optString("name").ifBlank { "Untitled" } },
@@ -589,14 +597,23 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
 		overview = metadata.optString("overview").ifBlank { metadata.optString("description").ifBlank { null } },
 		premiereDate = metadata.optString("date").ifBlank { metadata.optString("releaseDate").ifBlank { null } },
 		productionYear = metadata.optIntOrNull("year"),
+		officialRating = metadata.optString("officialRating")
+			.ifBlank { metadata.optString("certification") }
+			.ifBlank { null },
 		communityRating = metadata.optDoubleOrNull("communityRating"),
 		genres = genres?.let { array -> List(array.length()) { array.optString(it) }.filter(String::isNotBlank) }.orEmpty(),
+		studios = studios,
 		people = people,
+		recursiveItemCount = item.optIntOrNull("recursiveItemCount")
+			?: item.optIntOrNull("childCount")
+			?: metadata.optIntOrNull("recursiveItemCount")
+			?: metadata.optIntOrNull("childCount"),
 		runtimeTicks = metadata.optDoubleOrNull("runtimeMinutes")?.let { (it * 60.0 * 10_000_000.0).toLong() },
 		imageTags = buildMap { image("Primary")?.let { put("Primary", it) }; image("Logo")?.let { put("Logo", it) }; image("Banner")?.let { put("Banner", it) } },
 		backdropImageTags = image("Backdrop")?.let(::listOf).orEmpty(),
 		played = state.optBoolean("played", false),
 		favorite = state.optBoolean("favorite", false),
+		unplayedItemCount = state.optIntOrNull("unplayedItemCount"),
 		playedPercentage = state.optDoubleOrNull("playedPercentage"),
 		playbackPositionTicks = state.optDoubleOrNull("positionSeconds")?.let { (it * 10_000_000.0).toLong() },
 	)
