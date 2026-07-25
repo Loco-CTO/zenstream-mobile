@@ -29,7 +29,7 @@ class CatalogApiHttpTest {
     }
 
     @Test
-    fun reportsProgressWithNegotiatedSessionAndAcceptsNoContent() = runBlocking {
+    fun reportsProgressWithCatalogStatePatchAndAcceptsNoContent() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
         val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
@@ -39,37 +39,40 @@ class CatalogApiHttpTest {
             positionSeconds = 12.5,
             isPaused = true,
             playSessionId = "play-session-1",
+            durationSeconds = 100.0,
         )
 
         val request = server.takeRequest()
-        assertEquals("POST", request.method)
-        assertEquals("/api/playback/progress", request.path)
-        assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
+        assertEquals("PATCH", request.method)
+        assertEquals("/api/catalog/items/item-1/state", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
         val payload = JSONObject(request.body.readUtf8())
-        assertEquals("item-1", payload.getString("ItemId"))
-        assertEquals(125_000_000L, payload.optLong("PositionTicks"))
-        assertTrue(payload.optBoolean("IsPaused"))
-        assertEquals("DirectStream", payload.getString("PlayMethod"))
-        assertEquals("play-session-1", payload.getString("PlaySessionId"))
+        assertEquals(12.5, payload.getDouble("positionSeconds"), 0.001)
+        assertEquals(100.0, payload.getDouble("durationSeconds"), 0.001)
+        assertTrue(!payload.has("isPaused"))
+        assertTrue(!payload.has("playSessionId"))
     }
 
     @Test
-    fun loadsTrickplayWithAuthenticatedItemRequest() = runBlocking {
-        server.enqueue(
-            MockResponse().setBody(
-                """{"Trickplay":{"source-1":{"320":{"Width":320,"Interval":10000}}}}"""
-            )
-        )
+    fun writesWatchedAndFavoriteStateWithCatalogStatePatches() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        server.enqueue(MockResponse().setResponseCode(204))
         val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val api = CatalogApi(deviceId = "device-id")
 
-        val result = CatalogApi(deviceId = "device-id").trickplay(session, "episode-1")
+        api.setPlayed(session, "episode-1", true)
+        api.setFavorite(session, "episode-1", true)
 
-        val request = server.takeRequest()
-        assertEquals("/api/content/items/episode-1/trickplay?fields=Trickplay", request.path)
-        assertTrue(request.getHeader("Authorization").orEmpty().contains("Token=\"test-token\""))
-        assertEquals(320, result["source-1"]?.get("320")?.width)
-        assertEquals(10_000L, result["source-1"]?.get("320")?.intervalMillis)
+        val played = server.takeRequest()
+        assertEquals("PATCH", played.method)
+        assertEquals("/api/catalog/items/episode-1/state", played.path)
+        assertEquals("Bearer test-token", played.getHeader("Authorization"))
+        assertTrue(JSONObject(played.body.readUtf8()).getBoolean("played"))
+
+        val favorite = server.takeRequest()
+        assertEquals("PATCH", favorite.method)
+        assertEquals("/api/catalog/items/episode-1/state", favorite.path)
+        assertEquals("Bearer test-token", favorite.getHeader("Authorization"))
+        assertTrue(JSONObject(favorite.body.readUtf8()).getBoolean("favorite"))
     }
 }
-
-
