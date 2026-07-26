@@ -35,10 +35,9 @@ data class TrickplayInfo(
 
 data class MediaSource(
     val id: String?,
-    val directStreamUrl: String? = null,
-    val transcodingUrl: String? = null,
+    val url: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
-    val runTimeTicks: Long? = null,
+    val durationSeconds: Double? = null,
     val trickplay: Map<String, TrickplayInfo> = emptyMap(),
     val container: String? = null,
     val transcodingContainer: String? = null,
@@ -58,7 +57,7 @@ data class TrickplayPreview(
 data class PlaybackData(
     val item: MediaItem,
     val source: MediaSource,
-    val audio: List<MediaStream>,
+    val audioTracks: List<MediaStream>,
     val subtitles: List<MediaStream>,
     val segments: List<PlaybackSegment> = emptyList(),
     val qualities: List<Int> = listOf(
@@ -71,16 +70,36 @@ data class PlaybackData(
         32_000_000,
         64_000_000
     ),
-    val playSessionId: String? = null,
+    val mode: String? = null,
+    val sessionState: String? = null,
+    val sessionId: String? = null,
+    val url: String? = null,
+    val durationSeconds: Double? = null,
+    val startPositionSeconds: Double = 0.0,
+    val expiresAt: String? = null,
+    val errorCode: String? = null,
+    val errorDetail: String? = null,
+)
+
+data class PlaybackSessionStatus(
+    val sessionId: String,
+    val sessionState: String,
+    val playlistReady: Boolean = false,
+    val segmentCount: Int = 0,
+    val processAlive: Boolean = false,
+    val errorCode: String? = null,
+    val errorDetail: String? = null,
+    val lastAccessedAt: String? = null,
 )
 
 data class PlaybackOptions(
     val maxStreamingBitrate: Int? = null,
-    val startTimeTicks: Long = 0L,
-    val mediaSourceId: String? = null,
-    val audioStreamIndex: Int? = null,
+    val startPositionSeconds: Double = 0.0,
+    val sourceId: String? = null,
+    val audioStreamId: Int? = null,
     val forceTranscoding: Boolean = false,
     val directPlayOnly: Boolean = false,
+    val requestedMode: String? = null,
 )
 
 data class SubtitleStyle(

@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import android.view.View
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -93,9 +94,14 @@ private data class PlaybackProgressSnapshot(
     val positionSeconds: Double,
 	val durationSeconds: Double,
     val paused: Boolean,
-    val playSessionId: String?,
+    val sessionId: String?,
     val playbackGeneration: Long,
 )
+
+private const val PLAYBACK_TAG = "ZenStreamPlayback"
+
+private fun redactPlaybackUrl(value: String?): String =
+    value.orEmpty().replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
 
 class PlaybackViewModel(
     private val repository: CatalogRepository,
@@ -138,12 +144,24 @@ class PlaybackViewModel(
         engineJob = viewModelScope.launch {
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
+                if (state.error != null) {
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "engine error item=$itemId mode=${_uiState.value.playback?.mode} sessionId=${_uiState.value.playback?.sessionId} error=${state.error} recovered=$recovered",
+                    )
+                }
                 clearPlayedOnPlaybackStart(state)
-                if (state.error != null && !recovered && _uiState.value.playback?.source?.transcodingUrl == null) {
+                if (state.error != null && !recovered &&
+                    (_uiState.value.playback?.mode == null ||
+                        _uiState.value.playback?.mode == "direct")) {
                     recovered = true
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "performing single video-transcode recovery item=$itemId previousMode=${_uiState.value.playback?.mode}",
+                    )
                     loadPlayback(
                         PlaybackOptions(
-                            forceTranscoding = true,
+                            requestedMode = "video-transcode",
                             maxStreamingBitrate = 1_000_000
                         )
                     )
@@ -202,8 +220,6 @@ class PlaybackViewModel(
                     session,
                     itemId,
                     playback.source,
-                    _uiState.value.selectedQuality,
-                    ticks(mediaOriginSeconds)
                 ),
                 currentPosition,
                 playbackMimeType(playback.source, _uiState.value.selectedQuality),
@@ -222,15 +238,16 @@ class PlaybackViewModel(
             val requestedStartSeconds = if (hasCurrentPlayback) {
                 mediaOriginSeconds + currentPosition
             } else {
-                options.startTimeTicks / 10_000_000.0
+                options.startPositionSeconds
             }.coerceAtLeast(0.0)
             val requestOptions = options.copy(
-                startTimeTicks = if (hasCurrentPlayback) ticks(requestedStartSeconds) else options.startTimeTicks,
+                startPositionSeconds = if (hasCurrentPlayback) requestedStartSeconds else options.startPositionSeconds,
             )
             _uiState.value = _uiState.value.copy(loading = true, error = null)
             val data = runCatching {
                 repository.playback(session, itemId, requestOptions)
             }.getOrElse {
+                Log.e(PLAYBACK_TAG, "playback negotiation failed item=$itemId error=${it.message}")
                 if (loadGeneration == playbackGeneration) {
                     _uiState.value = _uiState.value.copy(
                         loading = false,
@@ -240,17 +257,21 @@ class PlaybackViewModel(
                 return@launch
             }
             if (loadGeneration != playbackGeneration) return@launch
+            Log.i(
+                PLAYBACK_TAG,
+                "playback data item=$itemId mode=${data.mode} state=${data.sessionState} sessionId=${data.sessionId} url=${redactPlaybackUrl(data.url)}",
+            )
 
-            val selectedAudio = requestOptions.audioStreamIndex
-                ?: data.audio.firstOrNull { it.isDefault }?.index
-                ?: data.audio.firstOrNull()?.index
+            val selectedAudio = requestOptions.audioStreamId
+                ?: data.audioTracks.firstOrNull { it.isDefault }?.index
+                ?: data.audioTracks.firstOrNull()?.index
             val selectedSubtitle = selectSubtitleTrack(
                 currentTrack = _uiState.value.selectedSubtitle,
                 selectionInitialized = subtitleSelectionInitialized,
                 subtitles = data.subtitles,
             )
             val requestedOrResumeStartSeconds =
-                if (hasCurrentPlayback || requestOptions.startTimeTicks > 0) {
+                if (hasCurrentPlayback || requestOptions.startPositionSeconds > 0) {
                     requestedStartSeconds
                 } else {
                     data.item.playbackPositionTicks.orZero() / 10_000_000.0
@@ -259,7 +280,7 @@ class PlaybackViewModel(
                 session,
                 data.source,
                 requestedOrResumeStartSeconds,
-                streamStartsAtRequestedPosition = requestOptions.startTimeTicks > 0L,
+                streamStartsAtRequestedPosition = requestOptions.startPositionSeconds > 0,
             )
             val localStartSeconds =
                 playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
@@ -298,8 +319,6 @@ class PlaybackViewModel(
                     session,
                     itemId,
                     playbackData.source,
-                    bitrate,
-                    requestOptions.startTimeTicks
                 ),
                 localStartSeconds,
                 playbackMimeType(playbackData.source, bitrate),
@@ -357,7 +376,7 @@ class PlaybackViewModel(
                 itemId,
                 snapshot.positionSeconds,
                 snapshot.paused,
-                snapshot.playSessionId,
+                snapshot.sessionId,
 				snapshot.durationSeconds,
             )
         }
@@ -371,7 +390,7 @@ class PlaybackViewModel(
                 positionSeconds = it,
 				durationSeconds = state.durationSeconds,
                 paused = !state.isPlaying,
-                playSessionId = _uiState.value.playback?.playSessionId,
+                sessionId = _uiState.value.playback?.sessionId,
                 playbackGeneration = playbackGeneration,
             )
         }
@@ -404,8 +423,8 @@ class PlaybackViewModel(
         _uiState.value = _uiState.value.copy(selectedAudio = stream.index)
         loadPlayback(
             PlaybackOptions(
-                mediaSourceId = _uiState.value.playback?.source?.id,
-                audioStreamIndex = stream.index
+                sourceId = _uiState.value.playback?.source?.id,
+                audioStreamId = stream.index
             )
         )
     }
@@ -498,4 +517,3 @@ class PlaybackViewModel(
         ) as T
     }
 }
-

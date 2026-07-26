@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.ui.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -101,6 +102,7 @@ interface PlaybackEngine {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class Media3PlaybackEngine : PlaybackEngine {
+    private val tag = "ZenStreamPlayback"
     private val _state = MutableStateFlow(EngineState())
     override val state: StateFlow<EngineState> = _state
     private val handler = Handler(Looper.getMainLooper())
@@ -135,6 +137,7 @@ class Media3PlaybackEngine : PlaybackEngine {
                     .build()
                 exo.addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
+                        Log.e(tag, "Media3 playback error code=${error.errorCodeName} message=${error.message}")
                         _state.value = _state.value.copy(error = error.message ?: "Playback failed")
                     }
 
@@ -143,6 +146,7 @@ class Media3PlaybackEngine : PlaybackEngine {
                             ready = playbackState == Player.STATE_READY,
                             isBuffering = playbackState == Player.STATE_BUFFERING,
                         )
+                        Log.i(tag, "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}")
                         if (playbackState == Player.STATE_READY) applyInitialSeek()
                     }
                 })
@@ -161,6 +165,7 @@ class Media3PlaybackEngine : PlaybackEngine {
             ?: _state.value.positionSeconds
 
     override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
+        Log.i(tag, "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds")
         val current = player
         if (current == null) {
             pending = PendingPlayback(url, startPositionSeconds, mimeType)
@@ -209,6 +214,9 @@ class Media3PlaybackEngine : PlaybackEngine {
         player = null
     }
 }
+
+private fun redactPlaybackUrl(value: String): String =
+    value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
 
 class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private val _state = MutableStateFlow(EngineState())

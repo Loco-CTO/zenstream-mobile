@@ -71,22 +71,6 @@ internal fun isCurrentSubtitleRequest(
         requestedTrack == currentTrack &&
         requestedSourceId == currentSourceId
 
-fun playbackSessionId(session: AuthSession, source: MediaSource): String? {
-    val negotiated = source.transcodingUrl ?: source.directStreamUrl ?: return null
-    val resolved = runCatching { session.serverUrl.toHttpUrl().resolve(negotiated) }.getOrNull()
-    return resolved?.queryParameter("PlaySessionId")
-        ?.takeIf { it.isNotBlank() }
-        ?: resolved?.queryParameter("playSessionId")?.takeIf { it.isNotBlank() }
-}
-
-internal fun playbackSessionIdFromInfo(
-    infoPlaySessionId: String?,
-    session: AuthSession,
-    source: MediaSource,
-): String? = infoPlaySessionId
-    ?.takeIf { it.isNotBlank() }
-    ?: playbackSessionId(session, source)
-
 private fun parseVttTimestamp(value: String): Double? {
     val parts = value.trim().split(':')
     if (parts.size !in 2..3) return null

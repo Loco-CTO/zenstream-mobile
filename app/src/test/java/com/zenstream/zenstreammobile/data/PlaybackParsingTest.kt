@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -19,7 +18,7 @@ class PlaybackParsingTest {
             playbackMimeType(
                 MediaSource(
                     id = "source-1",
-                    transcodingUrl = "/api/playback/items/item-1/stream?lease=lease-1",
+                    url = "/api/playback/sessions/session-1/master.m3u8?access=lease-1",
                 ),
             ),
         )
@@ -80,31 +79,6 @@ class PlaybackParsingTest {
     }
 
     @Test
-    fun prefersPlaybackInfoSessionId() {
-        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
-        val source = MediaSource(
-            id = "source-1",
-            transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
-        )
-
-        assertEquals(
-            "info-session",
-            playbackSessionIdFromInfo("info-session", session, source),
-        )
-    }
-
-    @Test
-    fun fallsBackToNegotiatedPlaybackUrlSessionId() {
-        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
-        val source = MediaSource(
-            id = "source-1",
-            transcodingUrl = "/video/master.m3u8?PlaySessionId=url-session",
-        )
-
-        assertEquals("url-session", playbackSessionIdFromInfo(null, session, source))
-    }
-
-    @Test
     fun resolvesRelativeNegotiatedPlaybackUrlAgainstServer() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
             "https://orchestrator.example", "token", "user", "name"
@@ -114,25 +88,28 @@ class PlaybackParsingTest {
             "item-1",
             com.zenstream.zenstreammobile.model.MediaSource(
                 id = "source-1",
-                transcodingUrl = "/api/playback/items/item-1/stream?MediaSourceId=source-1&lease=lease-1",
+                url = "/api/playback/items/item-1/stream?sourceId=source-1&access=lease-1",
             )
         )
         assertTrue(url.startsWith("https://orchestrator.example/api/playback/items/item-1/stream"))
-        assertTrue(url.contains("MediaSourceId=source-1"))
+        assertTrue(url.contains("sourceId=source-1"))
     }
 
     @Test
-    fun fallbackPlaybackCarriesTheOrchestratorResourceTicket() {
+    fun canonicalPlaybackUrlCarriesTheOrchestratorResourceTicket() {
         val session = com.zenstream.zenstreammobile.model.AuthSession(
             "https://orchestrator.example", "token", "user", "name", "resource-ticket"
         )
         val url = playbackUrl(
             session,
             "item-1",
-            com.zenstream.zenstreammobile.model.MediaSource(id = "source-1"),
+            com.zenstream.zenstreammobile.model.MediaSource(
+                id = "source-1",
+                url = "/api/playback/items/item-1/stream?sourceId=source-1&access=resource-ticket",
+            ),
         )
 
-        assertEquals("resource-ticket", url.toHttpUrl().queryParameter("access"))
+        assertTrue(url.contains("access=resource-ticket"))
     }
 
     @Test
@@ -144,12 +121,12 @@ class PlaybackParsingTest {
             session,
             com.zenstream.zenstreammobile.model.MediaSource(
                 id = "source-1",
-                transcodingUrl = "/video/master.m3u8?startTimeTicks=1250000000",
+                url = "/api/playback/sessions/session-1/master.m3u8?access=ticket",
             ),
             requestedStartSeconds = 125.0,
         )
 
-        assertEquals(125.0, origin, 0.001)
+        assertEquals(0.0, origin, 0.001)
     }
 
     @Test
@@ -159,7 +136,7 @@ class PlaybackParsingTest {
         )
 
         assertEquals(
-            42.0,
+            0.0,
             playbackStreamStartPositionSeconds(
                 session,
                 com.zenstream.zenstreammobile.model.MediaSource(id = "source-1"),
@@ -181,7 +158,7 @@ class PlaybackParsingTest {
                 session,
                 com.zenstream.zenstreammobile.model.MediaSource(
                     id = "source-1",
-                    transcodingUrl = "/video/master.m3u8?MediaSourceId=source-1",
+                    url = "/api/playback/sessions/session-1/master.m3u8?access=ticket",
                 ),
                 requestedStartSeconds = 125.0,
             ),
@@ -201,7 +178,7 @@ class PlaybackParsingTest {
                 session,
                 com.zenstream.zenstreammobile.model.MediaSource(
                     id = "source-1",
-                    transcodingUrl = "/api/playback/items/item-1/stream?lease=opaque",
+                url = "/api/playback/sessions/session-1/master.m3u8?access=opaque",
                 ),
                 requestedStartSeconds = 125.0,
                 streamStartsAtRequestedPosition = true,
@@ -454,4 +431,3 @@ class PlaybackParsingTest {
     }
 
 }
-

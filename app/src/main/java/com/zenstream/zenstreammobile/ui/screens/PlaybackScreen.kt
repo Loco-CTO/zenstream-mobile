@@ -288,7 +288,7 @@ fun PlaybackScreen(
                                 LucideR.drawable.lucide_ic_gauge,
                                 stringResourceCompat(R.string.player_speed)
                             ) { sheet = PlayerSheet.Speed }
-                            if (shouldShowAudioSelector(state.playback?.audio.orEmpty().size)) {
+                            if (shouldShowAudioSelector(state.playback?.audioTracks.orEmpty().size)) {
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_audio_lines,
                                     stringResourceCompat(R.string.audio_track)
@@ -455,7 +455,7 @@ fun PlaybackScreen(
             selectedSubtitle = state.selectedSubtitle,
             selectedAudio = state.selectedAudio,
             selectedQuality = state.selectedQuality,
-            audio = state.playback?.audio.orEmpty(),
+            audio = state.playback?.audioTracks.orEmpty(),
             subtitles = state.playback?.subtitles.orEmpty(),
             qualities = state.playback?.qualities.orEmpty(),
             speed = state.engine.speed,

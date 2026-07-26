@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import android.os.Build
+import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
@@ -20,12 +21,14 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
+import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.TrickplayInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -82,28 +85,97 @@ class CatalogApi(
             method = "POST",
             body = JSONObject()
                 .put("engine", "media3")
-                .put("mediaSourceId", options.mediaSourceId)
+                .put("sourceId", options.sourceId)
+                .put("requestedMode", options.requestedMode)
                 .put("forceTranscoding", options.forceTranscoding)
-                .put("containers", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("mp4", "webm")))
-                .put("videoCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("h264", "vp9", "av1")))
-                .put("audioCodecs", if (options.forceTranscoding) JSONArray() else JSONArray(listOf("aac", "opus", "vorbis")))
+                .put("containers", JSONArray(listOf("mp4", "webm")))
+                .put("videoCodecs", JSONArray(listOf("h264", "vp9", "av1")))
+                .put("audioCodecs", JSONArray(listOf("aac", "opus", "vorbis")))
+                .put("maxAudioChannels", 2)
                 .put("maxStreamingBitrate", options.maxStreamingBitrate)
-                .put("audioStreamIndex", options.audioStreamIndex)
+                .put("startPositionSeconds", options.startPositionSeconds)
+                .put("audioStreamId", options.audioStreamId)
                 .toString(),
         )
         val sourcePayload = json.optJSONObject("source") ?: error("Server did not return a media source")
-        val sourceJson = playbackSource(json, sourcePayload)
-        val source = parseMediaSource(sourceJson)
-        val playSessionId = json.optString("sessionId").ifBlank { null }
+        val source = parseMediaSource(sourcePayload)
+        val sessionId = json.optString("sessionId").ifBlank { null }
+        val sessionState = json.optString("sessionState").ifBlank { null }
+        Log.i(
+            PLAYBACK_TAG,
+            "negotiated item=$itemId mode=${json.optString("mode")} sessionId=${sessionId ?: "none"} state=${sessionState ?: "none"} url=${redactPlaybackUrl(json.optString("url"))}",
+        )
+        if (sessionId != null && sessionState == "starting") {
+            val status = awaitPlaybackReady(session, sessionId)
+            json.put("sessionState", status.sessionState)
+            Log.i(
+                PLAYBACK_TAG,
+                "session ready sessionId=$sessionId state=${status.sessionState} playlistReady=${status.playlistReady} segments=${status.segmentCount}",
+            )
+        }
         PlaybackData(
             item = item,
             source = source,
-            audio = source.mediaStreams.filter { it.type == "Audio" },
+            audioTracks = source.mediaStreams.filter { it.type.equals("audio", true) },
             subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
             segments = getPlaybackSegments(session, itemId, item),
-            playSessionId = playSessionId,
+            mode = json.optString("mode").ifBlank { null },
+            sessionState = json.optString("sessionState").ifBlank { null },
+            sessionId = sessionId,
+            url = json.optString("url").ifBlank { null },
+            durationSeconds = json.optDoubleOrNull("durationSeconds"),
+            startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
+            expiresAt = json.optString("expiresAt").ifBlank { null },
+            errorCode = json.optString("errorCode").ifBlank { null },
+            errorDetail = json.optString("errorDetail").ifBlank { null },
         )
     }
+
+    suspend fun playbackStatus(
+        session: AuthSession,
+        sessionId: String,
+    ): PlaybackSessionStatus = withContext(Dispatchers.IO) {
+        parsePlaybackSessionStatus(
+            sessionId,
+            requestJson(session, "/api/playback/sessions/$sessionId"),
+        )
+    }
+
+    private suspend fun awaitPlaybackReady(
+        session: AuthSession,
+        sessionId: String,
+    ): PlaybackSessionStatus {
+        val deadline = android.os.SystemClock.elapsedRealtime() + PLAYBACK_READY_TIMEOUT_MILLIS
+        var latest: PlaybackSessionStatus? = null
+        while (android.os.SystemClock.elapsedRealtime() <= deadline) {
+            latest = playbackStatus(session, sessionId)
+            Log.i(
+                PLAYBACK_TAG,
+                "session status sessionId=$sessionId state=${latest.sessionState} playlistReady=${latest.playlistReady} segments=${latest.segmentCount} processAlive=${latest.processAlive}",
+            )
+            if (latest.sessionState == "ready" && latest.playlistReady) return latest
+            if (latest.sessionState in setOf("failed", "stopping", "expired")) {
+                Log.e(PLAYBACK_TAG, "session failed sessionId=$sessionId code=${latest.errorCode} detail=${latest.errorDetail}")
+                error(latest.errorCode ?: "Playback session failed before becoming ready")
+            }
+            delay(PLAYBACK_READY_INTERVAL_MILLIS)
+        }
+        error(latest?.errorCode ?: "Playback session did not become ready before the deadline")
+    }
+
+    private fun parsePlaybackSessionStatus(
+        sessionId: String,
+        json: JSONObject,
+    ): PlaybackSessionStatus = PlaybackSessionStatus(
+        sessionId = json.optString("sessionId").ifBlank { sessionId },
+        sessionState = json.optString("sessionState"),
+        playlistReady = json.optBoolean("playlistReady"),
+        segmentCount = json.optInt("segmentCount"),
+        processAlive = json.optBoolean("processAlive"),
+        errorCode = json.optString("errorCode").ifBlank { null },
+        errorDetail = json.optString("errorDetail").ifBlank { null },
+        lastAccessedAt = json.optString("lastAccessedAt").ifBlank { null },
+    )
 
     suspend fun trickplay(
         session: AuthSession,
@@ -211,17 +283,13 @@ class CatalogApi(
 
     internal fun playbackBody(session: AuthSession, options: PlaybackOptions): String =
         JSONObject()
-            .put("UserId", session.userId)
-            .put("MaxStreamingBitrate", options.maxStreamingBitrate)
-            .put("StartTimeTicks", options.startTimeTicks)
-            .put("MediaSourceId", options.mediaSourceId)
-            .put("AudioStreamIndex", options.audioStreamIndex)
-            .put("SubtitleStreamIndex", -1)
-            .put("EnableDirectPlay", !options.forceTranscoding)
-            .put("EnableDirectStream", !options.forceTranscoding)
-            .put("AllowVideoStreamCopy", !options.forceTranscoding)
-            .put("AllowAudioStreamCopy", !options.forceTranscoding)
-            .put("EnableTranscoding", !options.directPlayOnly)
+            .put("maxStreamingBitrate", options.maxStreamingBitrate)
+            .put("startPositionSeconds", options.startPositionSeconds)
+            .put("sourceId", options.sourceId)
+            .put("audioStreamId", options.audioStreamId)
+            .put("forceTranscoding", options.forceTranscoding)
+            .put("directPlayOnly", options.directPlayOnly)
+            .put("requestedMode", options.requestedMode)
             .put("DeviceProfile", deviceProfile(options))
             .toString()
 
@@ -229,17 +297,13 @@ class CatalogApi(
         session: AuthSession,
         options: PlaybackOptions
     ): Map<String, Any?> = mapOf(
-        "userId" to session.userId,
-        "startTimeTicks" to options.startTimeTicks,
+        "startPositionSeconds" to options.startPositionSeconds,
         "maxStreamingBitrate" to options.maxStreamingBitrate,
-        "mediaSourceId" to options.mediaSourceId,
-        "audioStreamIndex" to options.audioStreamIndex,
-        "subtitleStreamIndex" to -1,
-        "enableDirectPlay" to !options.forceTranscoding,
-        "enableDirectStream" to !options.forceTranscoding,
-        "allowVideoStreamCopy" to !options.forceTranscoding,
-        "allowAudioStreamCopy" to !options.forceTranscoding,
-        "enableTranscoding" to !options.directPlayOnly,
+        "sourceId" to options.sourceId,
+        "audioStreamId" to options.audioStreamId,
+        "forceTranscoding" to options.forceTranscoding,
+        "directPlayOnly" to options.directPlayOnly,
+        "requestedMode" to options.requestedMode,
     ).filterValues { it != null }
 
     private fun deviceProfile(options: PlaybackOptions): JSONObject {
@@ -534,11 +598,17 @@ class CatalogApi(
         private const val ITEM_FIELDS = "Overview,Genres,CommunityRating,ProductionYear,PremiereDate,People,Studios,Chapters"
         private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Banner"
         internal const val HOME_REQUEST_TIMEOUT_MILLIS = 30_000L
+        private const val PLAYBACK_READY_TIMEOUT_MILLIS = 15_000L
+        private const val PLAYBACK_READY_INTERVAL_MILLIS = 350L
+        private const val PLAYBACK_TAG = "ZenStreamPlayback"
 
         fun authorizationHeader(token: String) = "Bearer $token"
     }
 
 }
+
+private fun redactPlaybackUrl(value: String): String =
+    value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
 
 private fun catalogSort(value: LibrarySortBy): String = value.apiValue
 
@@ -619,28 +689,6 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
 	)
 }
 
-private fun playbackSource(root: JSONObject, source: JSONObject): JSONObject {
-	val streams = source.optJSONArray("streams") ?: JSONArray()
-	val mappedStreams = JSONArray()
-	for (index in 0 until streams.length()) {
-		val stream = streams.optJSONObject(index) ?: continue
-		val type = stream.optString("codec_type").replaceFirstChar { it.uppercase() }
-		mappedStreams.put(JSONObject()
-			.put("Index", stream.optInt("index", index))
-			.put("Type", type)
-			.put("Language", stream.optJSONObject("tags")?.optString("language"))
-			.put("DisplayTitle", stream.optJSONObject("tags")?.optString("title"))
-			.put("Kind", stream.optString("kind"))
-			.put("IsDefault", stream.optJSONObject("disposition")?.optInt("default", 0) == 1))
-	}
-	return JSONObject()
-		.put("Id", source.optString("id"))
-		.put("Container", source.optString("container"))
-		.put("RunTimeTicks", (source.optDouble("durationSeconds", 0.0) * 10_000_000.0).toLong())
-		.put("MediaStreams", mappedStreams)
-		.put(if (root.optString("mode") == "hls") "TranscodingUrl" else "DirectStreamUrl", root.optString("url"))
-}
-
 internal fun selectInitialSeason(
     item: MediaItem,
     seasons: List<MediaItem>,
@@ -662,7 +710,7 @@ internal fun subtitleWebVttQuery(
     itemId: String,
     sourceId: String?,
 ): Map<String, String> = buildMap {
-    put("MediaSourceId", sourceId ?: itemId)
+    put("sourceId", sourceId ?: itemId)
     put("format", "vtt")
     put("addVttTimeMap", "false")
     put("copyTimestamps", "false")
@@ -675,28 +723,43 @@ internal fun subtitleWebVttQuery(
 }
 
 private fun parseMediaSource(source: JSONObject): MediaSource {
-    val streams = source.optJSONArray("MediaStreams")?.let { array ->
+    val streams = source.optJSONArray("streams")?.let { array ->
         List(array.length()) { index ->
             val stream = array.optJSONObject(index) ?: JSONObject()
+            val codecType = stream.optString("codec_type").lowercase()
+            val type = when (codecType) {
+                "video" -> "Video"
+                "audio" -> "Audio"
+                "subtitle" -> "Subtitle"
+                else -> stream.optString("type")
+            }
+            val tags = stream.optJSONObject("tags")
+            val disposition = stream.optJSONObject("disposition")
             MediaStream(
-                index = stream.optInt("Index", -1),
-                type = stream.optString("Type"),
-                displayTitle = stream.optString("DisplayTitle").ifBlank { null },
-				language = stream.optString("Language").ifBlank { null },
-				isDefault = stream.optBoolean("IsDefault", false),
-				isLyrics = stream.optString("Kind") == "lyrics" || stream.optString("DisplayTitle") == "Lyrics",
+                index = stream.optInt("index", -1),
+                type = type,
+                displayTitle = stream.optString("displayTitle")
+                    .ifBlank { tags?.optString("title").orEmpty() }
+                    .ifBlank { null },
+                language = stream.optString("language")
+                    .ifBlank { tags?.optString("language").orEmpty() }
+                    .ifBlank { null },
+                isDefault = stream.optBoolean("isDefault") ||
+                    (disposition?.optInt("default", 0) ?: 0) == 1,
+                isLyrics = stream.optString("kind") == "lyrics" ||
+                    tags?.optString("handler_name") == "Lyrics" ||
+                    tags?.optString("title") == "Lyrics",
             )
         }.filter { it.index >= 0 }
     } ?: emptyList()
     return MediaSource(
-        id = source.optString("Id").ifBlank { null },
-        directStreamUrl = source.optString("DirectStreamUrl").ifBlank { null },
-        transcodingUrl = source.optString("TranscodingUrl").ifBlank { null },
+        id = source.optString("id").ifBlank { null },
+        url = source.optString("url").ifBlank { null },
         mediaStreams = streams,
-        runTimeTicks = source.optLongOrNull("RunTimeTicks"),
+        durationSeconds = source.optDoubleOrNull("durationSeconds"),
         trickplay = parseTrickplaySource(source.optJSONObject("Trickplay")),
-        container = source.optString("Container").ifBlank { null },
-        transcodingContainer = source.optString("TranscodingContainer").ifBlank { null },
+        container = source.optString("container").ifBlank { null },
+        transcodingContainer = source.optString("transcodingContainer").ifBlank { null },
     )
 }
 
@@ -719,14 +782,13 @@ internal fun parseTrickplaySource(value: JSONObject?): Map<String, TrickplayInfo
     }?.toMap().orEmpty()
 
 internal fun playbackMimeType(source: MediaSource, bitrate: Int = 0): String? {
-    val negotiatedUrl = source.transcodingUrl ?: source.directStreamUrl
+    val negotiatedUrl = source.url
     val urlPath = negotiatedUrl
         ?.substringBefore('?')
         ?.substringBefore('#')
         ?.lowercase()
-    if (urlPath?.endsWith(".m3u8") == true || source.transcodingUrl != null || bitrate > 0) {
-        // The gateway deliberately rewrites manifests to /api/video/.../stream,
-        // so Media3 cannot infer HLS from the URL after negotiation.
+    if (urlPath?.endsWith(".m3u8") == true || bitrate > 0) {
+        // The canonical session URL explicitly identifies HLS.
         return "application/x-mpegURL"
     }
 
@@ -747,9 +809,9 @@ fun playbackUrl(
     itemId: String,
     source: MediaSource,
     bitrate: Int = 0,
-    startTimeTicks: Long = 0L,
+    startPositionSeconds: Double = 0.0,
 ): String {
-    val negotiated = source.transcodingUrl ?: source.directStreamUrl
+    val negotiated = source.url
     if (negotiated != null) {
         val gateway = session.serverUrl.toHttpUrl()
         val resolved = gateway.resolve(negotiated)
@@ -759,16 +821,7 @@ fun playbackUrl(
             return resolved.toString()
         }
     }
-	val builder =
-		"${session.serverUrl}/api/playback/items/$itemId/stream".toHttpUrl()
-            .newBuilder()
-    builder.addQueryParameter("Static", if (bitrate > 0) "false" else "true")
-    builder.addQueryParameter("MediaSourceId", source.id ?: itemId)
-    if (startTimeTicks > 0) builder.addQueryParameter("startTimeTicks", startTimeTicks.toString())
-    if (bitrate > 0) builder.addQueryParameter("TranscodingMaxBitrate", bitrate.toString())
-    builder.addQueryParameter("TranscodingMaxAudioChannels", "2")
-    session.resourceTicket?.let { builder.addQueryParameter("access", it) }
-    return builder.build().toString()
+    error("Canonical playback response did not include a usable URL")
 }
 
 fun playbackStreamStartPositionSeconds(
@@ -777,14 +830,7 @@ fun playbackStreamStartPositionSeconds(
     requestedStartSeconds: Double = 0.0,
     streamStartsAtRequestedPosition: Boolean = false,
 ): Double {
-    val negotiated = source.transcodingUrl ?: source.directStreamUrl
-    if (negotiated == null) return requestedStartSeconds.coerceAtLeast(0.0)
-    val resolved = runCatching { session.serverUrl.toHttpUrl().resolve(negotiated) }.getOrNull()
-    val startTicks = resolved?.queryParameter("startTimeTicks")?.toLongOrNull()
-        ?: resolved?.queryParameter("StartTimeTicks")?.toLongOrNull()
-    return startTicks?.div(10_000_000.0)?.coerceAtLeast(0.0)
-        ?: requestedStartSeconds.takeIf { streamStartsAtRequestedPosition }?.coerceAtLeast(0.0)
-        ?: 0.0
+    return requestedStartSeconds.takeIf { streamStartsAtRequestedPosition }?.coerceAtLeast(0.0) ?: 0.0
 }
 
 fun playbackLocalPositionSeconds(

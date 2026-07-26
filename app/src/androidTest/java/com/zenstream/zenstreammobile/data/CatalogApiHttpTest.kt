@@ -38,7 +38,7 @@ class CatalogApiHttpTest {
             itemId = "item-1",
             positionSeconds = 12.5,
             isPaused = true,
-            playSessionId = "play-session-1",
+            sessionId = "play-session-1",
             durationSeconds = 100.0,
         )
 
