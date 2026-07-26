@@ -236,7 +236,7 @@ class PlaybackViewModel(
             val hasCurrentPlayback = _uiState.value.playback != null
             val currentPosition = currentPlayerPositionSeconds()
             val requestedStartSeconds = if (hasCurrentPlayback) {
-                mediaOriginSeconds + currentPosition
+                currentPosition
             } else {
                 options.startPositionSeconds
             }.coerceAtLeast(0.0)
@@ -276,14 +276,8 @@ class PlaybackViewModel(
                 } else {
                     data.item.playbackPositionTicks.orZero() / 10_000_000.0
                 }
-            val sourceOriginSeconds = playbackStreamStartPositionSeconds(
-                session,
-                data.source,
-                requestedOrResumeStartSeconds,
-                streamStartsAtRequestedPosition = requestOptions.startPositionSeconds > 0,
-            )
-            val localStartSeconds =
-                playbackLocalPositionSeconds(requestedOrResumeStartSeconds, sourceOriginSeconds)
+            val sourceOriginSeconds = 0.0
+            val localStartSeconds = requestedOrResumeStartSeconds
             val bitrate = requestOptions.maxStreamingBitrate ?: 0
             mediaOriginSeconds = sourceOriginSeconds
             val previousTrickplay = _uiState.value.playback?.source?.trickplay.orEmpty()
@@ -384,7 +378,7 @@ class PlaybackViewModel(
 
     private fun playbackProgressSnapshot(): PlaybackProgressSnapshot? {
         val state = _uiState.value.engine
-        val position = mediaOriginSeconds + currentPlayerPositionSeconds()
+        val position = currentPlayerPositionSeconds()
         return position.takeIf { it > 0 }?.let {
             PlaybackProgressSnapshot(
                 positionSeconds = it,
