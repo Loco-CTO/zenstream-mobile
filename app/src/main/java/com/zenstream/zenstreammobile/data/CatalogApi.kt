@@ -830,14 +830,13 @@ fun playbackStreamStartPositionSeconds(
     requestedStartSeconds: Double = 0.0,
     streamStartsAtRequestedPosition: Boolean = false,
 ): Double {
-    return requestedStartSeconds.takeIf { streamStartsAtRequestedPosition }?.coerceAtLeast(0.0) ?: 0.0
+    return 0.0
 }
 
 fun playbackLocalPositionSeconds(
     absolutePositionSeconds: Double,
     streamOriginSeconds: Double
-): Double =
-    (absolutePositionSeconds - streamOriginSeconds).coerceAtLeast(0.0)
+): Double = absolutePositionSeconds.coerceAtLeast(0.0)
 
 fun parseMediaItems(json: JSONObject): List<MediaItem> = items(json).mapNotNull { item ->
     val id = item.optString("Id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
