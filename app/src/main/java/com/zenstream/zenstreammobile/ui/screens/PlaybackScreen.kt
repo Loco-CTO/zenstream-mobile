@@ -364,8 +364,6 @@ fun PlaybackScreen(
                         timelineScrub?.positionSeconds ?: state.engine.positionSeconds
                     val preview = timelineScrub?.let { scrub ->
                         trickplayPreview(
-                            session = session,
-                            itemId = itemId,
                             source = state.playback?.source,
                             timeSeconds = state.mediaOriginSeconds + scrub.positionSeconds,
                         )
@@ -433,8 +431,6 @@ fun PlaybackScreen(
 
         surfaceDragPosition?.let { targetPosition ->
             val preview = trickplayPreview(
-                session = session,
-                itemId = itemId,
                 source = state.playback?.source,
                 timeSeconds = state.mediaOriginSeconds + targetPosition,
             ).takeUnless { surfacePreviewUnavailable }

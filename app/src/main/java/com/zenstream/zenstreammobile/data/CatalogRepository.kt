@@ -158,7 +158,8 @@ class CatalogRepository(
     ): PlaybackData =
         api.playback(session, itemId, options)
 
-    suspend fun trickplay(session: AuthSession, itemId: String) = api.trickplay(session, itemId)
+    suspend fun trickplay(session: AuthSession, itemId: String, sourceId: String?) =
+        api.trickplay(session, itemId, sourceId)
 
     suspend fun subtitleWebVtt(
         session: AuthSession,

@@ -8,7 +8,9 @@ import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
-import com.zenstream.zenstreammobile.model.TrickplayInfo
+import com.zenstream.zenstreammobile.model.TrickplayManifest
+import com.zenstream.zenstreammobile.model.TrickplaySheet
+import org.json.JSONObject
 
 class PlaybackParsingTest {
     @Test
@@ -33,16 +35,24 @@ class PlaybackParsingTest {
     }
 
     @Test
-    fun buildsTrickplayPreviewUsingLargestResolutionAndTileCoordinates() {
-        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
+    fun buildsTrickplayPreviewFromTheNativeManifestSheetAndTileCoordinates() {
         val preview = trickplayPreview(
-            session,
-            "episode/1",
             MediaSource(
                 id = "source-1",
-                trickplay = mapOf(
-                    "320" to TrickplayInfo(320, 180, 2, 2, 5_000),
-                    "640" to TrickplayInfo(640, 360, 2, 2, 5_000),
+                trickplay = TrickplayManifest(
+                    state = "ready",
+                    sourceId = "source-1",
+                    frameWidth = 640,
+                    frameHeight = 360,
+                    intervalSeconds = 5.0,
+                    columns = 2,
+                    rows = 2,
+                    frameCount = 10,
+                    sheets = listOf(
+                        TrickplaySheet(0, 4, "https://orchestrator.example/sheet-0.jpg"),
+                        TrickplaySheet(1, 4, "https://orchestrator.example/sheet-1.jpg"),
+                        TrickplaySheet(2, 2, "https://orchestrator.example/sheet-2.jpg"),
+                    ),
                 ),
             ),
             45.0,
@@ -52,30 +62,52 @@ class PlaybackParsingTest {
         assertEquals(1, preview?.cellX)
         assertEquals(0, preview?.cellY)
         assertEquals(640, preview?.width)
-        assertTrue(preview?.url.orEmpty().contains("/api/video/episode%2F1/trickplay/640/2"))
-        assertTrue(preview?.url.orEmpty().contains("MediaSourceId=source-1"))
-        assertFalse(preview?.url.orEmpty().contains("api_key"))
+        assertEquals("https://orchestrator.example/sheet-2.jpg", preview?.url)
     }
 
     @Test
-    fun trickplayPreviewUsesWebDefaultsWhenGeometryIsMissing() {
+    fun parsingNativeManifestResolvesSheetUrlsAndDerivesFrameCount() {
+        val manifest = parseTrickplayManifest(
+            JSONObject(
+                """{
+                    "state":"ready", "sourceId":"source-1", "frameWidth":320, "frameHeight":180,
+                    "intervalSeconds":10, "columns":10, "rows":10,
+                    "sheets":[{"index":0,"frameCount":100,"url":"/api/playback/items/item-1/trickplay/generation/0.jpg?access=ticket"}]
+                }""",
+            ),
+            "https://orchestrator.example",
+        )
+
+        assertEquals(100, manifest?.frameCount)
+        assertEquals(320, manifest?.frameWidth)
+        assertEquals(180, manifest?.frameHeight)
+        assertEquals(
+            "https://orchestrator.example/api/playback/items/item-1/trickplay/generation/0.jpg?access=ticket",
+            manifest?.sheets?.single()?.url,
+        )
+    }
+
+    @Test
+    fun trickplayPreviewIsUnavailableUntilTheManifestIsReady() {
         val preview = trickplayPreview(
-            AuthSession("https://orchestrator.example", "token", "user", "name"),
-            "item-1",
             MediaSource(
                 id = "source-1",
-                trickplay = mapOf("320" to TrickplayInfo()),
+                trickplay = TrickplayManifest(
+                    state = "generating",
+                    sourceId = "source-1",
+                    frameWidth = 320,
+                    frameHeight = 180,
+                    intervalSeconds = 10.0,
+                    columns = 10,
+                    rows = 10,
+                    frameCount = 1,
+                    sheets = emptyList(),
+                ),
             ),
             1.0,
         )
 
-        assertEquals(320, preview?.width)
-        assertEquals(180, preview?.height)
-        assertEquals(0, preview?.tileIndex)
-        assertEquals(0, preview?.cellX)
-        assertEquals(0, preview?.cellY)
-        assertEquals(10, preview?.columns)
-        assertEquals(10, preview?.rows)
+        assertEquals(null, preview)
     }
 
     @Test

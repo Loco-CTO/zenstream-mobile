@@ -1,13 +1,10 @@
 package com.zenstream.zenstreammobile.data
 
-import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.TrickplayPreview
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.math.floor
-import kotlin.math.max
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
     val lines = input.removePrefix("\uFEFF")
@@ -88,44 +85,29 @@ fun normalizeSubtitleStyle(style: SubtitleStyle): SubtitleStyle = style.copy(
 )
 
 fun trickplayPreview(
-    session: AuthSession,
-    itemId: String,
     source: MediaSource?,
     timeSeconds: Double,
 ): TrickplayPreview? {
     if (!timeSeconds.isFinite() || timeSeconds < 0.0) return null
-    val entry = source?.trickplay
-        ?.entries
-        ?.sortedByDescending { it.key.toIntOrNull() ?: Int.MIN_VALUE }
-        ?.firstOrNull { it.key.toIntOrNull() != null }
-        ?: return null
-    val widthKey = entry.key
-    val info = entry.value
-    val thumbnailWidth = info.width ?: widthKey.toIntOrNull() ?: return null
-    val thumbnailHeight = info.height ?: ((thumbnailWidth * 9) / 16)
-    val columns = info.tileWidth ?: 10
-    val rows = info.tileHeight ?: 10
-    val intervalSeconds = max(1.0, (info.intervalMillis ?: 10_000L) / 1_000.0)
-    if (thumbnailWidth <= 0 || thumbnailHeight <= 0 || columns <= 0 || rows <= 0) return null
+    val manifest = source?.trickplay ?: return null
+    if (manifest.state != "ready" || manifest.frameWidth <= 0 || manifest.frameHeight <= 0 ||
+        !manifest.intervalSeconds.isFinite() || manifest.intervalSeconds <= 0.0 ||
+        manifest.columns <= 0 || manifest.rows <= 0 || manifest.frameCount <= 0
+    ) return null
 
-    val thumbnail = floor(timeSeconds / intervalSeconds).toInt().coerceAtLeast(0)
+    val thumbnail = floor(timeSeconds / manifest.intervalSeconds).toInt()
+        .coerceIn(0, manifest.frameCount - 1)
+    val columns = manifest.columns
+    val rows = manifest.rows
     val tileSize = columns * rows
     val tileIndex = thumbnail / tileSize
+    val sheet = manifest.sheets.firstOrNull { it.index == tileIndex } ?: return null
     val tileOffset = thumbnail % tileSize
-    val url = session.serverUrl.toHttpUrl().newBuilder()
-        .addPathSegment("api")
-        .addPathSegment("video")
-        .addPathSegment(itemId)
-        .addPathSegment("trickplay")
-        .addPathSegment(widthKey)
-        .addPathSegment(tileIndex.toString())
-        .addQueryParameter("MediaSourceId", source.id ?: itemId)
-        .build()
-        .toString()
+    if (tileOffset >= sheet.frameCount) return null
     return TrickplayPreview(
-        url = url,
-        width = thumbnailWidth,
-        height = thumbnailHeight,
+        url = sheet.url,
+        width = manifest.frameWidth,
+        height = manifest.frameHeight,
         tileIndex = tileIndex,
         cellX = tileOffset % columns,
         cellY = tileOffset / columns,

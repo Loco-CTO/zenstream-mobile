@@ -25,12 +25,22 @@ data class MediaStream(
     val isLyrics: Boolean = false,
 )
 
-data class TrickplayInfo(
-    val width: Int? = null,
-    val height: Int? = null,
-    val tileWidth: Int? = null,
-    val tileHeight: Int? = null,
-    val intervalMillis: Long? = null,
+data class TrickplaySheet(
+    val index: Int,
+    val frameCount: Int,
+    val url: String,
+)
+
+data class TrickplayManifest(
+    val state: String,
+    val sourceId: String,
+    val frameWidth: Int,
+    val frameHeight: Int,
+    val intervalSeconds: Double,
+    val columns: Int,
+    val rows: Int,
+    val frameCount: Int,
+    val sheets: List<TrickplaySheet>,
 )
 
 data class MediaSource(
@@ -38,7 +48,7 @@ data class MediaSource(
     val url: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
     val durationSeconds: Double? = null,
-    val trickplay: Map<String, TrickplayInfo> = emptyMap(),
+    val trickplay: TrickplayManifest? = null,
     val container: String? = null,
     val transcodingContainer: String? = null,
 )

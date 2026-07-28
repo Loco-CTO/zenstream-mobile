@@ -99,6 +99,8 @@ private data class PlaybackProgressSnapshot(
 )
 
 private const val PLAYBACK_TAG = "ZenStreamPlayback"
+private const val TRICKPLAY_MANIFEST_ATTEMPTS = 12
+private const val TRICKPLAY_MANIFEST_RETRY_MILLIS = 1_000L
 
 private fun redactPlaybackUrl(value: String?): String =
     value.orEmpty().replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
@@ -280,8 +282,8 @@ class PlaybackViewModel(
             val localStartSeconds = requestedOrResumeStartSeconds
             val bitrate = requestOptions.maxStreamingBitrate ?: 0
             mediaOriginSeconds = sourceOriginSeconds
-            val previousTrickplay = _uiState.value.playback?.source?.trickplay.orEmpty()
-            val source = if (data.source.trickplay.isNotEmpty() || previousTrickplay.isEmpty()) {
+            val previousTrickplay = _uiState.value.playback?.source?.trickplay
+            val source = if (data.source.trickplay != null || previousTrickplay == null) {
                 data.source
             } else {
                 data.source.copy(trickplay = previousTrickplay)
@@ -319,22 +321,32 @@ class PlaybackViewModel(
             )
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()
-            loadTrickplay(loadGeneration, playbackData.source.trickplay.isEmpty())
+            loadTrickplay(loadGeneration, playbackData.source.id, playbackData.source.trickplay == null)
         }
     }
 
-    private fun loadTrickplay(loadGeneration: Long, shouldLoad: Boolean) {
+    private fun loadTrickplay(loadGeneration: Long, sourceId: String?, shouldLoad: Boolean) {
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
-            val bySource =
-                runCatching { repository.trickplay(session, itemId) }.getOrDefault(emptyMap())
-            if (loadGeneration != playbackGeneration) return@launch
-            val current = _uiState.value.playback ?: return@launch
-            val trickplay = bySource[current.source.id.orEmpty()] ?: return@launch
-            if (trickplay.isEmpty()) return@launch
-            _uiState.value = _uiState.value.copy(
-                playback = current.copy(source = current.source.copy(trickplay = trickplay)),
-            )
+            repeat(TRICKPLAY_MANIFEST_ATTEMPTS) { attempt ->
+                val manifest = runCatching {
+                    repository.trickplay(session, itemId, sourceId)
+                }.getOrNull()
+                if (loadGeneration != playbackGeneration) return@launch
+                if (manifest?.state == "ready" && manifest.sheets.isNotEmpty()) {
+                    val current = _uiState.value.playback ?: return@launch
+                    if (current.source.id == manifest.sourceId || sourceId == null) {
+                        _uiState.value = _uiState.value.copy(
+                            playback = current.copy(source = current.source.copy(trickplay = manifest)),
+                        )
+                    }
+                    return@launch
+                }
+                if (manifest?.state !in setOf("queued", "generating") ||
+                    attempt == TRICKPLAY_MANIFEST_ATTEMPTS - 1
+                ) return@launch
+                delay(TRICKPLAY_MANIFEST_RETRY_MILLIS)
+            }
         }
     }
 

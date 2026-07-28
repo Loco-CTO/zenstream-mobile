@@ -23,7 +23,8 @@ import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
 import com.zenstream.zenstreammobile.model.RowTitle
-import com.zenstream.zenstreammobile.model.TrickplayInfo
+import com.zenstream.zenstreammobile.model.TrickplayManifest
+import com.zenstream.zenstreammobile.model.TrickplaySheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -180,7 +181,15 @@ class CatalogApi(
     suspend fun trickplay(
         session: AuthSession,
         itemId: String,
-    ): Map<String, Map<String, TrickplayInfo>> = emptyMap()
+        sourceId: String?,
+    ): TrickplayManifest? = withContext(Dispatchers.IO) {
+        val manifest = requestJson(
+            session,
+            "/api/playback/items/${android.net.Uri.encode(itemId)}/trickplay",
+            query = buildMap { sourceId?.takeIf(String::isNotBlank)?.let { put("sourceId", it) } },
+        )
+        parseTrickplayManifest(manifest, session.serverUrl)
+    }
 
     private fun getPlaybackSegments(
         session: AuthSession,
@@ -757,29 +766,49 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
         url = source.optString("url").ifBlank { null },
         mediaStreams = streams,
         durationSeconds = source.optDoubleOrNull("durationSeconds"),
-        trickplay = parseTrickplaySource(source.optJSONObject("Trickplay")),
         container = source.optString("container").ifBlank { null },
         transcodingContainer = source.optString("transcodingContainer").ifBlank { null },
     )
 }
 
-internal fun parseTrickplayBySource(value: JSONObject?): Map<String, Map<String, TrickplayInfo>> =
-    value?.keys()?.asSequence()?.mapNotNull { sourceId ->
-        val source = value.optJSONObject(sourceId) ?: return@mapNotNull null
-        sourceId to parseTrickplaySource(source)
-    }?.toMap().orEmpty()
+internal fun parseTrickplayManifest(value: JSONObject?, serverUrl: String): TrickplayManifest? {
+    val manifest = value ?: return null
+    val sheets = manifest.optJSONArray("sheets") ?: manifest.optJSONArray("sheetList")
+    val parsedSheets = List(sheets?.length() ?: 0) { sheets?.optJSONObject(it) }
+        .mapNotNull { sheet ->
+            sheet ?: return@mapNotNull null
+            val index = sheet.optIntAny("index", "sheetIndex") ?: return@mapNotNull null
+            val frameCount = sheet.optIntAny("frameCount", "frames") ?: return@mapNotNull null
+            val rawUrl = sheet.optStringAny("url", "sheetUrl") ?: return@mapNotNull null
+            val url = resolveTrickplayUrl(serverUrl, rawUrl) ?: return@mapNotNull null
+            TrickplaySheet(index, frameCount, url)
+        }
+    return TrickplayManifest(
+        state = manifest.optStringAny("state") ?: return null,
+        sourceId = manifest.optStringAny("sourceId", "source_id") ?: return null,
+        frameWidth = manifest.optIntAny("frameWidth", "frame_width") ?: return null,
+        frameHeight = manifest.optIntAny("frameHeight", "frame_height") ?: return null,
+        intervalSeconds = manifest.optDoubleAny("intervalSeconds", "interval_seconds") ?: return null,
+        columns = manifest.optIntAny("columns") ?: return null,
+        rows = manifest.optIntAny("rows") ?: return null,
+        frameCount = manifest.optIntAny("frameCount", "frame_count")
+            ?: parsedSheets.sumOf { it.frameCount },
+        sheets = parsedSheets,
+    )
+}
 
-internal fun parseTrickplaySource(value: JSONObject?): Map<String, TrickplayInfo> =
-    value?.keys()?.asSequence()?.mapNotNull { width ->
-        val info = value.optJSONObject(width) ?: return@mapNotNull null
-        width to TrickplayInfo(
-            width = info.optIntOrNull("Width") ?: info.optIntOrNull("width"),
-            height = info.optIntOrNull("Height") ?: info.optIntOrNull("height"),
-            tileWidth = info.optIntOrNull("TileWidth") ?: info.optIntOrNull("tileWidth"),
-            tileHeight = info.optIntOrNull("TileHeight") ?: info.optIntOrNull("tileHeight"),
-            intervalMillis = info.optLongOrNull("Interval") ?: info.optLongOrNull("interval"),
-        )
-    }?.toMap().orEmpty()
+private fun JSONObject.optStringAny(vararg keys: String): String? =
+    keys.asSequence().map { optString(it).trim() }.firstOrNull { it.isNotBlank() }
+
+private fun JSONObject.optIntAny(vararg keys: String): Int? =
+    keys.asSequence().mapNotNull { optIntOrNull(it) }.firstOrNull()
+
+private fun JSONObject.optDoubleAny(vararg keys: String): Double? =
+    keys.asSequence().mapNotNull { optDoubleOrNull(it) }.firstOrNull()
+
+private fun resolveTrickplayUrl(serverUrl: String, value: String): String? =
+    runCatching { value.toHttpUrl().toString() }.getOrNull()
+        ?: value.takeIf { it.startsWith('/') }?.let { serverUrl.trimEnd('/') + it }
 
 internal fun playbackMimeType(source: MediaSource, bitrate: Int = 0): String? {
     val negotiatedUrl = source.url
