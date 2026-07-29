@@ -370,15 +370,20 @@ class SyncplayManager(
         val viewing: Boolean,
         val loading: Boolean,
     ) {
-        fun isCurrent(active: SyncplayGroup): Boolean =
-            room.id == active.id &&
-                room.itemId == active.itemId &&
-                room.mediaGeneration == active.mediaGeneration &&
-                room.timelineRevision == active.timelineRevision
+        fun isCurrent(active: SyncplayGroup): Boolean = syncplayPresenceReportIsCurrent(room, active)
     }
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
+
+internal fun syncplayPresenceReportIsCurrent(
+    report: SyncplayGroup,
+    active: SyncplayGroup,
+): Boolean =
+    report.id == active.id &&
+        report.itemId == active.itemId &&
+        report.mediaGeneration == active.mediaGeneration &&
+        report.timelineRevision == active.timelineRevision
 
 object SyncplaySession {
     private var current: SyncplayManager? = null
