@@ -4,6 +4,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.SyncplayGroup
+import com.zenstream.zenstreammobile.model.SyncplayMember
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
@@ -161,10 +162,43 @@ class PlaybackViewModelTest {
         assertEquals(listOf("playing", "paused"), applied.map { it.playbackState })
     }
 
+    @Test
+    fun playingSyncplayTimelineIsReappliedEverySecond() = runTest {
+        val active = syncplayRoom(playbackState = "playing", effectiveAt = 0.0)
+        val applied = mutableListOf<Double>()
+        val scheduler = SyncplayTimelineScheduler(
+            scope = this,
+            serverNow = { testScheduler.currentTime / 1_000.0 },
+            currentRoom = { active },
+            apply = { _, now -> applied += now },
+        )
+
+        scheduler.apply(active)
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(listOf(0.0, 1.0), applied)
+        scheduler.cancel()
+    }
+
+    @Test
+    fun syncplayAutoplayIsDisabledOnlyForTheCurrentOptedInMember() {
+        val room = syncplayRoom(
+            playbackState = "paused",
+            members = listOf(syncplayMember(watchingTogether = true)),
+        )
+
+        assertFalse(syncplayShouldAutoplay(room, "device-1", "item-1"))
+        assertTrue(syncplayShouldAutoplay(room.copy(itemId = "other"), "device-1", "item-1"))
+        assertTrue(syncplayShouldAutoplay(room.copy(members = listOf(syncplayMember(watchingTogether = false))), "device-1", "item-1"))
+        assertTrue(syncplayShouldAutoplay(null, "device-1", "item-1"))
+    }
+
     private fun syncplayRoom(
         playbackState: String,
         effectiveAt: Double = 0.0,
         anchorPosition: Double = 10.0,
+        members: List<SyncplayMember> = emptyList(),
     ) = SyncplayGroup(
         id = "room-1",
         name = "Room",
@@ -185,6 +219,17 @@ class PlaybackViewModelTest {
         pauseReason = null,
         hostDisconnectedAt = null,
         updatedAt = 100.0,
-        members = emptyList(),
+        members = members,
+    )
+
+    private fun syncplayMember(watchingTogether: Boolean) = SyncplayMember(
+        userId = "user-1",
+        participantId = "device-1",
+        username = "User",
+        watchingTogether = watchingTogether,
+        viewing = true,
+        loading = false,
+        readyGeneration = 1,
+        role = "host",
     )
 }
