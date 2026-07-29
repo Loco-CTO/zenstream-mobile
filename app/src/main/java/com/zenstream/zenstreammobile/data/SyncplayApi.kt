@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
+import com.zenstream.zenstreammobile.model.playableSyncplayItemId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -78,7 +79,7 @@ class SyncplayException(val statusCode: Int, message: String, val payload: Strin
 
 fun parseSyncplayGroup(value: JSONObject): SyncplayGroup = SyncplayGroup(
     id = value.optString("id"), name = value.optString("name"), hostUserId = value.optString("hostUserId"), hostName = value.optString("hostName"),
-    allowViewerControls = value.optBoolean("allowViewerControls"), itemId = value.optString("itemId").ifBlank { null }, position = value.optDouble("position"),
+    allowViewerControls = value.optBoolean("allowViewerControls"), itemId = playableSyncplayItemId(value.optString("itemId")), position = value.optDouble("position"),
     playing = value.optBoolean("playing"), resumeWhenReady = value.optBoolean("resumeWhenReady"), revision = value.optInt("revision"),
     timelineRevision = value.optInt("timelineRevision", value.optInt("revision")), mediaGeneration = value.optInt("mediaGeneration"),
     anchorPosition = value.optDouble("anchorPosition"), anchorServerTime = value.optDouble("anchorServerTime"), effectiveAt = value.optDouble("effectiveAt"),

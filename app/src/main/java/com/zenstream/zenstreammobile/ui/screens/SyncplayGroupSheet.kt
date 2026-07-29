@@ -54,6 +54,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
 import com.zenstream.zenstreammobile.model.SyncplayUiState
+import com.zenstream.zenstreammobile.model.mediaItemId
 import kotlinx.coroutines.launch
 
 private val SyncplayPlayerSheetSurface = Color(0xFF1B1B1F)
@@ -362,7 +363,7 @@ private fun ActiveGroupContent(
         }
     }
 
-    if (group.itemId != null) {
+    if (group.mediaItemId() != null) {
         Button(
             onClick = { onReturnToView(group) },
             modifier = Modifier.fillMaxWidth(),

@@ -34,6 +34,12 @@ data class SyncplayGroup(
     val members: List<SyncplayMember>,
 )
 
+fun playableSyncplayItemId(itemId: String?): String? = itemId
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+
+fun SyncplayGroup.mediaItemId(): String? = playableSyncplayItemId(itemId)
+
 data class SyncplayUiState(
     val groups: List<SyncplayGroup> = emptyList(),
     val active: SyncplayGroup? = null,

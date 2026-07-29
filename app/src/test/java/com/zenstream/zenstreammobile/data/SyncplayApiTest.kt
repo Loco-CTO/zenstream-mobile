@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,5 +54,12 @@ class SyncplayApiTest {
             listOf("room-1"),
             JSONArray().put(JSONObject().put("id", "room-1").put("members", JSONArray())).toGroups().map { it.id },
         )
+    }
+
+    @Test
+    fun parsesJsonNullMediaIdAsNoMedia() {
+        val group = parseSyncplayGroup(JSONObject().put("id", "room-1").put("itemId", JSONObject.NULL))
+
+        assertNull(group.itemId)
     }
 }

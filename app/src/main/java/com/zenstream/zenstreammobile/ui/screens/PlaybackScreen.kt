@@ -102,6 +102,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.TrickplayPreview
+import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
@@ -164,7 +165,7 @@ fun PlaybackScreen(
     ) {
         val room = syncplayState.active ?: return@LaunchedEffect
         val member = syncplayState.currentMember() ?: return@LaunchedEffect
-        if (member.watchingTogether && room.itemId != null) vm.applySyncplayRoom(room, syncplay.serverNow())
+        if (member.watchingTogether && room.mediaItemId() != null) vm.applySyncplayRoom(room, syncplay.serverNow())
     }
 
     DisposableEffect(vm, lifecycleOwner) {
@@ -231,7 +232,7 @@ fun PlaybackScreen(
         state.engine.isBuffering,
     ) {
         val room = syncplayState.active
-        if (room?.itemId == state.itemId && syncplayState.currentMember()?.watchingTogether == true) {
+        if (room?.mediaItemId() == state.itemId && syncplayState.currentMember()?.watchingTogether == true) {
             runCatching {
                 syncplay.presence(
                     viewing = true,
@@ -396,7 +397,7 @@ fun PlaybackScreen(
                                 manager = syncplay,
                                 session = session,
                                 onReturnToView = { group ->
-                                    if (group.itemId != null) {
+                                    if (group.mediaItemId() != null) {
                                         vm.applySyncplayRoom(group, syncplay.serverNow())
                                     }
                                 },

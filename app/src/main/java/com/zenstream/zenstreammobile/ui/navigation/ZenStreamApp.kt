@@ -55,6 +55,7 @@ import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.SyncplayGroup
+import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
@@ -142,7 +143,7 @@ private fun MainScaffold(
     ) {
         val room = syncplayState.active
         val member = syncplayState.currentMember()
-        val itemId = room?.itemId
+        val itemId = room?.mediaItemId()
         val key = room?.let { "${it.id}:${it.mediaGeneration}:${itemId}" }
         // A media command begins paused while the Syncplay readiness barrier waits
         // for every opted-in participant.  Following only `playing` rooms leaves
@@ -215,7 +216,7 @@ private fun MainScaffold(
                             syncplay = syncplay,
                             session = session,
                             onReturnToView = { group ->
-                                group.itemId?.let { launchPlayback(context, it, "") }
+                                group.mediaItemId()?.let { launchPlayback(context, it, "") }
                             },
                             onSettings = {
                                 navController.navigate(SETTINGS) {
