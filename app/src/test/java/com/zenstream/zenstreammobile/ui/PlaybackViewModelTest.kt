@@ -194,6 +194,22 @@ class PlaybackViewModelTest {
         assertTrue(syncplayShouldAutoplay(null, "device-1", "item-1"))
     }
 
+    @Test
+    fun syncplayReadinessBarrierMatchesTheWebRules() {
+        val waiting = syncplayRoom(
+            playbackState = "paused",
+            members = listOf(syncplayMember(watchingTogether = true).copy(viewing = false)),
+        ).copy(resumeWhenReady = true)
+
+        assertTrue(syncplayWaitingForMembers(waiting, "item-1"))
+        assertTrue(syncplayWaitingForMembers(waiting.copy(members = listOf(syncplayMember(true).copy(loading = true))), "item-1"))
+        assertTrue(syncplayWaitingForMembers(waiting.copy(members = listOf(syncplayMember(true).copy(readyGeneration = 0))), "item-1"))
+        assertFalse(syncplayWaitingForMembers(waiting.copy(members = listOf(syncplayMember(false))), "item-1"))
+        assertFalse(syncplayWaitingForMembers(waiting.copy(resumeWhenReady = false), "item-1"))
+        assertTrue(syncplayWaitingForMembers(waiting.copy(members = emptyList()), "item-1"))
+        assertFalse(syncplayWaitingForMembers(waiting, "other-item"))
+    }
+
     private fun syncplayRoom(
         playbackState: String,
         effectiveAt: Double = 0.0,
