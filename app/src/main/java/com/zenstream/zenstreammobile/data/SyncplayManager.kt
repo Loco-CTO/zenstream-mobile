@@ -6,6 +6,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,7 @@ class SyncplayManager(
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
     private var hydrated = false
+    private var pendingPresence: Job? = null
 
     init { scope.launch { start() } }
 
@@ -140,6 +142,7 @@ class SyncplayManager(
         }
     }
     suspend fun setWatchingTogether(watching: Boolean) = mutex.withLock {
+        pendingPresence?.cancel()
         _state.value.active?.let {
             try {
                 adopt(api.participation(session, participant(), it, watching))
@@ -150,6 +153,7 @@ class SyncplayManager(
         }
     }
     suspend fun command(action: String, position: Double, playing: Boolean, itemId: String? = null) = mutex.withLock {
+        pendingPresence?.cancel()
         val active = _state.value.active ?: return@withLock
         try {
             try {
@@ -165,23 +169,39 @@ class SyncplayManager(
             throw error
         }
     }
-    suspend fun presence(viewing: Boolean, loading: Boolean) = mutex.withLock {
+    private suspend fun presence(report: PresenceReport) = mutex.withLock {
         val active = _state.value.active ?: return@withLock
+        if (!report.isCurrent(active)) return@withLock
         presenceSequence += 1
         try {
-            adopt(api.presence(session, participant(), active, viewing, loading, presenceSequence))
+            adopt(api.presence(
+                session,
+                participant(),
+                report.room,
+                report.viewing,
+                report.loading,
+                presenceSequence,
+            ))
         } catch (error: Exception) {
             notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
             throw error
         }
     }
 
-    fun reportPresence(viewing: Boolean, loading: Boolean) {
-        scope.launch { runCatching { presence(viewing, loading) } }
+    fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
+        val room = _state.value.active ?: return
+        val report = PresenceReport(room, viewing, loading)
+        pendingPresence?.cancel()
+        pendingPresence = scope.launch {
+            if (!immediate) delay(if (loading) 750 else 300)
+            runCatching { presence(report) }
+        }
     }
 
     fun stop() {
         stopped = true
+        pendingPresence?.cancel()
+        pendingPresence = null
         socket?.close(1000, "Session ended")
         socket = null
         connectionEnded?.complete(Unit)
@@ -344,6 +364,18 @@ class SyncplayManager(
         _notifications.tryEmit(notification)
     }
     private fun participant(): String = _state.value.participantId.ifBlank { error("Syncplay has not started") }
+
+    private data class PresenceReport(
+        val room: SyncplayGroup,
+        val viewing: Boolean,
+        val loading: Boolean,
+    ) {
+        fun isCurrent(active: SyncplayGroup): Boolean =
+            room.id == active.id &&
+                room.itemId == active.itemId &&
+                room.mediaGeneration == active.mediaGeneration &&
+                room.timelineRevision == active.timelineRevision
+    }
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
