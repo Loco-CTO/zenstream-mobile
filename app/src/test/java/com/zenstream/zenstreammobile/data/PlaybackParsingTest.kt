@@ -424,26 +424,4 @@ class PlaybackParsingTest {
         assertTrue(gate.shouldReportEndFile())
     }
 
-    @Test
-    fun derivesChapterMarkerEndFromTheNextChapterOrRuntime() {
-        val item = com.zenstream.zenstreammobile.model.MediaItem(
-            id = "episode-1",
-            name = "Episode",
-            runtimeTicks = 600_000_000L,
-            chapters = listOf(
-                com.zenstream.zenstreammobile.model.MediaChapter(0L, "Opening"),
-                com.zenstream.zenstreammobile.model.MediaChapter(120_000_000L, "Story"),
-                com.zenstream.zenstreammobile.model.MediaChapter(500_000_000L, "Ending Credits"),
-            ),
-        )
-
-        val markers = chapterPlaybackSegments(item)
-
-        assertEquals(2, markers.size)
-        assertEquals(0.0, markers[0].startSeconds, 0.001)
-        assertEquals(12.0, markers[0].endSeconds, 0.001)
-        assertEquals(50.0, markers[1].startSeconds, 0.001)
-        assertEquals(60.0, markers[1].endSeconds, 0.001)
-    }
-
 }

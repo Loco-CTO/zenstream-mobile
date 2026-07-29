@@ -1060,28 +1060,6 @@ private fun marker(type: PlaybackSegmentType, rawStart: Double, rawEnd: Double):
 private fun Double.toPlaybackSeconds(): Double =
     if (this > 1_000_000.0) this / 10_000_000.0 else this
 
-internal fun chapterPlaybackSegments(item: MediaItem): List<PlaybackSegment> {
-    val chapters = item.chapters.sortedBy { it.startPositionTicks }
-    val runtime = item.runtimeTicks ?: return emptyList()
-    return chapters.mapIndexedNotNull { index, chapter ->
-        val end = chapters.getOrNull(index + 1)?.startPositionTicks ?: runtime
-        chapterNameType(chapter.name)?.let { type ->
-            marker(type, chapter.startPositionTicks.toDouble(), end.toDouble())
-        }
-    }
-}
-
-private fun chapterNameType(name: String?): PlaybackSegmentType? {
-    val normalized = name.orEmpty().trim().lowercase()
-    return when {
-        normalized == "op" || normalized == "opening" || normalized.contains("intro") -> PlaybackSegmentType.INTRO
-        normalized == "ed" || normalized == "ending" || normalized == "outro" ||
-                normalized.contains("credit") || normalized.contains("closing") -> PlaybackSegmentType.OUTRO
-
-        else -> null
-    }
-}
-
 private fun stringArray(item: JSONObject, key: String): List<String> =
     item.optJSONArray(key)?.let { array ->
         List(array.length()) { array.optString(it) }.filter(String::isNotBlank)
