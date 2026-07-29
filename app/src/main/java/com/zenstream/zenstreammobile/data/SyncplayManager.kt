@@ -4,6 +4,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayUiState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,7 @@ class SyncplayManager(
     private var presenceSequence = 0
     private var serverOffsetSeconds = 0.0
     private var bestRttSeconds = Double.POSITIVE_INFINITY
+    private var connectionEnded: CompletableDeferred<Unit>? = null
 
     init { scope.launch { start() } }
 
@@ -97,24 +99,37 @@ class SyncplayManager(
         stopped = true
         socket?.close(1000, "Session ended")
         socket = null
+        connectionEnded?.complete(Unit)
+        connectionEnded = null
         scope.coroutineContext.cancel()
     }
 
     private fun connect() {
         scope.launch {
             while (!stopped) {
-                runCatching {
+                val ended = CompletableDeferred<Unit>()
+                connectionEnded = ended
+                try {
                     val ticket = api.socketTicket(session)
                     val url = "${session.serverUrl}/api/ws/syncplay?ticket=${android.net.Uri.encode(ticket)}&participantId=${android.net.Uri.encode(participant())}"
-                    socket = socketClient.newWebSocket(Request.Builder().url(url.toHttpUrl()).build(), SocketEvents())
-                }.onFailure { _state.value = _state.value.copy(error = it.message) }
-                delay(5_000)
-                while (!stopped && _state.value.connected) delay(1_000)
+                    socket = socketClient.newWebSocket(
+                        Request.Builder().url(url.toHttpUrl()).build(),
+                        SocketEvents(ended),
+                    )
+                    ended.await()
+                } catch (error: Exception) {
+                    if (!stopped) _state.value = _state.value.copy(error = error.message)
+                } finally {
+                    if (connectionEnded === ended) connectionEnded = null
+                }
+                if (!stopped) delay(5_000)
             }
         }
     }
 
-    private inner class SocketEvents : WebSocketListener() {
+    private inner class SocketEvents(
+        private val ended: CompletableDeferred<Unit>,
+    ) : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             _state.value = _state.value.copy(connected = true, error = null)
             scope.launch { refresh() }
@@ -136,8 +151,20 @@ class SyncplayManager(
                 "clock" -> updateClock(value)
             }
         }
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { _state.value = _state.value.copy(connected = false) }
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { _state.value = _state.value.copy(connected = false, error = t.message) }
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (socket === webSocket) {
+                socket = null
+                _state.value = _state.value.copy(connected = false)
+            }
+            ended.complete(Unit)
+        }
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (socket === webSocket) {
+                socket = null
+                _state.value = _state.value.copy(connected = false, error = t.message)
+            }
+            ended.complete(Unit)
+        }
     }
 
     private fun syncClock(webSocket: WebSocket) {
