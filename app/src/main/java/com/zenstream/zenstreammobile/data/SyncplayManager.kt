@@ -11,8 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,12 +38,15 @@ class SyncplayManager(
     private val mutex = Mutex()
     private val _state = MutableStateFlow(SyncplayUiState())
     val state: StateFlow<SyncplayUiState> = _state.asStateFlow()
+    private val _notifications = MutableSharedFlow<SyncplayNotification>(extraBufferCapacity = 32)
+    val notifications: SharedFlow<SyncplayNotification> = _notifications.asSharedFlow()
     private var socket: WebSocket? = null
     private var stopped = false
     private var presenceSequence = 0
     private var serverOffsetSeconds = 0.0
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
+    private var hydrated = false
 
     init { scope.launch { start() } }
 
@@ -61,41 +67,113 @@ class SyncplayManager(
     }
 
     suspend fun create(): SyncplayGroup = mutex.withLock {
-        api.create(session, participant()).also(::adopt)
+        try {
+            api.create(session, participant()).also(::adopt).also {
+                notify(SyncplayNotification.GroupCreated)
+            }
+        } catch (error: Exception) {
+            notify(
+                SyncplayNotification.Failure(
+                    if (error is SyncplayException && error.statusCode == 409) {
+                        SyncplayFailure.CREATE_ALREADY_IN_GROUP
+                    } else {
+                        SyncplayFailure.CREATE
+                    },
+                ),
+            )
+            throw error
+        }
     }
     suspend fun join(id: String): SyncplayGroup = mutex.withLock {
-        val known = _state.value.groups.firstOrNull { it.id == id }
-        api.join(session, participant(), id, known?.revision ?: 0).also(::adopt)
+        try {
+            val known = _state.value.groups.firstOrNull { it.id == id }
+            api.join(session, participant(), id, known?.revision ?: 0).also(::adopt).also { group ->
+                notify(SyncplayNotification.JoinedGroup(group.name))
+            }
+        } catch (error: Exception) {
+            notify(
+                SyncplayNotification.Failure(
+                    if (error is SyncplayException && error.statusCode == 409) {
+                        SyncplayFailure.JOIN_MUST_LEAVE_GROUP
+                    } else {
+                        SyncplayFailure.JOIN
+                    },
+                ),
+            )
+            throw error
+        }
     }
     suspend fun leave() = mutex.withLock {
         val active = _state.value.active ?: return@withLock
-        api.leave(session, participant(), active)
-        _state.value = _state.value.copy(active = null, groups = _state.value.groups.filter { it.id != active.id })
+        try {
+            api.leave(session, participant(), active)
+            _state.value = _state.value.copy(active = null, groups = _state.value.groups.filter { it.id != active.id })
+            notify(SyncplayNotification.LeftGroup(active.name))
+        } catch (error: Exception) {
+            if (error is SyncplayException && (error.statusCode == 403 || error.statusCode == 404)) {
+                _state.value = _state.value.copy(active = null, groups = _state.value.groups.filter { it.id != active.id })
+                notify(SyncplayNotification.GroupEnded(active.name))
+                return@withLock
+            }
+            notify(SyncplayNotification.Failure(SyncplayFailure.LEAVE))
+            throw error
+        }
     }
     suspend fun setControls(enabled: Boolean) = mutex.withLock {
-        _state.value.active?.let { adopt(api.setControls(session, participant(), it, enabled)) }
+        _state.value.active?.let {
+            try {
+                adopt(api.setControls(session, participant(), it, enabled))
+            } catch (error: Exception) {
+                notify(SyncplayNotification.Failure(SyncplayFailure.SETTINGS))
+                throw error
+            }
+        }
     }
     suspend fun removeMember(userId: String) = mutex.withLock {
-        _state.value.active?.let { adopt(api.removeMember(session, participant(), it, userId)) }
+        _state.value.active?.let {
+            try {
+                adopt(api.removeMember(session, participant(), it, userId))
+            } catch (error: Exception) {
+                notify(SyncplayNotification.Failure(SyncplayFailure.SETTINGS))
+                throw error
+            }
+        }
     }
     suspend fun setWatchingTogether(watching: Boolean) = mutex.withLock {
-        _state.value.active?.let { adopt(api.participation(session, participant(), it, watching)) }
+        _state.value.active?.let {
+            try {
+                adopt(api.participation(session, participant(), it, watching))
+            } catch (error: Exception) {
+                notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+                throw error
+            }
+        }
     }
     suspend fun command(action: String, position: Double, playing: Boolean, itemId: String? = null) = mutex.withLock {
         val active = _state.value.active ?: return@withLock
         try {
-            adopt(api.command(session, participant(), active, action, position.coerceAtLeast(0.0), playing, itemId))
-        } catch (error: SyncplayException) {
-            if (error.statusCode != 409) throw error
-            val latest = api.group(session, participant(), active.id)
-            adopt(latest)
-            adopt(api.command(session, participant(), latest, action, position.coerceAtLeast(0.0), playing, itemId))
+            try {
+                adopt(api.command(session, participant(), active, action, position.coerceAtLeast(0.0), playing, itemId))
+            } catch (error: SyncplayException) {
+                if (error.statusCode != 409) throw error
+                val latest = api.group(session, participant(), active.id)
+                adopt(latest)
+                adopt(api.command(session, participant(), latest, action, position.coerceAtLeast(0.0), playing, itemId))
+            }
+        } catch (error: Exception) {
+            notify(SyncplayNotification.Failure(SyncplayFailure.PLAYBACK))
+            throw error
         }
     }
     suspend fun presence(viewing: Boolean, loading: Boolean) = mutex.withLock {
         val active = _state.value.active ?: return@withLock
         presenceSequence += 1
-        adopt(api.presence(session, participant(), active, viewing, loading, presenceSequence))
+        try {
+            adopt(api.presence(session, participant(), active, viewing, loading, presenceSequence))
+        } catch (error: Exception) {
+            notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+            throw error
+        }
     }
 
     fun stop() {
@@ -153,7 +231,11 @@ class SyncplayManager(
                 "groups" -> scope.launch { mutex.withLock { adoptGroups(value.optJSONArray("groups").toGroups()) } }
                 "group" -> value.optJSONObject("group")?.let { group -> scope.launch { mutex.withLock { adopt(parseSyncplayGroup(group)) } } }
                 "group-ended" -> scope.launch { mutex.withLock { end(value.optString("id"), value.optInt("revision")) } }
-                "participant-replaced" -> scope.launch { mutex.withLock { end(value.optString("id"), Int.MAX_VALUE) } }
+                "participant-replaced" -> scope.launch {
+                    mutex.withLock {
+                        end(value.optString("id"), Int.MAX_VALUE, SyncplayNotification.ParticipantReplaced)
+                    }
+                }
                 "clock" -> updateClock(value)
             }
         }
@@ -194,7 +276,11 @@ class SyncplayManager(
     private fun adoptGroups(groups: List<SyncplayGroup>) {
         val previous = _state.value
         val active = previous.active?.let { current -> groups.firstOrNull { it.id == current.id } ?: current }
-        _state.value = previous.copy(groups = groups, active = active?.takeIf { group -> group.members.any { it.participantId == participant() } })
+            ?: groups.firstOrNull { group -> group.members.any { it.participantId == participant() } }
+        val next = active?.takeIf { group -> group.members.any { it.participantId == participant() } }
+        _state.value = previous.copy(groups = groups, active = next)
+        announceChanges(previous.active, next)
+        hydrated = true
     }
     private fun adopt(group: SyncplayGroup) {
         val previous = _state.value
@@ -208,12 +294,45 @@ class SyncplayManager(
             else -> previous.active
         }
         _state.value = previous.copy(groups = groups, active = active)
+        announceChanges(previous.active, active)
     }
-    private fun end(id: String, revision: Int) {
+    private fun end(id: String, revision: Int, notification: SyncplayNotification? = null) {
         val current = _state.value
         val known = current.groups.firstOrNull { it.id == id }
         if (known != null && known.revision > revision) return
-        _state.value = current.copy(groups = current.groups.filter { it.id != id }, active = current.active?.takeIf { it.id != id })
+        val active = current.active?.takeIf { it.id != id }
+        _state.value = current.copy(groups = current.groups.filter { it.id != id }, active = active)
+        if (hydrated && current.active?.id == id) {
+            notify(notification ?: SyncplayNotification.GroupEnded(current.active.name))
+        }
+    }
+    private fun announceChanges(previous: SyncplayGroup?, next: SyncplayGroup?) {
+        if (!hydrated || previous?.id != next?.id || previous == null || next == null) return
+        if (!previous.hostDisconnectedAt.isFiniteOrNull() && next.hostDisconnectedAt.isFiniteOrNull()) {
+            notify(SyncplayNotification.HostDisconnected)
+        }
+        if (previous.allowViewerControls != next.allowViewerControls) {
+            notify(
+                if (next.allowViewerControls) {
+                    SyncplayNotification.ViewerControlsEnabled
+                } else {
+                    SyncplayNotification.ViewerControlsDisabled
+                },
+            )
+        }
+        val before = previous.members.associateBy { it.participantId }
+        val after = next.members.associateBy { it.participantId }
+        next.members.filter { it.participantId != participant() && it.participantId !in before }
+            .forEach { notify(SyncplayNotification.MemberJoined(it.username)) }
+        previous.members.filter { it.participantId != participant() && it.participantId !in after }
+            .forEach { notify(SyncplayNotification.MemberLeft(it.username)) }
+        if (next.itemId != null && next.mediaGeneration != previous.mediaGeneration) {
+            notify(SyncplayNotification.NowPlaying(next.itemId))
+        }
+    }
+    private fun Double?.isFiniteOrNull(): Boolean = this?.isFinite() == true
+    private fun notify(notification: SyncplayNotification) {
+        _notifications.tryEmit(notification)
     }
     private fun participant(): String = _state.value.participantId.ifBlank { error("Syncplay has not started") }
 }
