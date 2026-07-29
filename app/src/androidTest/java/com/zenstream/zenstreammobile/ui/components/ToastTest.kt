@@ -2,14 +2,14 @@ package com.zenstream.zenstreammobile.ui.components
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.waitUntil
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Rule
@@ -36,7 +36,7 @@ class ToastTest {
         composeRule.onNodeWithText("Joined the group").assertIsDisplayed()
         composeRule.onNodeWithText("Could not join").assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription(dismiss)[0].performClick()
-        composeRule.onNodeWithText("Joined the group").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Joined the group").assertCountEquals(0)
         composeRule.onNodeWithText("Could not join").assertIsDisplayed()
     }
 
