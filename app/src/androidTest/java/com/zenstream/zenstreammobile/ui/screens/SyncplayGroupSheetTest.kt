@@ -93,6 +93,13 @@ class SyncplayGroupSheetTest {
     }
 
     @Test
+    fun onlyJoiningAGroupWithActiveMediaOpensThePlayer() {
+        assertTrue(shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = "item-1", playing = true)))
+        assertTrue(!shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = "item-1", playing = false)))
+        assertTrue(!shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = null, playing = true)))
+    }
+
+    @Test
     fun activeHostCanRemoveMembersChangeControlsAndReturnToTheView() {
         val group = syncplayGroup(itemId = "item-1")
         var removedMember: String? = null
@@ -133,7 +140,7 @@ class SyncplayGroupSheetTest {
         }
     }
 
-    private fun syncplayGroup(itemId: String? = null): SyncplayGroup = SyncplayGroup(
+    private fun syncplayGroup(itemId: String? = null, playing: Boolean = false): SyncplayGroup = SyncplayGroup(
         id = "group-1",
         name = "Movie night",
         hostUserId = "host",
@@ -141,7 +148,7 @@ class SyncplayGroupSheetTest {
         allowViewerControls = false,
         itemId = itemId,
         position = 0.0,
-        playing = false,
+        playing = playing,
         resumeWhenReady = false,
         revision = 1,
         timelineRevision = 1,
@@ -149,7 +156,7 @@ class SyncplayGroupSheetTest {
         anchorPosition = 0.0,
         anchorServerTime = 0.0,
         effectiveAt = 0.0,
-        playbackState = "paused",
+        playbackState = if (playing) "playing" else "paused",
         pauseReason = null,
         hostDisconnectedAt = null,
         updatedAt = 0.0,
