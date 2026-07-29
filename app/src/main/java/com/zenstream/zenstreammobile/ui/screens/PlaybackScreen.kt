@@ -95,6 +95,9 @@ import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
+import com.zenstream.zenstreammobile.ui.components.ToastHost
+import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -140,6 +143,7 @@ fun PlaybackScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val toast = rememberToastHostState()
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
@@ -594,6 +598,17 @@ fun PlaybackScreen(
             onAudio = { vm.chooseAudio(it); sheet = null },
             onQuality = { vm.chooseQuality(it); sheet = null },
             onSpeed = { vm.setSpeed(it); sheet = null },
+        )
+        SyncplayToastNotifications(
+            manager = syncplay,
+            repository = repository,
+            session = session,
+            toast = toast,
+        )
+        ToastHost(
+            state = toast,
+            playerContext = true,
+            modifier = Modifier.zIndex(50f),
         )
     }
 }

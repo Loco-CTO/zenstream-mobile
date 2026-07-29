@@ -183,4 +183,25 @@
     <string name="syncplay_allow_controls">Allow viewer controls</string>
     <string name="syncplay_return_to_view">Return to view</string>
     <string name="syncplay_leave">Leave group</string>
+    <string name="toast_dismiss">Dismiss notification</string>
+    <string name="syncplay_group_created">Syncplay group created.</string>
+    <string name="syncplay_joined_group">You successfully joined %1$s.</string>
+    <string name="syncplay_left_group">You left %1$s.</string>
+    <string name="syncplay_member_joined">%1$s joined the group.</string>
+    <string name="syncplay_member_left">%1$s left the group.</string>
+    <string name="syncplay_group_ended">%1$s has ended.</string>
+    <string name="syncplay_now_playing">Now playing %1$s.</string>
+    <string name="syncplay_now_playing_fallback">Syncplay started playback.</string>
+    <string name="syncplay_create_failed">Could not create the Syncplay group.</string>
+    <string name="syncplay_join_failed">Could not join the Syncplay group.</string>
+    <string name="syncplay_leave_failed">Could not leave the Syncplay group.</string>
+    <string name="syncplay_settings_failed">Could not update Syncplay settings.</string>
+    <string name="syncplay_viewer_controls_enabled">Viewer controls were enabled for everyone.</string>
+    <string name="syncplay_viewer_controls_disabled">Viewer controls were disabled for everyone.</string>
+    <string name="syncplay_playback_failed">Could not update Syncplay playback.</string>
+    <string name="syncplay_presence_failed">Could not update Syncplay readiness.</string>
+    <string name="syncplay_already_in_group">You already belong to an active Syncplay group.</string>
+    <string name="syncplay_must_leave_group">Leave your current Syncplay group before joining another.</string>
+    <string name="syncplay_host_disconnected">The host disconnected. The room will close if they do not reconnect within five minutes.</string>
+    <string name="syncplay_participant_replaced">You were disconnected from Syncplay because this account joined from another device or tab.</string>
 </resources>

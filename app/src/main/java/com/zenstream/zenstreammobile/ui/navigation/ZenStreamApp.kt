@@ -66,6 +66,9 @@ import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
+import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
+import com.zenstream.zenstreammobile.ui.components.ToastHost
+import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import com.composables.icons.lucide.R as LucideR
@@ -107,6 +110,7 @@ private fun MainScaffold(
 ) {
     val syncplay = remember(session) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val toast = rememberToastHostState()
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -282,13 +286,14 @@ private fun MainScaffold(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        NavHost(
-            navController,
-            startDestination = HOME,
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(scrollConnection)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController,
+                startDestination = HOME,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(scrollConnection)
+            ) {
             composable(HOME) {
                 HomeScreen(
                     repository,
@@ -345,6 +350,14 @@ private fun MainScaffold(
                     onLogout = onLogout,
                 )
             }
+            }
+            SyncplayToastNotifications(
+                manager = syncplay,
+                repository = repository,
+                session = session,
+                toast = toast,
+            )
+            ToastHost(state = toast)
         }
     }
 }
