@@ -58,8 +58,10 @@ class SyncplayApiTest {
 
     @Test
     fun parsesJsonNullMediaIdAsNoMedia() {
-        val group = parseSyncplayGroup(JSONObject().put("id", "room-1").put("itemId", JSONObject.NULL))
+        val nullGroup = parseSyncplayGroup(JSONObject().put("id", "room-1").put("itemId", JSONObject.NULL))
+        val stringNullGroup = parseSyncplayGroup(JSONObject().put("id", "room-2").put("itemId", "null"))
 
-        assertNull(group.itemId)
+        assertNull(nullGroup.itemId)
+        assertNull(stringNullGroup.itemId)
     }
 }
