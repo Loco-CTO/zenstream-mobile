@@ -136,7 +136,8 @@ private fun MainScaffold(
         syncplayState.active?.id,
         syncplayState.active?.itemId,
         syncplayState.active?.mediaGeneration,
-        syncplayState.active?.playing,
+        syncplayState.active?.revision,
+        syncplayState.currentMember()?.watchingTogether,
         syncplayState.participantId,
     ) {
         val room = syncplayState.active
@@ -149,6 +150,8 @@ private fun MainScaffold(
         if (itemId != null && member?.watchingTogether == true && key != followedGeneration) {
             followedGeneration = key
             launchPlayback(context, itemId, "")
+        } else if (itemId == null || member?.watchingTogether != true) {
+            followedGeneration = null
         }
     }
     val bottomBarVisibility = remember(density) {

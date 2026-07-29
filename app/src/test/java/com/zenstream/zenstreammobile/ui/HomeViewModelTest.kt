@@ -93,15 +93,23 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun derivedRowsAppearBeforeLibraryRowsAsTheirRequestCompletes() = runTest {
+    fun recentlyPlayedAndGenreRowsFollowLibraryRowsAsTheirRequestCompletes() = runTest {
         val derived = CompletableDeferred<DerivedHomeData>()
-        val source = FakeHomeDataSource(derivedRequest = { derived.await() })
+        val library = Library("movies", "Movies", "movies")
+        val source = FakeHomeDataSource(
+            derivedRequest = { derived.await() },
+            librariesRequest = { listOf(library) },
+            libraryDataRequest = {
+                LibraryData(it, listOf(MediaRow(RowTitle.NewlyAdded, it.name, listOf(MediaItem("new", "New")))))
+            },
+        )
         val viewModel = HomeViewModel(source, session)
         runCurrent()
 
         derived.complete(
             DerivedHomeData(
                 myList = listOf(MediaItem("favorite", "Favorite")),
+                recentlyPlayed = listOf(MediaItem("recent", "Recent")),
                 genreRows = listOf(
                     MediaRow(RowTitle.Genre, items = listOf(MediaItem("drama", "Drama")), label = "Drama", key = "genre:drama"),
                 ),
@@ -110,7 +118,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf(RowTitle.MyList, RowTitle.Genre),
+            listOf(RowTitle.MyList, RowTitle.NewlyAdded, RowTitle.RecentlyPlayed, RowTitle.Genre),
             viewModel.uiState.value.data?.rows?.map { it.title },
         )
         assertFalse(viewModel.uiState.value.loading)
