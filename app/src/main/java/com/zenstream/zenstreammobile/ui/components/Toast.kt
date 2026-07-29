@@ -58,6 +58,7 @@ internal data class ToastMessage(
 @Stable
 class ToastHostState internal constructor(
     private val scope: CoroutineScope,
+    private val durationMillis: Long,
 ) {
     private val messages = mutableStateListOf<ToastMessage>()
     private var nextId by mutableIntStateOf(0)
@@ -76,16 +77,16 @@ class ToastHostState internal constructor(
         val toast = ToastMessage(nextId++, message, variant)
         messages += toast
         scope.launch {
-            delay(TOAST_DURATION_MILLIS)
+            delay(durationMillis)
             dismiss(toast.id)
         }
     }
 }
 
 @Composable
-fun rememberToastHostState(): ToastHostState {
+fun rememberToastHostState(durationMillis: Long = TOAST_DURATION_MILLIS): ToastHostState {
     val scope = rememberCoroutineScope()
-    return remember(scope) { ToastHostState(scope) }
+    return remember(scope, durationMillis) { ToastHostState(scope, durationMillis) }
 }
 
 @Composable
