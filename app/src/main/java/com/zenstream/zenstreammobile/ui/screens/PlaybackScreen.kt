@@ -379,9 +379,6 @@ fun PlaybackScreen(
                                         vm.applySyncplayRoom(group, syncplay.serverNow())
                                     }
                                 },
-                                onJoinedPlayingGroup = { group ->
-                                    vm.applySyncplayRoom(group, syncplay.serverNow())
-                                },
                                 playerContext = true,
                             )
                             if (state.showDebugIcon) {

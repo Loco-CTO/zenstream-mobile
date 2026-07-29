@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -104,6 +105,7 @@ private fun MainScaffold(
     onLogout: () -> Unit
 ) {
     val syncplay = remember(session) { repository.syncplayManager(session) }
+    val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -129,6 +131,23 @@ private fun MainScaffold(
     }
     val density = LocalDensity.current
     val context = LocalContext.current
+    var followedGeneration by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        syncplayState.active?.id,
+        syncplayState.active?.itemId,
+        syncplayState.active?.mediaGeneration,
+        syncplayState.active?.playing,
+        syncplayState.participantId,
+    ) {
+        val room = syncplayState.active
+        val member = syncplayState.currentMember()
+        val itemId = room?.itemId
+        val key = room?.let { "${it.id}:${it.mediaGeneration}:${itemId}" }
+        if (itemId != null && room.playing && member?.watchingTogether == true && key != followedGeneration) {
+            followedGeneration = key
+            launchPlayback(context, itemId, "")
+        }
+    }
     val bottomBarVisibility = remember(density) {
         ScrollVisibilityController(
             hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
@@ -190,9 +209,6 @@ private fun MainScaffold(
                             syncplay = syncplay,
                             session = session,
                             onReturnToView = { group ->
-                                group.itemId?.let { launchPlayback(context, it, "") }
-                            },
-                            onJoinedPlayingGroup = { group ->
                                 group.itemId?.let { launchPlayback(context, it, "") }
                             },
                             onSettings = {
@@ -340,7 +356,6 @@ internal fun MainTopBar(
     syncplay: SyncplayManager? = null,
     session: AuthSession? = null,
     onReturnToView: (SyncplayGroup) -> Unit = {},
-    onJoinedPlayingGroup: (SyncplayGroup) -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     TopAppBar(
@@ -359,7 +374,6 @@ internal fun MainTopBar(
                     manager = syncplay,
                     session = session,
                     onReturnToView = onReturnToView,
-                    onJoinedPlayingGroup = onJoinedPlayingGroup,
                 )
             }
             Box(
