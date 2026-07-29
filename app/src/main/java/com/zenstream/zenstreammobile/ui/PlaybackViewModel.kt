@@ -85,6 +85,16 @@ internal fun shouldClearPlayedOnPlaybackStart(
     resetAlreadyRequested: Boolean,
 ): Boolean = isPlaying && played && !resetAlreadyRequested
 
+internal fun syncplayShouldAutoplay(
+    room: SyncplayGroup?,
+    participantId: String,
+    itemId: String,
+): Boolean {
+    if (room?.itemId != itemId) return true
+    val member = room.members.firstOrNull { it.participantId == participantId }
+    return member?.watchingTogether != true
+}
+
 internal fun selectSubtitleTrack(
     currentTrack: Int?,
     selectionInitialized: Boolean,
@@ -271,9 +281,17 @@ class PlaybackViewModel(
                 ),
                 currentPosition,
                 playbackMimeType(playback.source, _uiState.value.selectedQuality),
+                syncplayShouldAutoplayFor(currentItemId),
             )
         }
     }
+
+    private fun syncplayShouldAutoplayFor(itemId: String): Boolean =
+        syncplayShouldAutoplay(
+            syncplay?.state?.value?.active,
+            syncplay?.state?.value?.participantId.orEmpty(),
+            itemId,
+        )
 
     private fun loadPlayback(options: PlaybackOptions = PlaybackOptions()) {
         val loadGeneration = ++playbackGeneration
@@ -380,6 +398,7 @@ class PlaybackViewModel(
                 streamUrl,
                 localStartSeconds,
                 playbackMimeType(playbackData.source, bitrate),
+                syncplayShouldAutoplayFor(currentItemId),
             )
             handledCompletionGeneration = -1L
             transitionInProgress = false
