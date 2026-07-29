@@ -325,7 +325,14 @@ private fun MainScaffold(
                     onPlay = { item, tracks -> scope.launch {
                         val active = syncplay.state.value.active
                         if (active == null || syncplay.state.value.canControl(session.userId)) {
-                            if (active != null) syncplay.command("media", 0.0, true, item.id)
+                            if (active != null) {
+                                syncplay.command("media", 0.0, true, item.id)
+                                syncplay.state.value.active?.let { updated ->
+                                    followedGeneration = updated.mediaItemId()?.let { itemId ->
+                                        "${updated.id}:${updated.mediaGeneration}:$itemId"
+                                    }
+                                }
+                            }
                             navigateToPlayback(context, item.id, item.name, tracks)
                         }
                     } },

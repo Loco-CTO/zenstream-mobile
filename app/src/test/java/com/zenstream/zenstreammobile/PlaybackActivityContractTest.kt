@@ -1,7 +1,9 @@
 package com.zenstream.zenstreammobile
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackActivityContractTest {
@@ -40,5 +42,21 @@ class PlaybackActivityContractTest {
                 hasSubtitleSelection = true,
             ),
         )
+    }
+
+    @Test
+    fun launchGateRejectsOverlappingPlaybackActivities() {
+        val gate = PlaybackActivityLaunchGate()
+
+        assertTrue(gate.beginLaunch())
+        assertTrue(gate.claimActivity())
+        assertFalse(gate.beginLaunch())
+        assertFalse(gate.claimActivity())
+
+        gate.releaseActivity()
+
+        assertTrue(gate.beginLaunch())
+        gate.cancelLaunch()
+        assertTrue(gate.claimActivity())
     }
 }

@@ -61,6 +61,49 @@ internal fun parsePlaybackLaunchArgs(
     )
 }
 
+internal class PlaybackActivityLaunchGate {
+    private enum class State {
+        IDLE,
+        LAUNCHING,
+        ACTIVE,
+    }
+
+    private var state = State.IDLE
+
+    @Synchronized
+    fun beginLaunch(): Boolean =
+        if (state == State.IDLE) {
+            state = State.LAUNCHING
+            true
+        } else {
+            false
+        }
+
+    @Synchronized
+    fun claimActivity(): Boolean = when (state) {
+        State.IDLE,
+        State.LAUNCHING
+        -> {
+            state = State.ACTIVE
+            true
+        }
+
+        State.ACTIVE -> false
+    }
+
+    @Synchronized
+    fun cancelLaunch() {
+        if (state == State.LAUNCHING) state = State.IDLE
+    }
+
+    @Synchronized
+    fun releaseActivity() {
+        if (state == State.ACTIVE) state = State.IDLE
+    }
+}
+
+private val playbackActivityLaunchGate = PlaybackActivityLaunchGate()
+
 fun playbackIntent(
     context: Context,
     itemId: String,
@@ -90,12 +133,18 @@ fun launchPlayback(
     itemName: String,
     tracks: PlaybackTrackSelection? = null,
 ) {
+    if (!playbackActivityLaunchGate.beginLaunch()) return
     val intent = playbackIntent(context, itemId, itemName, tracks)
     val activity = context.findActivity()
-    if (activity != null) {
-        activity.startActivity(intent)
-    } else {
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    try {
+        if (activity != null) {
+            activity.startActivity(intent)
+        } else {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    } catch (error: RuntimeException) {
+        playbackActivityLaunchGate.cancelLaunch()
+        throw error
     }
 }
 
@@ -108,6 +157,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 class PlaybackActivity : ComponentActivity() {
     private var immersiveModeApplied = false
     private var enteringPictureInPicture = false
+    private var ownsPlaybackLaunch = false
 
     private val repository by lazy {
         val dataStoreName = if (
@@ -127,6 +177,11 @@ class PlaybackActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!playbackActivityLaunchGate.claimActivity()) {
+            finish()
+            return
+        }
+        ownsPlaybackLaunch = true
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -203,6 +258,11 @@ class PlaybackActivity : ComponentActivity() {
         if (isFinishing) restoreSystemBars()
         else immersiveModeApplied = false
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (ownsPlaybackLaunch) playbackActivityLaunchGate.releaseActivity()
+        super.onDestroy()
     }
 
     private fun enterPictureInPicture(): Boolean {
