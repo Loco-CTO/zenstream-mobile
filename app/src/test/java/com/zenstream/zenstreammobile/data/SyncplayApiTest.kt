@@ -64,4 +64,20 @@ class SyncplayApiTest {
         assertNull(nullGroup.itemId)
         assertNull(stringNullGroup.itemId)
     }
+
+    @Test
+    fun rejectsPresenceReportsFromSupersededSyncplayTimelines() {
+        val current = parseSyncplayGroup(
+            JSONObject()
+                .put("id", "room-1")
+                .put("itemId", "item-1")
+                .put("mediaGeneration", 3)
+                .put("timelineRevision", 7),
+        )
+
+        assertTrue(syncplayPresenceReportIsCurrent(current, current))
+        assertFalse(syncplayPresenceReportIsCurrent(current.copy(timelineRevision = 6), current))
+        assertFalse(syncplayPresenceReportIsCurrent(current.copy(mediaGeneration = 2), current))
+        assertFalse(syncplayPresenceReportIsCurrent(current.copy(itemId = "item-2"), current))
+    }
 }
