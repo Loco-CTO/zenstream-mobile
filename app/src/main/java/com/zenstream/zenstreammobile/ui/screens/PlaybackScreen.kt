@@ -50,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -107,6 +108,7 @@ import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.TrickplayPreview
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
+import com.zenstream.zenstreammobile.ui.SyncplayTimelineScheduler
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -143,6 +145,8 @@ fun PlaybackScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val latestState by rememberUpdatedState(state)
+    val playbackScope = rememberCoroutineScope()
     val toast = rememberToastHostState()
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
@@ -154,6 +158,19 @@ fun PlaybackScreen(
     var surfaceDragPosition by remember { mutableStateOf<Double?>(null) }
     var surfacePreviewUnavailable by remember { mutableStateOf(false) }
     var debugOpen by remember { mutableStateOf(false) }
+    var playerVisible by remember { mutableStateOf(true) }
+    val timelineScheduler = remember(vm, syncplay, playbackScope) {
+        SyncplayTimelineScheduler(
+            scope = playbackScope,
+            serverNow = syncplay::serverNow,
+            currentRoom = { syncplay.state.value.active },
+            apply = { room, serverNow ->
+                if (syncplay.state.value.currentMember()?.watchingTogether == true) {
+                    vm.applySyncplayRoom(room, serverNow)
+                }
+            },
+        )
+    }
 
     LaunchedEffect(state.showDebugIcon) {
         if (!state.showDebugIcon) debugOpen = false
@@ -164,26 +181,65 @@ fun PlaybackScreen(
         syncplayState.active?.mediaGeneration,
         syncplayState.active?.timelineRevision,
         syncplayState.active?.playbackState,
+        syncplayState.currentMember()?.watchingTogether,
         state.itemId,
-        state.loading,
+        playerVisible,
     ) {
-        val room = syncplayState.active ?: return@LaunchedEffect
+        if (!playerVisible) {
+            timelineScheduler.cancel()
+            return@LaunchedEffect
+        }
+        val room = syncplayState.active ?: run {
+            timelineScheduler.cancel()
+            return@LaunchedEffect
+        }
         val member = syncplayState.currentMember() ?: return@LaunchedEffect
-        if (member.watchingTogether && room.mediaItemId() != null) vm.applySyncplayRoom(room, syncplay.serverNow())
+        if (member.watchingTogether && room.mediaItemId() != null) {
+            timelineScheduler.apply(room)
+        } else {
+            timelineScheduler.cancel()
+        }
     }
 
-    DisposableEffect(vm, lifecycleOwner) {
+    DisposableEffect(vm, lifecycleOwner, timelineScheduler) {
+        fun reportPresence(viewing: Boolean) {
+            val room = syncplay.state.value.active
+            if (room?.mediaItemId() == latestState.itemId &&
+                syncplay.state.value.currentMember()?.watchingTogether == true
+            ) {
+                syncplay.reportPresence(
+                    viewing = viewing,
+                    loading = viewing && (
+                        latestState.loading ||
+                            !latestState.engine.ready ||
+                            latestState.engine.isBuffering
+                        ),
+                )
+            }
+        }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    playerVisible = true
+                    reportPresence(viewing = true)
+                }
                 Lifecycle.Event.ON_PAUSE -> {
-                    if (shouldPauseForBackground()) vm.pauseForBackground()
+                    if (shouldPauseForBackground()) {
+                        playerVisible = false
+                        vm.pauseForBackground()
+                        reportPresence(viewing = false)
+                    }
                     vm.flushProgress()
                 }
                 Lifecycle.Event.ON_STOP -> {
                     // A PiP activity stays paused rather than stopped. Reaching ON_STOP therefore
                     // means PiP was dismissed (or the app was otherwise backgrounded) and must
                     // never leave audio playing.
-                    vm.pauseForBackground()
+                    if (playerVisible) {
+                        playerVisible = false
+                        vm.pauseForBackground()
+                        reportPresence(viewing = false)
+                    }
                     vm.flushProgress()
                 }
                 else -> Unit
@@ -192,6 +248,8 @@ fun PlaybackScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            timelineScheduler.cancel()
+            reportPresence(viewing = false)
             vm.flushProgress()
         }
     }
@@ -236,13 +294,13 @@ fun PlaybackScreen(
         state.engine.isBuffering,
     ) {
         val room = syncplayState.active
-        if (room?.mediaItemId() == state.itemId && syncplayState.currentMember()?.watchingTogether == true) {
-            runCatching {
-                syncplay.presence(
-                    viewing = true,
-                    loading = state.loading || !state.engine.ready || state.engine.isBuffering,
-                )
-            }
+        if (playerVisible && room?.mediaItemId() == state.itemId &&
+            syncplayState.currentMember()?.watchingTogether == true
+        ) {
+            syncplay.reportPresence(
+                viewing = true,
+                loading = state.loading || !state.engine.ready || state.engine.isBuffering,
+            )
         }
     }
 

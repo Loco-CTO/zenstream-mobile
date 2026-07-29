@@ -3,11 +3,16 @@ package com.zenstream.zenstreammobile.ui
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.SyncplayGroup
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 
 class PlaybackViewModelTest {
     @Test
@@ -89,4 +94,95 @@ class PlaybackViewModelTest {
         assertEquals(6, selection.subtitleStreamIndex)
         assertTrue(selection.hasSubtitleSelection)
     }
+
+    @Test
+    fun syncplayTimelineUsesTheAuthoritativeClockForPausedScheduledAndLatePlayback() {
+        val paused = syncplayRoom(playbackState = "paused", anchorPosition = 12.0)
+        val scheduled = syncplayRoom(playbackState = "playing", effectiveAt = 101.0)
+        val late = syncplayRoom(playbackState = "playing", effectiveAt = 101.0)
+
+        assertEquals(12.0, syncplayTimelineTarget(paused, 110.0).positionSeconds, 0.0)
+        assertFalse(syncplayTimelineTarget(paused, 110.0).shouldPlay)
+
+        val pending = syncplayTimelineTarget(scheduled, 100.0)
+        assertEquals(10.0, pending.positionSeconds, 0.0)
+        assertFalse(pending.shouldPlay)
+        assertEquals(1_020L, pending.startDelayMillis)
+
+        val current = syncplayTimelineTarget(late, 103.0)
+        assertEquals(13.0, current.positionSeconds, 0.0)
+        assertTrue(current.shouldPlay)
+        assertNull(current.startDelayMillis)
+    }
+
+    @Test
+    fun scheduledSyncplayStartReappliesOnlyAfterTheEffectiveTime() = runTest {
+        var active = syncplayRoom(playbackState = "playing", effectiveAt = 1.0)
+        val applied = mutableListOf<Pair<SyncplayGroup, Double>>()
+        val scheduler = SyncplayTimelineScheduler(
+            scope = this,
+            serverNow = { testScheduler.currentTime / 1_000.0 },
+            currentRoom = { active },
+            apply = { room, now -> applied += room to now },
+        )
+
+        scheduler.apply(active)
+        assertEquals(1, applied.size)
+        assertFalse(syncplayTimelineTarget(applied.single().first, applied.single().second).shouldPlay)
+
+        advanceTimeBy(1_019)
+        runCurrent()
+        assertEquals(1, applied.size)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, applied.size)
+        assertTrue(syncplayTimelineTarget(applied.last().first, applied.last().second).shouldPlay)
+    }
+
+    @Test
+    fun replacingTheSyncplayTimelineCancelsItsPendingStart() = runTest {
+        var active = syncplayRoom(playbackState = "playing", effectiveAt = 1.0)
+        val applied = mutableListOf<SyncplayGroup>()
+        val scheduler = SyncplayTimelineScheduler(
+            scope = this,
+            serverNow = { testScheduler.currentTime / 1_000.0 },
+            currentRoom = { active },
+            apply = { room, _ -> applied += room },
+        )
+
+        scheduler.apply(active)
+        active = active.copy(playbackState = "paused", timelineRevision = 2)
+        scheduler.apply(active)
+        advanceUntilIdle()
+
+        assertEquals(listOf("playing", "paused"), applied.map { it.playbackState })
+    }
+
+    private fun syncplayRoom(
+        playbackState: String,
+        effectiveAt: Double = 0.0,
+        anchorPosition: Double = 10.0,
+    ) = SyncplayGroup(
+        id = "room-1",
+        name = "Room",
+        hostUserId = "user-1",
+        hostName = "User",
+        allowViewerControls = true,
+        itemId = "item-1",
+        position = anchorPosition,
+        playing = playbackState == "playing",
+        resumeWhenReady = false,
+        revision = 1,
+        timelineRevision = 1,
+        mediaGeneration = 1,
+        anchorPosition = anchorPosition,
+        anchorServerTime = 100.0,
+        effectiveAt = effectiveAt,
+        playbackState = playbackState,
+        pauseReason = null,
+        hostDisconnectedAt = null,
+        updatedAt = 100.0,
+        members = emptyList(),
+    )
 }

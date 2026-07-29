@@ -539,10 +539,11 @@ class PlaybackViewModel(
             transitionToSyncplay(itemId, room.anchorPosition)
             return
         }
-        val position = if (room.playbackState == "playing" && serverNow >= room.effectiveAt) room.anchorPosition + (serverNow - room.anchorServerTime).coerceAtLeast(0.0) else room.anchorPosition
+        val timeline = syncplayTimelineTarget(room, serverNow)
+        val position = timeline.positionSeconds
         val current = currentPlayerPositionSeconds()
         if (kotlin.math.abs(current - position) > 1.5) playbackEngine?.seekTo(position)
-        if (room.playbackState == "playing" && serverNow >= room.effectiveAt) playbackEngine?.play() else playbackEngine?.pause()
+        if (timeline.shouldPlay) playbackEngine?.play() else playbackEngine?.pause()
     }
 
     private fun transitionToSyncplay(itemId: String, position: Double) {

@@ -176,6 +176,10 @@ class SyncplayManager(
         }
     }
 
+    fun reportPresence(viewing: Boolean, loading: Boolean) {
+        scope.launch { runCatching { presence(viewing, loading) } }
+    }
+
     fun stop() {
         stopped = true
         socket?.close(1000, "Session ended")
@@ -307,7 +311,12 @@ class SyncplayManager(
         }
     }
     private fun announceChanges(previous: SyncplayGroup?, next: SyncplayGroup?) {
-        if (!hydrated || previous?.id != next?.id || previous == null || next == null) return
+        if (!hydrated || previous == null) return
+        if (next == null) {
+            notify(SyncplayNotification.GroupEnded(previous.name))
+            return
+        }
+        if (previous.id != next.id) return
         if (!previous.hostDisconnectedAt.isFiniteOrNull() && next.hostDisconnectedAt.isFiniteOrNull()) {
             notify(SyncplayNotification.HostDisconnected)
         }
