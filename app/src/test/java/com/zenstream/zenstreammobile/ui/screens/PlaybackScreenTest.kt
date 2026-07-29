@@ -27,4 +27,14 @@ class PlaybackScreenTest {
         assertEquals(false, shouldShowNextUp(true, true, true, 89.9, 100.0))
         assertEquals(false, shouldShowNextUp(false, true, true, 99.0, 100.0))
     }
+
+    @Test
+    fun loadingIndicatorCoversNormalLoadingBufferingAndSyncplayReadiness() {
+        assertEquals(true, shouldShowPlayerLoading(null, true, true, false, true, false))
+        assertEquals(true, shouldShowPlayerLoading(null, false, false, false, true, false))
+        assertEquals(true, shouldShowPlayerLoading(null, false, true, true, true, false))
+        assertEquals(true, shouldShowPlayerLoading(null, false, true, false, true, true))
+        assertEquals(false, shouldShowPlayerLoading(null, false, true, false, true, false))
+        assertEquals(false, shouldShowPlayerLoading("Playback failed", true, false, true, true, true))
+    }
 }
