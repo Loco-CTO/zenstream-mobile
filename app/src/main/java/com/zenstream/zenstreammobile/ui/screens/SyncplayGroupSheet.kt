@@ -63,6 +63,7 @@ fun SyncplayGroupMenu(
     manager: SyncplayManager,
     session: AuthSession,
     onReturnToView: (SyncplayGroup) -> Unit,
+    onJoinedPlayingGroup: (SyncplayGroup) -> Unit = {},
     playerContext: Boolean = false,
 ) {
     val state by manager.state.collectAsStateWithLifecycle()
@@ -85,7 +86,15 @@ fun SyncplayGroupMenu(
             playerContext = playerContext,
             onDismiss = { expanded = false },
             onCreate = { scope.launch { manager.create() } },
-            onJoin = { groupId -> scope.launch { manager.join(groupId) } },
+            onJoin = { groupId ->
+                scope.launch {
+                    val group = manager.join(groupId)
+                    if (shouldOpenJoinedPlayingGroup(group)) {
+                        expanded = false
+                        onJoinedPlayingGroup(group)
+                    }
+                }
+            },
             onRemoveMember = { memberId -> scope.launch { manager.removeMember(memberId) } },
             onControlsChanged = { enabled -> scope.launch { manager.setControls(enabled) } },
             onReturnToView = { group ->
@@ -99,6 +108,9 @@ fun SyncplayGroupMenu(
         )
     }
 }
+
+internal fun shouldOpenJoinedPlayingGroup(group: SyncplayGroup): Boolean =
+    group.itemId != null && group.playing && group.playbackState == "playing"
 
 @Composable
 internal fun SyncplayGroupButton(

@@ -55,10 +55,12 @@ class SyncplayManager(
         adoptGroups(groups)
     }
 
-    suspend fun create() = mutex.withLock { adopt(api.create(session, participant())) }
-    suspend fun join(id: String) = mutex.withLock {
+    suspend fun create(): SyncplayGroup = mutex.withLock {
+        api.create(session, participant()).also(::adopt)
+    }
+    suspend fun join(id: String): SyncplayGroup = mutex.withLock {
         val known = _state.value.groups.firstOrNull { it.id == id }
-        adopt(api.join(session, participant(), id, known?.revision ?: 0))
+        api.join(session, participant(), id, known?.revision ?: 0).also(::adopt)
     }
     suspend fun leave() = mutex.withLock {
         val active = _state.value.active ?: return@withLock
