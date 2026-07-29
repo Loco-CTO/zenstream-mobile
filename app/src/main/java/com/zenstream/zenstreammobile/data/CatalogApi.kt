@@ -5,6 +5,7 @@ import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
+import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
@@ -27,7 +28,6 @@ import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -40,6 +40,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.util.UUID
+
+data class EpisodeNeighbors(
+    val previous: MediaItem? = null,
+    val next: MediaItem? = null,
+)
 
 class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
@@ -80,26 +85,41 @@ class CatalogApi(
         options: PlaybackOptions = PlaybackOptions(),
     ): PlaybackData = withContext(Dispatchers.IO) {
         val item = getItem(session, itemId)
+        val resumePositionSeconds = item.playbackPositionTicks
+            ?.div(10_000_000.0)
+            ?.takeIf { it.isFinite() && it > 0.0 }
+            ?: 0.0
+        val negotiatedOptions = options.copy(
+            startPositionSeconds = options.startPositionSeconds.takeIf { it > 0.0 }
+                ?: resumePositionSeconds,
+        )
+        val capabilities = playbackCapabilities(negotiatedOptions.engine)
         val json = requestJson(
             session,
             "/api/playback/items/$itemId/negotiate",
             method = "POST",
             body = JSONObject()
-                .put("engine", "media3")
-                .put("sourceId", options.sourceId)
-                .put("requestedMode", options.requestedMode)
-                .put("forceTranscoding", options.forceTranscoding)
-                .put("containers", JSONArray(listOf("mp4", "webm")))
-                .put("videoCodecs", JSONArray(listOf("h264", "vp9", "av1")))
-                .put("audioCodecs", JSONArray(listOf("aac", "opus", "vorbis")))
-                .put("maxAudioChannels", 2)
-                .put("maxStreamingBitrate", options.maxStreamingBitrate)
-                .put("startPositionSeconds", options.startPositionSeconds)
-                .put("audioStreamId", options.audioStreamId)
+                .put("engine", capabilities.engine)
+                .put("sourceId", negotiatedOptions.sourceId)
+                .put("requestedMode", negotiatedOptions.requestedMode)
+                .put("forceTranscoding", negotiatedOptions.forceTranscoding)
+                .put("containers", JSONArray(capabilities.containers))
+                .put("videoCodecs", JSONArray(capabilities.videoCodecs))
+                .put("audioCodecs", JSONArray(capabilities.audioCodecs))
+                .put("maxAudioChannels", capabilities.maxAudioChannels)
+                .put("maxStreamingBitrate", negotiatedOptions.maxStreamingBitrate)
+                .put("startPositionSeconds", negotiatedOptions.startPositionSeconds)
+                .put("audioStreamId", negotiatedOptions.audioStreamId)
                 .toString(),
         )
         val sourcePayload = json.optJSONObject("source") ?: error("Server did not return a media source")
-        val source = parseMediaSource(sourcePayload)
+        // The negotiated stream URL belongs to the canonical response, rather
+        // than the media-source inventory record. Preserve it on the source
+        // consumed by the player so direct and HLS playback use the same path.
+        val source = withNegotiatedPlaybackUrl(
+            parseMediaSource(sourcePayload),
+            json.optString("url"),
+        )
         val sessionId = json.optString("sessionId").ifBlank { null }
         val sessionState = json.optString("sessionState").ifBlank { null }
         Log.i(
@@ -119,7 +139,7 @@ class CatalogApi(
             source = source,
             audioTracks = source.mediaStreams.filter { it.type.equals("audio", true) },
             subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
-            segments = getPlaybackSegments(session, itemId, item),
+            segments = source.id?.let { playbackSegments(session, itemId, it) } ?: emptyList(),
             mode = json.optString("mode").ifBlank { null },
             sessionState = json.optString("sessionState").ifBlank { null },
             sessionId = sessionId,
@@ -132,6 +152,37 @@ class CatalogApi(
         )
     }
 
+    suspend fun playbackSource(session: AuthSession, itemId: String): MediaSource =
+        withContext(Dispatchers.IO) {
+            parseMediaSource(
+                requestJson(
+                    session,
+                    "/api/playback/items/${android.net.Uri.encode(itemId)}/source",
+                ),
+            )
+        }
+
+    private fun playbackSegments(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+    ): List<PlaybackSegment> = runCatching {
+        val item = requestJson(
+            session,
+            "/api/playback/items/${android.net.Uri.encode(itemId)}/segments?sourceId=${android.net.Uri.encode(sourceId)}",
+        )
+        val values = item.optJSONArray("segments") ?: return@runCatching emptyList()
+        List(values.length()) { index -> values.optJSONObject(index) ?: JSONObject() }
+            .mapNotNull { segment ->
+                val type = when (segment.optString("type").lowercase()) {
+                    "intro" -> PlaybackSegmentType.INTRO
+                    "outro" -> PlaybackSegmentType.OUTRO
+                    else -> return@mapNotNull null
+                }
+                marker(type, segment.optDouble("startSeconds", Double.NaN), segment.optDouble("endSeconds", Double.NaN))
+            }
+    }.getOrDefault(emptyList())
+
     suspend fun playbackStatus(
         session: AuthSession,
         sessionId: String,
@@ -141,6 +192,11 @@ class CatalogApi(
             requestJson(session, "/api/playback/sessions/$sessionId"),
         )
     }
+
+    suspend fun cancelPlaybackSession(session: AuthSession, sessionId: String) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/playback/sessions/${android.net.Uri.encode(sessionId)}", method = "DELETE")
+        }
 
     private suspend fun awaitPlaybackReady(
         session: AuthSession,
@@ -191,57 +247,17 @@ class CatalogApi(
         parseTrickplayManifest(manifest, session.serverUrl)
     }
 
-    private fun getPlaybackSegments(
-        session: AuthSession,
-        itemId: String,
-        item: MediaItem,
-    ): List<PlaybackSegment> {
-        val providerSegments = playbackMarkerPaths(android.net.Uri.encode(itemId)).asSequence()
-            .mapNotNull { path ->
-                runCatching {
-                    parsePlaybackMarkers(
-                        requestMarkerPayload(
-                            session,
-                            path
-                        )
-                    )
-                }.getOrNull()
-            }
-            .firstOrNull { it.isNotEmpty() }
-            .orEmpty()
-        return mergePlaybackSegments(providerSegments, chapterPlaybackSegments(item))
-    }
-
-    private fun requestMarkerPayload(session: AuthSession, path: String): Any? {
-        val request = Request.Builder()
-            .url("${session.serverUrl}$path".toHttpUrl())
-            .header("Accept", "application/json")
-            .header("Authorization", "Bearer ${session.token}")
-            .get()
-            .build()
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw CatalogException(
-                response.code,
-                "ZenStream marker request failed with ${response.code}",
-            )
-            val body = response.body?.string().orEmpty().ifBlank { return null }
-            return JSONTokener(body).nextValue()
-        }
-    }
-
     suspend fun subtitleWebVtt(
         session: AuthSession,
         itemId: String,
         sourceId: String?,
         streamIndex: Int,
     ): String = withContext(Dispatchers.IO) {
-		val negotiated = requestJson(
-			session,
-			"/api/playback/items/$itemId/negotiate",
-			method = "POST",
-			body = JSONObject().put("engine", "mpv").toString(),
-		)
-		val streams = negotiated.optJSONObject("source")?.optJSONArray("streams")
+        val source = requestJson(
+            session,
+            "/api/playback/items/${android.net.Uri.encode(itemId)}/source",
+        )
+		val streams = source.optJSONArray("streams")
 		val mediaFileId = streams?.let { array ->
 			(0 until array.length()).asSequence().mapNotNull { array.optJSONObject(it) }
 				.firstOrNull { it.optInt("index", -1) == streamIndex }
@@ -341,36 +357,33 @@ class CatalogApi(
             )
     }
 
-    suspend fun fetchHome(session: AuthSession): HomeData = coroutineScope {
-        val home = async {
-            requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS)
-        }
-        val libraries = async { getLibraries(session, HOME_REQUEST_TIMEOUT_MILLIS) }
-        val libraryData = libraries.await().flatMap { library ->
-            if (library.collectionType != "tvshows" && library.collectionType != "movies") emptyList()
-            else listOf(async { fetchLibraryData(session, library, HOME_REQUEST_TIMEOUT_MILLIS) })
-        }.awaitAll()
-        val payload = home.await()
-        val rows = buildList {
-            add(MediaRow(RowTitle.ContinueWatching, items = catalogItems(payload, "continueWatching"), wide = true))
-            add(MediaRow(RowTitle.NextUp, items = catalogItems(payload, "nextUp"), wide = true))
-            libraryData.flatMapTo(this) { it.rows }
-        }.filter { it.items.isNotEmpty() }
-        HomeData(
-            featured = catalogItems(payload, "latestItems").filter { it.backdropImageTags.isNotEmpty() }.take(5),
-            rows = rows
-        )
+    suspend fun fetchHome(session: AuthSession): HomeData = withContext(Dispatchers.IO) {
+        parseHomeData(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS))
     }
 
-    suspend fun fetchHomeFeatured(session: AuthSession): List<MediaItem> =
-        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "latestItems")
+    suspend fun fetchHomeFeatured(session: AuthSession): List<MediaItem> = withContext(Dispatchers.IO) {
+        catalogItems(homeSection(session, "featured"), "latestItems")
             .filter { it.backdropImageTags.isNotEmpty() }.take(5)
+    }
 
-    suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> =
-        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "continueWatching")
+    suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> = withContext(Dispatchers.IO) {
+        catalogItems(homeSection(session, "continueWatching"), "continueWatching")
+    }
 
-    suspend fun fetchHomeNextUp(session: AuthSession): List<MediaItem> =
-        catalogItems(requestJson(session, "/api/catalog/home", requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS), "nextUp")
+    suspend fun fetchHomeNextUp(session: AuthSession): List<MediaItem> = withContext(Dispatchers.IO) {
+        catalogItems(homeSection(session, "nextUp"), "nextUp")
+    }
+
+    suspend fun fetchHomeDerived(session: AuthSession): DerivedHomeData = withContext(Dispatchers.IO) {
+        parseDerivedHomeData(homeSection(session, "derived"))
+    }
+
+    private suspend fun homeSection(session: AuthSession, section: String): JSONObject =
+        requestJson(
+            session,
+            "/api/catalog/home?section=${android.net.Uri.encode(section)}",
+            requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS,
+        )
 
     internal fun nextUpItemsQuery(userId: String): Map<String, String> = mapOf(
         "userId" to userId,
@@ -423,7 +436,7 @@ class CatalogApi(
         session: AuthSession,
         library: Library,
         requestTimeoutMillis: Long? = null,
-    ): LibraryData =
+    ): LibraryData = withContext(Dispatchers.IO) {
         coroutineScope {
 			fun path(sortBy: String) = "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=$sortBy&sortOrder=descending"
 			val recent = async { catalogItems(requestJson(session, path(if (library.supportsLastAdded) "lastAdded" else "added"), requestTimeoutMillis = requestTimeoutMillis)) }
@@ -436,6 +449,7 @@ class CatalogApi(
                     MediaRow(RowTitle.NewReleases, library.name, newReleases.await()),
                 ).filter { it.items.isNotEmpty() })
         }
+    }
 
     suspend fun fetchLibraryPage(
         session: AuthSession,
@@ -528,6 +542,15 @@ class CatalogApi(
         )
     }
 
+    suspend fun episodeNeighbors(session: AuthSession, item: MediaItem): EpisodeNeighbors =
+        withContext(Dispatchers.IO) {
+            val seriesId = item.seriesId ?: return@withContext EpisodeNeighbors()
+            val cachedEpisodes = mutableMapOf<String, List<MediaItem>>()
+            resolveEpisodeNeighbors(item, getSeasons(session, seriesId)) { season ->
+                cachedEpisodes.getOrPut(season.id) { getEpisodes(session, seriesId, season.id) }
+            }
+        }
+
     internal fun detailItemQuery(userId: String): Map<String, String> = mapOf(
         "userId" to userId,
         "fields" to ITEM_FIELDS,
@@ -619,6 +642,38 @@ class CatalogApi(
 private fun redactPlaybackUrl(value: String): String =
     value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
 
+internal fun resolveEpisodeNeighbors(
+    item: MediaItem,
+    seasons: List<MediaItem>,
+    episodesForSeason: (MediaItem) -> List<MediaItem>,
+): EpisodeNeighbors {
+    val seasonNumber = item.parentIndexNumber ?: return EpisodeNeighbors()
+    val episodeNumber = item.indexNumber ?: return EpisodeNeighbors()
+    if (item.type != "Episode" || item.seriesId.isNullOrBlank()) return EpisodeNeighbors()
+    val orderedSeasons = seasons.filter { it.indexNumber != null }.sortedBy { it.indexNumber }
+    val currentSeason = orderedSeasons.firstOrNull { it.indexNumber == seasonNumber }
+        ?: return EpisodeNeighbors()
+    val currentEpisodes = episodesForSeason(currentSeason)
+    val previousInSeason = currentEpisodes
+        .filter { (it.indexNumber ?: Int.MIN_VALUE) < episodeNumber }
+        .maxByOrNull { it.indexNumber ?: Int.MIN_VALUE }
+    val nextInSeason = currentEpisodes
+        .filter { (it.indexNumber ?: Int.MAX_VALUE) > episodeNumber }
+        .minByOrNull { it.indexNumber ?: Int.MAX_VALUE }
+    val currentSeasonPosition = orderedSeasons.indexOf(currentSeason)
+    val previous = previousInSeason ?: orderedSeasons
+        .take(currentSeasonPosition)
+        .lastOrNull()
+        ?.let(episodesForSeason)
+        ?.maxByOrNull { it.indexNumber ?: Int.MIN_VALUE }
+    val next = nextInSeason ?: orderedSeasons
+        .drop(currentSeasonPosition + 1)
+        .firstOrNull()
+        ?.let(episodesForSeason)
+        ?.minByOrNull { it.indexNumber ?: Int.MAX_VALUE }
+    return EpisodeNeighbors(previous, next)
+}
+
 private fun catalogSort(value: LibrarySortBy): String = value.apiValue
 
 private fun itemTypes(collectionType: String?, newlyAdded: Boolean = false): String {
@@ -639,21 +694,74 @@ private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
 	jsonArray(root, key).map(::catalogMediaItem)
 
+internal fun parseHomeData(payload: JSONObject): HomeData {
+    val globalRows = listOfNotNull(
+        catalogItems(payload, "continueWatching").takeIf { it.isNotEmpty() }
+            ?.let { MediaRow(RowTitle.ContinueWatching, items = it, wide = true) },
+        catalogItems(payload, "nextUp").takeIf { it.isNotEmpty() }
+            ?.let { MediaRow(RowTitle.NextUp, items = it, wide = true) },
+    )
+    val libraryRows = jsonArray(payload, "libraryRows").mapNotNull { row ->
+        val title = when (row.optString("titleKey")) {
+            "newlyAdded", "newlyAddedOn" -> RowTitle.NewlyAdded
+            "topRated" -> RowTitle.TopRated
+            "newReleases" -> RowTitle.NewReleases
+            else -> return@mapNotNull null
+        }
+        val items = catalogItems(row)
+        val libraryName = row.optString("libraryName").takeIf { it.isNotBlank() }
+            ?: return@mapNotNull null
+        items.takeIf { it.isNotEmpty() }?.let {
+            MediaRow(title, libraryName, it, stackEpisodes = row.optBoolean("stackEpisodes", false))
+        }
+    }
+    return HomeData(
+        featured = catalogItems(payload, "latestItems")
+            .filter { it.backdropImageTags.isNotEmpty() }
+            .take(5),
+        rows = globalRows + parseDerivedHomeData(payload).rows() + libraryRows,
+    )
+}
+
+internal fun parseDerivedHomeData(payload: JSONObject): DerivedHomeData = DerivedHomeData(
+    myList = catalogItems(payload, "myList"),
+    recentlyPlayed = catalogItems(payload, "recentlyPlayed"),
+    genreRows = jsonArray(payload, "genreRows").mapNotNull { row ->
+        val genre = row.optString("genre").trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val items = catalogItems(row)
+        items.takeIf { it.isNotEmpty() }?.let {
+            MediaRow(RowTitle.Genre, items = it, label = genre, key = "genre:${genre.lowercase()}")
+        }
+    },
+)
+
 internal fun catalogMediaItem(item: JSONObject): MediaItem {
 	val metadata = item.optJSONObject("metadata") ?: JSONObject()
 	val state = item.optJSONObject("userState") ?: JSONObject()
 	val images = metadata.optJSONObject("images") ?: JSONObject()
 	fun image(category: String) = images.optJSONObject(category)?.optString("url")?.takeIf { it.isNotBlank() }
+	fun imageBlurHash(category: String) = images.optJSONObject(category)?.optString("blurHash")?.takeIf { it.isNotBlank() }
 	val type = when (item.optString("type")) {
 		"movie" -> "Movie"; "series" -> "Series"; "season" -> "Season"
 		"episode" -> "Episode"; "collection" -> "BoxSet"; else -> item.optString("type")
 	}
-	val people = metadata.optJSONArray("people")?.let { array ->
+	val credits = metadata.optJSONObject("credits")
+	val people = listOf("cast", "crew").flatMap { creditType ->
+		val array = credits?.optJSONArray(creditType) ?: return@flatMap emptyList()
 		List(array.length()) { index ->
 			val person = array.optJSONObject(index) ?: JSONObject()
-			MediaPerson(person.optString("name"), person.optString("role").ifBlank { null }, person.optString("department").ifBlank { null })
+			val image = person.optJSONObject("image")
+			MediaPerson(
+				name = person.optString("name"),
+				role = (if (creditType == "cast") person.optString("character") else person.optString("job")).ifBlank { null },
+				type = person.optString("department").ifBlank { null },
+				primaryImageTag = image?.optString("url")?.ifBlank { null },
+				id = person.optString("id").ifBlank { null },
+				creditType = creditType,
+				imageBlurHash = image?.optString("blurHash")?.ifBlank { null },
+			)
 		}.filter { it.name.isNotBlank() }
-	}.orEmpty()
+	}
 	val genres = metadata.optJSONArray("genres") ?: metadata.optJSONArray("tags")
 	val studios = metadata.optJSONArray("studios")?.let { array ->
 		List(array.length()) { index ->
@@ -667,12 +775,14 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
 		id = item.optString("id"),
 		name = metadata.optString("title").ifBlank { item.optString("name").ifBlank { "Untitled" } },
 		type = type,
+		seriesName = item.optString("seriesName").ifBlank { null },
 		seriesId = item.optString("seriesId").ifBlank { null },
 		seasonId = item.optString("seasonId").ifBlank { null },
 		parentId = item.optString("parentId").ifBlank { null },
 		libraryId = item.optString("libraryId").ifBlank { null },
+		lastAddedAt = item.optString("lastAddedAt").ifBlank { null },
 		parentIndexNumber = item.optIntOrNull("seasonNumber"),
-		indexNumber = item.optIntOrNull("episodeNumber"),
+		indexNumber = if (type == "Season") item.optIntOrNull("seasonNumber") else item.optIntOrNull("episodeNumber"),
 		overview = metadata.optString("overview").ifBlank { metadata.optString("description").ifBlank { null } },
 		premiereDate = metadata.optString("date").ifBlank { metadata.optString("releaseDate").ifBlank { null } },
 		productionYear = metadata.optIntOrNull("year"),
@@ -689,7 +799,14 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
 			?: metadata.optIntOrNull("childCount"),
 		runtimeTicks = metadata.optDoubleOrNull("runtimeMinutes")?.let { (it * 60.0 * 10_000_000.0).toLong() },
 		imageTags = buildMap { image("Primary")?.let { put("Primary", it) }; image("Logo")?.let { put("Logo", it) }; image("Banner")?.let { put("Banner", it) } },
+		imageBlurHashes = buildMap {
+			imageBlurHash("Primary")?.let { put("Primary", it) }
+			imageBlurHash("Backdrop")?.let { put("Backdrop", it) }
+			imageBlurHash("Banner")?.let { put("Banner", it) }
+		},
 		backdropImageTags = image("Backdrop")?.let(::listOf).orEmpty(),
+		seriesPrimaryImageTag = item.optJSONObject("seriesPrimaryImage")?.optString("url")?.takeIf { it.isNotBlank() },
+		seriesPrimaryImageBlurHash = item.optJSONObject("seriesPrimaryImage")?.optString("blurHash")?.takeIf { it.isNotBlank() },
 		played = state.optBoolean("played", false),
 		favorite = state.optBoolean("favorite", false),
 		unplayedItemCount = state.optIntOrNull("unplayedItemCount"),
@@ -731,7 +848,7 @@ internal fun subtitleWebVttQuery(
     session.resourceTicket?.let { put("access", it) }
 }
 
-private fun parseMediaSource(source: JSONObject): MediaSource {
+internal fun parseMediaSource(source: JSONObject): MediaSource {
     val streams = source.optJSONArray("streams")?.let { array ->
         List(array.length()) { index ->
             val stream = array.optJSONObject(index) ?: JSONObject()
@@ -758,6 +875,10 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
                 isLyrics = stream.optString("kind") == "lyrics" ||
                     tags?.optString("handler_name") == "Lyrics" ||
                     tags?.optString("title") == "Lyrics",
+                codec = stream.optString("codec_name").ifBlank { null },
+                width = stream.optIntOrNull("width"),
+                height = stream.optIntOrNull("height"),
+                channels = stream.optIntOrNull("channels"),
             )
         }.filter { it.index >= 0 }
     } ?: emptyList()
@@ -768,8 +889,12 @@ private fun parseMediaSource(source: JSONObject): MediaSource {
         durationSeconds = source.optDoubleOrNull("durationSeconds"),
         container = source.optString("container").ifBlank { null },
         transcodingContainer = source.optString("transcodingContainer").ifBlank { null },
+        bitrate = source.optIntOrNull("bitrate"),
     )
 }
+
+internal fun withNegotiatedPlaybackUrl(source: MediaSource, url: String?): MediaSource =
+    source.copy(url = url?.trim()?.takeIf(String::isNotBlank) ?: source.url)
 
 internal fun parseTrickplayManifest(value: JSONObject?, serverUrl: String): TrickplayManifest? {
     val manifest = value ?: return null
@@ -924,76 +1049,6 @@ internal fun parseChapters(item: JSONObject): List<MediaChapter> =
             .sortedBy { it.startPositionTicks }
     } ?: emptyList()
 
-internal fun parsePlaybackMarkers(value: Any?): List<PlaybackSegment> {
-    val entries = when (value) {
-        is JSONArray -> List(value.length()) { value.optJSONObject(it) }.filterNotNull()
-        is JSONObject -> value.optJSONArray("Items")?.let { items ->
-            List(items.length()) { items.optJSONObject(it) }.filterNotNull()
-        } ?: listOf(value)
-
-        else -> emptyList()
-    }
-    val typed = normalizePlaybackMarkers(
-        entries.map { entry ->
-            PlaybackMarkerInput(
-                type = entry.optString("Type").ifBlank { null },
-                start = entry.numberValue("StartTicks", "StartTimeTicks"),
-                end = entry.numberValue("EndTicks", "EndTimeTicks"),
-            )
-        }
-    )
-    if (typed.isNotEmpty()) return typed
-    val root = value as? JSONObject ?: return emptyList()
-    return listOfNotNull(
-        parseNamedMarkerInput(
-            root,
-            listOf("intro", "introduction", "opening"),
-            listOf("IntroStart", "IntroStartTicks", "StartTicks"),
-            listOf("IntroEnd", "IntroEndTicks", "EndTicks"),
-        )?.let { PlaybackMarkerInput("Intro", it.first, it.second) },
-        parseNamedMarkerInput(
-            root,
-            listOf("outro", "credits", "closing"),
-            listOf("OutroStart", "CreditsStart", "CreditsStartTicks"),
-            listOf("OutroEnd", "CreditsEnd", "CreditsEndTicks"),
-        )?.let { PlaybackMarkerInput("Outro", it.first, it.second) },
-    ).let(::normalizePlaybackMarkers)
-}
-
-private fun parseNamedMarkerInput(
-    root: JSONObject,
-    names: List<String>,
-    startKeys: List<String>,
-    endKeys: List<String>,
-): Pair<Double, Double>? {
-    val nested = names.asSequence()
-        .mapNotNull { root.opt(it) as? JSONObject }
-        .firstOrNull()
-    val start = nested?.numberValue("start", "Start")
-        ?: startKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
-    val end = nested?.numberValue("end", "End")
-        ?: endKeys.asSequence().mapNotNull(root::numberValue).firstOrNull()
-    return if (start != null && end != null) start to end else null
-}
-
-internal data class PlaybackMarkerInput(
-    val type: String?,
-    val start: Double?,
-    val end: Double?,
-)
-
-internal fun normalizePlaybackMarkers(inputs: List<PlaybackMarkerInput>): List<PlaybackSegment> =
-    inputs.mapNotNull { input ->
-        val type = when (input.type?.lowercase()) {
-            "intro", "opening" -> PlaybackSegmentType.INTRO
-            "outro", "credits", "closing" -> PlaybackSegmentType.OUTRO
-            else -> null
-        }
-        if (type != null && input.start != null && input.end != null) {
-            marker(type, input.start, input.end)
-        } else null
-    }
-
 private fun marker(type: PlaybackSegmentType, rawStart: Double, rawEnd: Double): PlaybackSegment? {
     val start = rawStart.toPlaybackSeconds()
     val end = rawEnd.toPlaybackSeconds()
@@ -1001,17 +1056,6 @@ private fun marker(type: PlaybackSegmentType, rawStart: Double, rawEnd: Double):
         PlaybackSegment(type, start, end)
     } else null
 }
-
-private fun JSONObject.numberValue(vararg keys: String): Double? = keys.asSequence()
-    .mapNotNull { key ->
-        if (!has(key) || isNull(key)) null else when (val value = opt(key)) {
-            is Number -> value.toDouble()
-            is String -> value.toDoubleOrNull()
-            null -> null
-            else -> null
-        }
-    }
-    .firstOrNull()
 
 private fun Double.toPlaybackSeconds(): Double =
     if (this > 1_000_000.0) this / 10_000_000.0 else this
@@ -1037,20 +1081,6 @@ private fun chapterNameType(name: String?): PlaybackSegmentType? {
         else -> null
     }
 }
-
-internal fun mergePlaybackSegments(
-    providerSegments: List<PlaybackSegment>,
-    chapterSegments: List<PlaybackSegment>,
-): List<PlaybackSegment> {
-    val providerTypes = providerSegments.map { it.type }.toSet()
-    return (providerSegments + chapterSegments.filter { it.type !in providerTypes })
-        .filter { it.startSeconds >= 0.0 && it.endSeconds > it.startSeconds }
-        .sortedWith(compareBy<PlaybackSegment> { it.startSeconds }.thenBy { it.type })
-}
-
-internal fun playbackMarkerPaths(itemId: String): List<String> = listOf(
-    "/api/playback/markers/$itemId",
-)
 
 private fun stringArray(item: JSONObject, key: String): List<String> =
     item.optJSONArray(key)?.let { array ->

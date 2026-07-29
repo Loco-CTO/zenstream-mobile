@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
+    val showDebugIcon: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleSaveError: Boolean = false,
     val refreshing: Boolean = false,
@@ -33,6 +34,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             repository.playerEngine.collectLatest { engine ->
                 _uiState.value = _uiState.value.copy(playerEngine = engine)
+            }
+        }
+        viewModelScope.launch {
+            repository.showDebugIcon.collectLatest { enabled ->
+                _uiState.value = _uiState.value.copy(showDebugIcon = enabled)
             }
         }
         viewModelScope.launch {
@@ -73,6 +79,10 @@ class SettingsViewModel(
         viewModelScope.launch { repository.savePlayerEngine(engine) }
     }
 
+    fun setShowDebugIcon(enabled: Boolean) {
+        viewModelScope.launch { repository.saveShowDebugIcon(enabled) }
+    }
+
     fun updateSubtitle(change: SubtitleStyle.() -> SubtitleStyle) {
         val next = change(_uiState.value.subtitleStyle)
         _uiState.value = _uiState.value.copy(subtitleStyle = next, subtitleSaveError = false)
@@ -99,4 +109,3 @@ class SettingsViewModel(
             SettingsViewModel(repository) as T
     }
 }
-

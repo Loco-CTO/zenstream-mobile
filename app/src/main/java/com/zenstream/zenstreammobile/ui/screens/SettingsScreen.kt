@@ -120,6 +120,16 @@ fun SettingsScreen(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
                         ) {
                             EngineSelector(state.playerEngine, vm::setPlayerEngine)
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.player_show_debug_icon)) },
+                                supportingContent = { Text(stringResource(R.string.player_show_debug_icon_description)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = state.showDebugIcon,
+                                        onCheckedChange = vm::setShowDebugIcon,
+                                    )
+                                },
+                            )
                         }
                     }
 
@@ -391,4 +401,3 @@ private fun ColorField(label: String, value: String, onChange: (String) -> Unit)
 }
 
 private val MaterialThemeError = Color(0xFFFF8A80)
-

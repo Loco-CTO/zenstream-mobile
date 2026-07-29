@@ -23,6 +23,10 @@ data class MediaStream(
     val language: String? = null,
     val isDefault: Boolean = false,
     val isLyrics: Boolean = false,
+    val codec: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val channels: Int? = null,
 )
 
 data class TrickplaySheet(
@@ -51,6 +55,7 @@ data class MediaSource(
     val trickplay: TrickplayManifest? = null,
     val container: String? = null,
     val transcodingContainer: String? = null,
+    val bitrate: Int? = null,
 )
 
 data class TrickplayPreview(
@@ -103,6 +108,7 @@ data class PlaybackSessionStatus(
 )
 
 data class PlaybackOptions(
+    val engine: PlayerEngine = PlayerEngine.MEDIA3,
     val maxStreamingBitrate: Int? = null,
     val startPositionSeconds: Double = 0.0,
     val sourceId: String? = null,
@@ -110,6 +116,12 @@ data class PlaybackOptions(
     val forceTranscoding: Boolean = false,
     val directPlayOnly: Boolean = false,
     val requestedMode: String? = null,
+)
+
+data class PlaybackTrackSelection(
+    val audioStreamId: Int? = null,
+    val subtitleStreamIndex: Int? = null,
+    val hasSubtitleSelection: Boolean = false,
 )
 
 data class SubtitleStyle(

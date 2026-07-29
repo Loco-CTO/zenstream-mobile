@@ -22,4 +22,23 @@ class PlaybackActivityContractTest {
         assertNull(parsePlaybackLaunchArgs(null, "Example"))
         assertNull(parsePlaybackLaunchArgs("  ", "Example"))
     }
+
+    @Test
+    fun preservesTrackSelectionAndExplicitSubtitleOff() {
+        assertEquals(
+            PlaybackLaunchArgs(
+                "item-1",
+                "Example",
+                audioStreamId = 3,
+                subtitleStreamIndex = null,
+                hasSubtitleSelection = true,
+            ),
+            parsePlaybackLaunchArgs(
+                "item-1",
+                "Example",
+                audioStreamId = 3,
+                hasSubtitleSelection = true,
+            ),
+        )
+    }
 }

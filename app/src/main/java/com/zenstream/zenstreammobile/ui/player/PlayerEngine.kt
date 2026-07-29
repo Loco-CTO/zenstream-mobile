@@ -63,6 +63,7 @@ data class EngineState(
     val isBuffering: Boolean = false,
     val speed: Float = 1f,
     val ready: Boolean = false,
+    val ended: Boolean = false,
     val error: String? = null,
 )
 
@@ -77,6 +78,29 @@ internal class InitialSeekController {
 
     fun cancel() {
         pendingPositionSeconds = null
+    }
+}
+
+internal class MpvEndFileGate {
+    private var sourceLoaded = false
+    private var ignoreReplacementEnd = false
+
+    fun onSourceLoading() {
+        if (sourceLoaded) ignoreReplacementEnd = true
+        sourceLoaded = true
+    }
+
+    fun shouldReportEndFile(): Boolean {
+        if (ignoreReplacementEnd) {
+            ignoreReplacementEnd = false
+            return false
+        }
+        return true
+    }
+
+    fun clear() {
+        sourceLoaded = false
+        ignoreReplacementEnd = false
     }
 }
 
@@ -145,6 +169,7 @@ class Media3PlaybackEngine : PlaybackEngine {
                         _state.value = _state.value.copy(
                             ready = playbackState == Player.STATE_READY,
                             isBuffering = playbackState == Player.STATE_BUFFERING,
+                            ended = playbackState == Player.STATE_ENDED,
                         )
                         Log.i(tag, "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}")
                         if (playbackState == Player.STATE_READY) applyInitialSeek()
@@ -225,7 +250,24 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private var view: MpvSurfaceView? = null
     private var pending: PendingPlayback? = null
     private val initialSeek = InitialSeekController()
+    private val endFileGate = MpvEndFileGate()
     private var released = false
+    private var playWhenReady = false
+    private val eventObserver = object : MPVLib.EventObserver {
+        override fun eventProperty(property: String) = Unit
+        override fun eventProperty(property: String, value: Long) = Unit
+        override fun eventProperty(property: String, value: Boolean) = Unit
+        override fun eventProperty(property: String, value: String) = Unit
+        override fun eventProperty(property: String, value: Double) = Unit
+
+        override fun event(eventId: Int) {
+            if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
+                if (endFileGate.shouldReportEndFile()) {
+                    _state.value = _state.value.copy(ended = true)
+                }
+            }
+        }
+    }
     private val ticker = object : Runnable {
         override fun run() {
             if (released) return
@@ -261,9 +303,10 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         if (view == null) {
             val configDir = context.filesDir.resolve("mpv-config").apply { mkdirs() }
             val cacheDir = context.cacheDir.resolve("mpv-cache").apply { mkdirs() }
-            view = MpvSurfaceView(context).also {
+            view = MpvSurfaceView(context) { playWhenReady }.also {
                 it.initialize(configDir.absolutePath, cacheDir.absolutePath)
             }
+            MPVLib.addObserver(eventObserver)
             handler.post(ticker)
         }
         return view!!.also { pending?.let { request -> prepare(request.url, request.startPositionSeconds, request.mimeType) } }
@@ -279,20 +322,24 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
     override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
         if (released) return
+        playWhenReady = true
         pending = PendingPlayback(url, startPositionSeconds, mimeType)
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
+        endFileGate.onSourceLoading()
         current.load(url)
-        if (current.hasSurface()) MPVLib.setPropertyBoolean("pause", false)
+        if (current.hasSurface()) MPVLib.setPropertyBoolean("pause", !playWhenReady)
         _state.value = EngineState()
     }
 
     override fun play() {
+        playWhenReady = true
         if (!released && view != null) MPVLib.setPropertyBoolean("pause", false)
     }
 
     override fun pause() {
+        playWhenReady = false
         if (!released && view != null) MPVLib.setPropertyBoolean("pause", true)
     }
 
@@ -314,11 +361,16 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         if (released) return
         released = true
         handler.removeCallbacks(ticker)
+        MPVLib.removeObserver(eventObserver)
         initialSeek.cancel()
+        endFileGate.clear()
         view?.requestDestroy() ?: Unit
     }
 
-    private class MpvSurfaceView(context: Context) : BaseMPVView(context, null) {
+    private class MpvSurfaceView(
+        context: Context,
+        private val playWhenReady: () -> Boolean,
+    ) : BaseMPVView(context, null) {
         private val lifecycle = MpvSurfaceLifecycle()
         private var destroyAfterSurfaceTeardown = false
 
@@ -364,7 +416,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             if (!lifecycle.canUseSurface()) return
             super.surfaceCreated(holder)
             lifecycle.markSurfaceCreated()
-            MPVLib.setPropertyBoolean("pause", false)
+            MPVLib.setPropertyBoolean("pause", !playWhenReady())
         }
 
         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {

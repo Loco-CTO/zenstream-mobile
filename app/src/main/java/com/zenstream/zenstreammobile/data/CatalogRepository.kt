@@ -11,21 +11,30 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.HomeData
+import com.zenstream.zenstreammobile.model.DerivedHomeData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-interface HomeDataSource {
+interface CatalogRefreshSource {
+    val catalogRefreshRevision: Flow<Long>
+        get() = kotlinx.coroutines.flow.emptyFlow()
+}
+
+interface HomeDataSource : CatalogRefreshSource {
     suspend fun clearSession()
     suspend fun homeFeatured(session: AuthSession): List<MediaItem>
     suspend fun homeContinueWatching(session: AuthSession): List<MediaItem>
     suspend fun homeNextUp(session: AuthSession): List<MediaItem>
+    suspend fun homeDerived(session: AuthSession): DerivedHomeData
     suspend fun homeLibraries(session: AuthSession): List<Library>
     suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData
 }
 
-interface LibraryDataSource {
+interface LibraryDataSource : CatalogRefreshSource {
     suspend fun clearSession()
     suspend fun libraries(session: AuthSession): List<Library>
     suspend fun libraryPage(
@@ -40,7 +49,7 @@ interface LibraryDataSource {
     suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort)
 }
 
-interface SearchDataSource {
+interface SearchDataSource : CatalogRefreshSource {
     suspend fun clearSession()
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
@@ -52,12 +61,15 @@ class CatalogRepository(
 ) : HomeDataSource, LibraryDataSource, SearchDataSource {
     private val homeMutex = Mutex()
     private var homeCache: Pair<Long, HomeData>? = null
+    private val _catalogRefreshRevision = MutableStateFlow(0L)
+    override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
     val locale: Flow<String> = sessionStore.locale
 	val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
+    val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -93,28 +105,34 @@ class CatalogRepository(
 		val current = session.first() ?: error("Authentication required")
 		return orchestratorApi.setMetadataPreference(current.serverUrl, current.token, language).also {
 			sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+			invalidateCatalogMetadata()
 		}
 	}
 
     override suspend fun clearSession() {
+        SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         sessionStore.clearSession()
     }
-    suspend fun clearAll() = sessionStore.clearAll()
+    suspend fun clearAll() {
+        SyncplaySession.clear()
+        sessionStore.clearAll()
+    }
 
-    override suspend fun homeFeatured(session: AuthSession) = home(session).featured
+    override suspend fun homeFeatured(session: AuthSession) = api.fetchHomeFeatured(session)
+
     override suspend fun homeContinueWatching(session: AuthSession) =
-        home(session).rows.firstOrNull { it.title == com.zenstream.zenstreammobile.model.RowTitle.ContinueWatching }?.items.orEmpty()
+        api.fetchHomeContinueWatching(session)
 
-    override suspend fun homeNextUp(session: AuthSession) =
-        home(session).rows.firstOrNull { it.title == com.zenstream.zenstreammobile.model.RowTitle.NextUp }?.items.orEmpty()
+    override suspend fun homeNextUp(session: AuthSession) = api.fetchHomeNextUp(session)
+
+    override suspend fun homeDerived(session: AuthSession) = api.fetchHomeDerived(session)
+
     override suspend fun homeLibraries(session: AuthSession) =
         api.getLibraries(session, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
-    override suspend fun homeLibraryData(
-        session: AuthSession,
-        library: Library,
-    ) = api.fetchLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
+    override suspend fun homeLibraryData(session: AuthSession, library: Library) =
+        api.fetchLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
     suspend fun library(
@@ -158,6 +176,15 @@ class CatalogRepository(
     ): PlaybackData =
         api.playback(session, itemId, options)
 
+    suspend fun playbackSource(session: AuthSession, itemId: String) =
+        api.playbackSource(session, itemId)
+
+    suspend fun episodeNeighbors(session: AuthSession, item: MediaItem): EpisodeNeighbors =
+        api.episodeNeighbors(session, item)
+
+    suspend fun cancelPlaybackSession(session: AuthSession, sessionId: String) =
+        api.cancelPlaybackSession(session, sessionId)
+
     suspend fun trickplay(session: AuthSession, itemId: String, sourceId: String?) =
         api.trickplay(session, itemId, sourceId)
 
@@ -181,6 +208,8 @@ class CatalogRepository(
 	}
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
+    suspend fun saveShowDebugIcon(enabled: Boolean) = sessionStore.saveShowDebugIcon(enabled)
+    fun syncplayManager(session: AuthSession): SyncplayManager = SyncplaySession.manager(session, sessionStore)
 
     suspend fun loadSubtitleStyle(): SubtitleStyle =
         sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
@@ -190,13 +219,22 @@ class CatalogRepository(
         sessionStore.cacheSubtitleStyle(normalized)
         return normalized
     }
-    suspend fun home(session: AuthSession): HomeData = homeMutex.withLock {
+    suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData = homeMutex.withLock {
         val cached = homeCache
-        if (cached != null && cached.first > System.currentTimeMillis() - 30_000) return@withLock cached.second
+        if (!forceRefresh && cached != null && cached.first > System.currentTimeMillis() - 30_000) {
+            return@withLock cached.second
+        }
         api.fetchHome(session).also { homeCache = System.currentTimeMillis() to it }
     }
 
     private suspend fun invalidateHomeCache() {
         homeMutex.withLock { homeCache = null }
+    }
+
+    private suspend fun invalidateCatalogMetadata() {
+        homeMutex.withLock {
+            homeCache = null
+            _catalogRefreshRevision.value += 1
+        }
     }
 }

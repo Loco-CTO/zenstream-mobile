@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -15,7 +16,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.click
 import androidx.compose.ui.platform.testTag
@@ -104,10 +104,74 @@ class PlaybackGestureTest {
             }
         }
 
-        composeRule.onNodeWithTag("gesture-layer").performTouchInput { swipeRight() }
+        composeRule.onNodeWithTag("gesture-layer").performTouchInput {
+            down(Offset(width * .3f, height / 2f))
+            moveTo(Offset(width * .7f, height / 2f))
+            up()
+        }
 
         composeRule.runOnIdle {
             assertTrue(seekTo.last() > 50.0)
+        }
+    }
+
+    @Test
+    fun dragStartingAtTheSystemGestureEdgeDoesNotSeek() {
+        val seekTo = mutableStateListOf<Double>()
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                PlaybackGestureLayer(
+                    modifier = Modifier.fillMaxSize().testTag("gesture-layer"),
+                    controlsLocked = false,
+                    positionSeconds = 50.0,
+                    durationSeconds = 100.0,
+                    onToggleControls = {},
+                    onSeekBy = {},
+                    onSeekFeedback = {},
+                    onSurfaceDragEnd = seekTo::add,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("gesture-layer").performTouchInput {
+            down(Offset(1f, height / 2f))
+            moveTo(Offset(width * .6f, height / 2f))
+            up()
+        }
+
+        composeRule.runOnIdle {
+            assertTrue(seekTo.isEmpty())
+        }
+    }
+
+    @Test
+    fun verticalFirstDragDoesNotSeek() {
+        val seekTo = mutableStateListOf<Double>()
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                PlaybackGestureLayer(
+                    modifier = Modifier.fillMaxSize().testTag("gesture-layer"),
+                    controlsLocked = false,
+                    positionSeconds = 50.0,
+                    durationSeconds = 100.0,
+                    onToggleControls = {},
+                    onSeekBy = {},
+                    onSeekFeedback = {},
+                    onSurfaceDragEnd = seekTo::add,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("gesture-layer").performTouchInput {
+            down(center)
+            moveTo(center + Offset(20f, 100f))
+            up()
+        }
+
+        composeRule.runOnIdle {
+            assertTrue(seekTo.isEmpty())
         }
     }
 
@@ -136,7 +200,11 @@ class PlaybackGestureTest {
             }
         }
 
-        composeRule.onNodeWithTag("gesture-layer").performTouchInput { swipeRight() }
+        composeRule.onNodeWithTag("gesture-layer").performTouchInput {
+            down(Offset(width * .3f, height / 2f))
+            moveTo(Offset(width * .7f, height / 2f))
+            up()
+        }
 
         composeRule.runOnIdle {
             assertTrue(previewTargets.isNotEmpty())

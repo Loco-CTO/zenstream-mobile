@@ -20,6 +20,10 @@
     <string name="library">Library</string>
     <string name="continue_watching">Continue Watching</string>
     <string name="next_up">Next Up</string>
+    <string name="my_list">My List</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="play_next">Play next</string>
+    <string name="stop_playing">Stop playing</string>
     <string name="newly_added_on">Newly Added on %1$s</string>
     <string name="top_rated">Top Rated Anime</string>
     <string name="new_releases">New Releases</string>
@@ -74,6 +78,22 @@
     <string name="player_engine">Player engine</string>
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>
+    <string name="player_show_debug_icon">Show debug icon in player</string>
+    <string name="player_show_debug_icon_description">Show playback diagnostics in the player controls.</string>
+    <string name="player_debug">Playback diagnostics</string>
+    <string name="player_debug_mode">Mode</string>
+    <string name="player_debug_session">Session</string>
+    <string name="player_debug_state">State</string>
+    <string name="player_debug_engine">Engine</string>
+    <string name="player_debug_source">Source</string>
+    <string name="player_debug_video">Video</string>
+    <string name="player_debug_audio">Audio</string>
+    <string name="player_debug_position">Position</string>
+    <string name="player_debug_buffered">Buffered</string>
+    <string name="player_debug_native">Player</string>
+    <string name="player_debug_error">Error</string>
+    <string name="player_show_debug">Show playback diagnostics</string>
+    <string name="player_hide_debug">Hide playback diagnostics</string>
     <string name="audio_track">Audio track</string>
     <string name="player_audio_track_format">Audio track %1$d</string>
     <string name="subtitle_track">Subtitle track</string>
@@ -126,6 +146,8 @@
     <string name="season_episode">Season %1$d · Episode %2$d</string>
     <string name="episodes_label">Episodes</string>
     <string name="cast_crew">Cast &amp; Crew</string>
+    <string name="cast">Cast</string>
+    <string name="crew">Crew</string>
     <string name="more_like_this">More Like This</string>
     <string name="no_episodes">No episodes available.</string>
     <string name="mark_watched">Mark as watched</string>
@@ -147,4 +169,14 @@
     <string name="preferred_metadata_language">Preferred metadata language</string>
     <string name="metadata_language_automatic">Automatic (%1$s)</string>
     <string name="metadata_language_save_failed">Metadata language could not be saved.</string>
+    <string name="syncplay_groups">Groups</string>
+    <string name="syncplay_create">Create</string>
+    <string name="syncplay_empty">No active groups yet.</string>
+    <string name="syncplay_member_count">%1$d members</string>
+    <string name="syncplay_join">Join</string>
+    <string name="syncplay_host">Host</string>
+    <string name="syncplay_remove">Remove</string>
+    <string name="syncplay_allow_controls">Allow viewer controls</string>
+    <string name="syncplay_return_to_view">Return to view</string>
+    <string name="syncplay_leave">Leave group</string>
 </resources>

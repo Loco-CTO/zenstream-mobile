@@ -22,6 +22,7 @@ data class MediaItem(
     val seasonId: String? = null,
     val parentId: String? = null,
     val libraryId: String? = null,
+	val lastAddedAt: String? = null,
     val parentIndexNumber: Int? = null,
     val indexNumber: Int? = null,
     val overview: String? = null,
@@ -35,8 +36,10 @@ data class MediaItem(
     val recursiveItemCount: Int? = null,
     val runtimeTicks: Long? = null,
     val imageTags: Map<String, String> = emptyMap(),
+    val imageBlurHashes: Map<String, String> = emptyMap(),
     val backdropImageTags: List<String> = emptyList(),
     val seriesPrimaryImageTag: String? = null,
+    val seriesPrimaryImageBlurHash: String? = null,
     val played: Boolean = false,
     val favorite: Boolean = false,
     val unplayedItemCount: Int? = null,
@@ -50,6 +53,9 @@ data class MediaPerson(
     val role: String? = null,
     val type: String? = null,
     val primaryImageTag: String? = null,
+    val id: String? = null,
+    val creditType: String? = null,
+    val imageBlurHash: String? = null,
 )
 
 data class Library(
@@ -64,14 +70,28 @@ data class MediaRow(
     val libraryName: String? = null,
     val items: List<MediaItem>,
     val wide: Boolean = false,
+	val stackEpisodes: Boolean = false,
+    val label: String? = null,
+    val key: String = "${title.name}:${libraryName.orEmpty()}:${label.orEmpty()}",
 )
 
-enum class RowTitle { ContinueWatching, NextUp, NewlyAdded, TopRated, NewReleases }
+enum class RowTitle { ContinueWatching, NextUp, MyList, RecentlyPlayed, Genre, NewlyAdded, TopRated, NewReleases }
 
 data class HomeData(
     val featured: List<MediaItem> = emptyList(),
     val rows: List<MediaRow> = emptyList(),
 )
+
+data class DerivedHomeData(
+    val myList: List<MediaItem> = emptyList(),
+    val recentlyPlayed: List<MediaItem> = emptyList(),
+    val genreRows: List<MediaRow> = emptyList(),
+) {
+    fun rows(): List<MediaRow> = listOfNotNull(
+        myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) },
+        recentlyPlayed.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.RecentlyPlayed, items = it) },
+    ) + genreRows.filter { it.items.isNotEmpty() }
+}
 
 data class LibraryData(
     val library: Library,

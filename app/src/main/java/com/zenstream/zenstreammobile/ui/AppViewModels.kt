@@ -8,6 +8,7 @@ import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
@@ -17,6 +18,8 @@ import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
@@ -74,8 +78,8 @@ class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
     }
 
     suspend fun configureServer(value: String) = repository.configureOrchestrator(value)
-    fun logout() = viewModelScope.launch { repository.clearSession() }
-    fun changeServer() = viewModelScope.launch { repository.clearAll() }
+    fun logout() = viewModelScope.launch { SyncplaySession.clear(); repository.clearSession() }
+    fun changeServer() = viewModelScope.launch { SyncplaySession.clear(); repository.clearAll() }
 
     class Factory(private val repository: CatalogRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -130,22 +134,26 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     private var loadingJob: Job? = null
 
     private companion object {
-        const val INITIAL_SECTION_COUNT = 4
+        const val INITIAL_SECTION_COUNT = 5
     }
 
     init {
         load()
+        viewModelScope.launch {
+            repository.catalogRefreshRevision.drop(1).collectLatest {
+                load(force = true)
+            }
+        }
     }
 
     fun load(force: Boolean = false) {
-        if (loadingJob?.isActive == true) return
+        if (loadingJob?.isActive == true) {
+            if (!force) return
+            loadingJob?.cancel()
+        }
         if (!force && !_uiState.value.loading && _uiState.value.data != null) return
         _uiState.value = if (force) {
-            HomeUiState(
-                loading = true,
-                data = HomeData(),
-                pendingSections = INITIAL_SECTION_COUNT,
-            )
+            HomeUiState(loading = true, data = HomeData(), pendingSections = INITIAL_SECTION_COUNT)
         } else {
             HomeUiState(loading = true, pendingSections = INITIAL_SECTION_COUNT)
         }
@@ -169,6 +177,12 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                         apply = { data, items -> data.withRow(RowTitle.NextUp, items, wide = true) },
                     )
                 }
+                launch {
+                    loadSection(
+                        request = { repository.homeDerived(session) },
+                        apply = { data, derived -> data.withDerivedRows(derived.rows()) },
+                    )
+                }
                 launch { loadLibraries() }
             }
         }
@@ -182,21 +196,14 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
             if (libraries.isNotEmpty()) addPendingSections(libraries.size)
             completeSection(success = true)
             if (libraries.isEmpty()) return
-
-            val libraryResults = libraries.map { library ->
+            libraries.map { library ->
                 launch {
                     loadSection(
                         request = { repository.homeLibraryData(session, library) },
-                        apply = { data, libraryData ->
-                            data.withLibraryData(
-                                libraries,
-                                libraryData
-                            )
-                        },
+                        apply = { data, libraryData -> data.withLibraryData(libraries, libraryData) },
                     )
                 }
-            }
-            libraryResults.joinAll()
+            }.joinAll()
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             handleFailure(error)
@@ -210,11 +217,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     ) {
         try {
             val result = request()
-            _uiState.update { state ->
-                state.copy(
-                    data = apply(state.data ?: HomeData(), result),
-                )
-            }
+            _uiState.update { state -> state.copy(data = apply(state.data ?: HomeData(), result)) }
             completeSection(success = true)
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -254,8 +257,13 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
 
 private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Boolean): HomeData {
     val globalRows = rows.filter { it.libraryName == null && it.title != title } +
-            listOfNotNull(items.takeIf { it.isNotEmpty() }
-                ?.let { MediaRow(title, items = it, wide = wide) })
+            listOfNotNull(items.takeIf { it.isNotEmpty() }?.let { MediaRow(title, items = it, wide = wide) })
+    return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
+}
+
+private fun HomeData.withDerivedRows(derivedRows: List<MediaRow>): HomeData {
+    val derivedTitles = setOf(RowTitle.MyList, RowTitle.RecentlyPlayed, RowTitle.Genre)
+    val globalRows = rows.filter { it.libraryName == null && it.title !in derivedTitles } + derivedRows
     return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
 }
 
@@ -263,24 +271,22 @@ private fun HomeData.withLibraryData(
     libraries: List<Library>,
     libraryData: com.zenstream.zenstreammobile.model.LibraryData,
 ): HomeData {
-    val byLibrary = rows.filter { it.libraryName != null }
-        .groupBy { it.libraryName }
-        .toMutableMap()
+    val byLibrary = rows.filter { it.libraryName != null }.groupBy { it.libraryName }.toMutableMap()
     byLibrary[libraryData.library.name] = libraryData.rows
-    val orderedLibraryRows = libraries.flatMap { byLibrary[it.name].orEmpty() }
-    return copy(
-        rows = rows.filter { it.libraryName == null }.orderedHomeRows() + orderedLibraryRows,
-    )
+    return copy(rows = rows.filter { it.libraryName == null }.orderedHomeRows() +
+            libraries.flatMap { byLibrary[it.name].orEmpty() })
 }
 
-private fun List<MediaRow>.orderedHomeRows(): List<MediaRow> =
-    sortedBy { row ->
-        when (row.title) {
-            RowTitle.ContinueWatching -> 0
-            RowTitle.NextUp -> 1
-            else -> 2
-        }
+private fun List<MediaRow>.orderedHomeRows(): List<MediaRow> = sortedBy { row ->
+    when (row.title) {
+        RowTitle.ContinueWatching -> 0
+        RowTitle.NextUp -> 1
+        RowTitle.MyList -> 2
+        RowTitle.RecentlyPlayed -> 3
+        RowTitle.Genre -> 4
+        else -> 5
     }
+}
 
 data class LibraryUiState(
     val loading: Boolean = true,
@@ -305,6 +311,11 @@ class LibraryViewModel(
 
     init {
         loadLibraries()
+        viewModelScope.launch {
+            repository.catalogRefreshRevision.drop(1).collectLatest {
+                refresh()
+            }
+        }
     }
 
     fun loadLibraries(preferredLibraryId: String? = null) {
@@ -505,6 +516,14 @@ class SearchViewModel(
     private var searchJob: Job? = null
     private var requestGeneration = 0L
 
+    init {
+        viewModelScope.launch {
+            repository.catalogRefreshRevision.drop(1).collectLatest {
+                refresh()
+            }
+        }
+    }
+
     fun updateQuery(value: String) {
         val generation = ++requestGeneration
         _uiState.value = _uiState.value.copy(
@@ -591,7 +610,20 @@ data class DetailUiState(
     val seasonLoading: Boolean = false,
     val actionBusy: Boolean = false,
     val actionError: Boolean = false,
+    val trackSource: MediaSource? = null,
+    val trackSelection: PlaybackTrackSelection? = null,
 )
+
+internal fun defaultTrackSelection(source: MediaSource): PlaybackTrackSelection {
+    val audio = source.mediaStreams.filter { it.type.equals("audio", true) }
+    val subtitles = source.mediaStreams.filter { it.type.equals("subtitle", true) }
+    return PlaybackTrackSelection(
+        audioStreamId = audio.firstOrNull { it.isDefault }?.index ?: audio.firstOrNull()?.index,
+        subtitleStreamIndex = subtitles.firstOrNull { it.isDefault }?.index
+            ?: subtitles.firstOrNull()?.index,
+        hasSubtitleSelection = subtitles.isNotEmpty(),
+    )
+}
 
 class DetailViewModel(
     private val repository: CatalogRepository,
@@ -600,13 +632,23 @@ class DetailViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState = _uiState.asStateFlow()
+    private var loadGeneration = 0L
+    private var loadJob: Job? = null
+    private var trackLoadJob: Job? = null
 
     init {
         load()
+        viewModelScope.launch {
+            repository.catalogRefreshRevision.drop(1).collectLatest {
+                load()
+            }
+        }
     }
 
     fun load() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        val generation = ++loadGeneration
+        loadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 loading = true,
                 seasonLoading = false,
@@ -620,9 +662,12 @@ class DetailViewModel(
                 )
             }
                 .onSuccess {
+                    if (generation != loadGeneration) return@onSuccess
                     _uiState.value = DetailUiState(loading = false, data = it)
+                    loadTrackSource(generation, it.item)
                 }
                 .onFailure {
+                    if (generation != loadGeneration) return@onFailure
                     if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = _uiState.value.copy(
                         loading = false,
@@ -636,6 +681,8 @@ class DetailViewModel(
     fun selectSeason(seasonId: String) {
         val currentData = _uiState.value.data ?: return
         if (currentData.selectedSeasonId == seasonId) return
+        loadJob?.cancel()
+        val generation = ++loadGeneration
         _uiState.value = _uiState.value.copy(
             loading = true,
             seasonLoading = true,
@@ -645,12 +692,15 @@ class DetailViewModel(
                 episodes = emptyList(),
             ),
         )
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             runCatching { repository.detail(session, itemId, seasonId) }
                 .onSuccess {
+                    if (generation != loadGeneration) return@onSuccess
                     _uiState.value = DetailUiState(loading = false, data = it)
+                    loadTrackSource(generation, it.item)
                 }
                 .onFailure {
+                    if (generation != loadGeneration) return@onFailure
                     if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
                     _uiState.value = DetailUiState(
                         loading = false,
@@ -667,6 +717,47 @@ class DetailViewModel(
 
     fun toggleFavorite() = toggleItemState(playedAction = false) { item, value ->
         repository.setFavorite(session, item.id, value)
+    }
+
+    fun selectAudioTrack(streamIndex: Int) {
+        val current = _uiState.value
+        val source = current.trackSource ?: return
+        if (source.mediaStreams.none { it.type.equals("audio", true) && it.index == streamIndex }) return
+        _uiState.value = current.copy(
+            trackSelection = (current.trackSelection ?: defaultTrackSelection(source)).copy(
+                audioStreamId = streamIndex,
+            ),
+        )
+    }
+
+    fun selectSubtitleTrack(streamIndex: Int?) {
+        val current = _uiState.value
+        val source = current.trackSource ?: return
+        if (streamIndex != null && source.mediaStreams.none {
+                it.type.equals("subtitle", true) && it.index == streamIndex
+            }) return
+        _uiState.value = current.copy(
+            trackSelection = (current.trackSelection ?: defaultTrackSelection(source)).copy(
+                subtitleStreamIndex = streamIndex,
+                hasSubtitleSelection = true,
+            ),
+        )
+    }
+
+    fun playbackTrackSelection(): PlaybackTrackSelection? = _uiState.value.trackSelection
+
+    private fun loadTrackSource(generation: Long, item: MediaItem) {
+        trackLoadJob?.cancel()
+        if (item.type !in setOf("Movie", "Episode")) return
+        trackLoadJob = viewModelScope.launch {
+            val source = runCatching { repository.playbackSource(session, item.id) }.getOrNull()
+                ?: return@launch
+            if (generation != loadGeneration || _uiState.value.data?.item?.id != item.id) return@launch
+            _uiState.value = _uiState.value.copy(
+                trackSource = source,
+                trackSelection = defaultTrackSelection(source),
+            )
+        }
     }
 
     fun toggleSeasonPlayed(seasonId: String) =

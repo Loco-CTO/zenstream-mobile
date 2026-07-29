@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
@@ -45,12 +44,16 @@ import coil3.request.crossfade
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.imageUrl
+import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
+import com.zenstream.zenstreammobile.data.seriesPosterImageType
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
+import java.time.Instant
+import androidx.compose.ui.platform.LocalLocale
 import kotlin.math.roundToInt
 import com.composables.icons.lucide.R as LucideR
 
@@ -68,6 +71,9 @@ fun MediaRowView(
     val title = when (row.title) {
         RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
         RowTitle.NextUp -> stringResource(R.string.next_up)
+        RowTitle.MyList -> stringResource(R.string.my_list)
+        RowTitle.RecentlyPlayed -> stringResource(R.string.recently_played)
+        RowTitle.Genre -> row.label.orEmpty()
         RowTitle.NewlyAdded -> row.libraryName?.let {
             stringResource(R.string.newly_added_on, it)
         } ?: stringResource(R.string.new_releases)
@@ -92,11 +98,142 @@ fun MediaRowView(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(row.items, key = { it.id }) { item ->
-                MediaCard(item, session, row.wide, onItemClick)
+            if (row.stackEpisodes) {
+                items(stackNewlyAdded(row.items), key = { it.items.first().id }) { stack ->
+                    if (stack.items.size > 1) {
+                        StackedEpisodeCard(stack, session, onItemClick)
+                    } else {
+                        MediaCard(
+                            stack.items.first(),
+                            session,
+                            row.wide,
+                            onItemClick,
+                            useSeriesPoster = true,
+                        )
+                    }
+                }
+            } else {
+                items(row.items, key = { it.id }) { item ->
+                    MediaCard(item, session, row.wide, onItemClick)
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+internal data class EpisodeStack(val items: List<MediaItem>)
+
+internal fun stackNewlyAdded(items: List<MediaItem>): List<EpisodeStack> {
+    val stacks = mutableListOf<EpisodeStack>()
+    for (item in items) {
+        val previous = stacks.lastOrNull()?.items?.lastOrNull()
+        if (previous != null && areBatchEpisodes(previous, item)) {
+            stacks[stacks.lastIndex] = stacks.last().copy(items = stacks.last().items + item)
+        } else {
+            stacks += EpisodeStack(listOf(item))
+        }
+    }
+    return stacks
+}
+
+private fun areBatchEpisodes(a: MediaItem, b: MediaItem): Boolean =
+    a.type == "Episode" &&
+        b.type == "Episode" &&
+        !a.seriesId.isNullOrBlank() &&
+        a.seriesId == b.seriesId &&
+		!a.seasonId.isNullOrBlank() &&
+		a.seasonId == b.seasonId &&
+        a.parentIndexNumber == b.parentIndexNumber &&
+        a.indexNumber != null &&
+        b.indexNumber != null &&
+        kotlin.math.abs(a.indexNumber - b.indexNumber) == 1 &&
+        addedWithinOneHour(a.lastAddedAt, b.lastAddedAt)
+
+private fun addedWithinOneHour(a: String?, b: String?): Boolean {
+    val aTime = a?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val bTime = b?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    return aTime != null && bTime != null && kotlin.math.abs(aTime - bTime) <= 3_600_000
+}
+
+@Composable
+private fun StackedEpisodeCard(
+    stack: EpisodeStack,
+    session: AuthSession,
+    onClick: (MediaItem) -> Unit,
+) {
+    val item = stack.items.first()
+    val playDescription = stringResource(R.string.play_description, episodeCardTitle(item))
+    Column(
+        modifier = Modifier
+            .width(POSTER_CARD_MIN_WIDTH)
+            .semantics {
+                role = Role.Button
+                contentDescription = playDescription
+            }
+            .clickable { onClick(item) },
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, top = 10.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = .10f)),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 5.dp, top = 5.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = .16f)),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 10.dp, bottom = 10.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                MediaImage(item, session, wide = false, useSeriesPoster = true)
+                Surface(
+                    color = Color.Black.copy(alpha = .65f),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
+                ) {
+                    Text(
+                        text = stack.items.size.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+        Text(
+            episodeCardTitle(item),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White.copy(alpha = .82f),
+            modifier = Modifier.padding(top = 7.dp),
+        )
+        Text(
+            episodeCardSubtitle(item),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = .42f),
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
@@ -108,7 +245,9 @@ fun MediaCard(
     onClick: (MediaItem) -> Unit,
     showRating: Boolean = false,
     gridCard: Boolean = false,
+    useSeriesPoster: Boolean = false,
 ) {
+	val locale = LocalLocale.current.platformLocale
     val cardWidthModifier = if (gridCard && !wide) {
         Modifier
             .fillMaxWidth()
@@ -132,7 +271,7 @@ fun MediaCard(
                 .clip(RoundedCornerShape(6.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            MediaImage(item, session, wide)
+            MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
             if (item.played || item.unplayedItemCount != null) {
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
@@ -175,7 +314,7 @@ fun MediaCard(
                         modifier = Modifier.width(12.dp),
                     )
                     Text(
-                        text = String.format("%.1f", item.communityRating),
+						text = String.format(locale, "%.1f", item.communityRating),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = .85f),
                     )
@@ -217,10 +356,15 @@ fun MediaImage(
     item: MediaItem,
     session: AuthSession,
     wide: Boolean,
+    useSeriesPoster: Boolean = false,
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val type = if (wide) landscapeImageType(item) else posterImageType(item)
+    val type = when {
+        wide -> landscapeImageType(item)
+        useSeriesPoster -> seriesPosterImageType(item)
+        else -> posterImageType(item)
+    }
     val url = type?.let {
         imageUrl(
             session.serverUrl,
@@ -240,8 +384,10 @@ fun MediaImage(
             .crossfade(true)
             .build()
     }
-    AsyncImage(
+    BlurHashAsyncImage(
         model = request,
+        imageKey = url,
+        blurHash = type?.let { imageBlurHash(item, it) },
         contentDescription = contentDescription ?: stringResource(
             R.string.poster_description,
             item.name

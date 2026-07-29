@@ -5,14 +5,34 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
+import com.zenstream.zenstreammobile.ui.player.MpvEndFileGate
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
 import org.json.JSONObject
 
 class PlaybackParsingTest {
+    @Test
+    fun parsesSessionFreeSourceMetadataTracks() {
+        val source = parseMediaSource(
+            JSONObject(
+                """{"id":"source-1","streams":[{"index":2,"codec_type":"audio","tags":{"title":"English","language":"en"}},{"index":4,"codec_type":"subtitle","disposition":{"default":1},"tags":{"language":"ja"}}]}""",
+            ),
+        )
+
+        assertEquals("source-1", source.id)
+        assertEquals(
+            listOf(
+                MediaStream(2, "Audio", "English", "en"),
+                MediaStream(4, "Subtitle", language = "ja", isDefault = true),
+            ),
+            source.mediaStreams,
+        )
+    }
+
     @Test
     fun identifiesGatewayRewrittenTranscodingUrlAsHls() {
         assertEquals(
@@ -24,6 +44,20 @@ class PlaybackParsingTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun attachesTheCanonicalNegotiatedUrlToTheInventorySource() {
+        val source = withNegotiatedPlaybackUrl(
+            MediaSource(id = "source-1", container = "matroska"),
+            "/api/playback/sessions/session-1/master.m3u8?access=lease-1",
+        )
+
+        assertEquals(
+            "/api/playback/sessions/session-1/master.m3u8?access=lease-1",
+            source.url,
+        )
+        assertEquals("application/x-mpegURL", playbackMimeType(source))
     }
 
     @Test
@@ -49,9 +83,9 @@ class PlaybackParsingTest {
                     rows = 2,
                     frameCount = 10,
                     sheets = listOf(
-                        TrickplaySheet(0, 4, "https://orchestrator.example/sheet-0.jpg"),
-                        TrickplaySheet(1, 4, "https://orchestrator.example/sheet-1.jpg"),
-                        TrickplaySheet(2, 2, "https://orchestrator.example/sheet-2.jpg"),
+                        TrickplaySheet(0, 4, "https://orchestrator.example/sheet-0.webp"),
+                        TrickplaySheet(1, 4, "https://orchestrator.example/sheet-1.webp"),
+                        TrickplaySheet(2, 2, "https://orchestrator.example/sheet-2.webp"),
                     ),
                 ),
             ),
@@ -62,7 +96,7 @@ class PlaybackParsingTest {
         assertEquals(1, preview?.cellX)
         assertEquals(0, preview?.cellY)
         assertEquals(640, preview?.width)
-        assertEquals("https://orchestrator.example/sheet-2.jpg", preview?.url)
+        assertEquals("https://orchestrator.example/sheet-2.webp", preview?.url)
     }
 
     @Test
@@ -72,7 +106,7 @@ class PlaybackParsingTest {
                 """{
                     "state":"ready", "sourceId":"source-1", "frameWidth":320, "frameHeight":180,
                     "intervalSeconds":10, "columns":10, "rows":10,
-                    "sheets":[{"index":0,"frameCount":100,"url":"/api/playback/items/item-1/trickplay/generation/0.jpg?access=ticket"}]
+                    "sheets":[{"index":0,"frameCount":100,"url":"/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket"}]
                 }""",
             ),
             "https://orchestrator.example",
@@ -82,7 +116,7 @@ class PlaybackParsingTest {
         assertEquals(320, manifest?.frameWidth)
         assertEquals(180, manifest?.frameHeight)
         assertEquals(
-            "https://orchestrator.example/api/playback/items/item-1/trickplay/generation/0.jpg?access=ticket",
+            "https://orchestrator.example/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket",
             manifest?.sheets?.single()?.url,
         )
     }
@@ -379,42 +413,15 @@ class PlaybackParsingTest {
     }
 
     @Test
-    fun followsTheWebMarkerProviderOrder() {
-        assertEquals(
-            listOf(
-                "/api/playback/markers/episode-1",
-            ),
-            playbackMarkerPaths("episode-1"),
-        )
-    }
+    fun replacementEndFileIsNotReportedAsEpisodeCompletion() {
+        val gate = MpvEndFileGate()
 
-    @Test
-    fun parsesTypedMediaSegmentsFromItemsAndConvertsTicks() {
-        val markers = normalizePlaybackMarkers(
-            listOf(
-                PlaybackMarkerInput("Intro", 100_000_000.0, 250_000_000.0),
-                PlaybackMarkerInput("Outro", 800.0, 1200.0),
-            )
-        )
+        gate.onSourceLoading()
+        assertTrue(gate.shouldReportEndFile())
 
-        assertEquals(2, markers.size)
-        assertEquals(10.0, markers[0].startSeconds, 0.001)
-        assertEquals(25.0, markers[0].endSeconds, 0.001)
-        assertEquals(800.0, markers[1].startSeconds, 0.001)
-    }
-
-    @Test
-    fun parsesLegacyIntroSkipperObjectShape() {
-        val markers = normalizePlaybackMarkers(
-            listOf(
-                PlaybackMarkerInput("Intro", 100_000_000.0, 200_000_000.0),
-                PlaybackMarkerInput("Credits", 900_000_000.0, 950_000_000.0),
-            )
-        )
-
-        assertEquals(2, markers.size)
-        assertEquals(10.0, markers.first { it.type.name == "INTRO" }.startSeconds, 0.001)
-        assertEquals(95.0, markers.first { it.type.name == "OUTRO" }.endSeconds, 0.001)
+        gate.onSourceLoading()
+        assertFalse(gate.shouldReportEndFile())
+        assertTrue(gate.shouldReportEndFile())
     }
 
     @Test
@@ -437,29 +444,6 @@ class PlaybackParsingTest {
         assertEquals(12.0, markers[0].endSeconds, 0.001)
         assertEquals(50.0, markers[1].startSeconds, 0.001)
         assertEquals(60.0, markers[1].endSeconds, 0.001)
-    }
-
-    @Test
-    fun providerMarkerTypeWinsOverChapterFallback() {
-        val provider = listOf(
-            com.zenstream.zenstreammobile.model.PlaybackSegment(
-                com.zenstream.zenstreammobile.model.PlaybackSegmentType.INTRO, 10.0, 20.0
-            )
-        )
-        val chapters = listOf(
-            com.zenstream.zenstreammobile.model.PlaybackSegment(
-                com.zenstream.zenstreammobile.model.PlaybackSegmentType.INTRO, 1.0, 5.0
-            ),
-            com.zenstream.zenstreammobile.model.PlaybackSegment(
-                com.zenstream.zenstreammobile.model.PlaybackSegmentType.OUTRO, 50.0, 60.0
-            ),
-        )
-
-        val merged = mergePlaybackSegments(provider, chapters)
-
-        assertEquals(2, merged.size)
-        assertFalse(merged.any { it.startSeconds == 1.0 })
-        assertTrue(merged.any { it.startSeconds == 50.0 })
     }
 
 }

@@ -15,6 +15,9 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Rule
 import org.junit.Test
@@ -241,5 +244,51 @@ class DetailScreensTest {
         composeRule.onNodeWithText("Example Series").performClick()
 
         assertEquals(series, opened)
+    }
+
+    @Test
+    fun movieDetailShowsTrackSelectorsAndCanTurnSubtitlesOff() {
+        val movie = MediaItem("movie", "Example Movie", type = "Movie")
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        var selectedSubtitle: Int? = 4
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = DetailData(item = movie),
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                    trackSource = MediaSource(
+                        id = "source-1",
+                        mediaStreams = listOf(
+                            MediaStream(1, "Audio", displayTitle = "English"),
+                            MediaStream(2, "Audio", displayTitle = "Japanese"),
+                            MediaStream(4, "Subtitle", displayTitle = "English"),
+                        ),
+                    ),
+                    trackSelection = PlaybackTrackSelection(
+                        audioStreamId = 1,
+                        subtitleStreamIndex = selectedSubtitle,
+                        hasSubtitleSelection = true,
+                    ),
+                    onSelectSubtitleTrack = { selectedSubtitle = it },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.audio_track)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.subtitle_track))
+            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.subtitles_off))
+            .performClick()
+
+        assertEquals(null, selectedSubtitle)
     }
 }

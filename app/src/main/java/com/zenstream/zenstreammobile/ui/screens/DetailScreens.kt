@@ -66,7 +66,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
@@ -75,12 +74,17 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.imageUrl
+import com.zenstream.zenstreammobile.data.imageBlurHash
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
+import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.DetailViewModel
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.progressPercent
@@ -97,7 +101,7 @@ fun DetailScreen(
     outerPadding: PaddingValues,
     onBack: () -> Unit,
     onOpenItem: (MediaItem) -> Unit,
-    onPlay: (MediaItem) -> Unit,
+    onPlay: (MediaItem, PlaybackTrackSelection?) -> Unit,
 ) {
     val vm: DetailViewModel = viewModel(
         key = "detail-${session.userId}-$itemId",
@@ -141,7 +145,7 @@ fun DetailScreen(
                 ),
                 actionBusy = state.actionBusy,
                 actionError = state.actionError,
-                onPlay = onPlay,
+                onPlay = { item -> onPlay(item, vm.playbackTrackSelection()) },
                 onOpenItem = onOpenItem,
                 onRefresh = vm::load,
                 onSelectSeason = vm::selectSeason,
@@ -149,6 +153,10 @@ fun DetailScreen(
                 onToggleFavorite = vm::toggleFavorite,
                 onToggleSeasonPlayed = vm::toggleSeasonPlayed,
                 onToggleSeasonFavorite = vm::toggleSeasonFavorite,
+                trackSource = state.trackSource,
+                trackSelection = state.trackSelection,
+                onSelectAudioTrack = vm::selectAudioTrack,
+                onSelectSubtitleTrack = vm::selectSubtitleTrack,
             )
         }
     }
@@ -171,6 +179,10 @@ internal fun DetailContent(
     onToggleFavorite: () -> Unit,
     onToggleSeasonPlayed: (String) -> Unit = {},
     onToggleSeasonFavorite: (String) -> Unit = {},
+    trackSource: MediaSource? = null,
+    trackSelection: PlaybackTrackSelection? = null,
+    onSelectAudioTrack: (Int) -> Unit = {},
+    onSelectSubtitleTrack: (Int?) -> Unit = {},
 ) {
     val mediaItem = data.item
     PullToRefreshLayout(
@@ -194,6 +206,14 @@ internal fun DetailContent(
                     onTogglePlayed = onTogglePlayed,
                     onToggleFavorite = onToggleFavorite,
                 )
+                if (mediaItem.type in setOf("Movie", "Episode") && trackSource != null && trackSelection != null) {
+                    DetailTrackChoices(
+                        source = trackSource,
+                        selection = trackSelection,
+                        onSelectAudio = onSelectAudioTrack,
+                        onSelectSubtitle = onSelectSubtitleTrack,
+                    )
+                }
                 if (actionError) {
                     Text(
                         stringResource(R.string.detail_action_failed),
@@ -225,7 +245,7 @@ internal fun DetailContent(
                     )
                 }
             }
-            if (mediaItem.people.isNotEmpty()) {
+            if (mediaItem.people.any { it.creditType == "cast" || it.creditType == "crew" }) {
                 item { PeopleSection(mediaItem.people, session) }
             }
             if (data.similar.isNotEmpty()) {
@@ -244,6 +264,155 @@ internal fun DetailContent(
         }
     }
 }
+
+private enum class DetailTrackPicker { Audio, Subtitles }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailTrackChoices(
+    source: MediaSource,
+    selection: PlaybackTrackSelection,
+    onSelectAudio: (Int) -> Unit,
+    onSelectSubtitle: (Int?) -> Unit,
+) {
+    val audio = source.mediaStreams.filter { it.type.equals("audio", true) }
+    val subtitles = source.mediaStreams.filter { it.type.equals("subtitle", true) }
+    var picker by remember(source.id) { mutableStateOf<DetailTrackPicker?>(null) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (audio.size > 1) {
+            DetailTrackPickerRow(
+                label = stringResource(R.string.audio_track),
+                value = audio.firstOrNull { it.index == selection.audioStreamId }
+                    ?.let { detailTrackLabel(it) }
+                    ?: stringResource(R.string.player_audio_track_format, selection.audioStreamId ?: 0),
+                onClick = { picker = DetailTrackPicker.Audio },
+            )
+        }
+        if (subtitles.isNotEmpty()) {
+            DetailTrackPickerRow(
+                label = stringResource(R.string.subtitle_track),
+                value = subtitles.firstOrNull { it.index == selection.subtitleStreamIndex }
+                    ?.let { detailTrackLabel(it) }
+                    ?: stringResource(R.string.subtitles_off),
+                onClick = { picker = DetailTrackPicker.Subtitles },
+            )
+        }
+    }
+    val currentPicker = picker ?: return
+    val title = stringResource(
+        if (currentPicker == DetailTrackPicker.Audio) R.string.audio_track else R.string.subtitle_track,
+    )
+    ModalBottomSheet(
+        onDismissRequest = { picker = null },
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .semantics { heading() },
+            )
+            if (currentPicker == DetailTrackPicker.Subtitles) {
+                DetailTrackOption(
+                    label = stringResource(R.string.subtitles_off),
+                    selected = selection.subtitleStreamIndex == null,
+                    onClick = {
+                        picker = null
+                        onSelectSubtitle(null)
+                    },
+                )
+            }
+            (if (currentPicker == DetailTrackPicker.Audio) audio else subtitles).forEach { stream ->
+                DetailTrackOption(
+                    label = detailTrackLabel(stream),
+                    selected = if (currentPicker == DetailTrackPicker.Audio) {
+                        selection.audioStreamId == stream.index
+                    } else {
+                        selection.subtitleStreamIndex == stream.index
+                    },
+                    onClick = {
+                        picker = null
+                        if (currentPicker == DetailTrackPicker.Audio) onSelectAudio(stream.index)
+                        else onSelectSubtitle(stream.index)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailTrackPickerRow(label: String, value: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button },
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(
+                value,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailTrackOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button },
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .16f) else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
+@Composable
+private fun detailTrackLabel(stream: MediaStream): String =
+    stream.displayTitle ?: stream.language ?: stringResource(
+        if (stream.type.equals("audio", true)) R.string.player_audio_track_format
+        else R.string.player_subtitle_track_format,
+        stream.index,
+    )
 
 private fun playTarget(data: DetailData): MediaItem = detailPlaybackTarget(data.item, data.episodes)
 
@@ -344,6 +513,7 @@ private fun DetailHero(item: MediaItem, parentSeries: MediaItem?, session: AuthS
         AuthenticatedImage(
             url = backdrop,
             session = session,
+            blurHash = backdropItem?.let { imageBlurHash(it, "Backdrop") },
             description = null,
             modifier = Modifier
                 .fillMaxSize()
@@ -366,7 +536,8 @@ private fun DetailHero(item: MediaItem, parentSeries: MediaItem?, session: AuthS
         ) {
             AuthenticatedImage(
                 url = artwork,
-                session = session,
+            session = session,
+            blurHash = artworkType?.let { imageBlurHash(item, it) },
                 description = stringResource(R.string.poster_description, item.name),
                 modifier = Modifier
                     .width(if (item.type == "Episode") 170.dp else 104.dp)
@@ -414,7 +585,7 @@ private fun Metadata(item: MediaItem) {
     }
     if (parts.isNotEmpty()) {
         Text(
-            parts.joinToString("  â€¢  "),
+            parts.joinToString("  •  "),
             color = Color.White.copy(alpha = .65f),
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
@@ -752,6 +923,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     stringResource(R.string.episode_description, item.name),
                     Modifier.fillMaxSize(),
                     ContentScale.Fit,
+                    blurHash = type?.let { imageBlurHash(item, it) },
                 )
                 if (item.played) {
                     Surface(
@@ -805,14 +977,20 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
 @Composable
 private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
     SectionTitle(R.string.cast_crew)
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        items(
-            people.filter { it.type == "Actor" || it.type == "Director" }.take(20),
-            key = { "${it.name}-${it.role}" }) { person ->
-			val url: String? = null
+    listOf("cast" to R.string.cast, "crew" to R.string.crew).forEach { (creditType, label) ->
+        val credits = people.filter { it.creditType == creditType }
+        if (credits.isEmpty()) return@forEach
+        Text(
+            stringResource(label),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(credits, key = { it.id ?: "${it.name}-${it.role}-${it.creditType}" }) { person ->
+			val url = person.primaryImageTag
             Column(Modifier.width(96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 AuthenticatedImage(
                     url,
@@ -822,6 +1000,7 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
                         .size(72.dp)
                         .clip(CircleShape),
                     ContentScale.Crop,
+                    person.imageBlurHash,
                 )
                 Text(
                     person.name,
@@ -839,6 +1018,7 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
                 )
             }
         }
+    }
     }
 }
 
@@ -861,6 +1041,7 @@ private fun AuthenticatedImage(
     description: String?,
     modifier: Modifier,
     scale: ContentScale,
+    blurHash: String? = null,
 ) {
     val request = url?.let {
         ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
@@ -868,8 +1049,10 @@ private fun AuthenticatedImage(
 				.set("Authorization", CatalogApi.authorizationHeader(session.token)).build(),
         ).crossfade(true).build()
     }
-    AsyncImage(
+    BlurHashAsyncImage(
         model = request,
+        imageKey = url,
+        blurHash = blurHash,
         contentDescription = description,
         contentScale = scale,
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant)
@@ -913,4 +1096,3 @@ private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit
         }
     }
 }
-

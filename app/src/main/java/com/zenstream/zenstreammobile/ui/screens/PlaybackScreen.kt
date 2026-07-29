@@ -1,30 +1,32 @@
 package com.zenstream.zenstreammobile.ui.screens
 
-import android.app.Activity
-import android.app.PictureInPictureParams
 import android.os.Build
-import android.util.Rational
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -54,12 +56,17 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -68,6 +75,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
@@ -83,6 +91,11 @@ import coil3.request.ImageRequest
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.data.imageUrl
+import com.zenstream.zenstreammobile.data.imageBlurHash
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -99,17 +112,33 @@ import com.composables.icons.lucide.R as LucideR
 fun PlaybackScreen(
     repository: CatalogRepository,
     session: AuthSession,
+    syncplay: SyncplayManager,
     itemId: String,
     initialItemName: String = "",
+    initialAudioStreamId: Int? = null,
+    initialSubtitleStreamIndex: Int? = null,
+    hasInitialSubtitleSelection: Boolean = false,
+    enterPictureInPicture: () -> Boolean,
+    shouldPauseForBackground: () -> Boolean,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel = viewModel(
         key = "playback-${session.userId}-$itemId",
-        factory = PlaybackViewModel.Factory(repository, session, itemId, context),
+        factory = PlaybackViewModel.Factory(
+            repository,
+            session,
+            itemId,
+            context,
+            initialAudioStreamId,
+            initialSubtitleStreamIndex,
+            hasInitialSubtitleSelection,
+            syncplay,
+        ),
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
@@ -119,11 +148,32 @@ fun PlaybackScreen(
     var previewUnavailable by remember { mutableStateOf(false) }
     var surfaceDragPosition by remember { mutableStateOf<Double?>(null) }
     var surfacePreviewUnavailable by remember { mutableStateOf(false) }
+    var debugOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.showDebugIcon) {
+        if (!state.showDebugIcon) debugOpen = false
+    }
+    LaunchedEffect(syncplayState.active?.id, syncplayState.active?.itemId, syncplayState.active?.mediaGeneration, state.itemId, state.loading) {
+        val room = syncplayState.active ?: return@LaunchedEffect
+        val member = syncplayState.currentMember() ?: return@LaunchedEffect
+        if (member.watchingTogether && room.itemId != null) vm.applySyncplayRoom(room, syncplay.serverNow())
+    }
 
     DisposableEffect(vm, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                vm.flushProgress()
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (shouldPauseForBackground()) vm.pauseForBackground()
+                    vm.flushProgress()
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    // A PiP activity stays paused rather than stopped. Reaching ON_STOP therefore
+                    // means PiP was dismissed (or the app was otherwise backgrounded) and must
+                    // never leave audio playing.
+                    vm.pauseForBackground()
+                    vm.flushProgress()
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -160,18 +210,27 @@ fun PlaybackScreen(
         }
     }
 
-    val playerView = remember(state.loading, state.engineType) {
-        if (!state.loading) vm.createView(context) else null
+    LaunchedEffect(state.closeRequested) {
+        if (state.closeRequested) onBack()
     }
+    LaunchedEffect(syncplayState.active?.id, syncplayState.active?.itemId, state.loading, state.engine.isBuffering) {
+        val room = syncplayState.active
+        if (room?.itemId == state.itemId && syncplayState.currentMember()?.watchingTogether == true) {
+            runCatching { syncplay.presence(viewing = true, loading = state.loading || state.engine.isBuffering) }
+        }
+    }
+
+    val playerView = vm.createView(context)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        if (playerView != null) {
+        playerView?.let { view ->
             AndroidView(
-                factory = { playerView },
+                factory = { view },
+                update = { it.keepScreenOn = state.engine.isPlaying },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -182,7 +241,7 @@ fun PlaybackScreen(
             positionSeconds = state.engine.positionSeconds,
             durationSeconds = state.engine.durationSeconds,
             onToggleControls = { controlsVisible = !controlsVisible },
-            onSeekBy = vm::seekBy,
+            onSeekBy = { delta -> vm.syncplaySeekBy(syncplay, delta) },
             onSeekFeedback = { seekFeedback = it },
             onSurfaceDragStart = {
                 seekFeedback = null
@@ -194,7 +253,7 @@ fun PlaybackScreen(
                 surfaceDragPosition = it
             },
             onSurfaceDragEnd = {
-                vm.seekTo(it)
+                vm.syncplaySeekTo(syncplay, it)
                 surfaceDragPosition = null
             },
             onSurfaceDragCancel = { surfaceDragPosition = null },
@@ -203,7 +262,9 @@ fun PlaybackScreen(
         seekFeedback?.let { feedback ->
             SeekFeedbackOverlay(
                 feedback = feedback,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = SEEK_FEEDBACK_VERTICAL_OFFSET),
             )
         }
 
@@ -213,6 +274,37 @@ fun PlaybackScreen(
             bottomPadding = if (controlsVisible && !controlsLocked) 128.dp else 48.dp,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        if (debugOpen) {
+            PlaybackDiagnosticsPanel(
+                state = state,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 88.dp, start = 16.dp, end = 16.dp)
+                    .zIndex(30f),
+            )
+        }
+
+        val nextEpisode = state.nextEpisode
+        val nextUpVisible = shouldShowNextUp(
+            isEpisode = state.playback?.item?.type == "Episode",
+            neighborsLoaded = state.episodeNeighborsLoaded,
+            hasNextEpisode = nextEpisode != null,
+            positionSeconds = state.engine.positionSeconds,
+            durationSeconds = state.engine.durationSeconds,
+        )
+        if (nextUpVisible && nextEpisode != null) {
+            NextUpOverlay(
+                episode = nextEpisode,
+                session = session,
+                onStop = vm::requestClose,
+                onPlayNext = { vm.syncplayNext(syncplay) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = if (controlsVisible) 112.dp else 28.dp)
+                    .zIndex(15f),
+            )
+        }
 
         if (state.loading) {
             CircularProgressIndicator(
@@ -253,7 +345,7 @@ fun PlaybackScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    IconButton(onClick = { vm.flushProgress(); onBack() }) {
+                    IconButton(onClick = vm::requestClose) {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_arrow_left),
                             stringResourceCompat(R.string.back),
@@ -279,11 +371,22 @@ fun PlaybackScreen(
                             )
                         }
                         if (!controlsLocked) {
+                            SyncplayGroupMenu(syncplay, session) { group ->
+                                if (group.itemId != null) vm.applySyncplayRoom(group, syncplay.serverNow())
+                            }
+                            if (state.showDebugIcon) {
+                                PlayerMenuButton(
+                                    LucideR.drawable.lucide_ic_bug,
+                                    stringResourceCompat(
+                                        if (debugOpen) R.string.player_hide_debug else R.string.player_show_debug,
+                                    ),
+                                ) { debugOpen = !debugOpen }
+                            }
                             PlayerMenuButton(
                                 LucideR.drawable.lucide_ic_picture_in_picture,
                                 stringResourceCompat(R.string.player_pip),
                                 enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                            ) { enterPip(context) }
+                            ) { enterPictureInPicture() }
                             PlayerMenuButton(
                                 LucideR.drawable.lucide_ic_gauge,
                                 stringResourceCompat(R.string.player_speed)
@@ -317,14 +420,15 @@ fun PlaybackScreen(
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_skip_back,
                         stringResourceCompat(R.string.player_previous),
-                        enabled = false
-                    ) {}
+                        enabled = state.previousEpisode != null && (syncplayState.active == null || syncplayState.canControl(session.userId))
+                    ) { vm.syncplayPrevious(syncplay) }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_rewind,
-                        stringResourceCompat(R.string.player_seek_back)
-                    ) { vm.seekBy(-10.0) }
+                        stringResourceCompat(R.string.player_seek_back),
+                        enabled = syncplayState.active == null || syncplayState.canControl(session.userId)
+                    ) { vm.syncplaySeekBy(syncplay, -10.0) }
                     Surface(
-                        onClick = vm::togglePlay,
+                        onClick = { vm.syncplayToggle(syncplay) },
                         modifier = Modifier.size(64.dp),
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = .58f),
@@ -341,13 +445,14 @@ fun PlaybackScreen(
                     }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_fast_forward,
-                        stringResourceCompat(R.string.player_seek_forward)
-                    ) { vm.seekBy(10.0) }
+                        stringResourceCompat(R.string.player_seek_forward),
+                        enabled = syncplayState.active == null || syncplayState.canControl(session.userId)
+                    ) { vm.syncplaySeekBy(syncplay, 10.0) }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_skip_forward,
                         stringResourceCompat(R.string.player_next),
-                        enabled = false
-                    ) {}
+                        enabled = state.nextEpisode != null && (syncplayState.active == null || syncplayState.canControl(session.userId))
+                    ) { vm.syncplayNext(syncplay) }
                 }
                 Column(
                     modifier = Modifier
@@ -388,7 +493,7 @@ fun PlaybackScreen(
                         },
                         onScrubChanged = { timelineScrub = it },
                         onScrubEnd = {
-                            vm.seekTo(it.positionSeconds)
+                            vm.syncplaySeekTo(syncplay, it.positionSeconds)
                             timelineScrub = null
                         },
                         onPreviewError = { previewUnavailable = true },
@@ -400,7 +505,7 @@ fun PlaybackScreen(
         if (!controlsLocked) {
             state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
                 Surface(
-                    onClick = { vm.skipSegment(segment) },
+                    onClick = { vm.syncplaySeekTo(syncplay, segment.endSeconds) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 20.dp, bottom = if (controlsVisible) 86.dp else 24.dp),
@@ -476,9 +581,21 @@ internal data class SeekFeedback(
 
 internal const val PLAYBACK_TIMELINE_CONTROLS_GAP_DP = 16
 private const val QUICK_SEEK_SECONDS = 5.0
+private const val DRAG_SEEK_SENSITIVITY = 0.5
 private const val SEEK_FEEDBACK_VISIBLE_MILLIS = 800L
+private val SEEK_FEEDBACK_VERTICAL_OFFSET = (-96).dp
+private val SYSTEM_GESTURE_EDGE_GUARD = 32.dp
+private const val HORIZONTAL_DRAG_DOMINANCE_RATIO = 1.5f
+
+internal data class GestureStartExclusion(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+)
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun PlaybackGestureLayer(
     modifier: Modifier = Modifier,
     controlsLocked: Boolean,
@@ -499,47 +616,87 @@ internal fun PlaybackGestureLayer(
     val toggleControls = rememberUpdatedState(onToggleControls)
     val seekBy = rememberUpdatedState(onSeekBy)
     val showFeedback = rememberUpdatedState(onSeekFeedback)
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val protectedInsets = WindowInsets.systemGestures
+        .union(WindowInsets.statusBarsIgnoringVisibility)
+        .union(WindowInsets.navigationBarsIgnoringVisibility)
+    val minimumEdgeGuard = with(density) { SYSTEM_GESTURE_EDGE_GUARD.toPx() }
+    val gestureStartExclusion = GestureStartExclusion(
+        left = maxOf(minimumEdgeGuard, protectedInsets.getLeft(density, layoutDirection).toFloat()),
+        top = maxOf(minimumEdgeGuard, protectedInsets.getTop(density).toFloat()),
+        right = maxOf(minimumEdgeGuard, protectedInsets.getRight(density, layoutDirection).toFloat()),
+        bottom = maxOf(minimumEdgeGuard, protectedInsets.getBottom(density).toFloat()),
+    )
 
     Box(
         modifier = modifier
-            .pointerInput(Unit) {
-                var dragStartPosition = 0.0
-                var dragDistancePixels = 0f
-                var dragTargetPosition = 0.0
-                var dragActive = false
+            .pointerInput(gestureStartExclusion) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (isGestureStartProtected(down.position, size, gestureStartExclusion)) {
+                        return@awaitEachGesture
+                    }
 
-                detectHorizontalDragGestures(
-                    onDragStart = {
-                        dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
-                        dragDistancePixels = 0f
-                        dragTargetPosition = dragStartPosition
-                        dragActive = currentDuration.value.isFinite() && currentDuration.value > 0.0
-                        if (dragActive) onSurfaceDragStart(dragTargetPosition)
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
+                    var dragStartPosition = 0.0
+                    var dragDistancePixels = 0f
+                    var dragTargetPosition = 0.0
+                    var dragActive = false
+                    var dragAccepted = false
+                    var dragRejected = false
+                    var accumulatedMovement = Offset.Zero
+
+                    while (!dragRejected) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.changedToUpIgnoreConsumed()) break
+                        if (!dragAccepted && change.isConsumed) {
+                            dragRejected = true
+                            break
+                        }
+
+                        val movement = change.positionChangeIgnoreConsumed()
+                        if (movement == Offset.Zero) continue
+                        accumulatedMovement += movement
+                        if (!dragAccepted) {
+                            if (kotlin.math.hypot(
+                                    accumulatedMovement.x.toDouble(),
+                                    accumulatedMovement.y.toDouble(),
+                                ) < viewConfiguration.touchSlop
+                            ) {
+                                continue
+                            }
+                            if (!isHorizontalSeekGesture(accumulatedMovement)) {
+                                dragRejected = true
+                                break
+                            }
+                            dragAccepted = true
+                            dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
+                            dragTargetPosition = dragStartPosition
+                            dragActive = currentDuration.value.isFinite() && currentDuration.value > 0.0
+                            if (dragActive) onSurfaceDragStart(dragTargetPosition)
+                        }
+
                         change.consume()
-                        dragDistancePixels += dragAmount
-                        val duration = currentDuration.value
-                        if (dragActive && duration.isFinite() && duration > 0.0) {
-                            val delta = dragSeekDeltaSeconds(
+                        dragDistancePixels += movement.x
+                        if (dragActive) {
+                            updateSurfaceDragTarget(
+                                dragStartPosition = dragStartPosition,
                                 dragDistancePixels = dragDistancePixels,
                                 playerWidthPixels = size.width,
-                                durationSeconds = duration,
-                            )
-                            dragTargetPosition =
-                                clampSeekTarget(dragStartPosition + delta, duration)
-                            onSurfaceDragChanged(dragTargetPosition)
+                                durationSeconds = currentDuration.value,
+                            )?.let {
+                                dragTargetPosition = it
+                                onSurfaceDragChanged(dragTargetPosition)
+                            }
                         }
-                    },
-                    onDragEnd = {
-                        if (dragActive) onSurfaceDragEnd(dragTargetPosition)
-                        dragActive = false
-                    },
-                    onDragCancel = {
-                        if (dragActive) onSurfaceDragCancel()
-                        dragActive = false
-                    },
-                )
+                    }
+                    if (dragActive && dragAccepted && !dragRejected) {
+                        onSurfaceDragEnd(dragTargetPosition)
+                    } else if (dragActive) {
+                        onSurfaceDragCancel()
+                    }
+                }
             }
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -606,7 +763,36 @@ internal fun dragSeekDeltaSeconds(
     durationSeconds: Double,
 ): Double {
     if (playerWidthPixels <= 0 || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0.0
-    return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() * durationSeconds
+    return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() * durationSeconds *
+        DRAG_SEEK_SENSITIVITY
+}
+
+internal fun isGestureStartProtected(
+    start: Offset,
+    playerSize: IntSize,
+    exclusion: GestureStartExclusion,
+): Boolean =
+    start.x <= exclusion.left ||
+        start.y <= exclusion.top ||
+        start.x >= playerSize.width - exclusion.right ||
+        start.y >= playerSize.height - exclusion.bottom
+
+internal fun isHorizontalSeekGesture(movement: Offset): Boolean =
+    kotlin.math.abs(movement.x) > kotlin.math.abs(movement.y) * HORIZONTAL_DRAG_DOMINANCE_RATIO
+
+private fun updateSurfaceDragTarget(
+    dragStartPosition: Double,
+    dragDistancePixels: Float,
+    playerWidthPixels: Int,
+    durationSeconds: Double,
+): Double? {
+    if (!durationSeconds.isFinite() || durationSeconds <= 0.0) return null
+    val delta = dragSeekDeltaSeconds(
+        dragDistancePixels = dragDistancePixels,
+        playerWidthPixels = playerWidthPixels,
+        durationSeconds = durationSeconds,
+    )
+    return clampSeekTarget(dragStartPosition + delta, durationSeconds)
 }
 
 internal fun quickSeekDeltaForTap(tapX: Float, playerWidthPixels: Int): Double =
@@ -925,6 +1111,106 @@ private fun TrickplaySpriteFrame(
 }
 
 @Composable
+private fun NextUpOverlay(
+    episode: com.zenstream.zenstreammobile.model.MediaItem,
+    session: AuthSession,
+    onStop: () -> Unit,
+    onPlayNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val artworkUrl = landscapeImageType(episode)?.let { type ->
+        imageUrl(session.serverUrl, episode, type, 360, 202)
+    }
+    Surface(
+        modifier = modifier
+            .widthIn(max = 360.dp)
+            .testTag("next-up"),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Black.copy(alpha = .82f),
+        contentColor = Color.White,
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResourceCompat(R.string.next_up),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                episode.runtimeTicks?.let { runtime ->
+                    Text(
+                        formatTime(runtime / 10_000_000.0),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = .65f),
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (artworkUrl != null) {
+                    val request = remember(artworkUrl, session.token) {
+                        ImageRequest.Builder(context)
+                            .data(artworkUrl)
+                            .httpHeaders(
+                                NetworkHeaders.Builder()
+                                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
+                                    .build(),
+                            )
+                            .build()
+                    }
+                    BlurHashAsyncImage(
+                        model = request,
+                        imageKey = artworkUrl,
+                        blurHash = landscapeImageType(episode)?.let { imageBlurHash(episode, it) },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .widthIn(min = 112.dp, max = 128.dp)
+                            .height(72.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f, fill = false)) {
+                    Text(
+                        "S${episode.parentIndexNumber ?: 0}:E${episode.indexNumber ?: 0}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = .62f),
+                    )
+                    Text(
+                        episode.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Button(onClick = onStop) {
+                    Text(stringResourceCompat(R.string.stop_playing))
+                }
+                Button(
+                    onClick = onPlayNext,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Text(stringResourceCompat(R.string.play_next))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PlayerMenuButton(
     @androidx.annotation.DrawableRes icon: Int,
     label: String,
@@ -936,6 +1222,87 @@ private fun PlayerMenuButton(
             painterResource(icon),
             label,
             tint = if (enabled) Color.White else Color.White.copy(alpha = .3f)
+        )
+    }
+}
+
+@Composable
+private fun PlaybackDiagnosticsPanel(
+    state: com.zenstream.zenstreammobile.ui.PlaybackUiState,
+    modifier: Modifier = Modifier,
+) {
+    val source = state.playback?.source
+    val video = source?.mediaStreams?.firstOrNull { it.type.equals("Video", ignoreCase = true) }
+    val audio = source?.mediaStreams?.firstOrNull { it.index == state.selectedAudio }
+        ?: source?.mediaStreams?.firstOrNull { it.type.equals("Audio", ignoreCase = true) }
+    val session = state.playback?.sessionId ?: "direct/no session"
+    val sourceDetails = listOfNotNull(
+        source?.container,
+        source?.bitrate?.let { "${it / 1_000} kbps" },
+    ).joinToString(" / ").ifBlank { "-" }
+    val videoDetails = listOfNotNull(
+        video?.codec,
+        video?.width?.let { width -> "${width}x${video.height ?: "?"}" },
+    ).joinToString(" ").ifBlank { "-" }
+    val audioDetails = listOfNotNull(
+        audio?.codec,
+        audio?.channels?.let { "${it}ch" },
+    ).joinToString(" / ").ifBlank { "-" }
+
+    Surface(
+        modifier = modifier.widthIn(max = 464.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xE610151B),
+        contentColor = Color.White,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                stringResourceCompat(R.string.player_debug),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            DebugRow(R.string.player_debug_mode, state.playback?.mode ?: "negotiating")
+            DebugRow(R.string.player_debug_session, session)
+            DebugRow(R.string.player_debug_state, state.playback?.sessionState ?: "ready")
+            DebugRow(R.string.player_debug_engine, state.engineType.name)
+            DebugRow(R.string.player_debug_source, sourceDetails)
+            DebugRow(R.string.player_debug_video, videoDetails)
+            DebugRow(R.string.player_debug_audio, audioDetails)
+            DebugRow(
+                R.string.player_debug_position,
+                "${formatTime(state.engine.positionSeconds)} / ${formatTime(state.engine.durationSeconds)}",
+            )
+            DebugRow(R.string.player_debug_buffered, "${formatTime(state.engine.bufferedSeconds)} ahead")
+            DebugRow(
+                R.string.player_debug_native,
+                listOf(
+                    if (state.engine.isPlaying) "playing" else "paused",
+                    if (state.engine.ready) "ready" else "loading",
+                    if (state.engine.isBuffering) "buffering" else "steady",
+                ).joinToString(" / "),
+            )
+            state.engine.error?.let { DebugRow(R.string.player_debug_error, it) }
+        }
+    }
+}
+
+@Composable
+private fun DebugRow(@androidx.annotation.StringRes label: Int, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            stringResourceCompat(label),
+            color = Color.White.copy(alpha = .58f),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.requiredWidth(72.dp),
+        )
+        Text(
+            value,
+            color = Color.White.copy(alpha = .9f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -1138,14 +1505,6 @@ private fun playbackQualityLabel(value: Int): String =
 internal fun formatPlaybackSpeedValue(value: Float): String =
     if (value % 1f == 0f) value.toInt().toString() else value.toString()
 
-private fun enterPip(context: android.content.Context) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        (context as? Activity)?.enterPictureInPictureMode(
-            PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
-        )
-    }
-}
-
 private fun playbackTitle(
     state: com.zenstream.zenstreammobile.ui.PlaybackUiState,
     initialItemName: String,
@@ -1172,6 +1531,18 @@ internal fun shouldAutoHidePlaybackControls(
 
 internal fun shouldShowAudioSelector(trackCount: Int): Boolean = trackCount > 1
 internal fun shouldShowSubtitleSelector(trackCount: Int): Boolean = trackCount > 0
+
+internal fun shouldShowNextUp(
+    isEpisode: Boolean,
+    neighborsLoaded: Boolean,
+    hasNextEpisode: Boolean,
+    positionSeconds: Double,
+    durationSeconds: Double,
+): Boolean = isEpisode &&
+    neighborsLoaded &&
+    hasNextEpisode &&
+    durationSeconds > 0.0 &&
+    durationSeconds - positionSeconds in 0.0..10.0
 
 @Composable
 private fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =

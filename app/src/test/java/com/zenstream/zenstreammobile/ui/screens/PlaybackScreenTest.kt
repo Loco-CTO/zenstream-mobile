@@ -17,4 +17,14 @@ class PlaybackScreenTest {
         assertEquals(2400.dp, width)
         assertEquals(1350.dp, height)
     }
+
+    @Test
+    fun nextUpIsShownOnlyForResolvedEpisodeNeighborsInTheFinalTenSeconds() {
+        assertEquals(true, shouldShowNextUp(true, true, true, 90.0, 100.0))
+        assertEquals(true, shouldShowNextUp(true, true, true, 99.0, 100.0))
+        assertEquals(false, shouldShowNextUp(true, false, true, 99.0, 100.0))
+        assertEquals(false, shouldShowNextUp(true, true, false, 99.0, 100.0))
+        assertEquals(false, shouldShowNextUp(true, true, true, 89.9, 100.0))
+        assertEquals(false, shouldShowNextUp(false, true, true, 99.0, 100.0))
+    }
 }

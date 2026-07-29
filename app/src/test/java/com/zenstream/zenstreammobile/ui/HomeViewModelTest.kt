@@ -4,6 +4,7 @@ import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
@@ -15,6 +16,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,155 +41,122 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun publishesCompletedSectionBeforeSlowerSectionsFinish() = runTest {
-        val featured = MediaItem("featured", "Featured", backdropImageTags = listOf("tag"))
-        val source = FakeHomeDataSource()
-        val continueGate = CompletableDeferred<List<MediaItem>>()
-        source.featuredRequest = { listOf(featured) }
-        source.continueRequest = { continueGate.await() }
-        source.nextUpRequest = { continueGate.await() }
-        source.librariesRequest = { continueGate.await().let { emptyList() } }
-
-        val viewModel = HomeViewModel(source, session)
-        runCurrent()
-
-        assertEquals(listOf(featured), viewModel.uiState.value.data?.featured)
-        assertTrue(viewModel.uiState.value.loading)
-        assertFalse(viewModel.uiState.value.error)
-
-        continueGate.complete(emptyList())
-        advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.loading)
-    }
-
-    @Test
-    fun failedSectionDoesNotCancelSuccessfulSectionsAndLibrariesKeepOrder() = runTest {
-        val firstLibrary = Library("first", "First", "movies")
-        val secondLibrary = Library("second", "Second", "movies")
-        val firstGate = CompletableDeferred<LibraryData>()
-        val secondGate = CompletableDeferred<LibraryData>()
+    fun rendersEachSectionAsItsOwnRequestCompletes() = runTest {
+        val featured = CompletableDeferred<List<MediaItem>>()
+        val continueWatching = CompletableDeferred<List<MediaItem>>()
+        val nextUp = CompletableDeferred<List<MediaItem>>()
         val source = FakeHomeDataSource(
-            featuredRequest = { error("featured failed") },
-            continueRequest = { listOf(MediaItem("continue", "Continue")) },
-            nextUpRequest = { error("next up failed") },
-            librariesRequest = { listOf(firstLibrary, secondLibrary) },
-            libraryDataRequest = { library ->
-                when (library.id) {
-                    firstLibrary.id -> firstGate.await()
-                    else -> secondGate.await()
-                }
-            },
+            featuredRequest = { featured.await() },
+            continueWatchingRequest = { continueWatching.await() },
+            nextUpRequest = { nextUp.await() },
         )
         val viewModel = HomeViewModel(source, session)
         runCurrent()
 
-        assertEquals("Continue", viewModel.uiState.value.data?.rows?.single()?.items?.single()?.name)
-        assertTrue(viewModel.uiState.value.loading)
-
-        secondGate.complete(libraryData(secondLibrary, "second-row"))
+        nextUp.complete(listOf(MediaItem("next", "Next")))
         runCurrent()
-        assertEquals(listOf("Second"), viewModel.uiState.value.data?.rows?.drop(1)?.map { it.libraryName })
-
-        firstGate.complete(libraryData(firstLibrary, "first-row"))
-        advanceUntilIdle()
-        assertEquals(
-            listOf("First", "Second"),
-            viewModel.uiState.value.data?.rows?.drop(1)?.map { it.libraryName },
-        )
-        assertFalse(viewModel.uiState.value.error)
-    }
-
-    @Test
-    fun globalRowsKeepTheirDesignOrderWhenResponsesCompleteOutOfOrder() = runTest {
-        val continueGate = CompletableDeferred<List<MediaItem>>()
-        val source = FakeHomeDataSource(
-            continueRequest = { continueGate.await() },
-            nextUpRequest = { listOf(MediaItem("next", "Next")) },
-            librariesRequest = { emptyList() },
-        )
-        val viewModel = HomeViewModel(source, session)
-        runCurrent()
-
         assertEquals(listOf(RowTitle.NextUp), viewModel.uiState.value.data?.rows?.map { it.title })
+        assertTrue(viewModel.uiState.value.loading)
 
-        continueGate.complete(listOf(MediaItem("continue", "Continue")))
+        featured.complete(listOf(MediaItem("featured", "Featured", backdropImageTags = listOf("tag"))))
+        continueWatching.complete(listOf(MediaItem("continue", "Continue")))
         advanceUntilIdle()
 
+        assertEquals("Featured", viewModel.uiState.value.data?.featured?.single()?.name)
         assertEquals(
             listOf(RowTitle.ContinueWatching, RowTitle.NextUp),
             viewModel.uiState.value.data?.rows?.map { it.title },
         )
-    }
-
-    @Test
-    fun allFailuresShowErrorAndRetryClearsTheFailedState() = runTest {
-        val source = FakeHomeDataSource(
-            featuredRequest = { error("featured failed") },
-            continueRequest = { error("continue failed") },
-            nextUpRequest = { error("next up failed") },
-            librariesRequest = { error("libraries failed") },
-        )
-        val viewModel = HomeViewModel(source, session)
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.loading)
-        assertEquals(null, viewModel.uiState.value.data)
-
-        val refreshed = MediaItem("refreshed", "Refreshed", backdropImageTags = listOf("tag"))
-        source.featuredRequest = { listOf(refreshed) }
-        source.continueRequest = { emptyList() }
-        source.nextUpRequest = { emptyList() }
-        source.librariesRequest = { emptyList() }
-        viewModel.load()
-        advanceUntilIdle()
-
-        assertFalse(viewModel.uiState.value.error)
-        assertEquals(listOf(refreshed), viewModel.uiState.value.data?.featured)
     }
 
     @Test
-    fun refreshReloadsCompletedHomeData() = runTest {
+    fun libraryRowsAppearAsEachLibraryRequestCompletes() = runTest {
+        val first = Library("first", "First", "movies")
+        val second = Library("second", "Second", "movies")
+        val firstData = CompletableDeferred<LibraryData>()
+        val secondData = CompletableDeferred<LibraryData>()
         val source = FakeHomeDataSource(
-            featuredRequest = { listOf(MediaItem("old", "Old", backdropImageTags = listOf("tag"))) },
+            librariesRequest = { listOf(first, second) },
+            libraryDataRequest = { library -> if (library == first) firstData.await() else secondData.await() },
         )
         val viewModel = HomeViewModel(source, session)
+        runCurrent()
+
+        secondData.complete(LibraryData(second, listOf(MediaRow(RowTitle.NewlyAdded, second.name, listOf(MediaItem("second", "Second"))))))
+        runCurrent()
+        assertEquals(listOf("Second"), viewModel.uiState.value.data?.rows?.map { it.items.single().name })
+
+        firstData.complete(LibraryData(first, listOf(MediaRow(RowTitle.NewlyAdded, first.name, listOf(MediaItem("first", "First"))))))
         advanceUntilIdle()
-        assertEquals("Old", viewModel.uiState.value.data?.featured?.single()?.name)
+        assertEquals(listOf("First", "Second"), viewModel.uiState.value.data?.rows?.map { it.items.single().name })
+    }
+
+    @Test
+    fun derivedRowsAppearBeforeLibraryRowsAsTheirRequestCompletes() = runTest {
+        val derived = CompletableDeferred<DerivedHomeData>()
+        val source = FakeHomeDataSource(derivedRequest = { derived.await() })
+        val viewModel = HomeViewModel(source, session)
+        runCurrent()
+
+        derived.complete(
+            DerivedHomeData(
+                myList = listOf(MediaItem("favorite", "Favorite")),
+                genreRows = listOf(
+                    MediaRow(RowTitle.Genre, items = listOf(MediaItem("drama", "Drama")), label = "Drama", key = "genre:drama"),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(RowTitle.MyList, RowTitle.Genre),
+            viewModel.uiState.value.data?.rows?.map { it.title },
+        )
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun metadataPreferenceRefreshForcesANewHomeRequest() = runTest {
+        val source = FakeHomeDataSource(featuredRequest = {
+            listOf(MediaItem("before", "Before", backdropImageTags = listOf("tag")))
+        })
+        val viewModel = HomeViewModel(source, session)
+        advanceUntilIdle()
 
         source.featuredRequest = {
-            listOf(MediaItem("new", "New", backdropImageTags = listOf("tag")))
+            listOf(MediaItem("after", "Fallback title", backdropImageTags = listOf("tag")))
         }
-        viewModel.refresh()
+        source.publishMetadataRefresh()
         advanceUntilIdle()
 
-        assertEquals("New", viewModel.uiState.value.data?.featured?.single()?.name)
-        assertFalse(viewModel.uiState.value.loading)
+        assertEquals(2, source.featuredRequests)
+        assertEquals("Fallback title", viewModel.uiState.value.data?.featured?.single()?.name)
     }
-
-    private fun libraryData(library: Library, itemId: String) = LibraryData(
-        library,
-        listOf(
-            MediaRow(
-                title = RowTitle.NewlyAdded,
-                libraryName = library.name,
-                items = listOf(MediaItem(itemId, itemId)),
-            )
-        ),
-    )
 }
 
 private class FakeHomeDataSource(
     var featuredRequest: suspend () -> List<MediaItem> = { emptyList() },
-    var continueRequest: suspend () -> List<MediaItem> = { emptyList() },
+    var continueWatchingRequest: suspend () -> List<MediaItem> = { emptyList() },
     var nextUpRequest: suspend () -> List<MediaItem> = { emptyList() },
+    var derivedRequest: suspend () -> DerivedHomeData = { DerivedHomeData() },
     var librariesRequest: suspend () -> List<Library> = { emptyList() },
-    var libraryDataRequest: suspend (Library) -> LibraryData = { library -> LibraryData(library, emptyList()) },
+    var libraryDataRequest: suspend (Library) -> LibraryData = { LibraryData(it, emptyList()) },
 ) : HomeDataSource {
+    var featuredRequests = 0
+    private val _catalogRefreshRevision = MutableStateFlow(0L)
+    override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
+
     override suspend fun clearSession() = Unit
-    override suspend fun homeFeatured(session: AuthSession) = featuredRequest()
-    override suspend fun homeContinueWatching(session: AuthSession) = continueRequest()
-    override suspend fun homeNextUp(session: AuthSession) = nextUpRequest()
-    override suspend fun homeLibraries(session: AuthSession) = librariesRequest()
-    override suspend fun homeLibraryData(session: AuthSession, library: Library) = libraryDataRequest(library)
+
+    override suspend fun homeFeatured(session: AuthSession): List<MediaItem> = featuredRequest().also { featuredRequests += 1 }
+    override suspend fun homeContinueWatching(session: AuthSession): List<MediaItem> = continueWatchingRequest()
+    override suspend fun homeNextUp(session: AuthSession): List<MediaItem> = nextUpRequest()
+    override suspend fun homeDerived(session: AuthSession): DerivedHomeData = derivedRequest()
+    override suspend fun homeLibraries(session: AuthSession): List<Library> = librariesRequest()
+    override suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData = libraryDataRequest(library)
+
+    fun publishMetadataRefresh() {
+        _catalogRefreshRevision.value += 1
+    }
 }

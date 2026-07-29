@@ -92,7 +92,7 @@ android {
     defaultConfig {
         applicationId = "com.zenstream.zenstreammobile"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = semanticVersionCode.toInt()
         versionName = displayVersion
         buildConfigField("String", "ZENSTREAM_VERSION", "\"$displayVersion\"")
@@ -146,10 +146,17 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
+    }
+    bundle {
+        language {
+            enableSplit = false
+        }
     }
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -164,6 +171,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.blurhash.android)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.ui)

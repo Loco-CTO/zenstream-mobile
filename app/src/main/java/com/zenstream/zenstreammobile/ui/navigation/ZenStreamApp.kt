@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -49,8 +50,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
+import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
@@ -60,6 +64,9 @@ import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
+import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.composables.icons.lucide.R as LucideR
 
 private const val HOME = "home"
@@ -97,6 +104,9 @@ private fun MainScaffold(
     session: AuthSession,
     onLogout: () -> Unit
 ) {
+    val syncplay = remember(session) { repository.syncplayManager(session) }
+    val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route?.substringBefore("/") ?: HOME
@@ -121,6 +131,17 @@ private fun MainScaffold(
     }
     val density = LocalDensity.current
     val context = LocalContext.current
+    var followedGeneration by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(syncplayState.active?.id, syncplayState.active?.itemId, syncplayState.active?.mediaGeneration, syncplayState.participantId) {
+        val room = syncplayState.active
+        val member = syncplayState.currentMember()
+        val itemId = room?.itemId
+        val key = room?.let { "${it.id}:${it.mediaGeneration}:${itemId}" }
+        if (itemId != null && member?.watchingTogether == true && key != followedGeneration) {
+            followedGeneration = key
+            launchPlayback(context, itemId, "")
+        }
+    }
     val bottomBarVisibility = remember(density) {
         ScrollVisibilityController(
             hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
@@ -178,7 +199,9 @@ private fun MainScaffold(
                         exit = shrinkVertically(shrinkTowards = Alignment.Top) +
                                 slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                     ) {
-                        MainTopBar(onSettings = {
+                        MainTopBar(syncplay, session, onReturnToView = { group ->
+                            group.itemId?.let { launchPlayback(context, it, "") }
+                        }, onSettings = {
                             navController.navigate(SETTINGS) {
                                 launchSingleTop = true
                             }
@@ -281,7 +304,13 @@ private fun MainScaffold(
                     outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     onBack = { navController.popBackStack() },
                     onOpenItem = { item -> navigateToDetail(navController, item.id) },
-                    onPlay = { item -> navigateToPlayback(context, item.id, item.name) },
+                    onPlay = { item, tracks -> scope.launch {
+                        val active = syncplay.state.value.active
+                        if (active == null || syncplay.state.value.canControl(session.userId)) {
+                            if (active != null) syncplay.command("media", 0.0, true, item.id)
+                            navigateToPlayback(context, item.id, item.name, tracks)
+                        }
+                    } },
                 )
             }
             composable(SETTINGS) {
@@ -305,13 +334,19 @@ private fun navigateToPlayback(
     context: Context,
     itemId: String,
     itemName: String,
+    tracks: PlaybackTrackSelection? = null,
 ) {
-    launchPlayback(context, itemId, itemName)
+    launchPlayback(context, itemId, itemName, tracks)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MainTopBar(onSettings: () -> Unit = {}) {
+internal fun MainTopBar(
+    syncplay: SyncplayManager? = null,
+    session: AuthSession? = null,
+    onReturnToView: (SyncplayGroup) -> Unit = {},
+    onSettings: () -> Unit = {},
+) {
     TopAppBar(
         title = {
             Image(
@@ -323,6 +358,9 @@ internal fun MainTopBar(onSettings: () -> Unit = {}) {
             )
         },
         actions = {
+            if (syncplay != null && session != null) {
+                SyncplayGroupMenu(syncplay, session, onReturnToView)
+            }
             Box(
                 modifier = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center,

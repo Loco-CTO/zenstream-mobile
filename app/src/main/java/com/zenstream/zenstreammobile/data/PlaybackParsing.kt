@@ -35,7 +35,7 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
         }.joinToString("\n")
             .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
             .replace(Regex("""<[^>]+>"""), "")
-            .replace(Regex("""\{\\[^}]*}"""), "")
+            .let(::stripAssOverrideTags)
             .replace("&amp;", "&", ignoreCase = true)
             .replace("&lt;", "<", ignoreCase = true)
             .replace("&gt;", ">", ignoreCase = true)
@@ -44,6 +44,21 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
         if (start != null && end != null && end > start && text.isNotBlank()) {
             add(SubtitleCue(start, end, text))
         }
+    }
+}
+
+private fun stripAssOverrideTags(input: String): String = buildString(input.length) {
+    var index = 0
+    while (index < input.length) {
+        if (input[index] == '{' && input.getOrNull(index + 1) == '\\') {
+            val end = input.indexOf('}', startIndex = index + 2)
+            if (end >= 0) {
+                index = end + 1
+                continue
+            }
+        }
+        append(input[index])
+        index++
     }
 }
 

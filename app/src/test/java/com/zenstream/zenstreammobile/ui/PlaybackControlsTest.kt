@@ -1,9 +1,14 @@
 package com.zenstream.zenstreammobile.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntSize
+import com.zenstream.zenstreammobile.ui.screens.GestureStartExclusion
 import com.zenstream.zenstreammobile.ui.screens.shouldAutoHidePlaybackControls
 import com.zenstream.zenstreammobile.ui.screens.clampSeekTarget
 import com.zenstream.zenstreammobile.ui.screens.dragSeekDeltaSeconds
 import com.zenstream.zenstreammobile.ui.screens.feedbackSeconds
+import com.zenstream.zenstreammobile.ui.screens.isGestureStartProtected
+import com.zenstream.zenstreammobile.ui.screens.isHorizontalSeekGesture
 import com.zenstream.zenstreammobile.ui.screens.quickSeekDeltaForTap
 import com.zenstream.zenstreammobile.ui.screens.shouldShowAudioSelector
 import com.zenstream.zenstreammobile.ui.screens.shouldShowSubtitleSelector
@@ -66,9 +71,29 @@ class PlaybackControlsTest {
     }
 
     @Test
-    fun dragSeekMapsPlayerWidthToTheFullDuration() {
-        assertEquals(60.0, dragSeekDeltaSeconds(250f, 1_000, 240.0), 0.001)
-        assertEquals(-60.0, dragSeekDeltaSeconds(-250f, 1_000, 240.0), 0.001)
+    fun dragSeekUsesHalfThePlayerWidthForTheFullDuration() {
+        assertEquals(30.0, dragSeekDeltaSeconds(250f, 1_000, 240.0), 0.001)
+        assertEquals(-30.0, dragSeekDeltaSeconds(-250f, 1_000, 240.0), 0.001)
+    }
+
+    @Test
+    fun gestureStartExclusionProtectsEverySystemEdge() {
+        val exclusion = GestureStartExclusion(left = 32f, top = 48f, right = 40f, bottom = 56f)
+        val playerSize = IntSize(width = 1_000, height = 2_000)
+
+        assertTrue(isGestureStartProtected(Offset(31f, 1_000f), playerSize, exclusion))
+        assertTrue(isGestureStartProtected(Offset(500f, 47f), playerSize, exclusion))
+        assertTrue(isGestureStartProtected(Offset(961f, 1_000f), playerSize, exclusion))
+        assertTrue(isGestureStartProtected(Offset(500f, 1_945f), playerSize, exclusion))
+        assertFalse(isGestureStartProtected(Offset(500f, 1_000f), playerSize, exclusion))
+    }
+
+    @Test
+    fun seekGestureMustBeDecisivelyHorizontal() {
+        assertTrue(isHorizontalSeekGesture(Offset(30f, 10f)))
+        assertTrue(isHorizontalSeekGesture(Offset(-30f, 10f)))
+        assertFalse(isHorizontalSeekGesture(Offset(10f, 30f)))
+        assertFalse(isHorizontalSeekGesture(Offset(15f, 10f)))
     }
 
     @Test

@@ -28,7 +28,6 @@
             android:name=".PlaybackActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:resizeableActivity="true"
-            android:screenOrientation="landscape"
             android:supportsPictureInPicture="true"
             android:exported="false">
             <property

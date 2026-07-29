@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -55,8 +56,10 @@ class SessionStore(
         val locale = stringPreferencesKey("locale")
 		val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
+        val showDebugIcon = booleanPreferencesKey("show_debug_icon")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
+        val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
     }
 
     // `server_url` is retained as a migration key, but it now always contains
@@ -80,6 +83,10 @@ class SessionStore(
                 PlayerEngine.MEDIA3
             )
         }
+        .distinctUntilChanged()
+
+    val showDebugIcon: Flow<Boolean> = dataStore.data
+        .map { it[Keys.showDebugIcon] ?: false }
         .distinctUntilChanged()
 
     val session: Flow<AuthSession?> = dataStore.data
@@ -154,6 +161,10 @@ class SessionStore(
         dataStore.edit { it[Keys.playerEngine] = engine.name }
     }
 
+    suspend fun saveShowDebugIcon(enabled: Boolean) {
+        dataStore.edit { it[Keys.showDebugIcon] = enabled }
+    }
+
     suspend fun cacheSubtitleStyle(style: SubtitleStyle) {
         dataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
@@ -213,6 +224,18 @@ class SessionStore(
     }
 
     suspend fun currentServerUrl(): String? = serverUrl.first()
+
+    suspend fun syncplayParticipantId(): String {
+        val existing = dataStore.data.first()[Keys.syncplayParticipantId]
+        if (!existing.isNullOrBlank()) return existing
+        val generated = java.util.UUID.randomUUID().toString()
+        dataStore.edit { prefs ->
+            if (prefs[Keys.syncplayParticipantId].isNullOrBlank()) {
+                prefs[Keys.syncplayParticipantId] = generated
+            }
+        }
+        return dataStore.data.first()[Keys.syncplayParticipantId] ?: generated
+    }
 }
 
 private fun librarySortKey(userId: String, libraryId: String): String = "$userId\u0000$libraryId"

@@ -93,6 +93,8 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.imageUrl
+import com.zenstream.zenstreammobile.data.imageBlurHash
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
@@ -120,12 +122,13 @@ fun HomeScreen(
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
     when {
-        state.loading && state.data == null -> CenterLoading(padding)
         state.error -> ErrorState(
             padding,
             R.string.library_load_failed,
             vm::load
         )
+
+        state.loading && state.data == null -> CenterLoading(padding)
 
         else -> {
             val data = state.data
@@ -149,7 +152,7 @@ fun HomeScreen(
                     }
                     items(
                         data?.rows.orEmpty(),
-                        key = { "${it.title}:${it.libraryName}" }) { row ->
+                        key = { it.key }) { row ->
                         MediaRowView(
                             row,
                             session,
@@ -240,8 +243,10 @@ internal fun FeaturedHero(
                                 .build()
                         ).crossfade(true).build()
                     }
-                    AsyncImage(
+                    BlurHashAsyncImage(
                         model = request,
+                        imageKey = url,
+                        blurHash = imageBlurHash(item, "Backdrop"),
                         contentDescription = stringResource(
                             R.string.backdrop_description,
                             item.name
@@ -281,8 +286,10 @@ internal fun FeaturedHero(
                             ).crossfade(true).build()
                         }
                         if (logoRequest != null) {
-                            AsyncImage(
+                            BlurHashAsyncImage(
                                 model = logoRequest,
+                                imageKey = logoUrl,
+                                blurHash = null,
                                 contentDescription = stringResource(
                                     R.string.logo_description,
                                     item.name
