@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.data
 
+import android.util.Log
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayUiState
@@ -48,7 +49,9 @@ class SyncplayManager(
     private suspend fun start() {
         val participantId = sessionStore.syncplayParticipantId()
         _state.value = _state.value.copy(participantId = participantId)
-        runCatching { refresh() }.onFailure { _state.value = _state.value.copy(error = it.message) }
+        runCatching { refresh() }.onFailure { error ->
+            Log.w(SYNCPLAY_LOG_TAG, "Initial Syncplay snapshot failed: ${error.javaClass.simpleName}")
+        }
         connect()
     }
 
@@ -118,7 +121,9 @@ class SyncplayManager(
                     )
                     ended.await()
                 } catch (error: Exception) {
-                    if (!stopped) _state.value = _state.value.copy(error = error.message)
+                    if (!stopped) {
+                        Log.w(SYNCPLAY_LOG_TAG, "Syncplay socket attempt failed: ${error.javaClass.simpleName}")
+                    }
                 } finally {
                     if (connectionEnded === ended) connectionEnded = null
                 }
@@ -132,6 +137,7 @@ class SyncplayManager(
     ) : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             _state.value = _state.value.copy(connected = true, error = null)
+            Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket connected")
             scope.launch { refresh() }
             syncClock(webSocket)
             scope.launch {
@@ -161,7 +167,8 @@ class SyncplayManager(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             if (socket === webSocket) {
                 socket = null
-                _state.value = _state.value.copy(connected = false, error = t.message)
+                _state.value = _state.value.copy(connected = false)
+                Log.w(SYNCPLAY_LOG_TAG, "Syncplay socket failed: ${t.javaClass.simpleName}")
             }
             ended.complete(Unit)
         }
@@ -210,6 +217,8 @@ class SyncplayManager(
     }
     private fun participant(): String = _state.value.participantId.ifBlank { error("Syncplay has not started") }
 }
+
+private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
 
 object SyncplaySession {
     private var current: SyncplayManager? = null
