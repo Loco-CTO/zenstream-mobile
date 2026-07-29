@@ -18,6 +18,7 @@ import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.orderedHomeRows
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import kotlinx.coroutines.CancellationException
@@ -258,13 +259,13 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
 private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Boolean): HomeData {
     val globalRows = rows.filter { it.libraryName == null && it.title != title } +
             listOfNotNull(items.takeIf { it.isNotEmpty() }?.let { MediaRow(title, items = it, wide = wide) })
-    return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
+    return copy(rows = orderedHomeRows(globalRows + rows.filter { it.libraryName != null }))
 }
 
 private fun HomeData.withDerivedRows(derivedRows: List<MediaRow>): HomeData {
     val derivedTitles = setOf(RowTitle.MyList, RowTitle.RecentlyPlayed, RowTitle.Genre)
     val globalRows = rows.filter { it.libraryName == null && it.title !in derivedTitles } + derivedRows
-    return copy(rows = globalRows.orderedHomeRows() + rows.filter { it.libraryName != null })
+    return copy(rows = orderedHomeRows(globalRows + rows.filter { it.libraryName != null }))
 }
 
 private fun HomeData.withLibraryData(
@@ -273,19 +274,9 @@ private fun HomeData.withLibraryData(
 ): HomeData {
     val byLibrary = rows.filter { it.libraryName != null }.groupBy { it.libraryName }.toMutableMap()
     byLibrary[libraryData.library.name] = libraryData.rows
-    return copy(rows = rows.filter { it.libraryName == null }.orderedHomeRows() +
-            libraries.flatMap { byLibrary[it.name].orEmpty() })
-}
-
-private fun List<MediaRow>.orderedHomeRows(): List<MediaRow> = sortedBy { row ->
-    when (row.title) {
-        RowTitle.ContinueWatching -> 0
-        RowTitle.NextUp -> 1
-        RowTitle.MyList -> 2
-        RowTitle.RecentlyPlayed -> 3
-        RowTitle.Genre -> 4
-        else -> 5
-    }
+    return copy(rows = orderedHomeRows(
+        rows.filter { it.libraryName == null } + libraries.flatMap { byLibrary[it.name].orEmpty() },
+    ))
 }
 
 data class LibraryUiState(

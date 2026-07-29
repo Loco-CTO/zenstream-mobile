@@ -143,7 +143,10 @@ private fun MainScaffold(
         val member = syncplayState.currentMember()
         val itemId = room?.itemId
         val key = room?.let { "${it.id}:${it.mediaGeneration}:${itemId}" }
-        if (itemId != null && room.playing && member?.watchingTogether == true && key != followedGeneration) {
+        // A media command begins paused while the Syncplay readiness barrier waits
+        // for every opted-in participant.  Following only `playing` rooms leaves
+        // Android outside the player, so it can never report itself ready.
+        if (itemId != null && member?.watchingTogether == true && key != followedGeneration) {
             followedGeneration = key
             launchPlayback(context, itemId, "")
         }

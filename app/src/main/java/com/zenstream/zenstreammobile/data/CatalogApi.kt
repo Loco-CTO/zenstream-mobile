@@ -26,6 +26,7 @@ import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
+import com.zenstream.zenstreammobile.model.orderedHomeRows
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -719,7 +720,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
         featured = catalogItems(payload, "latestItems")
             .filter { it.backdropImageTags.isNotEmpty() }
             .take(5),
-        rows = globalRows + parseDerivedHomeData(payload).rows() + libraryRows,
+        rows = orderedHomeRows(globalRows + parseDerivedHomeData(payload).rows() + libraryRows),
     )
 }
 

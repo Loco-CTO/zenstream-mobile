@@ -93,6 +93,18 @@ data class DerivedHomeData(
     ) + genreRows.filter { it.items.isNotEmpty() }
 }
 
+fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row ->
+    when {
+        row.title == RowTitle.ContinueWatching -> 0
+        row.title == RowTitle.NextUp -> 1
+        row.title == RowTitle.MyList -> 2
+        row.libraryName != null -> 3
+        row.title == RowTitle.RecentlyPlayed -> 4
+        row.title == RowTitle.Genre -> 5
+        else -> 3
+    }
+}
+
 data class LibraryData(
     val library: Library,
     val rows: List<MediaRow>,

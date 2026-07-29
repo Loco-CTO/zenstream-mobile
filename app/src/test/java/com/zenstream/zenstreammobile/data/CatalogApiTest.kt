@@ -72,13 +72,13 @@ class CatalogApiTest {
 
         assertEquals(listOf("Featured"), home.featured.map { it.name })
         assertEquals(
-            listOf(RowTitle.ContinueWatching, RowTitle.NextUp, RowTitle.MyList, RowTitle.RecentlyPlayed, RowTitle.Genre, RowTitle.NewlyAdded, RowTitle.TopRated, RowTitle.NewReleases),
+            listOf(RowTitle.ContinueWatching, RowTitle.NextUp, RowTitle.MyList, RowTitle.NewlyAdded, RowTitle.TopRated, RowTitle.NewReleases, RowTitle.RecentlyPlayed, RowTitle.Genre),
             home.rows.map { it.title },
         )
-        assertEquals(listOf(null, null, null, null, null, "Shows", "Movies", "Shows"), home.rows.map { it.libraryName })
-        assertEquals("Drama", home.rows[4].label)
-        assertEquals("genre:drama", home.rows[4].key)
-        assertTrue(home.rows[5].stackEpisodes)
+        assertEquals(listOf(null, null, null, "Shows", "Movies", "Shows", null, null), home.rows.map { it.libraryName })
+        assertEquals("Drama", home.rows[7].label)
+        assertEquals("genre:drama", home.rows[7].key)
+        assertTrue(home.rows[3].stackEpisodes)
     }
 
     @Test

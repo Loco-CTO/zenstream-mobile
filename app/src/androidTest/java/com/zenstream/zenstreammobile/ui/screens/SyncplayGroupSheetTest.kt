@@ -93,13 +93,6 @@ class SyncplayGroupSheetTest {
     }
 
     @Test
-    fun onlyJoiningAGroupWithActiveMediaOpensThePlayer() {
-        assertTrue(shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = "item-1", playing = true)))
-        assertTrue(!shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = "item-1", playing = false)))
-        assertTrue(!shouldOpenJoinedPlayingGroup(syncplayGroup(itemId = null, playing = true)))
-    }
-
-    @Test
     fun activeHostCanRemoveMembersChangeControlsAndReturnToTheView() {
         val group = syncplayGroup(itemId = "item-1")
         var removedMember: String? = null
