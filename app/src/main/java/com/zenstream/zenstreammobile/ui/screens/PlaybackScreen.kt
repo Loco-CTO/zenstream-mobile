@@ -153,7 +153,15 @@ fun PlaybackScreen(
     LaunchedEffect(state.showDebugIcon) {
         if (!state.showDebugIcon) debugOpen = false
     }
-    LaunchedEffect(syncplayState.active?.id, syncplayState.active?.itemId, syncplayState.active?.mediaGeneration, state.itemId, state.loading) {
+    LaunchedEffect(
+        syncplayState.active?.id,
+        syncplayState.active?.itemId,
+        syncplayState.active?.mediaGeneration,
+        syncplayState.active?.timelineRevision,
+        syncplayState.active?.playbackState,
+        state.itemId,
+        state.loading,
+    ) {
         val room = syncplayState.active ?: return@LaunchedEffect
         val member = syncplayState.currentMember() ?: return@LaunchedEffect
         if (member.watchingTogether && room.itemId != null) vm.applySyncplayRoom(room, syncplay.serverNow())
@@ -213,10 +221,23 @@ fun PlaybackScreen(
     LaunchedEffect(state.closeRequested) {
         if (state.closeRequested) onBack()
     }
-    LaunchedEffect(syncplayState.active?.id, syncplayState.active?.itemId, state.loading, state.engine.isBuffering) {
+    LaunchedEffect(
+        syncplayState.active?.id,
+        syncplayState.active?.itemId,
+        syncplayState.active?.mediaGeneration,
+        syncplayState.active?.timelineRevision,
+        state.loading,
+        state.engine.ready,
+        state.engine.isBuffering,
+    ) {
         val room = syncplayState.active
         if (room?.itemId == state.itemId && syncplayState.currentMember()?.watchingTogether == true) {
-            runCatching { syncplay.presence(viewing = true, loading = state.loading || state.engine.isBuffering) }
+            runCatching {
+                syncplay.presence(
+                    viewing = true,
+                    loading = state.loading || !state.engine.ready || state.engine.isBuffering,
+                )
+            }
         }
     }
 
