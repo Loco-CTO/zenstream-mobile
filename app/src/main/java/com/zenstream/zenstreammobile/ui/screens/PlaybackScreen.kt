@@ -371,9 +371,16 @@ fun PlaybackScreen(
                             )
                         }
                         if (!controlsLocked) {
-                            SyncplayGroupMenu(syncplay, session) { group ->
-                                if (group.itemId != null) vm.applySyncplayRoom(group, syncplay.serverNow())
-                            }
+                            SyncplayGroupMenu(
+                                manager = syncplay,
+                                session = session,
+                                onReturnToView = { group ->
+                                    if (group.itemId != null) {
+                                        vm.applySyncplayRoom(group, syncplay.serverNow())
+                                    }
+                                },
+                                playerContext = true,
+                            )
                             if (state.showDebugIcon) {
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_bug,

@@ -170,6 +170,10 @@
     <string name="metadata_language_automatic">Automatic (%1$s)</string>
     <string name="metadata_language_save_failed">Metadata language could not be saved.</string>
     <string name="syncplay_groups">Groups</string>
+    <plurals name="syncplay_group_count">
+        <item quantity="one">%1$d group</item>
+        <item quantity="other">%1$d groups</item>
+    </plurals>
     <string name="syncplay_create">Create</string>
     <string name="syncplay_empty">No active groups yet.</string>
     <string name="syncplay_member_count">%1$d members</string>

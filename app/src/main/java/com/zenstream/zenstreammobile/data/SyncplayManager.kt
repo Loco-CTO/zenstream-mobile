@@ -103,8 +103,7 @@ class SyncplayManager(
             while (!stopped) {
                 runCatching {
                     val ticket = api.socketTicket(session)
-                    val origin = session.serverUrl.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
-                    val url = "$origin/api/ws/syncplay?ticket=${android.net.Uri.encode(ticket)}&participantId=${android.net.Uri.encode(participant())}"
+                    val url = "${session.serverUrl}/api/ws/syncplay?ticket=${android.net.Uri.encode(ticket)}&participantId=${android.net.Uri.encode(participant())}"
                     socket = socketClient.newWebSocket(Request.Builder().url(url.toHttpUrl()).build(), SocketEvents())
                 }.onFailure { _state.value = _state.value.copy(error = it.message) }
                 delay(5_000)

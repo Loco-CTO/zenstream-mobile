@@ -168,6 +168,9 @@
 	<string name="metadata_language_automatic">&#x81EA;&#x52D5; (%1$s)</string>
 	<string name="metadata_language_save_failed">&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;&#x8A00;&#x8A9E;&#x3092;&#x4FDD;&#x5B58;&#x3067;&#x304D;&#x307E;&#x305B;&#x3093;&#x3067;&#x3057;&#x305F;&#x3002;</string>
 	<string name="syncplay_groups">&#x30B0;&#x30EB;&#x30FC;&#x30D7;</string>
+	<plurals name="syncplay_group_count">
+		<item quantity="other">%1$d &#x30B0;&#x30EB;&#x30FC;&#x30D7;</item>
+	</plurals>
 	<string name="syncplay_create">&#x4F5C;&#x6210;</string>
 	<string name="syncplay_empty">&#x30A2;&#x30AF;&#x30C6;&#x30A3;&#x30D6;&#x306A;&#x30B0;&#x30EB;&#x30FC;&#x30D7;&#x306F;&#x3042;&#x308A;&#x307E;&#x305B;&#x3093;&#x3002;</string>
 	<string name="syncplay_member_count">%1$d &#x4EBA;&#x306E;&#x30E1;&#x30F3;&#x30D0;&#x30FC;</string>
