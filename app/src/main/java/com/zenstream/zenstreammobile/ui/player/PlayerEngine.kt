@@ -108,6 +108,7 @@ private data class PendingPlayback(
     val url: String,
     val startPositionSeconds: Double,
     val mimeType: String?,
+    val playWhenReady: Boolean,
 )
 
 interface PlaybackEngine {
@@ -115,8 +116,13 @@ interface PlaybackEngine {
     fun createView(context: Context): View
     fun currentPositionSeconds(): Double = state.value.positionSeconds
 
-    /** Loads the source and starts playback once it is ready. */
-    fun prepare(url: String, startPositionSeconds: Double, mimeType: String? = null)
+    /** Loads the source, optionally waiting for an authoritative caller to start it. */
+    fun prepare(
+        url: String,
+        startPositionSeconds: Double,
+        mimeType: String? = null,
+        playWhenReady: Boolean = true,
+    )
     fun play()
     fun pause()
     fun seekTo(positionSeconds: Double)
@@ -182,23 +188,30 @@ class Media3PlaybackEngine : PlaybackEngine {
             useController = false
             subtitleView?.visibility = View.GONE
             player = this@Media3PlaybackEngine.player
-        }.also { pending?.let { request -> prepare(request.url, request.startPositionSeconds, request.mimeType) } }
+        }.also { pending?.let { request ->
+            prepare(request.url, request.startPositionSeconds, request.mimeType, request.playWhenReady)
+        } }
     }
 
     override fun currentPositionSeconds(): Double =
         player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0)
             ?: _state.value.positionSeconds
 
-    override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
-        Log.i(tag, "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds")
+    override fun prepare(
+        url: String,
+        startPositionSeconds: Double,
+        mimeType: String?,
+        playWhenReady: Boolean,
+    ) {
+        Log.i(tag, "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds playWhenReady=$playWhenReady")
         val current = player
         if (current == null) {
-            pending = PendingPlayback(url, startPositionSeconds, mimeType)
+            pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
             return
         }
         pending = null
         initialSeek.schedule(startPositionSeconds)
-        current.playWhenReady = true
+        current.playWhenReady = playWhenReady
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .apply {
@@ -309,7 +322,9 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             MPVLib.addObserver(eventObserver)
             handler.post(ticker)
         }
-        return view!!.also { pending?.let { request -> prepare(request.url, request.startPositionSeconds, request.mimeType) } }
+        return view!!.also { pending?.let { request ->
+            prepare(request.url, request.startPositionSeconds, request.mimeType, request.playWhenReady)
+        } }
     }
 
     override fun currentPositionSeconds(): Double {
@@ -320,10 +335,15 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             ?: _state.value.positionSeconds
     }
 
-    override fun prepare(url: String, startPositionSeconds: Double, mimeType: String?) {
+    override fun prepare(
+        url: String,
+        startPositionSeconds: Double,
+        mimeType: String?,
+        playWhenReady: Boolean,
+    ) {
         if (released) return
-        playWhenReady = true
-        pending = PendingPlayback(url, startPositionSeconds, mimeType)
+        this.playWhenReady = playWhenReady
+        pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
