@@ -245,7 +245,7 @@ fun MediaCard(
     onClick: (MediaItem) -> Unit,
     showRating: Boolean = false,
     gridCard: Boolean = false,
-    useSeriesPoster: Boolean = false,
+    useSeriesPoster: Boolean = !wide,
 ) {
 	val locale = LocalLocale.current.platformLocale
     val cardWidthModifier = if (gridCard && !wide) {
