@@ -7,6 +7,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.SyncplayGroup
@@ -125,6 +126,8 @@ class SyncplayGroupSheetTest {
             .assertIsDisplayed()
         composeRule.onNode(isToggleable()).performClick()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_return_to_view))
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
         composeRule.runOnIdle {
             assertEquals("viewer", removedMember)

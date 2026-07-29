@@ -318,77 +318,77 @@ private fun ActiveGroupContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp)
-            .semantics { heading() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        SyncplayIconBadge()
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = group.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.syncplay_member_count, group.members.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-
-    Surface(
-        color = MaterialTheme.colorScheme.surface.copy(alpha = .68f),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            group.members.forEach { member ->
-                GroupMemberRow(
-                    member = member,
-                    hostUserId = group.hostUserId,
-                    canRemove = group.hostUserId == userId && member.userId != userId,
-                    onRemove = { onRemoveMember(member.userId) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .semantics { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SyncplayIconBadge()
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.syncplay_member_count, group.members.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-    }
 
-    if (group.hostUserId == userId) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = .68f),
+            shape = MaterialTheme.shapes.medium,
         ) {
-            Checkbox(
-                checked = group.allowViewerControls,
-                onCheckedChange = onControlsChanged,
-            )
-            Text(
-                text = stringResource(R.string.syncplay_allow_controls),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                group.members.forEach { member ->
+                    GroupMemberRow(
+                        member = member,
+                        hostUserId = group.hostUserId,
+                        canRemove = group.hostUserId == userId && member.userId != userId,
+                        onRemove = { onRemoveMember(member.userId) },
+                    )
+                }
+            }
         }
-    }
 
-    if (group.mediaItemId() != null) {
-        Button(
-            onClick = { onReturnToView(group) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.syncplay_return_to_view))
+        if (group.hostUserId == userId) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = group.allowViewerControls,
+                    onCheckedChange = onControlsChanged,
+                )
+                Text(
+                    text = stringResource(R.string.syncplay_allow_controls),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
-    }
-    OutlinedButton(
-        onClick = onLeave,
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = .55f)),
-    ) {
-        Text(stringResource(R.string.syncplay_leave))
+
+        if (group.mediaItemId() != null) {
+            Button(
+                onClick = { onReturnToView(group) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.syncplay_return_to_view))
+            }
+        }
+        OutlinedButton(
+            onClick = onLeave,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = .55f)),
+        ) {
+            Text(stringResource(R.string.syncplay_leave))
         }
     }
 }
