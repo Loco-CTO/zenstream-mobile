@@ -109,6 +109,7 @@ import com.zenstream.zenstreammobile.model.TrickplayPreview
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.SyncplayTimelineScheduler
+import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -202,7 +203,7 @@ fun PlaybackScreen(
     }
 
     DisposableEffect(vm, lifecycleOwner, timelineScheduler) {
-        fun reportPresence(viewing: Boolean) {
+        fun reportPresence(viewing: Boolean, immediate: Boolean = false) {
             val room = syncplay.state.value.active
             if (room?.mediaItemId() == latestState.itemId &&
                 syncplay.state.value.currentMember()?.watchingTogether == true
@@ -212,8 +213,9 @@ fun PlaybackScreen(
                     loading = viewing && (
                         latestState.loading ||
                             !latestState.engine.ready ||
-                            latestState.engine.isBuffering
+                        latestState.engine.isBuffering
                         ),
+                    immediate = immediate,
                 )
             }
         }
@@ -221,13 +223,13 @@ fun PlaybackScreen(
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     playerVisible = true
-                    reportPresence(viewing = true)
+                    reportPresence(viewing = true, immediate = true)
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     if (shouldPauseForBackground()) {
                         playerVisible = false
                         vm.pauseForBackground()
-                        reportPresence(viewing = false)
+                        reportPresence(viewing = false, immediate = true)
                     }
                     vm.flushProgress()
                 }
@@ -238,7 +240,7 @@ fun PlaybackScreen(
                     if (playerVisible) {
                         playerVisible = false
                         vm.pauseForBackground()
-                        reportPresence(viewing = false)
+                        reportPresence(viewing = false, immediate = true)
                     }
                     vm.flushProgress()
                 }
@@ -249,7 +251,7 @@ fun PlaybackScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             timelineScheduler.cancel()
-            reportPresence(viewing = false)
+            reportPresence(viewing = false, immediate = true)
             vm.flushProgress()
         }
     }
@@ -289,6 +291,21 @@ fun PlaybackScreen(
         syncplayState.active?.itemId,
         syncplayState.active?.mediaGeneration,
         syncplayState.active?.timelineRevision,
+        state.itemId,
+        playerVisible,
+    ) {
+        val room = syncplayState.active
+        if (playerVisible && room?.mediaItemId() == state.itemId &&
+            syncplayState.currentMember()?.watchingTogether == true
+        ) {
+            syncplay.reportPresence(
+                viewing = true,
+                loading = state.loading || !state.engine.ready || state.engine.isBuffering,
+                immediate = true,
+            )
+        }
+    }
+    LaunchedEffect(
         state.loading,
         state.engine.ready,
         state.engine.isBuffering,
@@ -305,6 +322,10 @@ fun PlaybackScreen(
     }
 
     val playerView = vm.createView(context)
+    val waitingForSyncplayMembers = syncplayWaitingForMembers(syncplayState.active, state.itemId)
+    val generalPlayerLoading = state.loading || state.engine.isBuffering ||
+        (state.playback != null && !state.engine.ready)
+    val showPlayerLoading = state.error == null && (generalPlayerLoading || waitingForSyncplayMembers)
 
     Box(
         modifier = Modifier
@@ -390,10 +411,12 @@ fun PlaybackScreen(
             )
         }
 
-        if (state.loading) {
+        if (showPlayerLoading) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .testTag("player-loading"),
             )
         }
         if (state.error != null && !state.loading) {
