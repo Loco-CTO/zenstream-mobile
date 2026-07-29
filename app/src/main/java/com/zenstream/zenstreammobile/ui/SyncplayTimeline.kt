@@ -39,6 +39,20 @@ internal fun sameSyncplayTimeline(left: SyncplayGroup, right: SyncplayGroup): Bo
         left.mediaGeneration == right.mediaGeneration &&
         left.timelineRevision == right.timelineRevision
 
+internal fun syncplayWaitingForMembers(room: SyncplayGroup?, itemId: String): Boolean {
+    if (room?.itemId != itemId) return false
+    // An explicit pause must remain a pause. A stale loading flag from a prior
+    // transition is not a reason to obscure the player with the readiness UI.
+    if (!room.resumeWhenReady && room.playbackState == "paused") return false
+    return room.resumeWhenReady && room.members.any { member ->
+        member.watchingTogether && (
+            !member.viewing ||
+                member.loading ||
+                member.readyGeneration != room.mediaGeneration
+            )
+    }
+}
+
 internal class SyncplayTimelineScheduler(
     private val scope: CoroutineScope,
     private val serverNow: () -> Double,
@@ -46,25 +60,42 @@ internal class SyncplayTimelineScheduler(
     private val apply: (SyncplayGroup, Double) -> Unit,
 ) {
     private var pendingStart: Job? = null
+    private var reconciliation: Job? = null
 
     fun apply(room: SyncplayGroup) {
         pendingStart?.cancel()
+        reconciliation?.cancel()
         val now = serverNow()
         val target = syncplayTimelineTarget(room, now)
         apply(room, now)
-        val delayMillis = target.startDelayMillis ?: return
-        pendingStart = scope.launch {
-            delay(delayMillis)
-            currentRoom()
-                ?.takeIf { sameSyncplayTimeline(it, room) }
-                ?.let { current -> apply(current, serverNow()) }
+        target.startDelayMillis?.let { delayMillis ->
+            pendingStart = scope.launch {
+                delay(delayMillis)
+                currentRoom()
+                    ?.takeIf { sameSyncplayTimeline(it, room) }
+                    ?.let { current -> apply(current, serverNow()) }
+            }
+        }
+        if (room.playbackState == "playing") {
+            reconciliation = scope.launch {
+                while (true) {
+                    delay(RECONCILIATION_INTERVAL_MILLIS)
+                    currentRoom()
+                        ?.takeIf { sameSyncplayTimeline(it, room) }
+                        ?.let { current -> apply(current, serverNow()) }
+                        ?: return@launch
+                }
+            }
         }
     }
 
     fun cancel() {
         pendingStart?.cancel()
         pendingStart = null
+        reconciliation?.cancel()
+        reconciliation = null
     }
 }
 
 private const val START_GRACE_MILLIS = 20L
+private const val RECONCILIATION_INTERVAL_MILLIS = 1_000L
