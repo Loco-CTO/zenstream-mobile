@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.waitUntil
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Rule
@@ -52,5 +53,22 @@ class ToastTest {
         composeRule.onNodeWithContentDescription(
             composeRule.activity.getString(R.string.toast_dismiss),
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun expiresAfterItsConfiguredDuration() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                val toast = rememberToastHostState(durationMillis = 100)
+                LaunchedEffect(Unit) { toast.success("Temporary Syncplay notice") }
+                ToastHost(state = toast)
+            }
+        }
+
+        composeRule.onNodeWithText("Temporary Syncplay notice").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 2_000) {
+            composeRule.onAllNodesWithText("Temporary Syncplay notice")
+                .fetchSemanticsNodes().isEmpty()
+        }
     }
 }
