@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -158,7 +157,7 @@ internal fun SyncplayGroupSheet(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .widthIn(max = 520.dp)
                     .fillMaxWidth()
@@ -166,19 +165,23 @@ internal fun SyncplayGroupSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 state.active?.let { group ->
-                    ActiveGroupContent(
-                        group = group,
-                        userId = userId,
-                        onRemoveMember = onRemoveMember,
-                        onControlsChanged = onControlsChanged,
-                        onReturnToView = onReturnToView,
-                        onLeave = onLeave,
+                    item {
+                        ActiveGroupContent(
+                            group = group,
+                            userId = userId,
+                            onRemoveMember = onRemoveMember,
+                            onControlsChanged = onControlsChanged,
+                            onReturnToView = onReturnToView,
+                            onLeave = onLeave,
+                        )
+                    }
+                } ?: item {
+                    GroupBrowserContent(
+                        state = state,
+                        onCreate = onCreate,
+                        onJoin = onJoin,
                     )
-                } ?: GroupBrowserContent(
-                    state = state,
-                    onCreate = onCreate,
-                    onJoin = onJoin,
-                )
+                }
             }
         }
     }
@@ -190,72 +193,76 @@ private fun GroupBrowserContent(
     onCreate: () -> Unit,
     onJoin: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp)
-            .semantics { heading() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SyncplayIconBadge()
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.syncplay_groups),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = pluralStringResource(
-                    R.plurals.syncplay_group_count,
-                    state.groups.size,
-                    state.groups.size,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Button(onClick = onCreate) {
-            Text(stringResource(R.string.syncplay_create))
-        }
-    }
-
-    state.error?.let { message ->
-        Surface(
-            color = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(12.dp),
-            )
-        }
-    }
-
-    if (state.groups.isEmpty()) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(top = 4.dp)
+                .semantics { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SyncplayIconBadge(large = true)
-            Text(
-                text = stringResource(R.string.syncplay_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            SyncplayIconBadge()
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.syncplay_groups),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.syncplay_group_count,
+                        state.groups.size,
+                        state.groups.size,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Button(onClick = onCreate) {
+                Text(stringResource(R.string.syncplay_create))
+            }
         }
-    } else {
-        LazyColumn(
-            modifier = Modifier.heightIn(max = 420.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(state.groups, key = { it.id }) { group ->
-                GroupRow(group = group, onJoin = onJoin)
+
+        state.error?.let { message ->
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
+
+        if (state.groups.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SyncplayIconBadge(large = true)
+                Text(
+                    text = stringResource(R.string.syncplay_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.groups.forEach { group ->
+                    GroupRow(group = group, onJoin = onJoin)
+                }
             }
         }
     }
@@ -306,7 +313,11 @@ private fun ActiveGroupContent(
     onReturnToView: (SyncplayGroup) -> Unit,
     onLeave: () -> Unit,
 ) {
-    Row(
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
@@ -378,6 +389,7 @@ private fun ActiveGroupContent(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = .55f)),
     ) {
         Text(stringResource(R.string.syncplay_leave))
+        }
     }
 }
 
