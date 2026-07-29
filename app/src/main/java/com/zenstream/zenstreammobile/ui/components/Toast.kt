@@ -47,9 +47,9 @@ import kotlinx.coroutines.launch
 
 private const val TOAST_DURATION_MILLIS = 5_000L
 
-private enum class ToastVariant { Success, Error }
+internal enum class ToastVariant { Success, Error }
 
-private data class ToastMessage(
+internal data class ToastMessage(
     val id: Int,
     val message: String,
     val variant: ToastVariant,
@@ -187,7 +187,7 @@ fun SyncplayToastNotifications(
                 is SyncplayNotification.Failure -> toast.error(notification.operation.message(context))
                 is SyncplayNotification.NowPlaying -> launch {
                     val title = titleCache[notification.itemId] ?: runCatching {
-                        repository.detail(session, notification.itemId).name
+                        repository.detail(session, notification.itemId).item.name
                     }.getOrNull()?.also { titleCache[notification.itemId] = it }
                     toast.success(
                         if (title != null) {
