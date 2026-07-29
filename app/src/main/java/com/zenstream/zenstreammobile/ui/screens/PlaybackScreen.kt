@@ -115,6 +115,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import com.composables.icons.lucide.R as LucideR
 
+internal fun shouldShowPlayerLoading(
+    error: String?,
+    loading: Boolean,
+    engineReady: Boolean,
+    engineBuffering: Boolean,
+    hasPlayback: Boolean,
+    waitingForSyncplayMembers: Boolean,
+): Boolean = error == null && (
+    loading ||
+        engineBuffering ||
+        (hasPlayback && !engineReady) ||
+        waitingForSyncplayMembers
+    )
+
 @Composable
 fun PlaybackScreen(
     repository: CatalogRepository,
@@ -323,9 +337,14 @@ fun PlaybackScreen(
 
     val playerView = vm.createView(context)
     val waitingForSyncplayMembers = syncplayWaitingForMembers(syncplayState.active, state.itemId)
-    val generalPlayerLoading = state.loading || state.engine.isBuffering ||
-        (state.playback != null && !state.engine.ready)
-    val showPlayerLoading = state.error == null && (generalPlayerLoading || waitingForSyncplayMembers)
+    val showPlayerLoading = shouldShowPlayerLoading(
+        error = state.error,
+        loading = state.loading,
+        engineReady = state.engine.ready,
+        engineBuffering = state.engine.isBuffering,
+        hasPlayback = state.playback != null,
+        waitingForSyncplayMembers = waitingForSyncplayMembers,
+    )
 
     Box(
         modifier = Modifier
