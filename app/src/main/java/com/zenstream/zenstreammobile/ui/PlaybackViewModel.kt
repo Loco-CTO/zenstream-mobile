@@ -554,6 +554,10 @@ class PlaybackViewModel(
 
     fun applySyncplayRoom(room: SyncplayGroup, serverNow: Double) {
         val itemId = room.itemId ?: return
+        Log.d(
+            PLAYBACK_TAG,
+            "Syncplay apply id=${room.id} revision=${room.revision} timeline=${room.timelineRevision} state=${room.playbackState} item=$itemId",
+        )
         if (itemId != currentItemId) {
             transitionToSyncplay(itemId, room.anchorPosition)
             return
