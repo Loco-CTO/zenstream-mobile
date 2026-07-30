@@ -267,6 +267,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private var released = false
     private var playWhenReady = false
     private var sourceReady = false
+    private var sourceLoadPending = false
     private val eventObserver = object : MPVLib.EventObserver {
         override fun eventProperty(property: String) = Unit
         override fun eventProperty(property: String, value: Long) = Unit
@@ -275,12 +276,10 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         override fun eventProperty(property: String, value: Double) = Unit
 
         override fun event(eventId: Int) {
-            if (!released && (
-                    eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED ||
-                        eventId == MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART
-                )
-            ) {
+            if (!released && sourceLoadPending && eventId in MPV_READY_EVENTS) {
                 sourceReady = true
+                sourceLoadPending = false
+                Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
                 _state.value = _state.value.copy(ready = true, isBuffering = false)
             }
             if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
@@ -354,6 +353,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         this.playWhenReady = playWhenReady
         pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
         sourceReady = false
+        sourceLoadPending = true
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
@@ -390,6 +390,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     override fun release() {
         if (released) return
         released = true
+        sourceLoadPending = false
         handler.removeCallbacks(ticker)
         MPVLib.removeObserver(eventObserver)
         initialSeek.cancel()
@@ -465,6 +466,13 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         }
     }
 }
+
+private val MPV_READY_EVENTS = setOf(
+    MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED,
+    MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART,
+    MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG,
+    MPVLib.MpvEvent.MPV_EVENT_AUDIO_RECONFIG,
+)
 
 fun createPlaybackEngine(engine: PlayerEngine, context: Context): PlaybackEngine = when (engine) {
     PlayerEngine.MEDIA3 -> Media3PlaybackEngine()
