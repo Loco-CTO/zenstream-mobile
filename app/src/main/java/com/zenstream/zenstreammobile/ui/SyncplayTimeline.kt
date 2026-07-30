@@ -75,20 +75,13 @@ internal class SyncplayTimelineScheduler(
                 delay(delayMillis)
                 currentRoom()
                     ?.takeIf { sameSyncplayTimeline(it, room) }
-                    ?.let { current -> apply(current, serverNow()) }
+                    ?.let { current ->
+                        apply(current, serverNow())
+                        startReconciliation(current)
+                    }
             }
         }
-        if (room.playbackState == "playing") {
-            reconciliation = scope.launch {
-                while (true) {
-                    delay(RECONCILIATION_INTERVAL_MILLIS)
-                    currentRoom()
-                        ?.takeIf { sameSyncplayTimeline(it, room) }
-                        ?.let { current -> apply(current, serverNow()) }
-                        ?: return@launch
-                }
-            }
-        }
+        if (target.shouldPlay) startReconciliation(room)
     }
 
     fun cancel() {
@@ -96,6 +89,19 @@ internal class SyncplayTimelineScheduler(
         pendingStart = null
         reconciliation?.cancel()
         reconciliation = null
+    }
+
+    private fun startReconciliation(room: SyncplayGroup) {
+        reconciliation?.cancel()
+        reconciliation = scope.launch {
+            while (true) {
+                delay(RECONCILIATION_INTERVAL_MILLIS)
+                currentRoom()
+                    ?.takeIf { sameSyncplayTimeline(it, room) }
+                    ?.let { current -> apply(current, serverNow()) }
+                    ?: return@launch
+            }
+        }
     }
 }
 
