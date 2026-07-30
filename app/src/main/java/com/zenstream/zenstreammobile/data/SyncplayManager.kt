@@ -27,13 +27,14 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
 class SyncplayManager(
     private val session: AuthSession,
     private val sessionStore: SessionStore,
     private val api: SyncplayApi = SyncplayApi(),
-    private val socketClient: OkHttpClient = OkHttpClient(),
+    private val socketClient: OkHttpClient = syncplaySocketClient(),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -384,6 +385,11 @@ internal fun syncplayPresenceReportIsCurrent(
         report.itemId == active.itemId &&
         report.mediaGeneration == active.mediaGeneration &&
         report.timelineRevision == active.timelineRevision
+
+internal fun syncplaySocketClient(): OkHttpClient = OkHttpClient.Builder()
+    .readTimeout(0, TimeUnit.MILLISECONDS)
+    .pingInterval(25, TimeUnit.SECONDS)
+    .build()
 
 object SyncplaySession {
     private var current: SyncplayManager? = null
