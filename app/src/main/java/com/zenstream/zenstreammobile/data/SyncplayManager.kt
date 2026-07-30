@@ -27,6 +27,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
@@ -174,19 +175,14 @@ class SyncplayManager(
         val active = _state.value.active ?: return@withLock
         if (!report.isCurrent(active)) return@withLock
         presenceSequence += 1
-        try {
-            adopt(api.presence(
-                session,
-                participant(),
-                report.room,
-                report.viewing,
-                report.loading,
-                presenceSequence,
-            ))
-        } catch (error: Exception) {
-            notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
-            throw error
-        }
+        adopt(api.presence(
+            session,
+            participant(),
+            report.room,
+            report.viewing,
+            report.loading,
+            presenceSequence,
+        ))
     }
 
     fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
@@ -195,7 +191,23 @@ class SyncplayManager(
         pendingPresence?.cancel()
         pendingPresence = scope.launch {
             if (!immediate) delay(if (loading) 750 else 300)
-            runCatching { presence(report) }
+            repeat(PRESENCE_ATTEMPTS) { attempt ->
+                try {
+                    presence(report)
+                    return@launch
+                } catch (error: IOException) {
+                    if (attempt + 1 < PRESENCE_ATTEMPTS && report.isCurrent(_state.value.active ?: return@launch)) {
+                        delay(PRESENCE_RETRY_DELAY_MILLIS)
+                    } else {
+                        Log.w(SYNCPLAY_LOG_TAG, "Syncplay readiness update failed: ${error.javaClass.simpleName}")
+                        notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+                    }
+                } catch (error: Exception) {
+                    Log.w(SYNCPLAY_LOG_TAG, "Syncplay readiness update failed: ${error.javaClass.simpleName}")
+                    notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+                    return@launch
+                }
+            }
         }
     }
 
@@ -300,17 +312,26 @@ class SyncplayManager(
 
     private fun adoptGroups(groups: List<SyncplayGroup>) {
         val previous = _state.value
-        val active = previous.active?.let { current -> groups.firstOrNull { it.id == current.id } ?: current }
-            ?: groups.firstOrNull { group -> group.members.any { it.participantId == participant() } }
+        val latestGroups = groups.map { incoming ->
+            previous.groups.firstOrNull { it.id == incoming.id }
+                .let { known -> latestSyncplayGroup(known, incoming) }
+                ?: incoming
+        }
+        val active = previous.active?.let { current ->
+            latestGroups.firstOrNull { it.id == current.id }
+                .let { candidate -> latestSyncplayGroup(current, candidate) }
+                ?: current
+        } ?: latestGroups.firstOrNull { group -> group.members.any { it.participantId == participant() } }
         val next = active?.takeIf { group -> group.members.any { it.participantId == participant() } }
-        _state.value = previous.copy(groups = groups, active = next)
+        _state.value = previous.copy(groups = latestGroups, active = next)
         announceChanges(previous.active, next)
         hydrated = true
     }
     private fun adopt(group: SyncplayGroup) {
         val previous = _state.value
         val known = previous.groups.firstOrNull { it.id == group.id }
-        if (known != null && known.revision > group.revision) return
+        val activeKnown = previous.active?.takeIf { it.id == group.id }
+        if (latestSyncplayGroup(known, group) !== group || latestSyncplayGroup(activeKnown, group) !== group) return
         val groups = listOf(group) + previous.groups.filter { it.id != group.id }
         val isMember = group.members.any { it.participantId == participant() }
         val active = when {
@@ -376,6 +397,8 @@ class SyncplayManager(
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
+private const val PRESENCE_ATTEMPTS = 2
+private const val PRESENCE_RETRY_DELAY_MILLIS = 750L
 
 internal fun syncplayPresenceReportIsCurrent(
     report: SyncplayGroup,
@@ -385,6 +408,16 @@ internal fun syncplayPresenceReportIsCurrent(
         report.itemId == active.itemId &&
         report.mediaGeneration == active.mediaGeneration &&
         report.timelineRevision == active.timelineRevision
+
+internal fun latestSyncplayGroup(
+    known: SyncplayGroup?,
+    incoming: SyncplayGroup?,
+): SyncplayGroup? =
+    when {
+        incoming == null -> known
+        known != null && known.revision > incoming.revision -> known
+        else -> incoming
+    }
 
 internal fun syncplaySocketClient(): OkHttpClient = OkHttpClient.Builder()
     .readTimeout(0, TimeUnit.MILLISECONDS)
