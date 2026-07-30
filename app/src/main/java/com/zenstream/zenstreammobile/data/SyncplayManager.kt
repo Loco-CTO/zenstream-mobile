@@ -267,8 +267,19 @@ class SyncplayManager(
         override fun onMessage(webSocket: WebSocket, text: String) {
             val value = runCatching { JSONObject(text) }.getOrNull() ?: return
             when (value.optString("type")) {
-                "groups" -> scope.launch { mutex.withLock { adoptGroups(value.optJSONArray("groups").toGroups()) } }
-                "group" -> value.optJSONObject("group")?.let { group -> scope.launch { mutex.withLock { adopt(parseSyncplayGroup(group)) } } }
+                "groups" -> {
+                    val groups = value.optJSONArray("groups").toGroups()
+                    Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket groups count=${groups.size}")
+                    scope.launch { mutex.withLock { adoptGroups(groups) } }
+                }
+                "group" -> value.optJSONObject("group")?.let { raw ->
+                    val group = parseSyncplayGroup(raw)
+                    Log.d(
+                        SYNCPLAY_LOG_TAG,
+                        "Syncplay socket group id=${group.id} revision=${group.revision} timeline=${group.timelineRevision} state=${group.playbackState}",
+                    )
+                    scope.launch { mutex.withLock { adopt(group) } }
+                }
                 "group-ended" -> scope.launch { mutex.withLock { end(value.optString("id"), value.optInt("revision")) } }
                 "participant-replaced" -> scope.launch {
                     mutex.withLock {
@@ -333,7 +344,14 @@ class SyncplayManager(
         val previous = _state.value
         val known = previous.groups.firstOrNull { it.id == group.id }
         val activeKnown = previous.active?.takeIf { it.id == group.id }
-        if (latestSyncplayGroup(known, group) !== group || latestSyncplayGroup(activeKnown, group) !== group) return
+        if ((known?.revision ?: -1) > group.revision || (activeKnown?.revision ?: -1) > group.revision) {
+            Log.d(SYNCPLAY_LOG_TAG, "Syncplay ignored stale group id=${group.id} revision=${group.revision}")
+            return
+        }
+        Log.d(
+            SYNCPLAY_LOG_TAG,
+            "Syncplay adopted group id=${group.id} revision=${group.revision} timeline=${group.timelineRevision} state=${group.playbackState}",
+        )
         val groups = listOf(group) + previous.groups.filter { it.id != group.id }
         val isMember = group.members.any { it.participantId == participant() }
         val active = when {
