@@ -80,4 +80,12 @@ class SyncplayApiTest {
         assertFalse(syncplayPresenceReportIsCurrent(current.copy(mediaGeneration = 2), current))
         assertFalse(syncplayPresenceReportIsCurrent(current.copy(itemId = "item-2"), current))
     }
+
+    @Test
+    fun syncplaySocketDoesNotExpireDuringAnIdleRoom() {
+        val client = syncplaySocketClient()
+
+        assertEquals(0, client.readTimeoutMillis)
+        assertEquals(25_000, client.pingIntervalMillis)
+    }
 }
