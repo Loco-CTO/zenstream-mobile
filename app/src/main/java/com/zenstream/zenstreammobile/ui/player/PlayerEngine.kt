@@ -266,6 +266,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private val endFileGate = MpvEndFileGate()
     private var released = false
     private var playWhenReady = false
+    private var sourceReady = false
     private val eventObserver = object : MPVLib.EventObserver {
         override fun eventProperty(property: String) = Unit
         override fun eventProperty(property: String, value: Long) = Unit
@@ -274,6 +275,14 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         override fun eventProperty(property: String, value: Double) = Unit
 
         override fun event(eventId: Int) {
+            if (!released && (
+                    eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED ||
+                        eventId == MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART
+                )
+            ) {
+                sourceReady = true
+                _state.value = _state.value.copy(ready = true, isBuffering = false)
+            }
             if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
                 if (endFileGate.shouldReportEndFile()) {
                     _state.value = _state.value.copy(ended = true)
@@ -305,7 +314,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
                 }.getOrDefault(false),
                 speed = (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull()
                     ?: 1.0).toFloat(),
-                ready = duration > 0,
+                ready = sourceReady,
             )
             handler.postDelayed(this, 250L)
         }
@@ -344,6 +353,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         if (released) return
         this.playWhenReady = playWhenReady
         pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
+        sourceReady = false
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
