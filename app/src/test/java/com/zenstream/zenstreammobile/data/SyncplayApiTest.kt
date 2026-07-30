@@ -88,4 +88,14 @@ class SyncplayApiTest {
         assertEquals(0, client.readTimeoutMillis)
         assertEquals(25_000, client.pingIntervalMillis)
     }
+
+    @Test
+    fun keepsANewerLiveGroupWhenAnOlderSnapshotArrives() {
+        val newer = parseSyncplayGroup(JSONObject().put("id", "room-1").put("revision", 8))
+        val older = parseSyncplayGroup(JSONObject().put("id", "room-1").put("revision", 7))
+
+        assertEquals(8, latestSyncplayGroup(newer, older)?.revision)
+        assertEquals(8, latestSyncplayGroup(older, newer)?.revision)
+        assertEquals(8, latestSyncplayGroup(newer, null)?.revision)
+    }
 }
