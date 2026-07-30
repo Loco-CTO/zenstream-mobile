@@ -27,7 +27,6 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
@@ -50,7 +49,7 @@ class SyncplayManager(
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
     private var hydrated = false
-    private var pendingPresence: Job? = null
+    private var presenceChain: Job? = null
 
     init { scope.launch { start() } }
 
@@ -144,18 +143,27 @@ class SyncplayManager(
         }
     }
     suspend fun setWatchingTogether(watching: Boolean) = mutex.withLock {
-        pendingPresence?.cancel()
-        _state.value.active?.let {
+        _state.value.active?.let { group ->
+            adopt(group.copy(members = group.members.map { member ->
+                if (member.participantId == participant()) {
+                    member.copy(
+                        watchingTogether = watching,
+                        viewing = false,
+                        loading = false,
+                        readyGeneration = -1,
+                    )
+                } else member
+            }))
             try {
-                adopt(api.participation(session, participant(), it, watching))
+                adopt(api.participation(session, participant(), group, watching))
             } catch (error: Exception) {
+                runCatching { api.group(session, participant(), group.id) }.getOrNull()?.let(::adopt)
                 notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
                 throw error
             }
         }
     }
     suspend fun command(action: String, position: Double, playing: Boolean, itemId: String? = null) = mutex.withLock {
-        pendingPresence?.cancel()
         val active = _state.value.active ?: return@withLock
         try {
             try {
@@ -188,33 +196,27 @@ class SyncplayManager(
     fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
         val room = _state.value.active ?: return
         val report = PresenceReport(room, viewing, loading)
-        pendingPresence?.cancel()
-        pendingPresence = scope.launch {
+        val previous = presenceChain
+        presenceChain = scope.launch {
+            previous?.join()
             if (!immediate) delay(if (loading) 750 else 300)
-            repeat(PRESENCE_ATTEMPTS) { attempt ->
-                try {
-                    presence(report)
-                    return@launch
-                } catch (error: IOException) {
-                    if (attempt + 1 < PRESENCE_ATTEMPTS && report.isCurrent(_state.value.active ?: return@launch)) {
-                        delay(PRESENCE_RETRY_DELAY_MILLIS)
-                    } else {
-                        Log.w(SYNCPLAY_LOG_TAG, "Syncplay readiness update failed: ${error.javaClass.simpleName}")
-                        notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
-                    }
-                } catch (error: Exception) {
-                    Log.w(SYNCPLAY_LOG_TAG, "Syncplay readiness update failed: ${error.javaClass.simpleName}")
-                    notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
-                    return@launch
-                }
+            val active = _state.value.active ?: return@launch
+            if (!report.isCurrent(active)) return@launch
+            try {
+                presence(report)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(SYNCPLAY_LOG_TAG, "Syncplay readiness update failed: ${error.javaClass.simpleName}")
+                notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
             }
         }
     }
 
     fun stop() {
         stopped = true
-        pendingPresence?.cancel()
-        pendingPresence = null
+        presenceChain?.cancel()
+        presenceChain = null
         socket?.close(1000, "Session ended")
         socket = null
         connectionEnded?.complete(Unit)
@@ -397,8 +399,6 @@ class SyncplayManager(
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
-private const val PRESENCE_ATTEMPTS = 2
-private const val PRESENCE_RETRY_DELAY_MILLIS = 750L
 
 internal fun syncplayPresenceReportIsCurrent(
     report: SyncplayGroup,
