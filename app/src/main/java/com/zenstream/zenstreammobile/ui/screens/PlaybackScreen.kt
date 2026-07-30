@@ -227,8 +227,8 @@ fun PlaybackScreen(
                     loading = viewing && (
                         latestState.loading ||
                             !latestState.engine.ready ||
-                        latestState.engine.isBuffering
-                        ),
+                            latestState.engine.isBuffering
+                    ),
                     immediate = immediate,
                 )
             }
