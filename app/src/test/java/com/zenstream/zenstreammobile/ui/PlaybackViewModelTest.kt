@@ -141,6 +141,7 @@ class PlaybackViewModelTest {
         runCurrent()
         assertEquals(2, applied.size)
         assertTrue(syncplayTimelineTarget(applied.last().first, applied.last().second).shouldPlay)
+        scheduler.cancel()
     }
 
     @Test
