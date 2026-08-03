@@ -129,7 +129,7 @@ class SearchLibraryViewModelTest {
         val restored = LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
         val source = FakeLibraryDataSource(
             libraries = listOf(shows),
-            storedSort = restored,
+            storedSorts = mapOf(shows.id to restored),
             pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
         )
         val viewModel = LibraryViewModel(source, session)
@@ -143,6 +143,38 @@ class SearchLibraryViewModelTest {
         assertEquals(nextSort, viewModel.uiState.value.sort)
         assertEquals(nextSort, source.savedSort)
         assertEquals(nextSort, source.requestedSorts.last())
+    }
+
+    @Test
+    fun librarySortIsRestoredIndependentlyForEachLibrary() = runTest {
+        val shows = Library("shows", "Shows", "tvshows")
+        val movies = Library("movies", "Movies", "movies")
+        val showsSort = LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
+        val moviesSort = LibrarySort(LibrarySortBy.Runtime, SortOrder.Descending)
+        val source = FakeLibraryDataSource(
+            libraries = listOf(shows, movies),
+            storedSorts = mapOf(shows.id to showsSort),
+            pages = mapOf(
+                0 to PagedLibrary(shows, listOf(MediaItem("show", "Show")), 1),
+            ),
+        )
+        val viewModel = LibraryViewModel(source, session)
+        advanceUntilIdle()
+        assertEquals(showsSort, viewModel.uiState.value.sort)
+
+        viewModel.select(movies)
+        advanceUntilIdle()
+        assertEquals(
+            LibrarySort(LibrarySortBy.Added, SortOrder.Descending),
+            viewModel.uiState.value.sort,
+        )
+        viewModel.setSort(moviesSort)
+        advanceUntilIdle()
+
+        viewModel.select(shows)
+        advanceUntilIdle()
+        assertEquals(showsSort, viewModel.uiState.value.sort)
+        assertEquals(moviesSort, source.savedSorts["movies"])
     }
 }
 
@@ -162,10 +194,11 @@ private class FakeSearchDataSource(
 private class FakeLibraryDataSource(
     private val libraries: List<Library>,
     private val pages: Map<Int, PagedLibrary>,
-    private val storedSort: LibrarySort? = null,
+    private val storedSorts: Map<String, LibrarySort> = emptyMap(),
     private val pageGate: CompletableDeferred<Unit>? = null,
 ) : LibraryDataSource {
     var savedSort: LibrarySort? = null
+    val savedSorts = mutableMapOf<String, LibrarySort>()
     val requestedSorts = mutableListOf<LibrarySort>()
 
     override suspend fun clearSession() = Unit
@@ -184,9 +217,10 @@ private class FakeLibraryDataSource(
         return pages[startIndex] ?: PagedLibrary(library, emptyList(), 0)
     }
 
-    override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? = storedSort
+    override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? = storedSorts[libraryId]
 
     override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) {
         savedSort = sort
+        savedSorts[libraryId] = sort
     }
 }
