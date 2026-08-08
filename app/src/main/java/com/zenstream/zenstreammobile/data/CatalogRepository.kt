@@ -16,6 +16,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -70,6 +75,21 @@ class CatalogRepository(
 	val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
+    private val eventScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var catalogEvents: CatalogEventsClient? = null
+
+    init {
+        eventScope.launch {
+            session.collectLatest { active ->
+                catalogEvents?.stop()
+                catalogEvents = active?.let { value ->
+                    CatalogEventsClient(value, onChanged = {
+                        eventScope.launch { invalidateCatalogMetadata() }
+                    })
+                }
+            }
+        }
+    }
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
