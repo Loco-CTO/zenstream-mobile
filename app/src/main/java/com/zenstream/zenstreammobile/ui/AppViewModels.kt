@@ -145,6 +145,9 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                 load(force = true)
             }
         }
+        viewModelScope.launch {
+            repository.catalogChanges.collectLatest { load(force = true) }
+        }
     }
 
     fun load(force: Boolean = false) {
@@ -305,6 +308,11 @@ class LibraryViewModel(
         viewModelScope.launch {
             repository.catalogRefreshRevision.drop(1).collectLatest {
                 refresh()
+            }
+        }
+        viewModelScope.launch {
+            repository.catalogChanges.collectLatest { change ->
+                if (change.libraryId == null || change.libraryId == _uiState.value.selected?.id) refresh()
             }
         }
     }
@@ -513,6 +521,9 @@ class SearchViewModel(
                 refresh()
             }
         }
+        viewModelScope.launch {
+            repository.catalogChanges.collectLatest { refresh() }
+        }
     }
 
     fun updateQuery(value: String) {
@@ -632,6 +643,11 @@ class DetailViewModel(
         viewModelScope.launch {
             repository.catalogRefreshRevision.drop(1).collectLatest {
                 load()
+            }
+        }
+        viewModelScope.launch {
+            repository.catalogChanges.collectLatest { change ->
+                if (change.libraryId == null || change.libraryId == _uiState.value.data?.item?.libraryId) load()
             }
         }
     }
