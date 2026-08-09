@@ -18,16 +18,27 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-internal fun catalogEventGeneration(message: String): Long? = runCatching {
+data class CatalogChange(
+    val generation: Long,
+    val libraryId: String? = null,
+    val rootEntityId: String? = null,
+)
+
+internal fun catalogEvent(message: String): CatalogChange? = runCatching {
     val value = JSONObject(message)
-    value.optLong("generation").takeIf {
-        value.optString("type") == "catalog.updated" || value.optString("type") == "catalog.changed"
-    }
+    if (value.optString("type") != "catalog.updated" && value.optString("type") != "catalog.changed") return@runCatching null
+    CatalogChange(
+        generation = value.optLong("generation"),
+        libraryId = value.optString("libraryId").ifBlank { null },
+        rootEntityId = value.optString("rootEntityId").ifBlank { null },
+    )
 }.getOrNull()
+
+internal fun catalogEventGeneration(message: String): Long? = catalogEvent(message)?.generation
 
 class CatalogEventsClient(
     private val session: AuthSession,
-    private val onChanged: (Long) -> Unit,
+    private val onChanged: (CatalogChange) -> Unit,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
         .build(),
@@ -59,7 +70,7 @@ class CatalogEventsClient(
             .build()
         socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
-                catalogEventGeneration(text)?.let(onChanged)
+                catalogEvent(text)?.let(onChanged)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
