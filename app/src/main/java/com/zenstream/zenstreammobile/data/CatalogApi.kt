@@ -573,10 +573,19 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             val seriesId = item.seriesId ?: return@withContext EpisodeNeighbors()
             val seasons = getSeasons(session, seriesId)
-            val cachedEpisodes = seasons.associate { season ->
+            val seasonNumber = item.parentIndexNumber ?: return@withContext EpisodeNeighbors()
+            val orderedSeasons = seasons.filter { it.indexNumber != null }.sortedBy { it.indexNumber }
+            val currentIndex = orderedSeasons.indexOfFirst { it.indexNumber == seasonNumber }
+            if (currentIndex < 0) return@withContext EpisodeNeighbors()
+            val relevant = listOfNotNull(
+                orderedSeasons.getOrNull(currentIndex - 1),
+                orderedSeasons[currentIndex],
+                orderedSeasons.getOrNull(currentIndex + 1),
+            )
+            val cachedEpisodes = relevant.associate { season ->
                 season.id to getEpisodes(session, seriesId, season.id)
             }
-            resolveEpisodeNeighbors(item, seasons) { season ->
+            resolveEpisodeNeighbors(item, orderedSeasons) { season ->
                 cachedEpisodes[season.id].orEmpty()
             }
         }
