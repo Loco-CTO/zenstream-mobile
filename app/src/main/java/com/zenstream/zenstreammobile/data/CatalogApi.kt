@@ -32,15 +32,22 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.util.UUID
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 data class EpisodeNeighbors(
     val previous: MediaItem? = null,
@@ -518,6 +525,25 @@ class CatalogApi(
         itemId: String,
         requestedSeasonId: String? = null,
     ): DetailData = withContext(Dispatchers.IO) {
+        try {
+            val suffix = requestedSeasonId?.let {
+                "?seasonId=${android.net.Uri.encode(it)}"
+            }.orEmpty()
+            val payload = requestJson(
+                session,
+                "/api/catalog/items/${android.net.Uri.encode(itemId)}/detail$suffix",
+            )
+            return@withContext DetailData(
+                item = catalogMediaItem(payload.getJSONObject("item")),
+                parentSeries = payload.optJSONObject("backgroundItem")?.let(::catalogMediaItem),
+                seasons = catalogItems(payload, "seasons"),
+                episodes = catalogItems(payload, "episodes"),
+                similar = catalogItems(payload, "similar"),
+                selectedSeasonId = payload.optString("selectedSeasonId").ifBlank { null },
+            )
+        } catch (error: CatalogException) {
+            if (error.statusCode != 404 && error.statusCode != 405) throw error
+        }
         val item = getItem(session, itemId)
         val parentSeries = if (item.type == "Episode" && !item.seriesId.isNullOrBlank()) {
             getItem(session, item.seriesId)
@@ -546,9 +572,12 @@ class CatalogApi(
     suspend fun episodeNeighbors(session: AuthSession, item: MediaItem): EpisodeNeighbors =
         withContext(Dispatchers.IO) {
             val seriesId = item.seriesId ?: return@withContext EpisodeNeighbors()
-            val cachedEpisodes = mutableMapOf<String, List<MediaItem>>()
-            resolveEpisodeNeighbors(item, getSeasons(session, seriesId)) { season ->
-                cachedEpisodes.getOrPut(season.id) { getEpisodes(session, seriesId, season.id) }
+            val seasons = getSeasons(session, seriesId)
+            val cachedEpisodes = seasons.associate { season ->
+                season.id to getEpisodes(session, seriesId, season.id)
+            }
+            resolveEpisodeNeighbors(item, seasons) { season ->
+                cachedEpisodes[season.id].orEmpty()
             }
         }
 
@@ -571,27 +600,27 @@ class CatalogApi(
             requestJson(session, "/api/catalog/items/$itemId/state", method = "PATCH", body = JSONObject().put("played", played).toString())
         }
 
-    private fun getItem(session: AuthSession, itemId: String): MediaItem =
+    private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
         catalogMediaItem(requestJson(session, "/api/catalog/items/$itemId"))
 
-    private fun getChildren(session: AuthSession, parent: MediaItem): List<MediaItem> {
+    private suspend fun getChildren(session: AuthSession, parent: MediaItem): List<MediaItem> {
         val libraryId = parent.libraryId ?: return emptyList()
         val path = "/api/catalog/items?libraryId=${android.net.Uri.encode(libraryId)}&parentId=${android.net.Uri.encode(parent.id)}&pageSize=100"
         return catalogItems(requestJson(session, path))
     }
 
-    private fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
+    private suspend fun getSeasons(session: AuthSession, seriesId: String): List<MediaItem> =
         getChildren(session, getItem(session, seriesId))
 
-    private fun getEpisodes(session: AuthSession, seriesId: String, seasonId: String): List<MediaItem> {
+    private suspend fun getEpisodes(session: AuthSession, seriesId: String, seasonId: String): List<MediaItem> {
         @Suppress("UNUSED_VARIABLE") val ignoredSeriesId = seriesId
         return getChildren(session, getItem(session, seasonId)).sortedWith(compareBy(nullsLast()) { it.indexNumber })
     }
 
-    private fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
+    private suspend fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
         catalogItems(requestJson(session, "/api/catalog/items/$itemId/similar"))
 
-    private fun requestJson(
+    private suspend fun requestJson(
         session: AuthSession,
         path: String,
         query: Map<String, String> = emptyMap(),
@@ -600,7 +629,7 @@ class CatalogApi(
         requestTimeoutMillis: Long? = null,
     ): JSONObject = requestJson(session.serverUrl, path, query, session.token, method, body, requestTimeoutMillis)
 
-    private fun requestJson(
+    private suspend fun requestJson(
         server: String,
         path: String,
         query: Map<String, String> = emptyMap(),
@@ -608,7 +637,7 @@ class CatalogApi(
         method: String = "GET",
         body: String? = null,
         requestTimeoutMillis: Long? = null,
-    ): JSONObject {
+    ): JSONObject = suspendCancellableCoroutine { continuation ->
         val urlBuilder = "$server$path".toHttpUrl().newBuilder()
         query.forEach { (key, value) -> urlBuilder.addQueryParameter(key, value) }
         val request = Request.Builder()
@@ -620,10 +649,28 @@ class CatalogApi(
             .build()
         val call = httpClient.newCall(request)
         requestTimeoutMillis?.let { call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS) }
-        call.execute().use {
-            if (!it.isSuccessful) throw CatalogException(it.code, "ZenStream request failed with ${it.code}")
-            return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
-        }
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, error: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(error)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!continuation.isActive) return
+                    if (!it.isSuccessful) {
+                        continuation.resumeWithException(
+                            CatalogException(it.code, "ZenStream request failed with ${it.code}")
+                        )
+                        return
+                    }
+                    runCatching {
+                        JSONObject(it.body.string().ifBlank { "{}" })
+                    }.onSuccess(continuation::resume)
+                        .onFailure(continuation::resumeWithException)
+                }
+            }
+        })
     }
 
     companion object {
