@@ -15,4 +15,14 @@ class CatalogEventsClientTest {
         assertNull(catalogEventGeneration("""{"type":"catalog.status","generation":7}"""))
         assertNull(catalogEventGeneration("not-json"))
     }
+
+    @Test
+    fun reconnectStatusProducesLibraryWideInvalidations() {
+        assertEquals(
+            listOf(CatalogChange(9L, "tv", null)),
+            catalogEvents(
+                """{"type":"catalog.status","libraries":[{"id":"tv","catalogGeneration":9}]}"""
+            ),
+        )
+    }
 }
