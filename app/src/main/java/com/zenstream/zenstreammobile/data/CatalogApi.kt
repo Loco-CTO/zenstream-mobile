@@ -170,7 +170,7 @@ class CatalogApi(
             )
         }
 
-    private fun playbackSegments(
+    private suspend fun playbackSegments(
         session: AuthSession,
         itemId: String,
         sourceId: String,
