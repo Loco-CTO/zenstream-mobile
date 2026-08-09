@@ -36,6 +36,25 @@ internal fun catalogEvent(message: String): CatalogChange? = runCatching {
 
 internal fun catalogEventGeneration(message: String): Long? = catalogEvent(message)?.generation
 
+internal fun catalogEvents(message: String): List<CatalogChange> = runCatching {
+    val value = JSONObject(message)
+    if (value.optString("type") != "catalog.status") {
+        return@runCatching listOfNotNull(catalogEvent(message))
+    }
+    val libraries = value.optJSONArray("libraries") ?: return@runCatching emptyList()
+    List(libraries.length()) { index -> libraries.optJSONObject(index) }
+        .filterNotNull()
+        .mapNotNull { library ->
+            library.optString("id").takeIf(String::isNotBlank)?.let { libraryId ->
+                CatalogChange(
+                    generation = library.optLong("catalogGeneration"),
+                    libraryId = libraryId,
+                    rootEntityId = null,
+                )
+            }
+        }
+}.getOrDefault(emptyList())
+
 class CatalogEventsClient(
     private val session: AuthSession,
     private val onChanged: (CatalogChange) -> Unit,
@@ -70,7 +89,7 @@ class CatalogEventsClient(
             .build()
         socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
-                catalogEvent(text)?.let(onChanged)
+                catalogEvents(text).forEach(onChanged)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
