@@ -14,6 +14,8 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
@@ -26,6 +28,8 @@ import kotlinx.coroutines.sync.withLock
 
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
+        get() = kotlinx.coroutines.flow.emptyFlow()
+    val catalogChanges: Flow<CatalogChange>
         get() = kotlinx.coroutines.flow.emptyFlow()
 }
 
@@ -68,6 +72,8 @@ class CatalogRepository(
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
     override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
+    private val _catalogChanges = MutableSharedFlow<CatalogChange>(extraBufferCapacity = 16)
+    override val catalogChanges: SharedFlow<CatalogChange> = _catalogChanges
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -83,8 +89,8 @@ class CatalogRepository(
             session.collectLatest { active ->
                 catalogEvents?.stop()
                 catalogEvents = active?.let { value ->
-                    CatalogEventsClient(value, onChanged = {
-                        eventScope.launch { invalidateCatalogMetadata() }
+                    CatalogEventsClient(value, onChanged = { change ->
+                        eventScope.launch { invalidateCatalogMetadata(change) }
                     })
                 }
             }
@@ -251,10 +257,11 @@ class CatalogRepository(
         homeMutex.withLock { homeCache = null }
     }
 
-    private suspend fun invalidateCatalogMetadata() {
+    private suspend fun invalidateCatalogMetadata(change: CatalogChange? = null) {
         homeMutex.withLock {
             homeCache = null
-            _catalogRefreshRevision.value += 1
+            if (change == null) _catalogRefreshRevision.value += 1
         }
+        if (change != null) _catalogChanges.emit(change)
     }
 }
