@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import com.vanniktech.blurhash.BlurHash
@@ -25,11 +26,7 @@ fun BlurHashAsyncImage(
     onError: (() -> Unit)? = null,
 ) {
     var loaded by remember(imageKey) { mutableStateOf(false) }
-    val placeholder = remember(blurHash) {
-        blurHash?.let {
-            runCatching { BlurHash.decode(it, 24, 24, 1f, false)?.asImageBitmap() }.getOrNull()
-        }
-    }
+    val placeholder = remember(blurHash) { decodeBlurHashBitmap(blurHash) }
     Box(modifier) {
         if (placeholder != null && !loaded) {
             Image(
@@ -48,4 +45,8 @@ fun BlurHashAsyncImage(
             onError = { onError?.invoke() },
         )
     }
+}
+
+internal fun decodeBlurHashBitmap(value: String?): ImageBitmap? = value?.let {
+    runCatching { BlurHash.decode(it, 24, 24, 1f, false)?.asImageBitmap() }.getOrNull()
 }
