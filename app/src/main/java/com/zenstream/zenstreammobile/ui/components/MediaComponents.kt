@@ -394,7 +394,7 @@ fun MediaImage(
         ),
         contentScale = ContentScale.Crop,
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .clip(RoundedCornerShape(6.dp)),
     )
 }
