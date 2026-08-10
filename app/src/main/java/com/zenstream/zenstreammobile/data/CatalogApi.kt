@@ -29,7 +29,9 @@ import java.io.IOException
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -43,6 +45,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -87,6 +91,38 @@ class CatalogApi(
                 ticket,
             )
         }
+
+    suspend fun logout(session: AuthSession) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/auth/logout",
+                method = "POST",
+                requestTimeoutMillis = LOGOUT_REQUEST_TIMEOUT_MILLIS,
+            )
+        }
+
+    internal suspend fun socketTicket(session: AuthSession): String =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/auth/socket-ticket", method = "POST")
+                .optString("ticket")
+                .ifBlank { error("Server did not return a socket ticket") }
+        }
+
+    internal fun openCatalogSocket(
+        session: AuthSession,
+        ticket: String,
+        listener: WebSocketListener,
+    ): WebSocket {
+        val url =
+            session.serverUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("api/ws/catalog")
+                .addQueryParameter("ticket", ticket)
+                .build()
+        return httpClient.newWebSocket(Request.Builder().url(url).build(), listener)
+    }
 
     suspend fun playback(
         session: AuthSession,
@@ -136,34 +172,43 @@ class CatalogApi(
                 )
             val sessionId = json.optString("sessionId").ifBlank { null }
             val sessionState = json.optString("sessionState").ifBlank { null }
-            Log.i(
-                PLAYBACK_TAG,
-                "negotiated item=$itemId mode=${json.optString("mode")} sessionId=${sessionId ?: "none"} state=${sessionState ?: "none"} url=${redactPlaybackUrl(json.optString("url"))}",
-            )
-            if (sessionId != null && sessionState == "starting") {
-                val status = awaitPlaybackReady(session, sessionId)
-                json.put("sessionState", status.sessionState)
+            val mode = json.optString("mode").ifBlank { null }
+            try {
                 Log.i(
                     PLAYBACK_TAG,
-                    "session ready sessionId=$sessionId state=${status.sessionState} playlistReady=${status.playlistReady} segments=${status.segmentCount}",
+                    "negotiated item=$itemId mode=$mode sessionId=${sessionId ?: "none"} state=${sessionState ?: "none"} url=${redactPlaybackUrl(json.optString("url"))}",
                 )
+                if (sessionId != null && sessionState == "starting") {
+                    val status = awaitPlaybackReady(session, sessionId)
+                    json.put("sessionState", status.sessionState)
+                    Log.i(
+                        PLAYBACK_TAG,
+                        "session ready sessionId=$sessionId state=${status.sessionState} playlistReady=${status.playlistReady} segments=${status.segmentCount}",
+                    )
+                }
+                PlaybackData(
+                    item = item,
+                    source = source,
+                    audioTracks = source.mediaStreams.filter { it.type.equals("audio", true) },
+                    subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
+                    segments =
+                        source.id?.let { playbackSegments(session, itemId, it) } ?: emptyList(),
+                    mode = mode,
+                    sessionState = json.optString("sessionState").ifBlank { null },
+                    sessionId = sessionId,
+                    url = json.optString("url").ifBlank { null },
+                    durationSeconds = json.optDoubleOrNull("durationSeconds"),
+                    startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
+                    expiresAt = json.optString("expiresAt").ifBlank { null },
+                    errorCode = json.optString("errorCode").ifBlank { null },
+                    errorDetail = json.optString("errorDetail").ifBlank { null },
+                )
+            } catch (error: Throwable) {
+                if (sessionId != null && mode != "direct") {
+                    releaseIncompletePlaybackSession(session, sessionId)
+                }
+                throw error
             }
-            PlaybackData(
-                item = item,
-                source = source,
-                audioTracks = source.mediaStreams.filter { it.type.equals("audio", true) },
-                subtitles = source.mediaStreams.filter { it.type == "Subtitle" },
-                segments = source.id?.let { playbackSegments(session, itemId, it) } ?: emptyList(),
-                mode = json.optString("mode").ifBlank { null },
-                sessionState = json.optString("sessionState").ifBlank { null },
-                sessionId = sessionId,
-                url = json.optString("url").ifBlank { null },
-                durationSeconds = json.optDoubleOrNull("durationSeconds"),
-                startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
-                expiresAt = json.optString("expiresAt").ifBlank { null },
-                errorCode = json.optString("errorCode").ifBlank { null },
-                errorDetail = json.optString("errorDetail").ifBlank { null },
-            )
         }
 
     suspend fun playbackSource(session: AuthSession, itemId: String): MediaSource =
@@ -203,7 +248,10 @@ class CatalogApi(
                         )
                     }
             }
-            .getOrDefault(emptyList())
+            .getOrElse { error ->
+                if (error is CancellationException) throw error
+                emptyList()
+            }
 
     suspend fun playbackStatus(
         session: AuthSession,
@@ -212,7 +260,10 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             parsePlaybackSessionStatus(
                 sessionId,
-                requestJson(session, "/api/playback/sessions/$sessionId"),
+                requestJson(
+                    session,
+                    "/api/playback/sessions/${android.net.Uri.encode(sessionId)}",
+                ),
             )
         }
 
@@ -248,6 +299,19 @@ class CatalogApi(
             delay(PLAYBACK_READY_INTERVAL_MILLIS)
         }
         error(latest?.errorCode ?: "Playback session did not become ready before the deadline")
+    }
+
+    private suspend fun releaseIncompletePlaybackSession(
+        session: AuthSession,
+        sessionId: String,
+    ) = withContext(NonCancellable) {
+        runCatching { cancelPlaybackSession(session, sessionId) }
+            .onFailure { cancellationError ->
+                Log.w(
+                    PLAYBACK_TAG,
+                    "failed to release incomplete sessionId=$sessionId error=${cancellationError.message}",
+                )
+            }
     }
 
     private fun parsePlaybackSessionStatus(
@@ -499,33 +563,7 @@ class CatalogApi(
                     "/api/catalog/libraries",
                     requestTimeoutMillis = requestTimeoutMillis,
                 )
-            jsonArray(json, "libraries")
-                .mapNotNull { item ->
-                    item
-                        .optString("id")
-                        .takeIf { it.isNotBlank() }
-                        ?.let { id ->
-                            Library(
-                                id,
-                                item.optString("name").ifBlank { "Library" },
-                                when (item.optString("type")) {
-                                    "tv_series" -> "tvshows"
-                                    "movies" -> "movies"
-                                    "collection" -> "boxsets"
-                                    else -> null
-                                },
-                                item.optBoolean(
-                                    "supportsLastAdded",
-                                    item.optString("type") != "movies",
-                                ),
-                            )
-                        }
-                }
-                .filter {
-                    it.collectionType == "tvshows" ||
-                        it.collectionType == "movies" ||
-                        it.collectionType == "boxsets"
-                }
+            parseLibraries(json)
         }
 
     suspend fun fetchLibraryData(
@@ -567,9 +605,24 @@ class CatalogApi(
                 LibraryData(
                     library,
                     listOf(
-                            MediaRow(RowTitle.NewlyAdded, library.name, recent.await()),
-                            MediaRow(RowTitle.TopRated, library.name, topRated.await()),
-                            MediaRow(RowTitle.NewReleases, library.name, newReleases.await()),
+                            MediaRow(
+                                RowTitle.NewlyAdded,
+                                library.name,
+                                recent.await(),
+                                libraryId = library.id,
+                            ),
+                            MediaRow(
+                                RowTitle.TopRated,
+                                library.name,
+                                topRated.await(),
+                                libraryId = library.id,
+                            ),
+                            MediaRow(
+                                RowTitle.NewReleases,
+                                library.name,
+                                newReleases.await(),
+                                libraryId = library.id,
+                            ),
                         )
                         .filter { it.items.isNotEmpty() },
                 )
@@ -667,14 +720,7 @@ class CatalogApi(
                         session,
                         "/api/catalog/items/${android.net.Uri.encode(itemId)}/detail$suffix",
                     )
-                return@withContext DetailData(
-                    item = catalogMediaItem(payload.getJSONObject("item")),
-                    parentSeries = payload.optJSONObject("backgroundItem")?.let(::catalogMediaItem),
-                    seasons = catalogItems(payload, "seasons"),
-                    episodes = catalogItems(payload, "episodes"),
-                    similar = catalogItems(payload, "similar"),
-                    selectedSeasonId = payload.optString("selectedSeasonId").ifBlank { null },
-                )
+                return@withContext parseDetailData(payload)
             } catch (error: CatalogException) {
                 if (error.statusCode != 404 && error.statusCode != 405) throw error
             }
@@ -867,6 +913,7 @@ class CatalogApi(
             "Overview,Genres,CommunityRating,ProductionYear,PremiereDate,People,Studios,Chapters"
         private const val ITEM_IMAGE_TYPES = "Primary,Backdrop,Logo,Banner"
         internal const val HOME_REQUEST_TIMEOUT_MILLIS = 30_000L
+        private const val LOGOUT_REQUEST_TIMEOUT_MILLIS = 5_000L
         private const val PLAYBACK_READY_TIMEOUT_MILLIS = 15_000L
         private const val PLAYBACK_READY_INTERVAL_MILLIS = 350L
         private const val PLAYBACK_TAG = "ZenStreamPlayback"
@@ -877,6 +924,50 @@ class CatalogApi(
 
 private fun redactPlaybackUrl(value: String): String =
     value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
+
+internal fun parseLibraries(payload: JSONObject): List<Library> =
+    jsonArray(payload, "libraries")
+        .mapNotNull { item ->
+            item
+                .optString("id")
+                .takeIf { it.isNotBlank() }
+                ?.let { id ->
+                    Library(
+                        id,
+                        item.optString("name").ifBlank { "Library" },
+                        when (item.optString("type")) {
+                            "tv_series" -> "tvshows"
+                            "movies" -> "movies"
+                            "collection" -> "boxsets"
+                            else -> null
+                        },
+                        item.optBoolean(
+                            "supportsLastAdded",
+                            item.optString("type") != "movies",
+                        ),
+                    )
+                }
+        }
+        .filter {
+            it.collectionType == "tvshows" ||
+                it.collectionType == "movies" ||
+                it.collectionType == "boxsets"
+        }
+        .distinctBy(Library::id)
+
+internal fun parseDetailData(payload: JSONObject): DetailData =
+    DetailData(
+        item = catalogMediaItem(payload.getJSONObject("item")),
+        parentSeries = payload.optJSONObject("backgroundItem")?.let(::catalogMediaItem),
+        seasons = catalogItems(payload, "seasons"),
+        episodes = catalogItems(payload, "episodes"),
+        similar = catalogItems(payload, "similar"),
+        collectionItems = catalogItems(payload, "collectionItems"),
+        selectedSeasonId = payload.optString("selectedSeasonId").ifBlank { null },
+        rootEntityId = payload.optString("rootEntityId").ifBlank { null },
+        catalogGeneration =
+            payload.optLong("catalogGeneration").takeIf { payload.has("catalogGeneration") },
+    )
 
 internal fun resolveEpisodeNeighbors(
     item: MediaItem,
@@ -969,6 +1060,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                         title,
                         libraryName,
                         it,
+                        libraryId = row.optString("libraryId").ifBlank { null },
                         stackEpisodes = row.optBoolean("stackEpisodes", false),
                     )
                 }

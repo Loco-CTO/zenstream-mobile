@@ -146,8 +146,10 @@ android {
         }
         release {
             optimization {
-                enable = false
+                enable = true
             }
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("ciRelease")
             }

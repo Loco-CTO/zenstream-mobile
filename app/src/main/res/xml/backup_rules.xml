@@ -6,6 +6,9 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+	<!-- Bearer/resource tickets are encrypted at rest but must never leave the
+	     device through cloud backup or device transfer. -->
+	<exclude domain="file" path="datastore/zenstream_session.preferences_pb" />
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

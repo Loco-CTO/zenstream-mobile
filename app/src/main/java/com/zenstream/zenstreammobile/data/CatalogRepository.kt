@@ -12,16 +12,32 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
         get() = kotlinx.coroutines.flow.emptyFlow()
+
+    val catalogInvalidations: Flow<CatalogInvalidation>
+        get() = catalogRefreshRevision.drop(1).map { CatalogInvalidation() }
 }
 
 interface HomeDataSource : CatalogRefreshSource {
@@ -70,9 +86,17 @@ class CatalogRepository(
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
 ) : HomeDataSource, LibraryDataSource, SearchDataSource {
     private val homeMutex = Mutex()
+    private val catalogManagerMutex = Mutex()
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
-    override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
+    private val _catalogInvalidations = MutableSharedFlow<CatalogInvalidation>(extraBufferCapacity = 32)
+    private var catalogUpdatesManager: CatalogUpdatesManager? = null
+    private var catalogUpdatesRequested = false
+    override val catalogRefreshRevision: Flow<Long> =
+        _catalogRefreshRevision.onStart { ensureCatalogUpdates() }
+    override val catalogInvalidations: Flow<CatalogInvalidation> =
+        _catalogInvalidations.asSharedFlow().onStart { ensureCatalogUpdates() }
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -80,6 +104,24 @@ class CatalogRepository(
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
+
+    init {
+        repositoryScope.launch {
+            combine(
+                    _catalogInvalidations.subscriptionCount,
+                    _catalogRefreshRevision.subscriptionCount,
+                ) { invalidationSubscribers, revisionSubscribers ->
+                    invalidationSubscribers + revisionSubscribers > 0
+                }
+                .distinctUntilChanged()
+                .collectLatest { active ->
+                    if (!active) {
+                        kotlinx.coroutines.delay(CATALOG_UPDATES_STOP_GRACE_MILLIS)
+                        stopCatalogUpdates()
+                    }
+                }
+        }
+    }
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -95,7 +137,10 @@ class CatalogRepository(
 
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
-        return api.authenticate(server, username, password).also { sessionStore.saveSession(it) }
+        return api.authenticate(server, username, password).also {
+            sessionStore.saveSession(it)
+            if (catalogUpdatesRequested) ensureCatalogUpdates()
+        }
     }
 
     suspend fun refreshLocale(orchestratorUrl: String, token: String) {
@@ -121,16 +166,29 @@ class CatalogRepository(
             }
     }
 
-    override suspend fun clearSession() {
-        SyncplaySession.clear()
-        homeMutex.withLock { homeCache = null }
-        sessionStore.clearSession()
-    }
+    override suspend fun clearSession() =
+        withContext(NonCancellable) {
+            stopCatalogUpdates()
+            session.first()?.let { current -> runCatching { api.logout(current) } }
+            SyncplaySession.clear()
+            homeMutex.withLock {
+                homeCache = null
+                _catalogRefreshRevision.value += 1
+            }
+            sessionStore.clearSession()
+        }
 
-    suspend fun clearAll() {
-        SyncplaySession.clear()
-        sessionStore.clearAll()
-    }
+    suspend fun clearAll() =
+        withContext(NonCancellable) {
+            stopCatalogUpdates()
+            session.first()?.let { current -> runCatching { api.logout(current) } }
+            SyncplaySession.clear()
+            homeMutex.withLock {
+                homeCache = null
+                _catalogRefreshRevision.value += 1
+            }
+            sessionStore.clearAll()
+        }
 
     override suspend fun homeFeatured(session: AuthSession) = api.fetchHomeFeatured(session)
 
@@ -198,6 +256,9 @@ class CatalogRepository(
     suspend fun cancelPlaybackSession(session: AuthSession, sessionId: String) =
         api.cancelPlaybackSession(session, sessionId)
 
+    suspend fun playbackStatus(session: AuthSession, sessionId: String) =
+        api.playbackStatus(session, sessionId)
+
     suspend fun trickplay(session: AuthSession, itemId: String, sourceId: String?) =
         api.trickplay(session, itemId, sourceId)
 
@@ -261,9 +322,36 @@ class CatalogRepository(
     }
 
     private suspend fun invalidateCatalogMetadata() {
-        homeMutex.withLock {
-            homeCache = null
-            _catalogRefreshRevision.value += 1
+        publishCatalogInvalidation(CatalogInvalidation())
+    }
+
+    private suspend fun ensureCatalogUpdates() {
+        catalogUpdatesRequested = true
+        catalogManagerMutex.withLock {
+            if (catalogUpdatesManager != null) return
+            val current = session.first() ?: return
+            catalogUpdatesManager =
+                CatalogUpdatesManager(api, current) { invalidation ->
+                        repositoryScope.launch { publishCatalogInvalidation(invalidation) }
+                    }
+                    .also(CatalogUpdatesManager::start)
         }
+    }
+
+    private suspend fun stopCatalogUpdates() {
+        catalogManagerMutex.withLock {
+            catalogUpdatesManager?.stop()
+            catalogUpdatesManager = null
+        }
+    }
+
+    private suspend fun publishCatalogInvalidation(invalidation: CatalogInvalidation) {
+        homeMutex.withLock { homeCache = null }
+        _catalogInvalidations.emit(invalidation)
+        _catalogRefreshRevision.value += 1
+    }
+
+    private companion object {
+        const val CATALOG_UPDATES_STOP_GRACE_MILLIS = 5_000L
     }
 }

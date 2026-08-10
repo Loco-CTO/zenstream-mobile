@@ -9,6 +9,8 @@ import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.SyncplaySession
+import com.zenstream.zenstreammobile.data.affectsDetail
+import com.zenstream.zenstreammobile.data.affectsLibrary
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.HomeData
@@ -31,7 +33,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
@@ -157,7 +158,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     init {
         load()
         viewModelScope.launch {
-            repository.catalogRefreshRevision.drop(1).collectLatest {
+            repository.catalogInvalidations.collectLatest {
                 load(force = true)
             }
         }
@@ -340,8 +341,8 @@ class LibraryViewModel(
     init {
         loadLibraries()
         viewModelScope.launch {
-            repository.catalogRefreshRevision.drop(1).collectLatest {
-                refresh()
+            repository.catalogInvalidations.collectLatest { invalidation ->
+                if (invalidation.affectsLibrary(_uiState.value.selected?.id)) refresh()
             }
         }
     }
@@ -553,7 +554,7 @@ class SearchViewModel(
 
     init {
         viewModelScope.launch {
-            repository.catalogRefreshRevision.drop(1).collectLatest {
+            repository.catalogInvalidations.collectLatest {
                 refresh()
             }
         }
@@ -679,8 +680,17 @@ class DetailViewModel(
     init {
         load()
         viewModelScope.launch {
-            repository.catalogRefreshRevision.drop(1).collectLatest {
-                load()
+            repository.catalogInvalidations.collectLatest { invalidation ->
+                val current = _uiState.value.data
+                if (
+                    invalidation.affectsDetail(
+                        libraryId = current?.item?.libraryId,
+                        rootEntityId = current?.rootEntityId,
+                        itemId = itemId,
+                    )
+                ) {
+                    load()
+                }
             }
         }
     }

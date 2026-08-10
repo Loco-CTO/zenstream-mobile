@@ -175,7 +175,6 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                     .url("${session.serverUrl}/api/syncplay/$path".toHttpUrl())
                     .header("Accept", "application/json")
                     .header("Authorization", "Bearer ${session.token}")
-                    .header("X-ZenStream-Username", session.username)
                     .header("X-ZenStream-Participant", participantId)
                     .method(
                         method,

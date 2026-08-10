@@ -11,6 +11,7 @@ import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -184,6 +185,26 @@ class PlaybackParsingTest {
             )
         assertTrue(url.startsWith("https://orchestrator.example/api/playback/items/item-1/stream"))
         assertTrue(url.contains("sourceId=source-1"))
+    }
+
+    @Test
+    fun rejectsNegotiatedPlaybackUrlsFromAnotherOrigin() {
+        val session = AuthSession("https://orchestrator.example", "token", "user", "name")
+
+        listOf(
+                "https://attacker.example/video.mp4",
+                "http://orchestrator.example/video.mp4",
+                "https://orchestrator.example:8443/video.mp4",
+            )
+            .forEach { untrustedUrl ->
+                assertThrows(IllegalStateException::class.java) {
+                    playbackUrl(
+                        session,
+                        "item-1",
+                        MediaSource(id = "source-1", url = untrustedUrl),
+                    )
+                }
+            }
     }
 
     @Test

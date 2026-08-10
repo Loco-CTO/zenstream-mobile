@@ -201,4 +201,6 @@
 	<string name="syncplay_must_leave_group">&#x5225;&#x306E;&#x30B0;&#x30EB;&#x30FC;&#x30D7;&#x306B;&#x53C2;&#x52A0;&#x3059;&#x308B;&#x524D;&#x306B;&#x3001;&#x73FE;&#x5728;&#x306E; Syncplay &#x30B0;&#x30EB;&#x30FC;&#x30D7;&#x3092;&#x9000;&#x51FA;&#x3057;&#x3066;&#x304F;&#x3060;&#x3055;&#x3044;&#x3002;</string>
 	<string name="syncplay_host_disconnected">&#x30DB;&#x30B9;&#x30C8;&#x304C;&#x5207;&#x65AD;&#x3055;&#x308C;&#x307E;&#x3057;&#x305F;&#x3002;5&#x5206;&#x4EE5;&#x5185;&#x306B;&#x518D;&#x63A5;&#x7D9A;&#x3057;&#x306A;&#x3044;&#x5834;&#x5408;&#x3001;&#x30EB;&#x30FC;&#x30E0;&#x306F;&#x7D42;&#x4E86;&#x3057;&#x307E;&#x3059;&#x3002;</string>
 	<string name="syncplay_participant_replaced">&#x3053;&#x306E;&#x30A2;&#x30AB;&#x30A6;&#x30F3;&#x30C8;&#x304C;&#x5225;&#x306E;&#x30C7;&#x30D0;&#x30A4;&#x30B9;&#x307E;&#x305F;&#x306F;&#x30BF;&#x30D6;&#x304B;&#x3089;&#x53C2;&#x52A0;&#x3057;&#x305F;&#x305F;&#x3081;&#x3001;Syncplay &#x304B;&#x3089;&#x5207;&#x65AD;&#x3055;&#x308C;&#x307E;&#x3057;&#x305F;&#x3002;</string>
+    <string name="cast">キャスト</string>
+    <string name="crew">スタッフ</string>
 </resources>

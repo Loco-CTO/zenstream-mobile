@@ -172,7 +172,16 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun createView(context: Context): View {
         if (player == null) {
             player =
-                ExoPlayer.Builder(context.applicationContext).build().also { exo ->
+                ExoPlayer.Builder(context.applicationContext)
+                    .setAudioAttributes(
+                        androidx.media3.common.AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build(),
+                        true,
+                    )
+                    .setHandleAudioBecomingNoisy(true)
+                    .build().also { exo ->
                     exo.trackSelectionParameters =
                         exo.trackSelectionParameters
                             .buildUpon()

@@ -27,9 +27,11 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class PlaybackUiState(
     val loading: Boolean = true,
@@ -118,6 +121,9 @@ internal fun shouldHandlePlaybackCompletion(
 internal fun shouldWaitForEpisodeNeighbors(episodeNeighborsLoaded: Boolean): Boolean =
     !episodeNeighborsLoaded
 
+internal fun requiresServerPlaybackSession(mode: String?, sessionId: String?): Boolean =
+    !sessionId.isNullOrBlank() && !mode.equals("direct", ignoreCase = true)
+
 internal fun nextUpFallbackItem(items: List<MediaItem>, currentItemId: String): MediaItem? =
     items.firstOrNull {
         it.id != currentItemId
@@ -156,7 +162,11 @@ class PlaybackViewModel(
     private var progressJob: Job? = null
     private var progressFlushJob: Job? = null
     private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sessionTeardownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var playbackLoadJob: Job? = null
+    private var playbackHeartbeatJob: Job? = null
+    private var heartbeatSessionId: String? = null
+    private val releasingPlaybackSessionIds = ConcurrentHashMap.newKeySet<String>()
     private var trickplayJob: Job? = null
     private var subtitleJob: Job? = null
     private var episodeNeighborsJob: Job? = null
@@ -323,7 +333,8 @@ class PlaybackViewModel(
         playbackLoadJob?.cancel()
         trickplayJob?.cancel()
         playbackLoadJob = viewModelScope.launch {
-            val hasCurrentPlayback = _uiState.value.playback?.item?.id == currentItemId
+            val outgoingPlayback = _uiState.value.playback
+            val hasCurrentPlayback = outgoingPlayback?.item?.id == currentItemId
             val currentPosition = currentPlayerPositionSeconds()
             val requestedStartSeconds =
                 if (hasCurrentPlayback) {
@@ -359,7 +370,10 @@ class PlaybackViewModel(
                         }
                         return@launch
                     }
-            if (loadGeneration != playbackGeneration) return@launch
+            if (loadGeneration != playbackGeneration) {
+                cancelPlaybackSession(data)
+                return@launch
+            }
             Log.i(
                 PLAYBACK_TAG,
                 "playback data item=$currentItemId mode=${data.mode} state=${data.sessionState} sessionId=${data.sessionId} url=${redactPlaybackUrl(data.url)}",
@@ -414,8 +428,16 @@ class PlaybackViewModel(
                                         ?: "Playback response did not include a usable stream URL",
                             )
                         transitionInProgress = false
+                        cancelPlaybackSession(playbackData)
                         return@launch
                     }
+            if (outgoingPlayback?.sessionId != playbackData.sessionId) {
+                cancelPlaybackSession(outgoingPlayback)
+            }
+            if (loadGeneration != playbackGeneration) {
+                cancelPlaybackSession(playbackData)
+                return@launch
+            }
             val subtitleLoadGeneration = ++subtitleGeneration
             subtitleJob?.cancel()
             _uiState.value =
@@ -441,6 +463,7 @@ class PlaybackViewModel(
                         },
                     error = null,
                 )
+            startPlaybackHeartbeat(playbackData)
             playbackEngine?.prepare(
                 streamUrl,
                 localStartSeconds,
@@ -818,16 +841,62 @@ class PlaybackViewModel(
         nextUpFallbackJob?.cancel()
     }
 
+    private fun startPlaybackHeartbeat(playback: PlaybackData) {
+        playbackHeartbeatJob?.cancel()
+        playbackHeartbeatJob = null
+        heartbeatSessionId = null
+        if (!requiresServerPlaybackSession(playback.mode, playback.sessionId)) return
+        val sessionId = requireNotNull(playback.sessionId)
+        heartbeatSessionId = sessionId
+        playbackHeartbeatJob = viewModelScope.launch {
+            while (heartbeatSessionId == sessionId) {
+                delay(PLAYBACK_HEARTBEAT_INTERVAL_MILLIS)
+                val status =
+                    runCatching { repository.playbackStatus(session, sessionId) }
+                        .onFailure { error ->
+                            Log.w(
+                                PLAYBACK_TAG,
+                                "playback heartbeat failed sessionId=$sessionId error=${error.message}",
+                            )
+                        }
+                        .getOrNull() ?: continue
+                if (status.sessionState in TERMINAL_PLAYBACK_SESSION_STATES) {
+                    if (_uiState.value.playback?.sessionId == sessionId) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                error =
+                                    status.errorDetail ?: "Playback session ${status.sessionState}"
+                            )
+                    }
+                    heartbeatSessionId = null
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private fun stopPlaybackHeartbeat(sessionId: String) {
+        if (heartbeatSessionId != sessionId) return
+        heartbeatSessionId = null
+        playbackHeartbeatJob?.cancel()
+        playbackHeartbeatJob = null
+    }
+
     private suspend fun cancelPlaybackSession(playback: PlaybackData?) {
         val sessionId = playback?.sessionId ?: return
-        if (playback.mode == "direct") return
-        runCatching { repository.cancelPlaybackSession(session, sessionId) }
-            .onFailure { error ->
-                Log.w(
-                    PLAYBACK_TAG,
-                    "playback session cancellation failed sessionId=$sessionId error=${error.message}",
-                )
-            }
+        if (!requiresServerPlaybackSession(playback.mode, sessionId)) return
+        stopPlaybackHeartbeat(sessionId)
+        if (!releasingPlaybackSessionIds.add(sessionId)) return
+        withContext(NonCancellable) {
+            runCatching { repository.cancelPlaybackSession(session, sessionId) }
+                .onFailure { error ->
+                    releasingPlaybackSessionIds.remove(sessionId)
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "playback session cancellation failed sessionId=$sessionId error=${error.message}",
+                    )
+                }
+        }
     }
 
     fun chooseQuality(value: Int) {
@@ -920,23 +989,37 @@ class PlaybackViewModel(
     fun onPause() = flushProgress()
 
     override fun onCleared() {
+        val outgoingPlayback = _uiState.value.playback
         progressJob?.cancel()
         progressFlushJob?.let { job ->
             job.invokeOnCompletion { progressReportingScope.cancel() }
         } ?: progressReportingScope.cancel()
         playbackLoadJob?.cancel()
+        playbackHeartbeatJob?.cancel()
+        heartbeatSessionId = null
         trickplayJob?.cancel()
         subtitleJob?.cancel()
         episodeNeighborsJob?.cancel()
+        nextUpFallbackJob?.cancel()
         engineJob?.cancel()
         playbackEngine?.release()
         playbackEngine = null
+        if (requiresServerPlaybackSession(outgoingPlayback?.mode, outgoingPlayback?.sessionId)) {
+            sessionTeardownScope.launch {
+                cancelPlaybackSession(outgoingPlayback)
+                sessionTeardownScope.cancel()
+            }
+        } else {
+            sessionTeardownScope.cancel()
+        }
     }
 
     private var lastProgressFlushAt = 0L
 
     private companion object {
         const val PROGRESS_FLUSH_DEBOUNCE_MILLIS = 1_000L
+        const val PLAYBACK_HEARTBEAT_INTERVAL_MILLIS = 15_000L
+        val TERMINAL_PLAYBACK_SESSION_STATES = setOf("failed", "stopping", "expired")
     }
 
     class Factory(

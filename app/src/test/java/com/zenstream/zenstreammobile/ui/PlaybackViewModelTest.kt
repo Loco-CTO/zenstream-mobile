@@ -19,6 +19,15 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackViewModelTest {
     @Test
+    fun onlyNonDirectPlaybackWithASessionIdNeedsServerLifecycleManagement() {
+        assertTrue(requiresServerPlaybackSession("remux", "session-1"))
+        assertTrue(requiresServerPlaybackSession("video-transcode", "session-2"))
+        assertFalse(requiresServerPlaybackSession("direct", "session-3"))
+        assertFalse(requiresServerPlaybackSession("remux", null))
+        assertFalse(requiresServerPlaybackSession(null, ""))
+    }
+
+    @Test
     fun clearsWatchedStateWhenPlaybackStartsForWatchedItem() {
         assertTrue(
             shouldClearPlayedOnPlaybackStart(
