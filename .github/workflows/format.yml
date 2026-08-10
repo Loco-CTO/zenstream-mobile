@@ -13,6 +13,8 @@ name: Auto formatting
       - ".github/workflows/format.yml"
       - ".editorconfig"
 
+  workflow_dispatch:
+
 permissions:
   contents: write
 
