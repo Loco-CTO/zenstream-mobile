@@ -61,6 +61,7 @@ data class PlaybackUiState(
     val nextEpisode: MediaItem? = null,
     val episodeNeighborsLoaded: Boolean = false,
     val closeRequested: Boolean = false,
+    val syncplaySettling: Boolean = false,
 ) {
     val activeCues: List<SubtitleCue>
         get() = activeCuesAt(engine.positionSeconds)
@@ -171,6 +172,7 @@ class PlaybackViewModel(
     private var pendingCompletionGeneration: Long? = null
     private var nextUpFallbackGeneration: Long? = null
     private var transitionInProgress = false
+    private var syncplayTimelineKey: String? = null
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
@@ -200,6 +202,19 @@ class PlaybackViewModel(
         engineJob = viewModelScope.launch {
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
+                val room = syncplay?.state?.value?.active
+                if (
+                    _uiState.value.syncplaySettling &&
+                        room?.itemId == currentItemId &&
+                        state.ready &&
+                        !state.isBuffering &&
+                        kotlin.math.abs(
+                            state.positionSeconds -
+                                syncplayTimelineTarget(room, syncplay.serverNow()).positionSeconds
+                        ) <= 1.5
+                ) {
+                    _uiState.value = _uiState.value.copy(syncplaySettling = false)
+                }
                 if (state.error != null) {
                     Log.w(
                         PLAYBACK_TAG,
@@ -592,9 +607,10 @@ class PlaybackViewModel(
         val target = positionSeconds.coerceAtLeast(0.0)
         if (room != null) {
             if (!manager.state.value.canControl(session.userId)) return
-            playbackEngine?.seekTo(target)
             viewModelScope.launch {
-                manager.command("seek", target, _uiState.value.engine.isPlaying, currentItemId)
+                val shouldResume =
+                    room.playbackState == "playing" || room.resumeWhenReady
+                manager.command("seek", target, shouldResume, currentItemId)
             }
         } else seekTo(target)
     }
@@ -620,13 +636,21 @@ class PlaybackViewModel(
             "Syncplay apply id=${room.id} revision=${room.revision} timeline=${room.timelineRevision} state=${room.playbackState} item=$itemId",
         )
         if (itemId != currentItemId) {
+            _uiState.value = _uiState.value.copy(syncplaySettling = true)
             transitionToSyncplay(itemId, room.anchorPosition)
             return
         }
         val timeline = syncplayTimelineTarget(room, serverNow)
         val position = timeline.positionSeconds
         val current = currentPlayerPositionSeconds()
-        if (kotlin.math.abs(current - position) > 1.5) playbackEngine?.seekTo(position)
+        val timelineKey = "${room.mediaGeneration}:${room.timelineRevision}"
+        val newTimeline = syncplayTimelineKey != timelineKey
+        if (newTimeline) {
+            syncplayTimelineKey = timelineKey
+            _uiState.value = _uiState.value.copy(syncplaySettling = true)
+        }
+        if (newTimeline || (timeline.shouldPlay && kotlin.math.abs(current - position) > 1.5))
+            playbackEngine?.seekTo(position)
         if (timeline.shouldPlay) playbackEngine?.play() else playbackEngine?.pause()
     }
 
@@ -639,7 +663,13 @@ class PlaybackViewModel(
             cancelPlaybackSession(outgoing)
             currentItemId = itemId
             _uiState.value =
-                _uiState.value.copy(loading = true, itemId = itemId, playback = null, error = null)
+                _uiState.value.copy(
+                    loading = true,
+                    itemId = itemId,
+                    playback = null,
+                    error = null,
+                    syncplaySettling = true,
+                )
             loadPlayback(PlaybackOptions(startPositionSeconds = position))
         }
     }
@@ -694,7 +724,7 @@ class PlaybackViewModel(
         pendingCompletionGeneration = null
         val manager = syncplay
         if (manager?.state?.value?.active != null) {
-            if (!manager.state.value.canControl(session.userId)) return
+            if (manager.state.value.active?.hostUserId != session.userId) return
             _uiState.value.nextEpisode?.let { target ->
                 viewModelScope.launch { manager.command("media", 0.0, true, target.id) }
             } ?: playHomeNextUpAfterEpisodeEnd()

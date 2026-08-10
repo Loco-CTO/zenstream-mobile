@@ -38,6 +38,7 @@ class SyncplayManager(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
+    private val commandMutex = Mutex()
     private val _state = MutableStateFlow(SyncplayUiState())
     val state: StateFlow<SyncplayUiState> = _state.asStateFlow()
     private val _notifications = MutableSharedFlow<SyncplayNotification>(extraBufferCapacity = 32)
@@ -49,7 +50,9 @@ class SyncplayManager(
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
     private var hydrated = false
-    private var presenceChain: Job? = null
+    private val presenceLock = Any()
+    private var pendingPresence: PresenceReport? = null
+    private var presenceWorker: Job? = null
 
     init {
         scope.launch { start() }
@@ -197,12 +200,12 @@ class SyncplayManager(
         position: Double,
         playing: Boolean,
         itemId: String? = null,
-    ) = mutex.withLock {
-        val active = _state.value.active ?: return@withLock
+    ) = commandMutex.withLock {
+        val active = mutex.withLock { _state.value.active } ?: return@withLock
+        val operationId = java.util.UUID.randomUUID().toString()
         try {
             try {
-                adopt(
-                    api.command(
+                val result = api.command(
                         session,
                         participant(),
                         active,
@@ -210,14 +213,14 @@ class SyncplayManager(
                         position.coerceAtLeast(0.0),
                         playing,
                         itemId,
+                        operationId,
                     )
-                )
+                mutex.withLock { adopt(result) }
             } catch (error: SyncplayException) {
                 if (error.statusCode != 409) throw error
                 val latest = api.group(session, participant(), active.id)
-                adopt(latest)
-                adopt(
-                    api.command(
+                mutex.withLock { adopt(latest) }
+                val result = api.command(
                         session,
                         participant(),
                         latest,
@@ -225,8 +228,9 @@ class SyncplayManager(
                         position.coerceAtLeast(0.0),
                         playing,
                         itemId,
+                        operationId,
                     )
-                )
+                mutex.withLock { adopt(result) }
             }
         } catch (error: Exception) {
             notify(SyncplayNotification.Failure(SyncplayFailure.PLAYBACK))
@@ -234,49 +238,81 @@ class SyncplayManager(
         }
     }
 
-    private suspend fun presence(report: PresenceReport) = mutex.withLock {
-        val active = _state.value.active ?: return@withLock
-        if (!report.isCurrent(active)) return@withLock
-        presenceSequence += 1
-        adopt(
-            api.presence(
-                session,
-                participant(),
-                report.room,
-                report.viewing,
-                report.loading,
-                presenceSequence,
-            )
+    private suspend fun presence(report: PresenceReport) {
+        val active = mutex.withLock { _state.value.active }
+            ?.takeIf(report::isCurrent) ?: return
+        val result = api.presence(
+            session,
+            participant(),
+            report.room,
+            report.viewing,
+            report.loading,
+            report.sequence,
         )
+        mutex.withLock {
+            if (_state.value.active?.id == active.id) adopt(result)
+        }
     }
 
     fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
         val room = _state.value.active ?: return
-        val report = PresenceReport(room, viewing, loading)
-        val previous = presenceChain
-        presenceChain = scope.launch {
-            previous?.join()
-            if (!immediate) delay(if (loading) 750 else 300)
-            val active = _state.value.active ?: return@launch
-            if (!report.isCurrent(active)) return@launch
+        val report = PresenceReport(
+            room = room,
+            viewing = viewing,
+            loading = loading,
+            immediate = immediate,
+            sequence = synchronized(presenceLock) { ++presenceSequence },
+        )
+        synchronized(presenceLock) {
+            pendingPresence = report
+            startPresenceWorkerLocked()
+        }
+    }
+
+    private fun startPresenceWorkerLocked() {
+        check(Thread.holdsLock(presenceLock))
+        if (presenceWorker != null || stopped) return
+        presenceWorker = scope.launch {
             try {
-                presence(report)
-            } catch (error: kotlinx.coroutines.CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.w(
-                    SYNCPLAY_LOG_TAG,
-                    "Syncplay readiness update failed: ${error.javaClass.simpleName}",
-                )
-                notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+                while (true) {
+                    val next = synchronized(presenceLock) {
+                        pendingPresence.also { pendingPresence = null }
+                    } ?: break
+                    if (!next.immediate) {
+                        delay(if (next.loading) 750 else 300)
+                        val superseded = synchronized(presenceLock) {
+                            pendingPresence != null
+                        }
+                        if (superseded) continue
+                    }
+                    try {
+                        presence(next)
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.w(
+                            SYNCPLAY_LOG_TAG,
+                            "Syncplay readiness update failed: ${error.javaClass.simpleName}",
+                        )
+                        notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
+                    }
+                }
+            } finally {
+                synchronized(presenceLock) {
+                    presenceWorker = null
+                    if (pendingPresence != null) startPresenceWorkerLocked()
+                }
             }
         }
     }
 
     fun stop() {
         stopped = true
-        presenceChain?.cancel()
-        presenceChain = null
+        synchronized(presenceLock) {
+            pendingPresence = null
+            presenceWorker?.cancel()
+            presenceWorker = null
+        }
         socket?.close(1000, "Session ended")
         socket = null
         connectionEnded?.complete(Unit)
@@ -513,6 +549,8 @@ class SyncplayManager(
         val room: SyncplayGroup,
         val viewing: Boolean,
         val loading: Boolean,
+        val immediate: Boolean,
+        val sequence: Int,
     ) {
         fun isCurrent(active: SyncplayGroup): Boolean =
             syncplayPresenceReportIsCurrent(room, active)

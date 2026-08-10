@@ -230,6 +230,7 @@ fun PlaybackScreen(
                     loading =
                         viewing &&
                             (latestState.loading ||
+                                latestState.syncplaySettling ||
                                 !latestState.engine.ready ||
                                 latestState.engine.isBuffering),
                     immediate = immediate,
@@ -320,7 +321,11 @@ fun PlaybackScreen(
         ) {
             syncplay.reportPresence(
                 viewing = true,
-                loading = state.loading || !state.engine.ready || state.engine.isBuffering,
+                loading =
+                    state.loading ||
+                        state.syncplaySettling ||
+                        !state.engine.ready ||
+                        state.engine.isBuffering,
                 immediate = true,
             )
         }
@@ -338,7 +343,11 @@ fun PlaybackScreen(
         ) {
             syncplay.reportPresence(
                 viewing = true,
-                loading = state.loading || !state.engine.ready || state.engine.isBuffering,
+                loading =
+                    state.loading ||
+                        state.syncplaySettling ||
+                        !state.engine.ready ||
+                        state.engine.isBuffering,
             )
         }
     }
@@ -348,7 +357,7 @@ fun PlaybackScreen(
     val showPlayerLoading =
         shouldShowPlayerLoading(
             error = state.error,
-            loading = state.loading,
+            loading = state.loading || state.syncplaySettling,
             engineReady = state.engine.ready,
             engineBuffering = state.engine.isBuffering,
             hasPlayback = state.playback != null,

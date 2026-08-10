@@ -220,7 +220,7 @@ class PlaybackViewModelTest {
                 )
                 .copy(resumeWhenReady = true)
 
-        assertTrue(syncplayWaitingForMembers(waiting, "item-1"))
+        assertFalse(syncplayWaitingForMembers(waiting, "item-1"))
         assertTrue(
             syncplayWaitingForMembers(
                 waiting.copy(members = listOf(syncplayMember(true).copy(loading = true))),
@@ -240,7 +240,7 @@ class PlaybackViewModelTest {
             )
         )
         assertFalse(syncplayWaitingForMembers(waiting.copy(resumeWhenReady = false), "item-1"))
-        assertTrue(syncplayWaitingForMembers(waiting.copy(members = emptyList()), "item-1"))
+        assertFalse(syncplayWaitingForMembers(waiting.copy(members = emptyList()), "item-1"))
         assertFalse(syncplayWaitingForMembers(waiting, "other-item"))
     }
 

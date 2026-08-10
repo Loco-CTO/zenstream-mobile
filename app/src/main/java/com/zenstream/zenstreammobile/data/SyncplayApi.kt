@@ -106,6 +106,7 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         position: Double,
         playing: Boolean,
         itemId: String? = null,
+        operationId: String = java.util.UUID.randomUUID().toString(),
     ): SyncplayGroup =
         parseSyncplayGroup(
             request(
@@ -113,7 +114,7 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                 participantId,
                 "groups/${encode(group.id)}/command",
                 "POST",
-                operation(group.revision)
+                operation(group.revision, operationId)
                     .put("action", action)
                     .put("position", position)
                     .put("playing", playing)
@@ -196,8 +197,8 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
             }
         }
 
-    private fun operation(revision: Int? = null) =
-        JSONObject().put("operationId", java.util.UUID.randomUUID().toString()).apply {
+    private fun operation(revision: Int? = null, operationId: String = java.util.UUID.randomUUID().toString()) =
+        JSONObject().put("operationId", operationId).apply {
             revision?.let { put("expectedRevision", it) }
         }
 

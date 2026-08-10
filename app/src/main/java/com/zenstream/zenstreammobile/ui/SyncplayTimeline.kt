@@ -47,13 +47,11 @@ internal fun syncplayWaitingForMembers(room: SyncplayGroup?, itemId: String): Bo
     // transition is not a reason to obscure the player with the readiness UI.
     if (!room.resumeWhenReady && room.playbackState == "paused") return false
     return room.resumeWhenReady &&
-        (room.members.isEmpty() ||
-            room.members.any { member ->
-                member.watchingTogether &&
-                    (!member.viewing ||
-                        member.loading ||
-                        member.readyGeneration != room.mediaGeneration)
-            })
+        room.members.any { member ->
+            member.watchingTogether &&
+                member.viewing &&
+                (member.loading || member.readyGeneration != room.mediaGeneration)
+        }
 }
 
 internal class SyncplayTimelineScheduler(
