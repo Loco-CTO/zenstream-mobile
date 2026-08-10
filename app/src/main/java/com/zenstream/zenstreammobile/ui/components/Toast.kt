@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.components
 
+import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -190,13 +191,13 @@ fun SyncplayToastNotifications(
     session: AuthSession,
     toast: ToastHostState,
 ) {
-    val context = LocalContext.current
+    val resources = LocalResources.current
     androidx.compose.runtime.LaunchedEffect(manager, repository, session, toast) {
         val titleCache = mutableMapOf<String, String>()
         manager.notifications.collect { notification ->
             when (notification) {
                 is SyncplayNotification.Failure ->
-                    toast.error(notification.operation.message(context))
+                    toast.error(notification.operation.message(resources))
                 is SyncplayNotification.NowPlaying ->
                     launch {
                         val title =
@@ -208,43 +209,43 @@ fun SyncplayToastNotifications(
                                     ?.also { titleCache[notification.itemId] = it }
                         toast.success(
                             if (title != null) {
-                                context.getString(R.string.syncplay_now_playing, title)
+                                resources.getString(R.string.syncplay_now_playing, title)
                             } else {
-                                context.getString(R.string.syncplay_now_playing_fallback)
+                                resources.getString(R.string.syncplay_now_playing_fallback)
                             }
                         )
                     }
 
-                else -> notification.message(context)?.let(toast::success)
+                else -> notification.message(resources)?.let(toast::success)
             }
         }
     }
 }
 
-private fun SyncplayNotification.message(context: android.content.Context): String? =
+private fun SyncplayNotification.message(resources: Resources): String? =
     when (this) {
-        SyncplayNotification.GroupCreated -> context.getString(R.string.syncplay_group_created)
+        SyncplayNotification.GroupCreated -> resources.getString(R.string.syncplay_group_created)
         is SyncplayNotification.JoinedGroup ->
-            context.getString(R.string.syncplay_joined_group, name)
-        is SyncplayNotification.LeftGroup -> context.getString(R.string.syncplay_left_group, name)
+            resources.getString(R.string.syncplay_joined_group, name)
+        is SyncplayNotification.LeftGroup -> resources.getString(R.string.syncplay_left_group, name)
         is SyncplayNotification.MemberJoined ->
-            context.getString(R.string.syncplay_member_joined, name)
-        is SyncplayNotification.MemberLeft -> context.getString(R.string.syncplay_member_left, name)
-        is SyncplayNotification.GroupEnded -> context.getString(R.string.syncplay_group_ended, name)
+            resources.getString(R.string.syncplay_member_joined, name)
+        is SyncplayNotification.MemberLeft -> resources.getString(R.string.syncplay_member_left, name)
+        is SyncplayNotification.GroupEnded -> resources.getString(R.string.syncplay_group_ended, name)
         SyncplayNotification.ViewerControlsEnabled ->
-            context.getString(R.string.syncplay_viewer_controls_enabled)
+            resources.getString(R.string.syncplay_viewer_controls_enabled)
         SyncplayNotification.ViewerControlsDisabled ->
-            context.getString(R.string.syncplay_viewer_controls_disabled)
+            resources.getString(R.string.syncplay_viewer_controls_disabled)
         SyncplayNotification.HostDisconnected ->
-            context.getString(R.string.syncplay_host_disconnected)
+            resources.getString(R.string.syncplay_host_disconnected)
         SyncplayNotification.ParticipantReplaced ->
-            context.getString(R.string.syncplay_participant_replaced)
+            resources.getString(R.string.syncplay_participant_replaced)
         is SyncplayNotification.Failure -> null
         is SyncplayNotification.NowPlaying -> null
     }
 
-private fun SyncplayFailure.message(context: android.content.Context): String =
-    context.getString(
+private fun SyncplayFailure.message(resources: Resources): String =
+    resources.getString(
         when (this) {
             SyncplayFailure.CREATE -> R.string.syncplay_create_failed
             SyncplayFailure.CREATE_ALREADY_IN_GROUP -> R.string.syncplay_already_in_group
