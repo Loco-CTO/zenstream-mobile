@@ -65,10 +65,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
@@ -87,6 +83,7 @@ import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.DetailViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaCard
+import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
 import java.util.Locale
@@ -1044,17 +1041,7 @@ private fun AuthenticatedImage(
     scale: ContentScale,
     blurHash: String? = null,
 ) {
-    val request = url?.let {
-        ImageRequest.Builder(LocalContext.current)
-            .data(it)
-            .httpHeaders(
-                NetworkHeaders.Builder()
-                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
-                    .build()
-            )
-            .crossfade(true)
-            .build()
-    }
+    val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
     BlurHashAsyncImage(
         model = request,
         imageKey = url,
