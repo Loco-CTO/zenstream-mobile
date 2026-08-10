@@ -12,9 +12,9 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,11 +90,13 @@ class CatalogRepository(
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
-    private val _catalogInvalidations = MutableSharedFlow<CatalogInvalidation>(extraBufferCapacity = 32)
+    private val _catalogInvalidations =
+        MutableSharedFlow<CatalogInvalidation>(extraBufferCapacity = 32)
     private var catalogUpdatesManager: CatalogUpdatesManager? = null
     private var catalogUpdatesRequested = false
-    override val catalogRefreshRevision: Flow<Long> =
-        _catalogRefreshRevision.onStart { ensureCatalogUpdates() }
+    override val catalogRefreshRevision: Flow<Long> = _catalogRefreshRevision.onStart {
+        ensureCatalogUpdates()
+    }
     override val catalogInvalidations: Flow<CatalogInvalidation> =
         _catalogInvalidations.asSharedFlow().onStart { ensureCatalogUpdates() }
     val serverUrl: Flow<String?> = sessionStore.serverUrl

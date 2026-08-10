@@ -51,16 +51,20 @@ internal fun parseCatalogInvalidations(message: String): List<CatalogInvalidatio
                     payload.optJSONArray("libraries")?.optJSONObject(index) ?: JSONObject()
                 }
                 .mapNotNull { library ->
-                library.optString("id").ifBlank { null }?.let { libraryId ->
-                    CatalogInvalidation(
-                        libraryId = libraryId,
-                        rootEntityId = library.optString("lastRootEntityId").ifBlank { null },
-                        generation =
-                            library.optLong("catalogGeneration").takeIf {
-                                library.has("catalogGeneration")
-                            },
-                    )
-                }
+                    library
+                        .optString("id")
+                        .ifBlank { null }
+                        ?.let { libraryId ->
+                            CatalogInvalidation(
+                                libraryId = libraryId,
+                                rootEntityId =
+                                    library.optString("lastRootEntityId").ifBlank { null },
+                                generation =
+                                    library.optLong("catalogGeneration").takeIf {
+                                        library.has("catalogGeneration")
+                                    },
+                            )
+                        }
                 }
         else -> emptyList()
     }
@@ -82,30 +86,29 @@ internal class CatalogUpdatesManager(
 
     fun start() {
         if (connectionJob != null || stopped.get()) return
-        connectionJob =
-            scope.launch {
-                var attempt = 0
-                while (!stopped.get()) {
-                    val ended = CompletableDeferred<Unit>()
-                    try {
-                        val ticket = api.socketTicket(session)
-                        socket = api.openCatalogSocket(session, ticket, SocketEvents(ended))
-                        ended.await()
-                        attempt = 0
-                    } catch (error: Exception) {
-                        if (!stopped.get()) {
-                            Log.w(
-                                CATALOG_UPDATES_TAG,
-                                "Catalog socket attempt failed: ${error.javaClass.simpleName}",
-                            )
-                        }
-                    }
+        connectionJob = scope.launch {
+            var attempt = 0
+            while (!stopped.get()) {
+                val ended = CompletableDeferred<Unit>()
+                try {
+                    val ticket = api.socketTicket(session)
+                    socket = api.openCatalogSocket(session, ticket, SocketEvents(ended))
+                    ended.await()
+                    attempt = 0
+                } catch (error: Exception) {
                     if (!stopped.get()) {
-                        delay(catalogReconnectDelayMillis(attempt))
-                        attempt++
+                        Log.w(
+                            CATALOG_UPDATES_TAG,
+                            "Catalog socket attempt failed: ${error.javaClass.simpleName}",
+                        )
                     }
                 }
+                if (!stopped.get()) {
+                    delay(catalogReconnectDelayMillis(attempt))
+                    attempt++
+                }
             }
+        }
     }
 
     fun stop() {

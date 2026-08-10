@@ -205,7 +205,8 @@ class SyncplayManager(
         val operationId = java.util.UUID.randomUUID().toString()
         try {
             try {
-                val result = api.command(
+                val result =
+                    api.command(
                         session,
                         participant(),
                         active,
@@ -220,7 +221,8 @@ class SyncplayManager(
                 if (error.statusCode != 409) throw error
                 val latest = api.group(session, participant(), active.id)
                 mutex.withLock { adopt(latest) }
-                val result = api.command(
+                val result =
+                    api.command(
                         session,
                         participant(),
                         latest,
@@ -239,16 +241,16 @@ class SyncplayManager(
     }
 
     private suspend fun presence(report: PresenceReport) {
-        val active = mutex.withLock { _state.value.active }
-            ?.takeIf(report::isCurrent) ?: return
-        val result = api.presence(
-            session,
-            participant(),
-            report.room,
-            report.viewing,
-            report.loading,
-            report.sequence,
-        )
+        val active = mutex.withLock { _state.value.active }?.takeIf(report::isCurrent) ?: return
+        val result =
+            api.presence(
+                session,
+                participant(),
+                report.room,
+                report.viewing,
+                report.loading,
+                report.sequence,
+            )
         mutex.withLock {
             if (_state.value.active?.id == active.id) adopt(result)
         }
@@ -256,13 +258,14 @@ class SyncplayManager(
 
     fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
         val room = _state.value.active ?: return
-        val report = PresenceReport(
-            room = room,
-            viewing = viewing,
-            loading = loading,
-            immediate = immediate,
-            sequence = synchronized(presenceLock) { ++presenceSequence },
-        )
+        val report =
+            PresenceReport(
+                room = room,
+                viewing = viewing,
+                loading = loading,
+                immediate = immediate,
+                sequence = synchronized(presenceLock) { ++presenceSequence },
+            )
         synchronized(presenceLock) {
             pendingPresence = report
             startPresenceWorkerLocked()
@@ -275,14 +278,16 @@ class SyncplayManager(
         presenceWorker = scope.launch {
             try {
                 while (true) {
-                    val next = synchronized(presenceLock) {
-                        pendingPresence.also { pendingPresence = null }
-                    } ?: break
+                    val next =
+                        synchronized(presenceLock) {
+                            pendingPresence.also { pendingPresence = null }
+                        } ?: break
                     if (!next.immediate) {
                         delay(if (next.loading) 750 else 300)
-                        val superseded = synchronized(presenceLock) {
-                            pendingPresence != null
-                        }
+                        val superseded =
+                            synchronized(presenceLock) {
+                                pendingPresence != null
+                            }
                         if (superseded) continue
                     }
                     try {

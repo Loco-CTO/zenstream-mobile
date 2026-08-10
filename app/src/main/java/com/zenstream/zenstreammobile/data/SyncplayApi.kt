@@ -196,7 +196,10 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
             }
         }
 
-    private fun operation(revision: Int? = null, operationId: String = java.util.UUID.randomUUID().toString()) =
+    private fun operation(
+        revision: Int? = null,
+        operationId: String = java.util.UUID.randomUUID().toString(),
+    ) =
         JSONObject().put("operationId", operationId).apply {
             revision?.let { put("expectedRevision", it) }
         }

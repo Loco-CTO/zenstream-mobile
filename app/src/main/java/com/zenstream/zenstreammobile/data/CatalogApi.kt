@@ -304,15 +304,16 @@ class CatalogApi(
     private suspend fun releaseIncompletePlaybackSession(
         session: AuthSession,
         sessionId: String,
-    ) = withContext(NonCancellable) {
-        runCatching { cancelPlaybackSession(session, sessionId) }
-            .onFailure { cancellationError ->
-                Log.w(
-                    PLAYBACK_TAG,
-                    "failed to release incomplete sessionId=$sessionId error=${cancellationError.message}",
-                )
-            }
-    }
+    ) =
+        withContext(NonCancellable) {
+            runCatching { cancelPlaybackSession(session, sessionId) }
+                .onFailure { cancellationError ->
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "failed to release incomplete sessionId=$sessionId error=${cancellationError.message}",
+                    )
+                }
+        }
 
     private fun parsePlaybackSessionStatus(
         sessionId: String,

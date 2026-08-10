@@ -86,7 +86,7 @@ class CatalogApiTest {
                     .put("backgroundItem", catalogItem("background-1", "Background"))
                     .put("collectionItems", JSONArray().put(catalogItem("movie-1", "Movie")))
                     .put("rootEntityId", "collection-1")
-                    .put("catalogGeneration", 12),
+                    .put("catalogGeneration", 12)
             )
 
         assertEquals("background-1", detail.parentSeries?.id)
