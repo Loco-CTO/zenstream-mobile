@@ -98,9 +98,9 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
-import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
+import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
@@ -226,8 +226,9 @@ internal fun FeaturedHero(
                         }
                 ) {
                     val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
-                    val request =
-                        url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
+                    val request = url?.let {
+                        authenticatedImageRequest(LocalContext.current, it, session)
+                    }
                     BlurHashAsyncImage(
                         model = request,
                         imageKey = url,
@@ -256,10 +257,9 @@ internal fun FeaturedHero(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
-                        val logoRequest =
-                            logoUrl?.let {
-                                authenticatedImageRequest(LocalContext.current, it, session)
-                            }
+                        val logoRequest = logoUrl?.let {
+                            authenticatedImageRequest(LocalContext.current, it, session)
+                        }
                         if (logoRequest != null) {
                             BlurHashAsyncImage(
                                 model = logoRequest,

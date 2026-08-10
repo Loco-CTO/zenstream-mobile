@@ -1430,9 +1430,7 @@ private fun people(item: JSONObject): List<MediaPerson> =
 
 internal fun JSONObject.optNullableString(key: String): String? {
     if (!has(key) || isNull(key)) return null
-    return optString(key)
-        .trim()
-        .takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+    return optString(key).trim().takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
 }
 
 private fun JSONObject.optIntOrNull(key: String): Int? =

@@ -3,9 +3,9 @@ package com.zenstream.zenstreammobile.data
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
-import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
+import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -37,34 +37,40 @@ class CatalogApiTest {
                     .put("id", "movie-1")
                     .put(
                         "metadata",
-                        JSONObject().put(
-                            "credits",
-                            JSONObject()
-                                .put(
-                                    "cast",
-                                    org.json.JSONArray().put(
-                                        JSONObject()
-                                            .put("id", "person-1")
-                                            .put("name", "Actor")
-                                            .put("character", JSONObject.NULL)
+                        JSONObject()
+                            .put(
+                                "credits",
+                                JSONObject()
+                                    .put(
+                                        "cast",
+                                        org.json
+                                            .JSONArray()
                                             .put(
-                                                "image",
-                                                JSONObject().put("url", "/api/person-image"),
+                                                JSONObject()
+                                                    .put("id", "person-1")
+                                                    .put("name", "Actor")
+                                                    .put("character", JSONObject.NULL)
+                                                    .put(
+                                                        "image",
+                                                        JSONObject()
+                                                            .put("url", "/api/person-image"),
+                                                    )
+                                            ),
+                                    )
+                                    .put(
+                                        "crew",
+                                        org.json
+                                            .JSONArray()
+                                            .put(
+                                                JSONObject()
+                                                    .put("id", "person-2")
+                                                    .put("name", "Crew")
+                                                    .put("job", "null")
+                                                    .put("department", JSONObject.NULL)
                                             ),
                                     ),
-                                )
-                                .put(
-                                    "crew",
-                                    org.json.JSONArray().put(
-                                        JSONObject()
-                                            .put("id", "person-2")
-                                            .put("name", "Crew")
-                                            .put("job", "null")
-                                            .put("department", JSONObject.NULL),
-                                    ),
-                                ),
-                        ),
-                    ),
+                            ),
+                    )
             )
 
         assertEquals(null, item.people[0].role)
