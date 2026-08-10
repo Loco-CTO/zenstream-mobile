@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType

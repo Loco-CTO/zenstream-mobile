@@ -15,10 +15,7 @@ fun authenticatedImageRequest(
     url: String,
     session: AuthSession,
 ): ImageRequest {
-    val requestUrl =
-        session.resourceTicket?.takeIf(String::isNotBlank)?.let { ticket ->
-            url.toHttpUrl().newBuilder().addQueryParameter("access", ticket).build().toString()
-        } ?: url
+    val requestUrl = authenticatedImageUrl(url, session.resourceTicket)
     return ImageRequest.Builder(context)
         .data(requestUrl)
         .httpHeaders(
@@ -29,3 +26,8 @@ fun authenticatedImageRequest(
         .crossfade(true)
         .build()
 }
+
+internal fun authenticatedImageUrl(url: String, resourceTicket: String?): String =
+    resourceTicket?.takeIf(String::isNotBlank)?.let { ticket ->
+        url.toHttpUrl().newBuilder().addQueryParameter("access", ticket).build().toString()
+    } ?: url
