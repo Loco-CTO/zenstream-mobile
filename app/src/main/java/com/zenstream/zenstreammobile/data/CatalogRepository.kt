@@ -16,9 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -28,9 +26,6 @@ import kotlinx.coroutines.sync.withLock
 
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
-        get() = kotlinx.coroutines.flow.emptyFlow()
-
-    val catalogChanges: Flow<CatalogChange>
         get() = kotlinx.coroutines.flow.emptyFlow()
 }
 
@@ -83,8 +78,6 @@ class CatalogRepository(
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
     override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
-    private val _catalogChanges = MutableSharedFlow<CatalogChange>(extraBufferCapacity = 16)
-    override val catalogChanges: SharedFlow<CatalogChange> = _catalogChanges
     val serverUrl: Flow<String?> = sessionStore.serverUrl
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
@@ -92,24 +85,6 @@ class CatalogRepository(
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
-    private val eventScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var catalogEvents: CatalogEventsClient? = null
-
-    init {
-        eventScope.launch {
-            session.collectLatest { active ->
-                catalogEvents?.stop()
-                catalogEvents = active?.let { value ->
-                    CatalogEventsClient(
-                        value,
-                        onChanged = { change ->
-                            eventScope.launch { invalidateCatalogMetadata(change) }
-                        },
-                    )
-                }
-            }
-        }
-    }
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -290,11 +265,10 @@ class CatalogRepository(
         homeMutex.withLock { homeCache = null }
     }
 
-    private suspend fun invalidateCatalogMetadata(change: CatalogChange? = null) {
+    private suspend fun invalidateCatalogMetadata() {
         homeMutex.withLock {
             homeCache = null
-            if (change == null) _catalogRefreshRevision.value += 1
+            _catalogRefreshRevision.value += 1
         }
-        if (change != null) _catalogChanges.emit(change)
     }
 }
