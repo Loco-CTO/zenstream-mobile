@@ -4,6 +4,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
+import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -13,6 +14,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatalogApiTest {
+    @Test
+    fun authenticatedImageUrlAddsTheResourceTicketWithoutDroppingExistingQuery() {
+        assertEquals(
+            "https://server/api/catalog/items/movie-1/images/Primary?language=en&access=ticket-1",
+            authenticatedImageUrl(
+                "https://server/api/catalog/items/movie-1/images/Primary?language=en",
+                "ticket-1",
+            ),
+        )
+    }
+
+    @Test
+    fun parsesNullCreditLabelsAsMissingValues() {
+        val item =
+            catalogMediaItem(
+                JSONObject()
+                    .put("id", "movie-1")
+                    .put(
+                        "metadata",
+                        JSONObject().put(
+                            "credits",
+                            JSONObject()
+                                .put(
+                                    "cast",
+                                    org.json.JSONArray().put(
+                                        JSONObject()
+                                            .put("id", "person-1")
+                                            .put("name", "Actor")
+                                            .put("character", JSONObject.NULL)
+                                            .put(
+                                                "image",
+                                                JSONObject().put("url", "/api/person-image"),
+                                            ),
+                                    ),
+                                )
+                                .put(
+                                    "crew",
+                                    org.json.JSONArray().put(
+                                        JSONObject()
+                                            .put("id", "person-2")
+                                            .put("name", "Crew")
+                                            .put("job", "null")
+                                            .put("department", JSONObject.NULL),
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+
+        assertEquals(null, item.people[0].role)
+        assertEquals("/api/person-image", item.people[0].primaryImageTag)
+        assertEquals(null, item.people[1].role)
+        assertEquals(null, item.people[1].type)
+    }
+
     @Test
     fun media3CapabilityProfileAllowsNativeMatroskaAndCommonAudioCodecs() {
         val capabilities = playbackCapabilities(PlayerEngine.MEDIA3)
