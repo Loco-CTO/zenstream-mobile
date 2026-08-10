@@ -12,16 +12,17 @@ import org.junit.runner.RunWith
 class SubtitleStyleStorageTest {
     @Test
     fun serializesAndRestoresTheCompleteStyle() {
-        val style = SubtitleStyle(
-            fontFamily = "mono",
-            bold = true,
-            textScale = 135f,
-            fontColor = "#12abef",
-            borderSize = 4f,
-            borderColor = "#010203",
-            backgroundColor = "#405060",
-            backgroundOpacity = 65f,
-        )
+        val style =
+            SubtitleStyle(
+                fontFamily = "mono",
+                bold = true,
+                textScale = 135f,
+                fontColor = "#12abef",
+                borderSize = 4f,
+                borderColor = "#010203",
+                backgroundColor = "#405060",
+                backgroundOpacity = 65f,
+            )
 
         assertEquals(style, subtitleStyleFromJson(subtitleStyleToJson(style)))
     }
@@ -29,9 +30,10 @@ class SubtitleStyleStorageTest {
     @Test
     fun migratesTheFirstLegacyUserStyleIntoTheDeviceLocalFormat() {
         val style = SubtitleStyle(fontFamily = "serif", textScale = 120f)
-        val preferences = preferencesOf(
-            stringPreferencesKey("subtitle_style_user-1") to subtitleStyleToJson(style),
-        )
+        val preferences =
+            preferencesOf(
+                stringPreferencesKey("subtitle_style_user-1") to subtitleStyleToJson(style)
+            )
 
         assertEquals(style, legacySubtitleStyleFrom(preferences))
     }

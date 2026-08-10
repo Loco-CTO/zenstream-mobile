@@ -2,23 +2,23 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.doubleClick
-import androidx.compose.ui.test.click
-import androidx.compose.ui.platform.testTag
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
@@ -28,8 +28,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlaybackGestureTest {
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     @Test
     fun rightDoubleTapSeeksForwardFiveSeconds() {
@@ -255,10 +254,10 @@ class PlaybackGestureTest {
             }
         }
 
-        val expectedLabel = InstrumentationRegistry
-            .getInstrumentation()
-            .targetContext
-            .getString(R.string.player_quick_seek_forward, 5)
+        val expectedLabel =
+            InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .getString(R.string.player_quick_seek_forward, 5)
         composeRule.onNodeWithText(expectedLabel).assertIsDisplayed()
     }
 
@@ -267,12 +266,13 @@ class PlaybackGestureTest {
         composeRule.setContent {
             ZenStreamTheme {
                 SurfaceTrickplayOverlay(
-                    session = com.zenstream.zenstreammobile.model.AuthSession(
-                        "https://example.com",
-                        "token",
-                        "user",
-                        "Test",
-                    ),
+                    session =
+                        com.zenstream.zenstreammobile.model.AuthSession(
+                            "https://example.com",
+                            "token",
+                            "user",
+                            "Test",
+                        ),
                     positionSeconds = 65.0,
                     durationSeconds = 125.0,
                     preview = null,
@@ -283,11 +283,12 @@ class PlaybackGestureTest {
 
         composeRule.onNodeWithTag("surface-trickplay-preview").assertIsDisplayed()
         composeRule.onNodeWithText("1:05 / 2:05").assertIsDisplayed()
-        val expectedDescription = InstrumentationRegistry
-            .getInstrumentation()
-            .targetContext
-            .getString(R.string.player_drag_seek_preview, "1:05", "2:05")
-        composeRule.onNodeWithTag("surface-trickplay-preview")
+        val expectedDescription =
+            InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .getString(R.string.player_drag_seek_preview, "1:05", "2:05")
+        composeRule
+            .onNodeWithTag("surface-trickplay-preview")
             .assert(hasContentDescription(expectedDescription))
     }
 }

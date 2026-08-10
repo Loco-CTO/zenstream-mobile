@@ -16,8 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ToastTest {
-    @get:Rule
-    val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun stacksToastsAndDismissesTheSelectedMessage() {
@@ -50,9 +49,9 @@ class ToastTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription(
-            composeRule.activity.getString(R.string.toast_dismiss),
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.toast_dismiss))
+            .assertIsDisplayed()
     }
 
     @Test
@@ -67,8 +66,10 @@ class ToastTest {
 
         composeRule.onNodeWithText("Temporary Syncplay notice").assertIsDisplayed()
         composeRule.waitUntil(timeoutMillis = 2_000) {
-            composeRule.onAllNodesWithText("Temporary Syncplay notice")
-                .fetchSemanticsNodes().isEmpty()
+            composeRule
+                .onAllNodesWithText("Temporary Syncplay notice")
+                .fetchSemanticsNodes()
+                .isEmpty()
         }
     }
 }

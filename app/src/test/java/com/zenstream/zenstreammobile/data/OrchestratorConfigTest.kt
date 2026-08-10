@@ -6,12 +6,12 @@ import org.junit.Test
 
 class OrchestratorConfigTest {
     @Test
-	fun acceptsTheCatalogCapabilityResponse() {
-		parseProxyConfig("{\"catalog\":true}")
+    fun acceptsTheCatalogCapabilityResponse() {
+        parseProxyConfig("{\"catalog\":true}")
     }
 
     @Test
-	fun rejectsAnOrchestratorWithoutTheCatalog() {
+    fun rejectsAnOrchestratorWithoutTheCatalog() {
         assertThrows(IllegalStateException::class.java) { parseProxyConfig("{}") }
     }
 
@@ -19,13 +19,15 @@ class OrchestratorConfigTest {
     fun normalizesConfiguredZenStreamUrl() {
         assertEquals(
             "https://orchestrator.example",
-			normalizeServerUrl(" https://orchestrator.example/ ")
+            normalizeServerUrl(" https://orchestrator.example/ "),
         )
     }
 
     @Test
     fun rejectsUnsupportedZenStreamUrl() {
-		assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("ftp://remote.example") }
+        assertThrows(IllegalArgumentException::class.java) {
+            normalizeServerUrl("ftp://remote.example")
+        }
     }
 
     @Test

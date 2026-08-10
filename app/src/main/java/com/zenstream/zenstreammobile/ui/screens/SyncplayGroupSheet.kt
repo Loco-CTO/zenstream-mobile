@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
@@ -112,12 +111,13 @@ internal fun SyncplayGroupButton(
         Icon(
             painter = painterResource(LucideR.drawable.lucide_ic_users),
             contentDescription = stringResource(R.string.syncplay_groups),
-            tint = when {
-                !enabled && playerContext -> Color.White.copy(alpha = .3f)
-                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .38f)
-                playerContext -> Color.White
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            tint =
+                when {
+                    !enabled && playerContext -> Color.White.copy(alpha = .3f)
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .38f)
+                    playerContext -> Color.White
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
         )
     }
 }
@@ -136,7 +136,8 @@ internal fun SyncplayGroupSheet(
     onReturnToView: (SyncplayGroup) -> Unit,
     onLeave: () -> Unit,
 ) {
-    val surfaceColor = if (playerContext) SyncplayPlayerSheetSurface else MaterialTheme.colorScheme.surfaceVariant
+    val surfaceColor =
+        if (playerContext) SyncplayPlayerSheetSurface else MaterialTheme.colorScheme.surfaceVariant
     val contentColor = if (playerContext) Color.White else MaterialTheme.colorScheme.onSurface
 
     ModalBottomSheet(
@@ -146,22 +147,15 @@ internal fun SyncplayGroupSheet(
         contentColor = contentColor,
         scrimColor = Color.Black.copy(alpha = if (playerContext) .72f else .52f),
         dragHandle = {
-            BottomSheetDefaults.DragHandle(
-                color = contentColor.copy(alpha = .36f),
-            )
+            BottomSheetDefaults.DragHandle(color = contentColor.copy(alpha = .36f))
         },
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
             LazyColumn(
-                modifier = Modifier
-                    .widthIn(max = 520.dp)
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
+                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth().padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 state.active?.let { group ->
@@ -175,13 +169,14 @@ internal fun SyncplayGroupSheet(
                             onLeave = onLeave,
                         )
                     }
-                } ?: item {
-                    GroupBrowserContent(
-                        state = state,
-                        onCreate = onCreate,
-                        onJoin = onJoin,
-                    )
                 }
+                    ?: item {
+                        GroupBrowserContent(
+                            state = state,
+                            onCreate = onCreate,
+                            onJoin = onJoin,
+                        )
+                    }
             }
         }
     }
@@ -198,10 +193,7 @@ private fun GroupBrowserContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-                .semantics { heading() },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).semantics { heading() },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -213,11 +205,12 @@ private fun GroupBrowserContent(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = pluralStringResource(
-                        R.plurals.syncplay_group_count,
-                        state.groups.size,
-                        state.groups.size,
-                    ),
+                    text =
+                        pluralStringResource(
+                            R.plurals.syncplay_group_count,
+                            state.groups.size,
+                            state.groups.size,
+                        ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -243,9 +236,7 @@ private fun GroupBrowserContent(
 
         if (state.groups.isEmpty()) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 36.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 36.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -257,9 +248,7 @@ private fun GroupBrowserContent(
                 )
             }
         } else {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.groups.forEach { group ->
                     GroupRow(group = group, onJoin = onJoin)
                 }
@@ -271,10 +260,10 @@ private fun GroupBrowserContent(
 @Composable
 private fun GroupRow(group: SyncplayGroup, onJoin: (String) -> Unit) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .clickable { onJoin(group.id) },
+        modifier =
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable {
+                onJoin(group.id)
+            },
         color = MaterialTheme.colorScheme.surface.copy(alpha = .68f),
         shape = MaterialTheme.shapes.medium,
     ) {
@@ -318,10 +307,7 @@ private fun ActiveGroupContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-                .semantics { heading() },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).semantics { heading() },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -385,7 +371,8 @@ private fun ActiveGroupContent(
         OutlinedButton(
             onClick = onLeave,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            colors =
+                ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = .55f)),
         ) {
             Text(stringResource(R.string.syncplay_leave))
@@ -401,16 +388,14 @@ private fun GroupMemberRow(
     onRemove: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f), CircleShape),
+            modifier =
+                Modifier.size(32.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -446,9 +431,9 @@ private fun GroupMemberRow(
 private fun SyncplayIconBadge(large: Boolean = false) {
     val size = if (large) 48.dp else 36.dp
     Box(
-        modifier = Modifier
-            .size(size)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f), CircleShape),
+        modifier =
+            Modifier.size(size)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

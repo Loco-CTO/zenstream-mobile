@@ -5,16 +5,17 @@ import org.json.JSONObject
 
 val DEFAULT_SUBTITLE_STYLE = SubtitleStyle()
 
-fun subtitleStyleToJson(style: SubtitleStyle): String = JSONObject()
-    .put("fontFamily", style.fontFamily)
-    .put("bold", style.bold)
-    .put("textScale", style.textScale)
-    .put("fontColor", style.fontColor)
-    .put("borderSize", style.borderSize)
-    .put("borderColor", style.borderColor)
-    .put("backgroundColor", style.backgroundColor)
-    .put("backgroundOpacity", style.backgroundOpacity)
-    .toString()
+fun subtitleStyleToJson(style: SubtitleStyle): String =
+    JSONObject()
+        .put("fontFamily", style.fontFamily)
+        .put("bold", style.bold)
+        .put("textScale", style.textScale)
+        .put("fontColor", style.fontColor)
+        .put("borderSize", style.borderSize)
+        .put("borderColor", style.borderColor)
+        .put("backgroundColor", style.backgroundColor)
+        .put("backgroundOpacity", style.backgroundOpacity)
+        .toString()
 
 fun subtitleStyleFromJson(body: String): SubtitleStyle {
     val json = JSONObject(body)

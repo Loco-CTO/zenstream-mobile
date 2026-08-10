@@ -42,12 +42,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.normalizeServerUrl
 import com.zenstream.zenstreammobile.ui.LoginViewModel
 import kotlinx.coroutines.launch
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun ServerSetupScreen(
@@ -68,29 +68,34 @@ fun ServerSetupScreen(
         Icon(
             painter = painterResource(LucideR.drawable.lucide_ic_lock),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.server_setup_title),
             style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.semantics { heading() })
+            modifier = Modifier.semantics { heading() },
+        )
         Text(
             stringResource(R.string.server_setup_description),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.padding(8.dp))
         OutlinedTextField(
             value = server,
-            onValueChange = { server = it; error = null },
+            onValueChange = {
+                server = it
+                error = null
+            },
             label = { Text(stringResource(R.string.orchestrator_url)) },
             placeholder = { Text(stringResource(R.string.server_url_hint)) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Done
-            ),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                ),
             isError = error != null,
             supportingText = { error?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth(),
@@ -99,18 +104,20 @@ fun ServerSetupScreen(
             onClick = {
                 scope.launch {
                     busy = true
-                    error = runCatching { normalizeServerUrl(server) }.exceptionOrNull()
-                        ?.let { invalidUrlMessage }
-                    if (error == null) runCatching { onConfigured(server) }.onFailure {
-                        error = invalidUrlMessage
-                    }
+                    error =
+                        runCatching { normalizeServerUrl(server) }
+                            .exceptionOrNull()
+                            ?.let { invalidUrlMessage }
+                    if (error == null)
+                        runCatching { onConfigured(server) }
+                            .onFailure {
+                                error = invalidUrlMessage
+                            }
                     busy = false
                 }
             },
             enabled = !busy,
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
         ) {
             AuthButtonContent(loading = busy) {
                 Text(stringResource(R.string.continue_label))
@@ -128,17 +135,18 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
         Icon(
             painter = painterResource(LucideR.drawable.lucide_ic_lock),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.welcome),
             style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.semantics { heading() })
+            modifier = Modifier.semantics { heading() },
+        )
         Text(
             stringResource(R.string.login_description),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.padding(8.dp))
         OutlinedTextField(
@@ -147,7 +155,7 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
             label = { Text(stringResource(R.string.username)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = password,
@@ -155,24 +163,25 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
             label = { Text(stringResource(R.string.password)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
             keyboardActions = KeyboardActions(onDone = { vm.login(password) }),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         state.error?.let {
             Text(
                 stringResource(R.string.login_failed),
                 color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Button(
             onClick = { vm.login(password) },
             enabled = !state.busy && state.username.isNotBlank() && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             AuthButtonContent(loading = state.busy) {
                 Text(stringResource(R.string.login))
@@ -181,8 +190,10 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
         OutlinedButton(
             onClick = onChangeServer,
             enabled = !state.busy,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(stringResource(R.string.change_server)) }
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.change_server))
+        }
     }
 }
 
@@ -190,12 +201,12 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
 private fun AuthButtonContent(loading: Boolean, label: @Composable () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
+                strokeWidth = 2.dp,
             )
         } else {
             label()
@@ -206,19 +217,14 @@ private fun AuthButtonContent(loading: Boolean, label: @Composable () -> Unit) {
 @Composable
 private fun AuthContainer(content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .navigationBarsPadding()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Column(
             modifier = Modifier.widthIn(max = 480.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content
+            content = content,
         )
     }
 }
-

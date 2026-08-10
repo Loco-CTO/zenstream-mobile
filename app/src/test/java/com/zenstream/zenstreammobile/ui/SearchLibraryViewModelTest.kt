@@ -8,8 +8,8 @@ import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
-import kotlinx.coroutines.CompletableDeferred
 import com.zenstream.zenstreammobile.model.SortOrder
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -42,11 +42,12 @@ class SearchLibraryViewModelTest {
 
     @Test
     fun searchRanksExactAndPrefixMatchesBeforeOtherMatches() {
-        val items = listOf(
-            MediaItem("contains", "The Dune Story"),
-            MediaItem("exact", "Dune"),
-            MediaItem("prefix", "Dune World"),
-        )
+        val items =
+            listOf(
+                MediaItem("contains", "The Dune Story"),
+                MediaItem("exact", "Dune"),
+                MediaItem("prefix", "Dune World"),
+            )
 
         assertEquals(
             listOf("exact", "prefix", "contains"),
@@ -80,13 +81,25 @@ class SearchLibraryViewModelTest {
     @Test
     fun libraryLoadsNextPageAndRemovesDuplicateItems() = runTest {
         val shows = Library("shows", "Shows", "tvshows")
-        val source = FakeLibraryDataSource(
-            libraries = listOf(shows),
-            pages = mapOf(
-                0 to PagedLibrary(shows, listOf(MediaItem("one", "One"), MediaItem("two", "Two")), 3),
-                2 to PagedLibrary(shows, listOf(MediaItem("two", "Two"), MediaItem("three", "Three")), 3),
-            ),
-        )
+        val source =
+            FakeLibraryDataSource(
+                libraries = listOf(shows),
+                pages =
+                    mapOf(
+                        0 to
+                            PagedLibrary(
+                                shows,
+                                listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
+                                3,
+                            ),
+                        2 to
+                            PagedLibrary(
+                                shows,
+                                listOf(MediaItem("two", "Two"), MediaItem("three", "Three")),
+                                3,
+                            ),
+                    ),
+            )
         val viewModel = LibraryViewModel(source, session)
         advanceUntilIdle()
 
@@ -103,11 +116,12 @@ class SearchLibraryViewModelTest {
     fun libraryStaysLoadingUntilInitialPageCompletes() = runTest {
         val shows = Library("shows", "Shows", "tvshows")
         val pageGate = CompletableDeferred<Unit>()
-        val source = FakeLibraryDataSource(
-            libraries = listOf(shows),
-            pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
-            pageGate = pageGate,
-        )
+        val source =
+            FakeLibraryDataSource(
+                libraries = listOf(shows),
+                pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
+                pageGate = pageGate,
+            )
         val viewModel = LibraryViewModel(source, session)
 
         runCurrent()
@@ -127,11 +141,12 @@ class SearchLibraryViewModelTest {
     fun librarySortIsRestoredAndChangesReloadAndPersist() = runTest {
         val shows = Library("shows", "Shows", "tvshows")
         val restored = LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
-        val source = FakeLibraryDataSource(
-            libraries = listOf(shows),
-            storedSorts = mapOf(shows.id to restored),
-            pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
-        )
+        val source =
+            FakeLibraryDataSource(
+                libraries = listOf(shows),
+                storedSorts = mapOf(shows.id to restored),
+                pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("one", "One")), 1)),
+            )
         val viewModel = LibraryViewModel(source, session)
         advanceUntilIdle()
         assertEquals(restored, viewModel.uiState.value.sort)
@@ -151,13 +166,12 @@ class SearchLibraryViewModelTest {
         val movies = Library("movies", "Movies", "movies")
         val showsSort = LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
         val moviesSort = LibrarySort(LibrarySortBy.Runtime, SortOrder.Descending)
-        val source = FakeLibraryDataSource(
-            libraries = listOf(shows, movies),
-            storedSorts = mapOf(shows.id to showsSort),
-            pages = mapOf(
-                0 to PagedLibrary(shows, listOf(MediaItem("show", "Show")), 1),
-            ),
-        )
+        val source =
+            FakeLibraryDataSource(
+                libraries = listOf(shows, movies),
+                storedSorts = mapOf(shows.id to showsSort),
+                pages = mapOf(0 to PagedLibrary(shows, listOf(MediaItem("show", "Show")), 1)),
+            )
         val viewModel = LibraryViewModel(source, session)
         advanceUntilIdle()
         assertEquals(showsSort, viewModel.uiState.value.sort)
@@ -178,9 +192,8 @@ class SearchLibraryViewModelTest {
     }
 }
 
-private class FakeSearchDataSource(
-    private val response: suspend (String) -> List<MediaItem>,
-) : SearchDataSource {
+private class FakeSearchDataSource(private val response: suspend (String) -> List<MediaItem>) :
+    SearchDataSource {
     val queries = mutableListOf<String>()
 
     override suspend fun clearSession() = Unit
@@ -217,7 +230,8 @@ private class FakeLibraryDataSource(
         return pages[startIndex] ?: PagedLibrary(library, emptyList(), 0)
     }
 
-    override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? = storedSorts[libraryId]
+    override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? =
+        storedSorts[libraryId]
 
     override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) {
         savedSort = sort

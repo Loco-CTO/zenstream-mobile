@@ -75,16 +75,17 @@ data class PlaybackData(
     val audioTracks: List<MediaStream>,
     val subtitles: List<MediaStream>,
     val segments: List<PlaybackSegment> = emptyList(),
-    val qualities: List<Int> = listOf(
-        0,
-        1_000_000,
-        2_000_000,
-        4_000_000,
-        8_000_000,
-        16_000_000,
-        32_000_000,
-        64_000_000
-    ),
+    val qualities: List<Int> =
+        listOf(
+            0,
+            1_000_000,
+            2_000_000,
+            4_000_000,
+            8_000_000,
+            16_000_000,
+            32_000_000,
+            64_000_000,
+        ),
     val mode: String? = null,
     val sessionState: String? = null,
     val sessionId: String? = null,

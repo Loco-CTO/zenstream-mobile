@@ -2,8 +2,8 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -20,8 +20,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SyncplayGroupSheetTest {
-    @get:Rule
-    val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun groupTriggerUsesTheUsersIconAndGroupsAccessibilityLabel() {
@@ -62,8 +61,12 @@ class SyncplayGroupSheetTest {
             }
         }
 
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_empty)).assertIsDisplayed()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_create)).performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_empty))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_create))
+            .performClick()
         composeRule.runOnIdle { assertTrue(created) }
     }
 
@@ -89,7 +92,9 @@ class SyncplayGroupSheetTest {
         }
 
         composeRule.onNodeWithText(group.name).assertIsDisplayed()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_join)).performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_join))
+            .performClick()
         composeRule.runOnIdle { assertEquals(group.id, joinedGroupId) }
     }
 
@@ -102,11 +107,12 @@ class SyncplayGroupSheetTest {
         composeRule.setContent {
             ZenStreamTheme {
                 SyncplayGroupSheet(
-                    state = SyncplayUiState(
-                        groups = listOf(group),
-                        active = group,
-                        participantId = "host-tab",
-                    ),
+                    state =
+                        SyncplayUiState(
+                            groups = listOf(group),
+                            active = group,
+                            participantId = "host-tab",
+                        ),
                     userId = "host",
                     playerContext = true,
                     onDismiss = {},
@@ -120,12 +126,18 @@ class SyncplayGroupSheetTest {
             }
         }
 
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_host)).assertIsDisplayed()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_remove)).performClick()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_allow_controls))
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_host))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_remove))
+            .performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_allow_controls))
             .assertIsDisplayed()
         composeRule.onNode(isToggleable()).performClick()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.syncplay_return_to_view))
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_return_to_view))
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
@@ -136,47 +148,49 @@ class SyncplayGroupSheetTest {
         }
     }
 
-    private fun syncplayGroup(itemId: String? = null, playing: Boolean = false): SyncplayGroup = SyncplayGroup(
-        id = "group-1",
-        name = "Movie night",
-        hostUserId = "host",
-        hostName = "Host",
-        allowViewerControls = false,
-        itemId = itemId,
-        position = 0.0,
-        playing = playing,
-        resumeWhenReady = false,
-        revision = 1,
-        timelineRevision = 1,
-        mediaGeneration = 1,
-        anchorPosition = 0.0,
-        anchorServerTime = 0.0,
-        effectiveAt = 0.0,
-        playbackState = if (playing) "playing" else "paused",
-        pauseReason = null,
-        hostDisconnectedAt = null,
-        updatedAt = 0.0,
-        members = listOf(
-            SyncplayMember(
-                userId = "host",
-                participantId = "host-tab",
-                username = "Host",
-                watchingTogether = true,
-                viewing = true,
-                loading = false,
-                readyGeneration = 1,
-                role = "host",
-            ),
-            SyncplayMember(
-                userId = "viewer",
-                participantId = "viewer-tab",
-                username = "Viewer",
-                watchingTogether = true,
-                viewing = true,
-                loading = false,
-                readyGeneration = 1,
-                role = "member",
-            ),
-        ),
-    )
+    private fun syncplayGroup(itemId: String? = null, playing: Boolean = false): SyncplayGroup =
+        SyncplayGroup(
+            id = "group-1",
+            name = "Movie night",
+            hostUserId = "host",
+            hostName = "Host",
+            allowViewerControls = false,
+            itemId = itemId,
+            position = 0.0,
+            playing = playing,
+            resumeWhenReady = false,
+            revision = 1,
+            timelineRevision = 1,
+            mediaGeneration = 1,
+            anchorPosition = 0.0,
+            anchorServerTime = 0.0,
+            effectiveAt = 0.0,
+            playbackState = if (playing) "playing" else "paused",
+            pauseReason = null,
+            hostDisconnectedAt = null,
+            updatedAt = 0.0,
+            members =
+                listOf(
+                    SyncplayMember(
+                        userId = "host",
+                        participantId = "host-tab",
+                        username = "Host",
+                        watchingTogether = true,
+                        viewing = true,
+                        loading = false,
+                        readyGeneration = 1,
+                        role = "host",
+                    ),
+                    SyncplayMember(
+                        userId = "viewer",
+                        participantId = "viewer-tab",
+                        username = "Viewer",
+                        watchingTogether = true,
+                        viewing = true,
+                        loading = false,
+                        readyGeneration = 1,
+                        role = "member",
+                    ),
+                ),
+        )
 }

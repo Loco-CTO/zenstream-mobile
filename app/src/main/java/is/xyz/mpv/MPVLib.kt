@@ -16,9 +16,13 @@ object MPVLib {
     }
 
     external fun create(appctx: Context)
+
     external fun init()
+
     external fun destroy()
+
     external fun attachSurface(surface: Surface)
+
     external fun detachSurface()
 
     external fun command(cmd: Array<out String>)
@@ -28,12 +32,19 @@ object MPVLib {
     external fun grabThumbnail(dimension: Int): Bitmap?
 
     external fun getPropertyInt(property: String): Int?
+
     external fun setPropertyInt(property: String, value: Int)
+
     external fun getPropertyDouble(property: String): Double?
+
     external fun setPropertyDouble(property: String, value: Double)
+
     external fun getPropertyBoolean(property: String): Boolean?
+
     external fun setPropertyBoolean(property: String, value: Boolean)
+
     external fun getPropertyString(property: String): String?
+
     external fun setPropertyString(property: String, value: String)
 
     external fun observeProperty(property: String, format: Int)
@@ -57,48 +68,42 @@ object MPVLib {
     @JvmStatic
     fun eventProperty(property: String, value: Long) {
         synchronized(observers) {
-            for (o in observers)
-                o.eventProperty(property, value)
+            for (o in observers) o.eventProperty(property, value)
         }
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Boolean) {
         synchronized(observers) {
-            for (o in observers)
-                o.eventProperty(property, value)
+            for (o in observers) o.eventProperty(property, value)
         }
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: Double) {
         synchronized(observers) {
-            for (o in observers)
-                o.eventProperty(property, value)
+            for (o in observers) o.eventProperty(property, value)
         }
     }
 
     @JvmStatic
     fun eventProperty(property: String, value: String) {
         synchronized(observers) {
-            for (o in observers)
-                o.eventProperty(property, value)
+            for (o in observers) o.eventProperty(property, value)
         }
     }
 
     @JvmStatic
     fun eventProperty(property: String) {
         synchronized(observers) {
-            for (o in observers)
-                o.eventProperty(property)
+            for (o in observers) o.eventProperty(property)
         }
     }
 
     @JvmStatic
     fun event(eventId: Int) {
         synchronized(observers) {
-            for (o in observers)
-                o.event(eventId)
+            for (o in observers) o.event(eventId)
         }
     }
 
@@ -121,17 +126,21 @@ object MPVLib {
     @JvmStatic
     fun logMessage(prefix: String, level: Int, text: String) {
         synchronized(log_observers) {
-            for (o in log_observers)
-                o.logMessage(prefix, level, text)
+            for (o in log_observers) o.logMessage(prefix, level, text)
         }
     }
 
     interface EventObserver {
         fun eventProperty(property: String)
+
         fun eventProperty(property: String, value: Long)
+
         fun eventProperty(property: String, value: Boolean)
+
         fun eventProperty(property: String, value: String)
+
         fun eventProperty(property: String, value: Double)
+
         fun event(eventId: Int)
     }
 
@@ -163,11 +172,9 @@ object MPVLib {
         const val MPV_EVENT_END_FILE: Int = 7
         const val MPV_EVENT_FILE_LOADED: Int = 8
 
-        @Deprecated("")
-        const val MPV_EVENT_IDLE: Int = 11
+        @Deprecated("") const val MPV_EVENT_IDLE: Int = 11
 
-        @Deprecated("")
-        const val MPV_EVENT_TICK: Int = 14
+        @Deprecated("") const val MPV_EVENT_TICK: Int = 14
         const val MPV_EVENT_CLIENT_MESSAGE: Int = 16
         const val MPV_EVENT_VIDEO_RECONFIG: Int = 17
         const val MPV_EVENT_AUDIO_RECONFIG: Int = 18

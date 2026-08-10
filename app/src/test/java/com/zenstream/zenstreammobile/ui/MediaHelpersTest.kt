@@ -18,7 +18,9 @@ class MediaHelpersTest {
     fun progressUsesTicksWhenPercentageMissing() {
         assertEquals(
             50,
-            progressPercent(MediaItem("1", "Movie", runtimeTicks = 100, playbackPositionTicks = 50))
+            progressPercent(
+                MediaItem("1", "Movie", runtimeTicks = 100, playbackPositionTicks = 50)
+            ),
         )
     }
 
@@ -32,15 +34,16 @@ class MediaHelpersTest {
 
     @Test
     fun episodeCardMatchesWebSeriesAndEpisodeLabel() {
-        val episode = MediaItem(
-            id = "episode-1",
-            name = "The Episode",
-            type = "Episode",
-            seriesName = "The Series",
-            seriesId = "series-1",
-            parentIndexNumber = 2,
-            indexNumber = 7,
-        )
+        val episode =
+            MediaItem(
+                id = "episode-1",
+                name = "The Episode",
+                type = "Episode",
+                seriesName = "The Series",
+                seriesId = "series-1",
+                parentIndexNumber = 2,
+                indexNumber = 7,
+            )
 
         assertEquals("The Series", episodeCardTitle(episode))
         assertEquals("S02E07 · The Episode", episodeCardSubtitle(episode))

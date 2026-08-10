@@ -8,10 +8,11 @@ class DetailHelpersTest {
     @Test
     fun seriesPlaybackUsesFirstUnwatchedEpisode() {
         val series = MediaItem("s", "Series", type = "Series")
-        val episodes = listOf(
-            MediaItem("e1", "First", type = "Episode", played = true),
-            MediaItem("e2", "Second", type = "Episode"),
-        )
+        val episodes =
+            listOf(
+                MediaItem("e1", "First", type = "Episode", played = true),
+                MediaItem("e2", "Second", type = "Episode"),
+            )
         assertEquals("e2", detailPlaybackTarget(series, episodes).id)
     }
 

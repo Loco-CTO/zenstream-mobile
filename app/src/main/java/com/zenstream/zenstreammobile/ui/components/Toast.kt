@@ -3,7 +3,6 @@ package com.zenstream.zenstreammobile.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -31,10 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
@@ -50,7 +48,10 @@ import kotlinx.coroutines.launch
 
 private const val TOAST_DURATION_MILLIS = 5_000L
 
-internal enum class ToastVariant { Success, Error }
+internal enum class ToastVariant {
+    Success,
+    Error,
+}
 
 internal data class ToastMessage(
     val id: Int,
@@ -59,14 +60,16 @@ internal data class ToastMessage(
 )
 
 @Stable
-class ToastHostState internal constructor(
+class ToastHostState
+internal constructor(
     private val scope: CoroutineScope,
     private val durationMillis: Long,
 ) {
     private val messages = mutableStateListOf<ToastMessage>()
     private var nextId by mutableIntStateOf(0)
 
-    internal val current: List<ToastMessage> get() = messages
+    internal val current: List<ToastMessage>
+        get() = messages
 
     fun success(message: String) = show(message, ToastVariant.Success)
 
@@ -103,13 +106,13 @@ fun ToastHost(
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 384.dp)
-                .heightIn(max = 420.dp)
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 16.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .widthIn(max = 384.dp)
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             state.current.forEach { toast ->
@@ -129,21 +132,23 @@ private fun ToastCard(
     onDismiss: () -> Unit,
     playerContext: Boolean,
 ) {
-    val icon = if (toast.variant == ToastVariant.Success) {
-        LucideR.drawable.lucide_ic_circle_check
-    } else {
-        LucideR.drawable.lucide_ic_circle_alert
-    }
-    val iconColor = if (toast.variant == ToastVariant.Success) Color(0xFFC4B5FD) else Color(0xFFFCA5A5)
+    val icon =
+        if (toast.variant == ToastVariant.Success) {
+            LucideR.drawable.lucide_ic_circle_check
+        } else {
+            LucideR.drawable.lucide_ic_circle_alert
+        }
+    val iconColor =
+        if (toast.variant == ToastVariant.Success) Color(0xFFC4B5FD) else Color(0xFFFCA5A5)
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics {
-                liveRegion = if (toast.variant == ToastVariant.Error) {
-                    LiveRegionMode.Assertive
-                } else {
-                    LiveRegionMode.Polite
-                }
+        modifier =
+            Modifier.fillMaxWidth().semantics {
+                liveRegion =
+                    if (toast.variant == ToastVariant.Error) {
+                        LiveRegionMode.Assertive
+                    } else {
+                        LiveRegionMode.Polite
+                    }
             },
         color = if (playerContext) Color(0xE6151519) else Color.Black.copy(alpha = .78f),
         contentColor = Color.White,
@@ -190,19 +195,25 @@ fun SyncplayToastNotifications(
         val titleCache = mutableMapOf<String, String>()
         manager.notifications.collect { notification ->
             when (notification) {
-                is SyncplayNotification.Failure -> toast.error(notification.operation.message(context))
-                is SyncplayNotification.NowPlaying -> launch {
-                    val title = titleCache[notification.itemId] ?: runCatching {
-                        repository.detail(session, notification.itemId).item.name
-                    }.getOrNull()?.also { titleCache[notification.itemId] = it }
-                    toast.success(
-                        if (title != null) {
-                            context.getString(R.string.syncplay_now_playing, title)
-                        } else {
-                            context.getString(R.string.syncplay_now_playing_fallback)
-                        },
-                    )
-                }
+                is SyncplayNotification.Failure ->
+                    toast.error(notification.operation.message(context))
+                is SyncplayNotification.NowPlaying ->
+                    launch {
+                        val title =
+                            titleCache[notification.itemId]
+                                ?: runCatching {
+                                        repository.detail(session, notification.itemId).item.name
+                                    }
+                                    .getOrNull()
+                                    ?.also { titleCache[notification.itemId] = it }
+                        toast.success(
+                            if (title != null) {
+                                context.getString(R.string.syncplay_now_playing, title)
+                            } else {
+                                context.getString(R.string.syncplay_now_playing_fallback)
+                            }
+                        )
+                    }
 
                 else -> notification.message(context)?.let(toast::success)
             }
@@ -210,30 +221,38 @@ fun SyncplayToastNotifications(
     }
 }
 
-private fun SyncplayNotification.message(context: android.content.Context): String? = when (this) {
-    SyncplayNotification.GroupCreated -> context.getString(R.string.syncplay_group_created)
-    is SyncplayNotification.JoinedGroup -> context.getString(R.string.syncplay_joined_group, name)
-    is SyncplayNotification.LeftGroup -> context.getString(R.string.syncplay_left_group, name)
-    is SyncplayNotification.MemberJoined -> context.getString(R.string.syncplay_member_joined, name)
-    is SyncplayNotification.MemberLeft -> context.getString(R.string.syncplay_member_left, name)
-    is SyncplayNotification.GroupEnded -> context.getString(R.string.syncplay_group_ended, name)
-    SyncplayNotification.ViewerControlsEnabled -> context.getString(R.string.syncplay_viewer_controls_enabled)
-    SyncplayNotification.ViewerControlsDisabled -> context.getString(R.string.syncplay_viewer_controls_disabled)
-    SyncplayNotification.HostDisconnected -> context.getString(R.string.syncplay_host_disconnected)
-    SyncplayNotification.ParticipantReplaced -> context.getString(R.string.syncplay_participant_replaced)
-    is SyncplayNotification.Failure -> null
-    is SyncplayNotification.NowPlaying -> null
-}
-
-private fun SyncplayFailure.message(context: android.content.Context): String = context.getString(
+private fun SyncplayNotification.message(context: android.content.Context): String? =
     when (this) {
-        SyncplayFailure.CREATE -> R.string.syncplay_create_failed
-        SyncplayFailure.CREATE_ALREADY_IN_GROUP -> R.string.syncplay_already_in_group
-        SyncplayFailure.JOIN -> R.string.syncplay_join_failed
-        SyncplayFailure.JOIN_MUST_LEAVE_GROUP -> R.string.syncplay_must_leave_group
-        SyncplayFailure.LEAVE -> R.string.syncplay_leave_failed
-        SyncplayFailure.SETTINGS -> R.string.syncplay_settings_failed
-        SyncplayFailure.PLAYBACK -> R.string.syncplay_playback_failed
-        SyncplayFailure.PRESENCE -> R.string.syncplay_presence_failed
-    },
-)
+        SyncplayNotification.GroupCreated -> context.getString(R.string.syncplay_group_created)
+        is SyncplayNotification.JoinedGroup ->
+            context.getString(R.string.syncplay_joined_group, name)
+        is SyncplayNotification.LeftGroup -> context.getString(R.string.syncplay_left_group, name)
+        is SyncplayNotification.MemberJoined ->
+            context.getString(R.string.syncplay_member_joined, name)
+        is SyncplayNotification.MemberLeft -> context.getString(R.string.syncplay_member_left, name)
+        is SyncplayNotification.GroupEnded -> context.getString(R.string.syncplay_group_ended, name)
+        SyncplayNotification.ViewerControlsEnabled ->
+            context.getString(R.string.syncplay_viewer_controls_enabled)
+        SyncplayNotification.ViewerControlsDisabled ->
+            context.getString(R.string.syncplay_viewer_controls_disabled)
+        SyncplayNotification.HostDisconnected ->
+            context.getString(R.string.syncplay_host_disconnected)
+        SyncplayNotification.ParticipantReplaced ->
+            context.getString(R.string.syncplay_participant_replaced)
+        is SyncplayNotification.Failure -> null
+        is SyncplayNotification.NowPlaying -> null
+    }
+
+private fun SyncplayFailure.message(context: android.content.Context): String =
+    context.getString(
+        when (this) {
+            SyncplayFailure.CREATE -> R.string.syncplay_create_failed
+            SyncplayFailure.CREATE_ALREADY_IN_GROUP -> R.string.syncplay_already_in_group
+            SyncplayFailure.JOIN -> R.string.syncplay_join_failed
+            SyncplayFailure.JOIN_MUST_LEAVE_GROUP -> R.string.syncplay_must_leave_group
+            SyncplayFailure.LEAVE -> R.string.syncplay_leave_failed
+            SyncplayFailure.SETTINGS -> R.string.syncplay_settings_failed
+            SyncplayFailure.PLAYBACK -> R.string.syncplay_playback_failed
+            SyncplayFailure.PRESENCE -> R.string.syncplay_presence_failed
+        }
+    )

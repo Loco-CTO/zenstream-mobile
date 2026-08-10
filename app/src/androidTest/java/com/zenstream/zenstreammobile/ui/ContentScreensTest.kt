@@ -12,11 +12,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -27,11 +27,11 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
-import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
-import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
+import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
+import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -39,8 +39,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ContentScreensTest {
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     private val session = AuthSession("https://example.test", "token", "user", "Test")
 
@@ -48,12 +47,13 @@ class ContentScreensTest {
     fun searchShowsSearchFieldBeforeAQueryIsEntered() {
         composeRule.setContent {
             ZenStreamTheme {
-                SearchScreen(EmptySearchSource(), session, PaddingValues()) { }
+                SearchScreen(EmptySearchSource(), session, PaddingValues()) {}
             }
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.search_placeholder))
+        composeRule
+            .onNodeWithText(context.getString(R.string.search_placeholder))
             .assertIsDisplayed()
     }
 
@@ -67,7 +67,7 @@ class ContentScreensTest {
                     LibraryScreenSource(listOf(shows, movies), shows),
                     session,
                     PaddingValues(),
-                ) { }
+                ) {}
             }
         }
 
@@ -76,9 +76,13 @@ class ContentScreensTest {
         }
         composeRule.onNodeWithText("Shows").assertIsDisplayed()
         composeRule.onNodeWithText("Movies").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription(
-            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.sort_by)
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(
+                InstrumentationRegistry.getInstrumentation()
+                    .targetContext
+                    .getString(R.string.sort_by)
+            )
+            .assertIsDisplayed()
     }
 
     @Test
@@ -90,8 +94,10 @@ class ContentScreensTest {
         assertEquals(2, narrowBounds.map { it.left }.distinct().size)
         assertEquals(5, tabletBounds.map { it.left }.distinct().size)
         items.forEach { item ->
-            val bounds = composeRule.onNodeWithContentDescription("Play ${item.name}")
-                .getUnclippedBoundsInRoot()
+            val bounds =
+                composeRule
+                    .onNodeWithContentDescription("Play ${item.name}")
+                    .getUnclippedBoundsInRoot()
             val width = bounds.right - bounds.left
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
@@ -104,11 +110,7 @@ class ContentScreensTest {
     ): List<androidx.compose.ui.unit.DpRect> {
         composeRule.setContent {
             ZenStreamTheme {
-                Box(
-                    Modifier
-                        .requiredWidth(width.dp)
-                        .requiredHeight(500.dp)
-                ) {
+                Box(Modifier.requiredWidth(width.dp).requiredHeight(500.dp)) {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         contentPadding = PaddingValues(16.dp),
@@ -119,7 +121,13 @@ class ContentScreensTest {
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
                             ) {
-                                MediaCard(item, session, wide = false, onClick = { }, gridCard = true)
+                                MediaCard(
+                                    item,
+                                    session,
+                                    wide = false,
+                                    onClick = {},
+                                    gridCard = true,
+                                )
                             }
                         }
                     }
@@ -128,14 +136,14 @@ class ContentScreensTest {
         }
         composeRule.waitForIdle()
         return items.map { item ->
-            composeRule.onNodeWithContentDescription("Play ${item.name}")
-                .getUnclippedBoundsInRoot()
+            composeRule.onNodeWithContentDescription("Play ${item.name}").getUnclippedBoundsInRoot()
         }
     }
 }
 
 private class EmptySearchSource : SearchDataSource {
     override suspend fun clearSession() = Unit
+
     override suspend fun search(session: AuthSession, query: String) = emptyList<MediaItem>()
 }
 
@@ -144,7 +152,9 @@ private class LibraryScreenSource(
     private val selected: Library,
 ) : LibraryDataSource {
     override suspend fun clearSession() = Unit
+
     override suspend fun libraries(session: AuthSession) = available
+
     override suspend fun libraryPage(
         session: AuthSession,
         library: Library,
@@ -152,6 +162,9 @@ private class LibraryScreenSource(
         limit: Int,
         sort: LibrarySort,
     ) = PagedLibrary(library, listOf(MediaItem("item", selected.name)), 1)
+
     override suspend fun cachedLibrarySort(userId: String, libraryId: String) = null
-    override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) = Unit
+
+    override suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort) =
+        Unit
 }

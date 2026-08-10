@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
@@ -89,16 +89,13 @@ import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
-import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.imageBlurHash
-import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
-import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
-import com.zenstream.zenstreammobile.ui.components.ToastHost
-import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
+import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.trickplayPreview
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -109,11 +106,14 @@ import com.zenstream.zenstreammobile.model.TrickplayPreview
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.SyncplayTimelineScheduler
-import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
+import com.zenstream.zenstreammobile.ui.components.ToastHost
+import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
+import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import com.composables.icons.lucide.R as LucideR
 
 internal fun shouldShowPlayerLoading(
     error: String?,
@@ -122,12 +122,9 @@ internal fun shouldShowPlayerLoading(
     engineBuffering: Boolean,
     hasPlayback: Boolean,
     waitingForSyncplayMembers: Boolean,
-): Boolean = error == null && (
-    loading ||
-        engineBuffering ||
-        (hasPlayback && !engineReady) ||
-        waitingForSyncplayMembers
-    )
+): Boolean =
+    error == null &&
+        (loading || engineBuffering || (hasPlayback && !engineReady) || waitingForSyncplayMembers)
 
 @Composable
 fun PlaybackScreen(
@@ -145,19 +142,21 @@ fun PlaybackScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val vm: PlaybackViewModel = viewModel(
-        key = "playback-${session.userId}-$itemId",
-        factory = PlaybackViewModel.Factory(
-            repository,
-            session,
-            itemId,
-            context,
-            initialAudioStreamId,
-            initialSubtitleStreamIndex,
-            hasInitialSubtitleSelection,
-            syncplay,
-        ),
-    )
+    val vm: PlaybackViewModel =
+        viewModel(
+            key = "playback-${session.userId}-$itemId",
+            factory =
+                PlaybackViewModel.Factory(
+                    repository,
+                    session,
+                    itemId,
+                    context,
+                    initialAudioStreamId,
+                    initialSubtitleStreamIndex,
+                    hasInitialSubtitleSelection,
+                    syncplay,
+                ),
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val latestState by rememberUpdatedState(state)
@@ -174,18 +173,19 @@ fun PlaybackScreen(
     var surfacePreviewUnavailable by remember { mutableStateOf(false) }
     var debugOpen by remember { mutableStateOf(false) }
     var playerVisible by remember { mutableStateOf(true) }
-    val timelineScheduler = remember(vm, syncplay, playbackScope) {
-        SyncplayTimelineScheduler(
-            scope = playbackScope,
-            serverNow = syncplay::serverNow,
-            currentRoom = { syncplay.state.value.active },
-            apply = { room, serverNow ->
-                if (syncplay.state.value.currentMember()?.watchingTogether == true) {
-                    vm.applySyncplayRoom(room, serverNow)
-                }
-            },
-        )
-    }
+    val timelineScheduler =
+        remember(vm, syncplay, playbackScope) {
+            SyncplayTimelineScheduler(
+                scope = playbackScope,
+                serverNow = syncplay::serverNow,
+                currentRoom = { syncplay.state.value.active },
+                apply = { room, serverNow ->
+                    if (syncplay.state.value.currentMember()?.watchingTogether == true) {
+                        vm.applySyncplayRoom(room, serverNow)
+                    }
+                },
+            )
+        }
 
     LaunchedEffect(state.showDebugIcon) {
         if (!state.showDebugIcon) debugOpen = false
@@ -204,10 +204,12 @@ fun PlaybackScreen(
             timelineScheduler.cancel()
             return@LaunchedEffect
         }
-        val room = syncplayState.active ?: run {
-            timelineScheduler.cancel()
-            return@LaunchedEffect
-        }
+        val room =
+            syncplayState.active
+                ?: run {
+                    timelineScheduler.cancel()
+                    return@LaunchedEffect
+                }
         val member = syncplayState.currentMember() ?: return@LaunchedEffect
         if (member.watchingTogether && room.mediaItemId() != null) {
             timelineScheduler.apply(room)
@@ -219,16 +221,17 @@ fun PlaybackScreen(
     DisposableEffect(vm, lifecycleOwner, timelineScheduler) {
         fun reportPresence(viewing: Boolean, immediate: Boolean = false) {
             val room = syncplay.state.value.active
-            if (room?.mediaItemId() == latestState.itemId &&
-                syncplay.state.value.currentMember()?.watchingTogether == true
+            if (
+                room?.mediaItemId() == latestState.itemId &&
+                    syncplay.state.value.currentMember()?.watchingTogether == true
             ) {
                 syncplay.reportPresence(
                     viewing = viewing,
-                    loading = viewing && (
-                        latestState.loading ||
-                            !latestState.engine.ready ||
-                            latestState.engine.isBuffering
-                    ),
+                    loading =
+                        viewing &&
+                            (latestState.loading ||
+                                !latestState.engine.ready ||
+                                latestState.engine.isBuffering),
                     immediate = immediate,
                 )
             }
@@ -271,11 +274,12 @@ fun PlaybackScreen(
     }
 
     LaunchedEffect(controlsVisible, controlsLocked, sheet, state.engine.isPlaying) {
-        if (shouldAutoHidePlaybackControls(
+        if (
+            shouldAutoHidePlaybackControls(
                 controlsVisible,
                 controlsLocked,
                 sheet != null,
-                state.engine.isPlaying
+                state.engine.isPlaying,
             )
         ) {
             delay(4_500)
@@ -292,7 +296,7 @@ fun PlaybackScreen(
 
     LaunchedEffect(vm) {
         while (isActive) {
-            withFrameNanos { }
+            withFrameNanos {}
             subtitlePositionSeconds = vm.subtitlePositionSeconds()
         }
     }
@@ -309,8 +313,10 @@ fun PlaybackScreen(
         playerVisible,
     ) {
         val room = syncplayState.active
-        if (playerVisible && room?.mediaItemId() == state.itemId &&
-            syncplayState.currentMember()?.watchingTogether == true
+        if (
+            playerVisible &&
+                room?.mediaItemId() == state.itemId &&
+                syncplayState.currentMember()?.watchingTogether == true
         ) {
             syncplay.reportPresence(
                 viewing = true,
@@ -325,8 +331,10 @@ fun PlaybackScreen(
         state.engine.isBuffering,
     ) {
         val room = syncplayState.active
-        if (playerVisible && room?.mediaItemId() == state.itemId &&
-            syncplayState.currentMember()?.watchingTogether == true
+        if (
+            playerVisible &&
+                room?.mediaItemId() == state.itemId &&
+                syncplayState.currentMember()?.watchingTogether == true
         ) {
             syncplay.reportPresence(
                 viewing = true,
@@ -337,20 +345,17 @@ fun PlaybackScreen(
 
     val playerView = vm.createView(context)
     val waitingForSyncplayMembers = syncplayWaitingForMembers(syncplayState.active, state.itemId)
-    val showPlayerLoading = shouldShowPlayerLoading(
-        error = state.error,
-        loading = state.loading,
-        engineReady = state.engine.ready,
-        engineBuffering = state.engine.isBuffering,
-        hasPlayback = state.playback != null,
-        waitingForSyncplayMembers = waitingForSyncplayMembers,
-    )
+    val showPlayerLoading =
+        shouldShowPlayerLoading(
+            error = state.error,
+            loading = state.loading,
+            engineReady = state.engine.ready,
+            engineBuffering = state.engine.isBuffering,
+            hasPlayback = state.playback != null,
+            waitingForSyncplayMembers = waitingForSyncplayMembers,
+        )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         playerView?.let { view ->
             AndroidView(
                 factory = { view },
@@ -386,9 +391,8 @@ fun PlaybackScreen(
         seekFeedback?.let { feedback ->
             SeekFeedbackOverlay(
                 feedback = feedback,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = SEEK_FEEDBACK_VERTICAL_OFFSET),
+                modifier =
+                    Modifier.align(Alignment.Center).offset(y = SEEK_FEEDBACK_VERTICAL_OFFSET),
             )
         }
 
@@ -402,54 +406,51 @@ fun PlaybackScreen(
         if (debugOpen) {
             PlaybackDiagnosticsPanel(
                 state = state,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 88.dp, start = 16.dp, end = 16.dp)
-                    .zIndex(30f),
+                modifier =
+                    Modifier.align(Alignment.TopStart)
+                        .padding(top = 88.dp, start = 16.dp, end = 16.dp)
+                        .zIndex(30f),
             )
         }
 
         val nextEpisode = state.nextEpisode
-        val nextUpVisible = shouldShowNextUp(
-            isEpisode = state.playback?.item?.type == "Episode",
-            neighborsLoaded = state.episodeNeighborsLoaded,
-            hasNextEpisode = nextEpisode != null,
-            positionSeconds = state.engine.positionSeconds,
-            durationSeconds = state.engine.durationSeconds,
-        )
+        val nextUpVisible =
+            shouldShowNextUp(
+                isEpisode = state.playback?.item?.type == "Episode",
+                neighborsLoaded = state.episodeNeighborsLoaded,
+                hasNextEpisode = nextEpisode != null,
+                positionSeconds = state.engine.positionSeconds,
+                durationSeconds = state.engine.durationSeconds,
+            )
         if (nextUpVisible && nextEpisode != null) {
             NextUpOverlay(
                 episode = nextEpisode,
                 session = session,
                 onStop = vm::requestClose,
                 onPlayNext = { vm.syncplayNext(syncplay) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = if (controlsVisible) 112.dp else 28.dp)
-                    .zIndex(15f),
+                modifier =
+                    Modifier.align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = if (controlsVisible) 112.dp else 28.dp)
+                        .zIndex(15f),
             )
         }
 
         if (showPlayerLoading) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .testTag("player-loading"),
+                modifier = Modifier.align(Alignment.Center).testTag("player-loading"),
             )
         }
         if (state.error != null && !state.loading) {
             Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(24.dp),
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
                     state.error ?: stringResourceCompat(R.string.media_playback_failed),
                     color = Color.White,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
                 Button(onClick = onBack) { Text(stringResourceCompat(R.string.back)) }
             }
@@ -457,15 +458,15 @@ fun PlaybackScreen(
 
         if (controlsVisible || controlsLocked) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = .78f), Color.Black.copy(alpha = 0f))
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = .78f), Color.Black.copy(alpha = 0f))
+                            )
                         )
-                    )
-                    .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 24.dp),
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 24.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -475,7 +476,7 @@ fun PlaybackScreen(
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_arrow_left),
                             stringResourceCompat(R.string.back),
-                            tint = Color.White
+                            tint = Color.White,
                         )
                     }
                     Text(
@@ -489,10 +490,22 @@ fun PlaybackScreen(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = { controlsLocked = !controlsLocked; sheet = null }) {
+                        IconButton(
+                            onClick = {
+                                controlsLocked = !controlsLocked
+                                sheet = null
+                            }
+                        ) {
                             Icon(
-                                painter = painterResource(if (controlsLocked) LucideR.drawable.lucide_ic_lock else LucideR.drawable.lucide_ic_lock_open),
-                                stringResourceCompat(if (controlsLocked) R.string.player_unlock else R.string.player_lock),
+                                painter =
+                                    painterResource(
+                                        if (controlsLocked) LucideR.drawable.lucide_ic_lock
+                                        else LucideR.drawable.lucide_ic_lock_open
+                                    ),
+                                stringResourceCompat(
+                                    if (controlsLocked) R.string.player_unlock
+                                    else R.string.player_lock
+                                ),
                                 tint = Color.White,
                             )
                         }
@@ -511,35 +524,52 @@ fun PlaybackScreen(
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_bug,
                                     stringResourceCompat(
-                                        if (debugOpen) R.string.player_hide_debug else R.string.player_show_debug,
+                                        if (debugOpen) R.string.player_hide_debug
+                                        else R.string.player_show_debug
                                     ),
-                                ) { debugOpen = !debugOpen }
+                                ) {
+                                    debugOpen = !debugOpen
+                                }
                             }
                             PlayerMenuButton(
                                 LucideR.drawable.lucide_ic_picture_in_picture,
                                 stringResourceCompat(R.string.player_pip),
-                                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                            ) { enterPictureInPicture() }
+                                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O,
+                            ) {
+                                enterPictureInPicture()
+                            }
                             PlayerMenuButton(
                                 LucideR.drawable.lucide_ic_gauge,
-                                stringResourceCompat(R.string.player_speed)
-                            ) { sheet = PlayerSheet.Speed }
-                            if (shouldShowAudioSelector(state.playback?.audioTracks.orEmpty().size)) {
+                                stringResourceCompat(R.string.player_speed),
+                            ) {
+                                sheet = PlayerSheet.Speed
+                            }
+                            if (
+                                shouldShowAudioSelector(state.playback?.audioTracks.orEmpty().size)
+                            ) {
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_audio_lines,
-                                    stringResourceCompat(R.string.audio_track)
-                                ) { sheet = PlayerSheet.Audio }
+                                    stringResourceCompat(R.string.audio_track),
+                                ) {
+                                    sheet = PlayerSheet.Audio
+                                }
                             }
-                            if (shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)) {
+                            if (
+                                shouldShowSubtitleSelector(state.playback?.subtitles.orEmpty().size)
+                            ) {
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_captions,
-                                    stringResourceCompat(R.string.subtitle_track)
-                                ) { sheet = PlayerSheet.Subtitles }
+                                    stringResourceCompat(R.string.subtitle_track),
+                                ) {
+                                    sheet = PlayerSheet.Subtitles
+                                }
                             }
                             PlayerMenuButton(
                                 LucideR.drawable.lucide_ic_settings,
-                                stringResourceCompat(R.string.player_quality)
-                            ) { sheet = PlayerSheet.Quality }
+                                stringResourceCompat(R.string.player_quality),
+                            ) {
+                                sheet = PlayerSheet.Quality
+                            }
                         }
                     }
                 }
@@ -553,13 +583,22 @@ fun PlaybackScreen(
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_skip_back,
                         stringResourceCompat(R.string.player_previous),
-                        enabled = state.previousEpisode != null && (syncplayState.active == null || syncplayState.canControl(session.userId))
-                    ) { vm.syncplayPrevious(syncplay) }
+                        enabled =
+                            state.previousEpisode != null &&
+                                (syncplayState.active == null ||
+                                    syncplayState.canControl(session.userId)),
+                    ) {
+                        vm.syncplayPrevious(syncplay)
+                    }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_rewind,
                         stringResourceCompat(R.string.player_seek_back),
-                        enabled = syncplayState.active == null || syncplayState.canControl(session.userId)
-                    ) { vm.syncplaySeekBy(syncplay, -10.0) }
+                        enabled =
+                            syncplayState.active == null ||
+                                syncplayState.canControl(session.userId),
+                    ) {
+                        vm.syncplaySeekBy(syncplay, -10.0)
+                    }
                     Surface(
                         onClick = { vm.syncplayToggle(syncplay) },
                         modifier = Modifier.size(64.dp),
@@ -569,8 +608,14 @@ fun PlaybackScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                painter = painterResource(if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
-                                stringResourceCompat(if (state.engine.isPlaying) R.string.pause else R.string.play),
+                                painter =
+                                    painterResource(
+                                        if (state.engine.isPlaying) LucideR.drawable.lucide_ic_pause
+                                        else LucideR.drawable.lucide_ic_play
+                                    ),
+                                stringResourceCompat(
+                                    if (state.engine.isPlaying) R.string.pause else R.string.play
+                                ),
                                 modifier = Modifier.size(28.dp),
                                 tint = Color.White,
                             )
@@ -579,24 +624,33 @@ fun PlaybackScreen(
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_fast_forward,
                         stringResourceCompat(R.string.player_seek_forward),
-                        enabled = syncplayState.active == null || syncplayState.canControl(session.userId)
-                    ) { vm.syncplaySeekBy(syncplay, 10.0) }
+                        enabled =
+                            syncplayState.active == null ||
+                                syncplayState.canControl(session.userId),
+                    ) {
+                        vm.syncplaySeekBy(syncplay, 10.0)
+                    }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_skip_forward,
                         stringResourceCompat(R.string.player_next),
-                        enabled = state.nextEpisode != null && (syncplayState.active == null || syncplayState.canControl(session.userId))
-                    ) { vm.syncplayNext(syncplay) }
+                        enabled =
+                            state.nextEpisode != null &&
+                                (syncplayState.active == null ||
+                                    syncplayState.canControl(session.userId)),
+                    ) {
+                        vm.syncplayNext(syncplay)
+                    }
                 }
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
+                    modifier =
+                        Modifier.align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = .8f))
+                                )
                             )
-                        )
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     val displayedPosition =
                         timelineScrub?.positionSeconds ?: state.engine.positionSeconds
@@ -639,9 +693,9 @@ fun PlaybackScreen(
             state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
                 Surface(
                     onClick = { vm.syncplaySeekTo(syncplay, segment.endSeconds) },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 20.dp, bottom = if (controlsVisible) 86.dp else 24.dp),
+                    modifier =
+                        Modifier.align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = if (controlsVisible) 86.dp else 24.dp),
                     shape = RoundedCornerShape(50),
                     color = Color.Black.copy(alpha = .58f),
                     contentColor = Color.White,
@@ -653,13 +707,19 @@ fun PlaybackScreen(
                     ) {
                         Icon(
                             painter = painterResource(LucideR.drawable.lucide_ic_fast_forward),
-                            contentDescription = stringResourceCompat(
-                                if (segment.type == PlaybackSegmentType.INTRO) R.string.skip_intro else R.string.skip_outro
-                            ),
+                            contentDescription =
+                                stringResourceCompat(
+                                    if (segment.type == PlaybackSegmentType.INTRO)
+                                        R.string.skip_intro
+                                    else R.string.skip_outro
+                                ),
                             modifier = Modifier.size(18.dp),
                         )
                         Text(
-                            stringResourceCompat(if (segment.type == PlaybackSegmentType.INTRO) R.string.skip_intro else R.string.skip_outro),
+                            stringResourceCompat(
+                                if (segment.type == PlaybackSegmentType.INTRO) R.string.skip_intro
+                                else R.string.skip_outro
+                            ),
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
@@ -668,19 +728,19 @@ fun PlaybackScreen(
         }
 
         surfaceDragPosition?.let { targetPosition ->
-            val preview = trickplayPreview(
-                source = state.playback?.source,
-                timeSeconds = state.mediaOriginSeconds + targetPosition,
-            ).takeUnless { surfacePreviewUnavailable }
+            val preview =
+                trickplayPreview(
+                        source = state.playback?.source,
+                        timeSeconds = state.mediaOriginSeconds + targetPosition,
+                    )
+                    .takeUnless { surfacePreviewUnavailable }
             SurfaceTrickplayOverlay(
                 session = session,
                 positionSeconds = targetPosition,
                 durationSeconds = state.engine.durationSeconds,
                 preview = preview,
                 onPreviewError = { surfacePreviewUnavailable = true },
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .zIndex(20f),
+                modifier = Modifier.align(Alignment.Center).zIndex(20f),
             )
         }
 
@@ -694,10 +754,22 @@ fun PlaybackScreen(
             qualities = state.playback?.qualities.orEmpty(),
             speed = state.engine.speed,
             onDismiss = { sheet = null },
-            onSubtitle = { vm.chooseSubtitle(it); sheet = null },
-            onAudio = { vm.chooseAudio(it); sheet = null },
-            onQuality = { vm.chooseQuality(it); sheet = null },
-            onSpeed = { vm.setSpeed(it); sheet = null },
+            onSubtitle = {
+                vm.chooseSubtitle(it)
+                sheet = null
+            },
+            onAudio = {
+                vm.chooseAudio(it)
+                sheet = null
+            },
+            onQuality = {
+                vm.chooseQuality(it)
+                sheet = null
+            },
+            onSpeed = {
+                vm.setSpeed(it)
+                sheet = null
+            },
         )
         SyncplayToastNotifications(
             manager = syncplay,
@@ -762,106 +834,122 @@ internal fun PlaybackGestureLayer(
     val showFeedback = rememberUpdatedState(onSeekFeedback)
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-    val protectedInsets = WindowInsets.systemGestures
-        .union(WindowInsets.statusBarsIgnoringVisibility)
-        .union(WindowInsets.navigationBarsIgnoringVisibility)
+    val protectedInsets =
+        WindowInsets.systemGestures
+            .union(WindowInsets.statusBarsIgnoringVisibility)
+            .union(WindowInsets.navigationBarsIgnoringVisibility)
     val minimumEdgeGuard = with(density) { SYSTEM_GESTURE_EDGE_GUARD.toPx() }
-    val gestureStartExclusion = GestureStartExclusion(
-        left = maxOf(minimumEdgeGuard, protectedInsets.getLeft(density, layoutDirection).toFloat()),
-        top = maxOf(minimumEdgeGuard, protectedInsets.getTop(density).toFloat()),
-        right = maxOf(minimumEdgeGuard, protectedInsets.getRight(density, layoutDirection).toFloat()),
-        bottom = maxOf(minimumEdgeGuard, protectedInsets.getBottom(density).toFloat()),
-    )
+    val gestureStartExclusion =
+        GestureStartExclusion(
+            left =
+                maxOf(
+                    minimumEdgeGuard,
+                    protectedInsets.getLeft(density, layoutDirection).toFloat(),
+                ),
+            top = maxOf(minimumEdgeGuard, protectedInsets.getTop(density).toFloat()),
+            right =
+                maxOf(
+                    minimumEdgeGuard,
+                    protectedInsets.getRight(density, layoutDirection).toFloat(),
+                ),
+            bottom = maxOf(minimumEdgeGuard, protectedInsets.getBottom(density).toFloat()),
+        )
 
     Box(
-        modifier = modifier
-            .pointerInput(gestureStartExclusion) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    if (isGestureStartProtected(down.position, size, gestureStartExclusion)) {
-                        return@awaitEachGesture
-                    }
-
-                    var dragStartPosition = 0.0
-                    var dragDistancePixels = 0f
-                    var dragTargetPosition = 0.0
-                    var dragActive = false
-                    var dragAccepted = false
-                    var dragRejected = false
-                    var accumulatedMovement = Offset.Zero
-
-                    while (!dragRejected) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (change.changedToUpIgnoreConsumed()) break
-                        if (!dragAccepted && change.isConsumed) {
-                            dragRejected = true
-                            break
+        modifier =
+            modifier
+                .pointerInput(gestureStartExclusion) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        if (isGestureStartProtected(down.position, size, gestureStartExclusion)) {
+                            return@awaitEachGesture
                         }
 
-                        val movement = change.positionChangeIgnoreConsumed()
-                        if (movement == Offset.Zero) continue
-                        accumulatedMovement += movement
-                        if (!dragAccepted) {
-                            if (kotlin.math.hypot(
-                                    accumulatedMovement.x.toDouble(),
-                                    accumulatedMovement.y.toDouble(),
-                                ) < viewConfiguration.touchSlop
-                            ) {
-                                continue
-                            }
-                            if (!isHorizontalSeekGesture(accumulatedMovement)) {
+                        var dragStartPosition = 0.0
+                        var dragDistancePixels = 0f
+                        var dragTargetPosition = 0.0
+                        var dragActive = false
+                        var dragAccepted = false
+                        var dragRejected = false
+                        var accumulatedMovement = Offset.Zero
+
+                        while (!dragRejected) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUpIgnoreConsumed()) break
+                            if (!dragAccepted && change.isConsumed) {
                                 dragRejected = true
                                 break
                             }
-                            dragAccepted = true
-                            dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
-                            dragTargetPosition = dragStartPosition
-                            dragActive = currentDuration.value.isFinite() && currentDuration.value > 0.0
-                            if (dragActive) onSurfaceDragStart(dragTargetPosition)
-                        }
 
-                        change.consume()
-                        dragDistancePixels += movement.x
-                        if (dragActive) {
-                            updateSurfaceDragTarget(
-                                dragStartPosition = dragStartPosition,
-                                dragDistancePixels = dragDistancePixels,
-                                playerWidthPixels = size.width,
-                                durationSeconds = currentDuration.value,
-                            )?.let {
-                                dragTargetPosition = it
-                                onSurfaceDragChanged(dragTargetPosition)
+                            val movement = change.positionChangeIgnoreConsumed()
+                            if (movement == Offset.Zero) continue
+                            accumulatedMovement += movement
+                            if (!dragAccepted) {
+                                if (
+                                    kotlin.math.hypot(
+                                        accumulatedMovement.x.toDouble(),
+                                        accumulatedMovement.y.toDouble(),
+                                    ) < viewConfiguration.touchSlop
+                                ) {
+                                    continue
+                                }
+                                if (!isHorizontalSeekGesture(accumulatedMovement)) {
+                                    dragRejected = true
+                                    break
+                                }
+                                dragAccepted = true
+                                dragStartPosition = currentPosition.value.coerceAtLeast(0.0)
+                                dragTargetPosition = dragStartPosition
+                                dragActive =
+                                    currentDuration.value.isFinite() && currentDuration.value > 0.0
+                                if (dragActive) onSurfaceDragStart(dragTargetPosition)
+                            }
+
+                            change.consume()
+                            dragDistancePixels += movement.x
+                            if (dragActive) {
+                                updateSurfaceDragTarget(
+                                        dragStartPosition = dragStartPosition,
+                                        dragDistancePixels = dragDistancePixels,
+                                        playerWidthPixels = size.width,
+                                        durationSeconds = currentDuration.value,
+                                    )
+                                    ?.let {
+                                        dragTargetPosition = it
+                                        onSurfaceDragChanged(dragTargetPosition)
+                                    }
                             }
                         }
-                    }
-                    if (dragActive && dragAccepted && !dragRejected) {
-                        onSurfaceDragEnd(dragTargetPosition)
-                    } else if (dragActive) {
-                        onSurfaceDragCancel()
+                        if (dragActive && dragAccepted && !dragRejected) {
+                            onSurfaceDragEnd(dragTargetPosition)
+                        } else if (dragActive) {
+                            onSurfaceDragCancel()
+                        }
                     }
                 }
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = { offset ->
-                        val delta = quickSeekDeltaForTap(offset.x, size.width)
-                        seekBy.value(delta)
-                        showFeedback.value(
-                            SeekFeedback(
-                                direction = if (delta < 0.0) SeekDirection.BACKWARD else SeekDirection.FORWARD,
-                                seconds = feedbackSeconds(delta),
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val delta = quickSeekDeltaForTap(offset.x, size.width)
+                            seekBy.value(delta)
+                            showFeedback.value(
+                                SeekFeedback(
+                                    direction =
+                                        if (delta < 0.0) SeekDirection.BACKWARD
+                                        else SeekDirection.FORWARD,
+                                    seconds = feedbackSeconds(delta),
+                                )
                             )
-                        )
-                    },
-                    onTap = {
-                        if (!currentLocked.value) toggleControls.value()
-                    },
-                )
-            }
-            .semantics {
-                contentDescription = quickControlsDescription
-            },
+                        },
+                        onTap = {
+                            if (!currentLocked.value) toggleControls.value()
+                        },
+                    )
+                }
+                .semantics {
+                    contentDescription = quickControlsDescription
+                }
     )
 }
 
@@ -883,18 +971,21 @@ internal fun SeekFeedbackOverlay(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                painter = painterResource(
-                    if (isBackward) LucideR.drawable.lucide_ic_rewind
-                    else LucideR.drawable.lucide_ic_fast_forward
-                ),
+                painter =
+                    painterResource(
+                        if (isBackward) LucideR.drawable.lucide_ic_rewind
+                        else LucideR.drawable.lucide_ic_fast_forward
+                    ),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
             )
             Text(
-                text = stringResourceCompat(
-                    if (isBackward) R.string.player_quick_seek_back else R.string.player_quick_seek_forward,
-                    feedback.seconds,
-                ),
+                text =
+                    stringResourceCompat(
+                        if (isBackward) R.string.player_quick_seek_back
+                        else R.string.player_quick_seek_forward,
+                        feedback.seconds,
+                    ),
                 style = MaterialTheme.typography.titleMedium,
             )
         }
@@ -907,7 +998,8 @@ internal fun dragSeekDeltaSeconds(
     durationSeconds: Double,
 ): Double {
     if (playerWidthPixels <= 0 || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0.0
-    return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() * durationSeconds *
+    return dragDistancePixels.toDouble() / playerWidthPixels.toDouble() *
+        durationSeconds *
         DRAG_SEEK_SENSITIVITY
 }
 
@@ -931,11 +1023,12 @@ private fun updateSurfaceDragTarget(
     durationSeconds: Double,
 ): Double? {
     if (!durationSeconds.isFinite() || durationSeconds <= 0.0) return null
-    val delta = dragSeekDeltaSeconds(
-        dragDistancePixels = dragDistancePixels,
-        playerWidthPixels = playerWidthPixels,
-        durationSeconds = durationSeconds,
-    )
+    val delta =
+        dragSeekDeltaSeconds(
+            dragDistancePixels = dragDistancePixels,
+            playerWidthPixels = playerWidthPixels,
+            durationSeconds = durationSeconds,
+        )
     return clampSeekTarget(dragStartPosition + delta, durationSeconds)
 }
 
@@ -948,7 +1041,12 @@ internal fun clampSeekTarget(positionSeconds: Double, durationSeconds: Double): 
 internal fun feedbackSeconds(deltaSeconds: Double): Int =
     kotlin.math.abs(deltaSeconds).toInt().coerceAtLeast(1)
 
-internal enum class PlayerSheet { Audio, Subtitles, Speed, Quality }
+internal enum class PlayerSheet {
+    Audio,
+    Subtitles,
+    Speed,
+    Quality,
+}
 
 private data class TimelineScrub(
     val positionSeconds: Double,
@@ -985,11 +1083,10 @@ private fun PlaybackProgress(
 ) {
     val duration = durationSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.1
     BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(horizontal = 12.dp)
-            .pointerInput(duration) {
+        modifier =
+            Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp).pointerInput(
+                duration
+            ) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     fun scrubFrom(x: Float): TimelineScrub {
@@ -1009,7 +1106,7 @@ private fun PlaybackProgress(
                     }
                     onScrubEnd(latest)
                 }
-            },
+            }
     ) {
         val previewWidth = preview?.let {
             val scale = minOf(1f, 240f / it.width, 150f / it.height)
@@ -1027,14 +1124,15 @@ private fun PlaybackProgress(
                 width = previewWidth,
                 height = previewHeight,
                 onError = onPreviewError,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(
-                        x = (scrub.fraction * maxWidth.value - previewWidth.value / 2f)
-                            .coerceIn(0f, (maxWidth - previewWidth).value)
-                            .dp,
-                        y = -(previewHeight + 8.dp),
-                    ),
+                modifier =
+                    Modifier.align(Alignment.TopStart)
+                        .offset(
+                            x =
+                                (scrub.fraction * maxWidth.value - previewWidth.value / 2f)
+                                    .coerceIn(0f, (maxWidth - previewWidth).value)
+                                    .dp,
+                            y = -(previewHeight + 8.dp),
+                        ),
             )
         }
         Canvas(Modifier.fillMaxSize()) {
@@ -1064,11 +1162,12 @@ private fun PlaybackProgress(
                 val right = xAt(segment.endSeconds)
                 if (right > left) {
                     drawRoundRect(
-                        color = if (segment.type == PlaybackSegmentType.INTRO) {
-                            Color(0xFF60A5FA)
-                        } else {
-                            Color(0xFFF59E0B)
-                        },
+                        color =
+                            if (segment.type == PlaybackSegmentType.INTRO) {
+                                Color(0xFF60A5FA)
+                            } else {
+                                Color(0xFFF59E0B)
+                            },
                         topLeft = androidx.compose.ui.geometry.Offset(left, trackTop),
                         size = androidx.compose.ui.geometry.Size(right - left, trackHeight),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2f),
@@ -1103,30 +1202,29 @@ internal fun SurfaceTrickplayOverlay(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         val maxPreviewWidth = (maxWidth - 32.dp).coerceAtLeast(1.dp)
         val previewSize = preview?.let {
-            val scale = minOf(
-                1f,
-                360f / it.width.coerceAtLeast(1),
-                203f / it.height.coerceAtLeast(1),
-                maxPreviewWidth.value / it.width.coerceAtLeast(1),
-            )
+            val scale =
+                minOf(
+                    1f,
+                    360f / it.width.coerceAtLeast(1),
+                    203f / it.height.coerceAtLeast(1),
+                    maxPreviewWidth.value / it.width.coerceAtLeast(1),
+                )
             (it.width * scale).dp to (it.height * scale).dp
         }
-        val accessibilityDescription = stringResourceCompat(
-            R.string.player_drag_seek_preview,
-            formatTime(positionSeconds),
-            formatTime(durationSeconds),
-        )
+        val accessibilityDescription =
+            stringResourceCompat(
+                R.string.player_drag_seek_preview,
+                formatTime(positionSeconds),
+                formatTime(durationSeconds),
+            )
         Surface(
-            modifier = Modifier
-                .testTag("surface-trickplay-preview")
-                .semantics {
+            modifier =
+                Modifier.testTag("surface-trickplay-preview").semantics {
                     contentDescription = accessibilityDescription
                 },
             shape = RoundedCornerShape(18.dp),
@@ -1143,10 +1241,11 @@ internal fun SurfaceTrickplayOverlay(
                         session = session,
                         width = previewSize.first,
                         height = previewSize.second,
-                        contentDescription = stringResourceCompat(
-                            R.string.player_timeline_preview,
-                            formatTime(positionSeconds),
-                        ),
+                        contentDescription =
+                            stringResourceCompat(
+                                R.string.player_timeline_preview,
+                                formatTime(positionSeconds),
+                            ),
                         onError = onPreviewError,
                     )
                 }
@@ -1173,14 +1272,15 @@ private fun TrickplayBubble(
     val cellWidth = width
     val cellHeight = height
     Column(
-        modifier = modifier
-            // PlaybackProgress is only 48.dp tall. The web player renders this
-            // bubble out of flow, so do not let that track constraint collapse
-            // the preview viewport or its caption.
-            .requiredWidth(cellWidth)
-            .wrapContentHeight(unbounded = true)
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color.Black.copy(alpha = .9f)),
+        modifier =
+            modifier
+                // PlaybackProgress is only 48.dp tall. The web player renders this
+                // bubble out of flow, so do not let that track constraint collapse
+                // the preview viewport or its caption.
+                .requiredWidth(cellWidth)
+                .wrapContentHeight(unbounded = true)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = .9f)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         TrickplaySpriteFrame(
@@ -1188,10 +1288,11 @@ private fun TrickplayBubble(
             session = session,
             width = cellWidth,
             height = cellHeight,
-            contentDescription = stringResourceCompat(
-                R.string.player_timeline_preview,
-                formatTime(position.positionSeconds),
-            ),
+            contentDescription =
+                stringResourceCompat(
+                    R.string.player_timeline_preview,
+                    formatTime(position.positionSeconds),
+                ),
             onError = onError,
             modifier = Modifier.clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
         )
@@ -1215,21 +1316,20 @@ private fun TrickplaySpriteFrame(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val request = remember(preview.url, session.token) {
-        ImageRequest.Builder(context)
-            .data(preview.url)
-            .httpHeaders(
-                NetworkHeaders.Builder()
-                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
-                    .build(),
-            )
-            .build()
-    }
+    val request =
+        remember(preview.url, session.token) {
+            ImageRequest.Builder(context)
+                .data(preview.url)
+                .httpHeaders(
+                    NetworkHeaders.Builder()
+                        .set("Authorization", CatalogApi.authorizationHeader(session.token))
+                        .build()
+                )
+                .build()
+        }
     val spriteSize = trickplaySpriteSize(width, height, preview.columns, preview.rows)
     Layout(
-        modifier = modifier
-            .requiredSize(width, height)
-            .clip(RoundedCornerShape(6.dp)),
+        modifier = modifier.requiredSize(width, height).clip(RoundedCornerShape(6.dp)),
         content = {
             AsyncImage(
                 model = request,
@@ -1263,13 +1363,12 @@ private fun NextUpOverlay(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val artworkUrl = landscapeImageType(episode)?.let { type ->
-        imageUrl(session.serverUrl, episode, type, 360, 202)
-    }
+    val artworkUrl =
+        landscapeImageType(episode)?.let { type ->
+            imageUrl(session.serverUrl, episode, type, 360, 202)
+        }
     Surface(
-        modifier = modifier
-            .widthIn(max = 360.dp)
-            .testTag("next-up"),
+        modifier = modifier.widthIn(max = 360.dp).testTag("next-up"),
         shape = RoundedCornerShape(16.dp),
         color = Color.Black.copy(alpha = .82f),
         contentColor = Color.White,
@@ -1299,26 +1398,30 @@ private fun NextUpOverlay(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (artworkUrl != null) {
-                    val request = remember(artworkUrl, session.token) {
-                        ImageRequest.Builder(context)
-                            .data(artworkUrl)
-                            .httpHeaders(
-                                NetworkHeaders.Builder()
-                                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
-                                    .build(),
-                            )
-                            .build()
-                    }
+                    val request =
+                        remember(artworkUrl, session.token) {
+                            ImageRequest.Builder(context)
+                                .data(artworkUrl)
+                                .httpHeaders(
+                                    NetworkHeaders.Builder()
+                                        .set(
+                                            "Authorization",
+                                            CatalogApi.authorizationHeader(session.token),
+                                        )
+                                        .build()
+                                )
+                                .build()
+                        }
                     BlurHashAsyncImage(
                         model = request,
                         imageKey = artworkUrl,
                         blurHash = landscapeImageType(episode)?.let { imageBlurHash(episode, it) },
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .widthIn(min = 112.dp, max = 128.dp)
-                            .height(72.dp)
-                            .clip(RoundedCornerShape(10.dp)),
+                        modifier =
+                            Modifier.widthIn(min = 112.dp, max = 128.dp)
+                                .height(72.dp)
+                                .clip(RoundedCornerShape(10.dp)),
                     )
                 }
                 Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -1335,9 +1438,7 @@ private fun NextUpOverlay(
                 }
             }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
                 Button(onClick = onStop) {
@@ -1365,7 +1466,7 @@ private fun PlayerMenuButton(
         Icon(
             painterResource(icon),
             label,
-            tint = if (enabled) Color.White else Color.White.copy(alpha = .3f)
+            tint = if (enabled) Color.White else Color.White.copy(alpha = .3f),
         )
     }
 }
@@ -1377,21 +1478,31 @@ private fun PlaybackDiagnosticsPanel(
 ) {
     val source = state.playback?.source
     val video = source?.mediaStreams?.firstOrNull { it.type.equals("Video", ignoreCase = true) }
-    val audio = source?.mediaStreams?.firstOrNull { it.index == state.selectedAudio }
-        ?: source?.mediaStreams?.firstOrNull { it.type.equals("Audio", ignoreCase = true) }
+    val audio =
+        source?.mediaStreams?.firstOrNull { it.index == state.selectedAudio }
+            ?: source?.mediaStreams?.firstOrNull { it.type.equals("Audio", ignoreCase = true) }
     val session = state.playback?.sessionId ?: "direct/no session"
-    val sourceDetails = listOfNotNull(
-        source?.container,
-        source?.bitrate?.let { "${it / 1_000} kbps" },
-    ).joinToString(" / ").ifBlank { "-" }
-    val videoDetails = listOfNotNull(
-        video?.codec,
-        video?.width?.let { width -> "${width}x${video.height ?: "?"}" },
-    ).joinToString(" ").ifBlank { "-" }
-    val audioDetails = listOfNotNull(
-        audio?.codec,
-        audio?.channels?.let { "${it}ch" },
-    ).joinToString(" / ").ifBlank { "-" }
+    val sourceDetails =
+        listOfNotNull(
+                source?.container,
+                source?.bitrate?.let { "${it / 1_000} kbps" },
+            )
+            .joinToString(" / ")
+            .ifBlank { "-" }
+    val videoDetails =
+        listOfNotNull(
+                video?.codec,
+                video?.width?.let { width -> "${width}x${video.height ?: "?"}" },
+            )
+            .joinToString(" ")
+            .ifBlank { "-" }
+    val audioDetails =
+        listOfNotNull(
+                audio?.codec,
+                audio?.channels?.let { "${it}ch" },
+            )
+            .joinToString(" / ")
+            .ifBlank { "-" }
 
     Surface(
         modifier = modifier.widthIn(max = 464.dp),
@@ -1418,14 +1529,18 @@ private fun PlaybackDiagnosticsPanel(
                 R.string.player_debug_position,
                 "${formatTime(state.engine.positionSeconds)} / ${formatTime(state.engine.durationSeconds)}",
             )
-            DebugRow(R.string.player_debug_buffered, "${formatTime(state.engine.bufferedSeconds)} ahead")
+            DebugRow(
+                R.string.player_debug_buffered,
+                "${formatTime(state.engine.bufferedSeconds)} ahead",
+            )
             DebugRow(
                 R.string.player_debug_native,
                 listOf(
-                    if (state.engine.isPlaying) "playing" else "paused",
-                    if (state.engine.ready) "ready" else "loading",
-                    if (state.engine.isBuffering) "buffering" else "steady",
-                ).joinToString(" / "),
+                        if (state.engine.isPlaying) "playing" else "paused",
+                        if (state.engine.ready) "ready" else "loading",
+                        if (state.engine.isBuffering) "buffering" else "steady",
+                    )
+                    .joinToString(" / "),
             )
             state.engine.error?.let { DebugRow(R.string.player_debug_error, it) }
         }
@@ -1474,18 +1589,20 @@ internal fun PlayerBottomSheet(
 ) {
     if (sheet == null) return
 
-    val title = when (sheet) {
-        PlayerSheet.Audio -> stringResourceCompat(R.string.audio_track)
-        PlayerSheet.Subtitles -> stringResourceCompat(R.string.subtitle_track)
-        PlayerSheet.Speed -> stringResourceCompat(R.string.player_speed)
-        PlayerSheet.Quality -> stringResourceCompat(R.string.player_quality)
-    }
-    val icon = when (sheet) {
-        PlayerSheet.Audio -> LucideR.drawable.lucide_ic_audio_lines
-        PlayerSheet.Subtitles -> LucideR.drawable.lucide_ic_captions
-        PlayerSheet.Speed -> LucideR.drawable.lucide_ic_gauge
-        PlayerSheet.Quality -> LucideR.drawable.lucide_ic_settings
-    }
+    val title =
+        when (sheet) {
+            PlayerSheet.Audio -> stringResourceCompat(R.string.audio_track)
+            PlayerSheet.Subtitles -> stringResourceCompat(R.string.subtitle_track)
+            PlayerSheet.Speed -> stringResourceCompat(R.string.player_speed)
+            PlayerSheet.Quality -> stringResourceCompat(R.string.player_quality)
+        }
+    val icon =
+        when (sheet) {
+            PlayerSheet.Audio -> LucideR.drawable.lucide_ic_audio_lines
+            PlayerSheet.Subtitles -> LucideR.drawable.lucide_ic_captions
+            PlayerSheet.Speed -> LucideR.drawable.lucide_ic_gauge
+            PlayerSheet.Quality -> LucideR.drawable.lucide_ic_settings
+        }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1495,37 +1612,30 @@ internal fun PlayerBottomSheet(
         dragHandle = null,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                modifier = Modifier
-                    .widthIn(max = 520.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 color = PlayerSheetSurface,
                 contentColor = Color.White,
             ) {
                 Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 12.dp),
+                    modifier =
+                        Modifier.verticalScroll(rememberScrollState()).padding(bottom = 12.dp)
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 2.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .36f))
                     }
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                            .semantics { heading() },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 16.dp)
+                                .semantics { heading() },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
@@ -1543,13 +1653,14 @@ internal fun PlayerBottomSheet(
                     }
 
                     when (sheet) {
-                        PlayerSheet.Audio -> audio.forEach { stream ->
-                            PlayerOptionRow(
-                                label = streamTitle(stream, R.string.player_audio_track_format),
-                                selected = selectedAudio == stream.index,
-                                onClick = { onAudio(stream) },
-                            )
-                        }
+                        PlayerSheet.Audio ->
+                            audio.forEach { stream ->
+                                PlayerOptionRow(
+                                    label = streamTitle(stream, R.string.player_audio_track_format),
+                                    selected = selectedAudio == stream.index,
+                                    onClick = { onAudio(stream) },
+                                )
+                            }
 
                         PlayerSheet.Subtitles -> {
                             PlayerOptionRow(
@@ -1559,31 +1670,34 @@ internal fun PlayerBottomSheet(
                             )
                             subtitles.forEach { stream ->
                                 PlayerOptionRow(
-                                    label = streamTitle(
-                                        stream,
-                                        R.string.player_subtitle_track_format
-                                    ),
+                                    label =
+                                        streamTitle(
+                                            stream,
+                                            R.string.player_subtitle_track_format,
+                                        ),
                                     selected = selectedSubtitle == stream.index,
                                     onClick = { onSubtitle(stream.index) },
                                 )
                             }
                         }
 
-                        PlayerSheet.Speed -> playbackSpeedOptions.forEach { value ->
-                            PlayerOptionRow(
-                                label = playbackSpeedLabel(value),
-                                selected = speed == value,
-                                onClick = { onSpeed(value) },
-                            )
-                        }
+                        PlayerSheet.Speed ->
+                            playbackSpeedOptions.forEach { value ->
+                                PlayerOptionRow(
+                                    label = playbackSpeedLabel(value),
+                                    selected = speed == value,
+                                    onClick = { onSpeed(value) },
+                                )
+                            }
 
-                        PlayerSheet.Quality -> qualities.forEach { value ->
-                            PlayerOptionRow(
-                                label = playbackQualityLabel(value),
-                                selected = selectedQuality == value,
-                                onClick = { onQuality(value) },
-                            )
-                        }
+                        PlayerSheet.Quality ->
+                            qualities.forEach { value ->
+                                PlayerOptionRow(
+                                    label = playbackQualityLabel(value),
+                                    selected = selectedQuality == value,
+                                    onClick = { onQuality(value) },
+                                )
+                            }
                     }
                 }
             }
@@ -1598,16 +1712,16 @@ private fun PlayerOptionRow(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .selectable(
-                selected = selected,
-                onClick = onClick,
-                role = Role.RadioButton,
-            )
-            .semantics(mergeDescendants = true) {}
-            .padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton,
+                )
+                .semantics(mergeDescendants = true) {}
+                .padding(horizontal = 20.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -1674,6 +1788,7 @@ internal fun shouldAutoHidePlaybackControls(
 ): Boolean = visible && !locked && !menuOpen && isPlaying
 
 internal fun shouldShowAudioSelector(trackCount: Int): Boolean = trackCount > 1
+
 internal fun shouldShowSubtitleSelector(trackCount: Int): Boolean = trackCount > 0
 
 internal fun shouldShowNextUp(
@@ -1682,11 +1797,12 @@ internal fun shouldShowNextUp(
     hasNextEpisode: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
-): Boolean = isEpisode &&
-    neighborsLoaded &&
-    hasNextEpisode &&
-    durationSeconds > 0.0 &&
-    durationSeconds - positionSeconds in 0.0..10.0
+): Boolean =
+    isEpisode &&
+        neighborsLoaded &&
+        hasNextEpisode &&
+        durationSeconds > 0.0 &&
+        durationSeconds - positionSeconds in 0.0..10.0
 
 @Composable
 private fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =

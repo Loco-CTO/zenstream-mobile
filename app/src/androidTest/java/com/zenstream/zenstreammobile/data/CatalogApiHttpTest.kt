@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zenstream.zenstreammobile.model.AuthSession
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -13,7 +14,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class CatalogApiHttpTest {
@@ -33,16 +33,18 @@ class CatalogApiHttpTest {
     @Test
     fun reportsProgressWithCatalogStatePatchAndAcceptsNoContent() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
-        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
-        CatalogApi(deviceId = "device-id").reportPlayback(
-            session = session,
-            itemId = "item-1",
-            positionSeconds = 12.5,
-            isPaused = true,
-            playSessionId = "play-session-1",
-            durationSeconds = 100.0,
-        )
+        CatalogApi(deviceId = "device-id")
+            .reportPlayback(
+                session = session,
+                itemId = "item-1",
+                positionSeconds = 12.5,
+                isPaused = true,
+                playSessionId = "play-session-1",
+                durationSeconds = 100.0,
+            )
 
         val request = server.takeRequest()
         assertEquals("PATCH", request.method)
@@ -59,7 +61,8 @@ class CatalogApiHttpTest {
     fun writesWatchedAndFavoriteStateWithCatalogStatePatches() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
         server.enqueue(MockResponse().setResponseCode(204))
-        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
         val api = CatalogApi(deviceId = "device-id")
 
         api.setPlayed(session, "episode-1", true)
@@ -81,7 +84,8 @@ class CatalogApiHttpTest {
     @Test
     fun cancelsPlaybackSessionsWithTheCanonicalDeleteEndpoint() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
-        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         CatalogApi(deviceId = "device-id").cancelPlaybackSession(session, "session-1")
 
@@ -94,32 +98,35 @@ class CatalogApiHttpTest {
     @Test
     fun playbackDoesNotRequestTheRemovedMarkerEndpoint() = runBlocking {
         server.enqueue(
-            MockResponse().setBody(
-                JSONObject()
-                    .put("id", "episode-1")
-                    .put("type", "episode")
-                    .put("metadata", JSONObject().put("title", "Episode"))
-                    .toString(),
-            ),
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("id", "episode-1")
+                        .put("type", "episode")
+                        .put("metadata", JSONObject().put("title", "Episode"))
+                        .toString()
+                )
         )
         server.enqueue(
-            MockResponse().setBody(
-                JSONObject()
-                    .put("mode", "direct")
-                    .put("sessionState", "ready")
-                    .put("url", "/api/playback/items/episode-1/stream?access=lease")
-                    .put(
-                        "source",
-                        JSONObject()
-                            .put("id", "source-1")
-                            .put("container", "mp4")
-                            .put("streams", org.json.JSONArray()),
-                    )
-                    .toString(),
-            ),
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("mode", "direct")
+                        .put("sessionState", "ready")
+                        .put("url", "/api/playback/items/episode-1/stream?access=lease")
+                        .put(
+                            "source",
+                            JSONObject()
+                                .put("id", "source-1")
+                                .put("container", "mp4")
+                                .put("streams", org.json.JSONArray()),
+                        )
+                        .toString()
+                )
         )
         server.enqueue(MockResponse().setResponseCode(404))
-        val session = AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         val playback = CatalogApi(deviceId = "device-id").playback(session, "episode-1")
 

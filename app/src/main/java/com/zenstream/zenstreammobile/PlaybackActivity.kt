@@ -5,8 +5,8 @@ import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.os.Bundle
 import android.os.Build
+import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,10 +15,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
-import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
-import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
+import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
@@ -31,8 +31,10 @@ object PlaybackActivityContract {
     const val EXTRA_ITEM_ID = "com.zenstream.zenstreammobile.extra.PLAYBACK_ITEM_ID"
     const val EXTRA_ITEM_NAME = "com.zenstream.zenstreammobile.extra.PLAYBACK_ITEM_NAME"
     const val EXTRA_AUDIO_STREAM_ID = "com.zenstream.zenstreammobile.extra.AUDIO_STREAM_ID"
-    const val EXTRA_SUBTITLE_STREAM_INDEX = "com.zenstream.zenstreammobile.extra.SUBTITLE_STREAM_INDEX"
-    const val EXTRA_HAS_SUBTITLE_SELECTION = "com.zenstream.zenstreammobile.extra.HAS_SUBTITLE_SELECTION"
+    const val EXTRA_SUBTITLE_STREAM_INDEX =
+        "com.zenstream.zenstreammobile.extra.SUBTITLE_STREAM_INDEX"
+    const val EXTRA_HAS_SUBTITLE_SELECTION =
+        "com.zenstream.zenstreammobile.extra.HAS_SUBTITLE_SELECTION"
     internal const val EXTRA_SESSION_DATA_STORE =
         "com.zenstream.zenstreammobile.extra.SESSION_DATA_STORE"
 }
@@ -51,15 +53,18 @@ internal fun parsePlaybackLaunchArgs(
     audioStreamId: Int? = null,
     subtitleStreamIndex: Int? = null,
     hasSubtitleSelection: Boolean = false,
-): PlaybackLaunchArgs? = itemId?.takeIf { it.isNotBlank() }?.let {
-    PlaybackLaunchArgs(
-        it,
-        itemName.orEmpty(),
-        audioStreamId,
-        subtitleStreamIndex,
-        hasSubtitleSelection,
-    )
-}
+): PlaybackLaunchArgs? =
+    itemId
+        ?.takeIf { it.isNotBlank() }
+        ?.let {
+            PlaybackLaunchArgs(
+                it,
+                itemName.orEmpty(),
+                audioStreamId,
+                subtitleStreamIndex,
+                hasSubtitleSelection,
+            )
+        }
 
 internal class PlaybackActivityLaunchGate {
     private enum class State {
@@ -80,16 +85,16 @@ internal class PlaybackActivityLaunchGate {
         }
 
     @Synchronized
-    fun claimActivity(): Boolean = when (state) {
-        State.IDLE,
-        State.LAUNCHING
-        -> {
-            state = State.ACTIVE
-            true
-        }
+    fun claimActivity(): Boolean =
+        when (state) {
+            State.IDLE,
+            State.LAUNCHING -> {
+                state = State.ACTIVE
+                true
+            }
 
-        State.ACTIVE -> false
-    }
+            State.ACTIVE -> false
+        }
 
     @Synchronized
     fun cancelLaunch() {
@@ -148,11 +153,12 @@ fun launchPlayback(
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 class PlaybackActivity : ComponentActivity() {
     private var immersiveModeApplied = false
@@ -160,18 +166,19 @@ class PlaybackActivity : ComponentActivity() {
     private var ownsPlaybackLaunch = false
 
     private val repository by lazy {
-        val dataStoreName = if (
-            BuildConfig.DEBUG &&
-            intent.getStringExtra(PlaybackActivityContract.EXTRA_SESSION_DATA_STORE) ==
-            INSTRUMENTATION_SESSION_DATA_STORE_NAME
-        ) {
-            INSTRUMENTATION_SESSION_DATA_STORE_NAME
-        } else {
-            DEFAULT_SESSION_DATA_STORE_NAME
-        }
+        val dataStoreName =
+            if (
+                BuildConfig.DEBUG &&
+                    intent.getStringExtra(PlaybackActivityContract.EXTRA_SESSION_DATA_STORE) ==
+                        INSTRUMENTATION_SESSION_DATA_STORE_NAME
+            ) {
+                INSTRUMENTATION_SESSION_DATA_STORE_NAME
+            } else {
+                DEFAULT_SESSION_DATA_STORE_NAME
+            }
         CatalogRepository(
             CatalogApi(),
-            SessionStore(applicationContext, dataStoreName = dataStoreName)
+            SessionStore(applicationContext, dataStoreName = dataStoreName),
         )
     }
 
@@ -188,20 +195,27 @@ class PlaybackActivity : ComponentActivity() {
         }
         applyImmersiveMode()
 
-        val args = parsePlaybackLaunchArgs(
-            intent.getStringExtra(PlaybackActivityContract.EXTRA_ITEM_ID),
-            intent.getStringExtra(PlaybackActivityContract.EXTRA_ITEM_NAME),
-            intent.takeIf { it.hasExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID) }
-                ?.getIntExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID, -1)
-                ?.takeIf { it >= 0 },
-            intent.takeIf { it.hasExtra(PlaybackActivityContract.EXTRA_SUBTITLE_STREAM_INDEX) }
-                ?.getIntExtra(PlaybackActivityContract.EXTRA_SUBTITLE_STREAM_INDEX, -1)
-                ?.takeIf { it >= 0 },
-            intent.getBooleanExtra(PlaybackActivityContract.EXTRA_HAS_SUBTITLE_SELECTION, false),
-        ) ?: run {
-            finish()
-            return
-        }
+        val args =
+            parsePlaybackLaunchArgs(
+                intent.getStringExtra(PlaybackActivityContract.EXTRA_ITEM_ID),
+                intent.getStringExtra(PlaybackActivityContract.EXTRA_ITEM_NAME),
+                intent
+                    .takeIf { it.hasExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID) }
+                    ?.getIntExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID, -1)
+                    ?.takeIf { it >= 0 },
+                intent
+                    .takeIf { it.hasExtra(PlaybackActivityContract.EXTRA_SUBTITLE_STREAM_INDEX) }
+                    ?.getIntExtra(PlaybackActivityContract.EXTRA_SUBTITLE_STREAM_INDEX, -1)
+                    ?.takeIf { it >= 0 },
+                intent.getBooleanExtra(
+                    PlaybackActivityContract.EXTRA_HAS_SUBTITLE_SELECTION,
+                    false,
+                ),
+            )
+                ?: run {
+                    finish()
+                    return
+                }
 
         lifecycleScope.launch {
             val session = repository.session.first()
@@ -240,8 +254,8 @@ class PlaybackActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !isInPictureInPictureMode) applyImmersiveMode() else immersiveModeApplied =
-            false
+        if (hasFocus && !isInPictureInPictureMode) applyImmersiveMode()
+        else immersiveModeApplied = false
     }
 
     override fun onPictureInPictureModeChanged(
@@ -255,8 +269,7 @@ class PlaybackActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        if (isFinishing) restoreSystemBars()
-        else immersiveModeApplied = false
+        if (isFinishing) restoreSystemBars() else immersiveModeApplied = false
         super.onPause()
     }
 
@@ -269,10 +282,11 @@ class PlaybackActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || isInPictureInPictureMode) return false
         enteringPictureInPicture = true
         return enterPictureInPictureMode(
-            PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build(),
-        ).also { entered ->
-            if (!entered) enteringPictureInPicture = false
-        }
+                PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+            )
+            .also { entered ->
+                if (!entered) enteringPictureInPicture = false
+            }
     }
 
     private fun shouldPauseForBackground(): Boolean =

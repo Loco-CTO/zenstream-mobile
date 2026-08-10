@@ -12,14 +12,16 @@ import java.util.Locale
 fun ZenStreamLocale(locale: String, content: @Composable () -> Unit) {
     val baseContext = LocalContext.current
     val baseConfiguration = LocalConfiguration.current
-    val configuration = remember(baseConfiguration, locale) {
-        Configuration(baseConfiguration).apply {
-            setLocale(Locale.forLanguageTag(locale))
+    val configuration =
+        remember(baseConfiguration, locale) {
+            Configuration(baseConfiguration).apply {
+                setLocale(Locale.forLanguageTag(locale))
+            }
         }
-    }
-    val localizedContext = remember(baseContext, configuration) {
-        baseContext.createConfigurationContext(configuration)
-    }
+    val localizedContext =
+        remember(baseContext, configuration) {
+            baseContext.createConfigurationContext(configuration)
+        }
     CompositionLocalProvider(
         LocalConfiguration provides configuration,
         LocalContext provides localizedContext,

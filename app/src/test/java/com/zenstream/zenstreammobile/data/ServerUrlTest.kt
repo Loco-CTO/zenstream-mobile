@@ -17,12 +17,18 @@ class ServerUrlTest {
 
     @Test
     fun rejectsUnsupportedSchemes() {
-        assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("ftp://example.com") }
+        assertThrows(IllegalArgumentException::class.java) {
+            normalizeServerUrl("ftp://example.com")
+        }
     }
 
     @Test
     fun rejectsCredentialsAndFragments() {
-        assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("https://user:pass@example.com") }
-        assertThrows(IllegalArgumentException::class.java) { normalizeServerUrl("https://example.com/#private") }
+        assertThrows(IllegalArgumentException::class.java) {
+            normalizeServerUrl("https://user:pass@example.com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            normalizeServerUrl("https://example.com/#private")
+        }
     }
 }

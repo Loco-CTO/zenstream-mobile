@@ -1,6 +1,8 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.DerivedHomeData
+import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
@@ -10,18 +12,16 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
-import com.zenstream.zenstreammobile.model.HomeData
-import com.zenstream.zenstreammobile.model.DerivedHomeData
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,23 +29,32 @@ import kotlinx.coroutines.sync.withLock
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
         get() = kotlinx.coroutines.flow.emptyFlow()
+
     val catalogChanges: Flow<CatalogChange>
         get() = kotlinx.coroutines.flow.emptyFlow()
 }
 
 interface HomeDataSource : CatalogRefreshSource {
     suspend fun clearSession()
+
     suspend fun homeFeatured(session: AuthSession): List<MediaItem>
+
     suspend fun homeContinueWatching(session: AuthSession): List<MediaItem>
+
     suspend fun homeNextUp(session: AuthSession): List<MediaItem>
+
     suspend fun homeDerived(session: AuthSession): DerivedHomeData
+
     suspend fun homeLibraries(session: AuthSession): List<Library>
+
     suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData
 }
 
 interface LibraryDataSource : CatalogRefreshSource {
     suspend fun clearSession()
+
     suspend fun libraries(session: AuthSession): List<Library>
+
     suspend fun libraryPage(
         session: AuthSession,
         library: Library,
@@ -55,11 +64,13 @@ interface LibraryDataSource : CatalogRefreshSource {
     ): PagedLibrary
 
     suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort?
+
     suspend fun saveLibrarySort(userId: String, libraryId: String, sort: LibrarySort)
 }
 
 interface SearchDataSource : CatalogRefreshSource {
     suspend fun clearSession()
+
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
 
@@ -78,7 +89,7 @@ class CatalogRepository(
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
     val locale: Flow<String> = sessionStore.locale
-	val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
+    val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
     private val eventScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -89,9 +100,12 @@ class CatalogRepository(
             session.collectLatest { active ->
                 catalogEvents?.stop()
                 catalogEvents = active?.let { value ->
-                    CatalogEventsClient(value, onChanged = { change ->
-                        eventScope.launch { invalidateCatalogMetadata(change) }
-                    })
+                    CatalogEventsClient(
+                        value,
+                        onChanged = { change ->
+                            eventScope.launch { invalidateCatalogMetadata(change) }
+                        },
+                    )
                 }
             }
         }
@@ -116,30 +130,33 @@ class CatalogRepository(
 
     suspend fun refreshLocale(orchestratorUrl: String, token: String) {
         sessionStore.saveLocale(orchestratorApi.fetchLocale(orchestratorUrl, token))
-		runCatching { orchestratorApi.fetchMetadataPreference(orchestratorUrl, token) }
-			.onSuccess { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
+        runCatching { orchestratorApi.fetchMetadataPreference(orchestratorUrl, token) }
+            .onSuccess { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
     }
 
-	suspend fun loadMetadataPreference(): MetadataPreference {
-		val current = session.first() ?: error("Authentication required")
-		return orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token).also {
-			sessionStore.saveMetadataLanguage(it.effectiveLanguage)
-		}
-	}
+    suspend fun loadMetadataPreference(): MetadataPreference {
+        val current = session.first() ?: error("Authentication required")
+        return orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token).also {
+            sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+        }
+    }
 
-	suspend fun saveMetadataPreference(language: String?): MetadataPreference {
-		val current = session.first() ?: error("Authentication required")
-		return orchestratorApi.setMetadataPreference(current.serverUrl, current.token, language).also {
-			sessionStore.saveMetadataLanguage(it.effectiveLanguage)
-			invalidateCatalogMetadata()
-		}
-	}
+    suspend fun saveMetadataPreference(language: String?): MetadataPreference {
+        val current = session.first() ?: error("Authentication required")
+        return orchestratorApi
+            .setMetadataPreference(current.serverUrl, current.token, language)
+            .also {
+                sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+                invalidateCatalogMetadata()
+            }
+    }
 
     override suspend fun clearSession() {
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         sessionStore.clearSession()
     }
+
     suspend fun clearAll() {
         SyncplaySession.clear()
         sessionStore.clearAll()
@@ -161,9 +178,10 @@ class CatalogRepository(
         api.fetchLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
+
     suspend fun library(
         session: AuthSession,
-        library: Library
+        library: Library,
     ) = api.fetchLibraryData(session, library)
 
     override suspend fun libraryPage(
@@ -198,9 +216,8 @@ class CatalogRepository(
     suspend fun playback(
         session: AuthSession,
         itemId: String,
-        options: PlaybackOptions = PlaybackOptions()
-    ): PlaybackData =
-        api.playback(session, itemId, options)
+        options: PlaybackOptions = PlaybackOptions(),
+    ): PlaybackData = api.playback(session, itemId, options)
 
     suspend fun playbackSource(session: AuthSession, itemId: String) =
         api.playbackSource(session, itemId)
@@ -227,15 +244,25 @@ class CatalogRepository(
         positionSeconds: Double,
         isPaused: Boolean,
         playSessionId: String?,
-		durationSeconds: Double? = null,
-	) {
-		api.reportPlayback(session, itemId, positionSeconds, isPaused, playSessionId, durationSeconds)
-		invalidateHomeCache()
-	}
+        durationSeconds: Double? = null,
+    ) {
+        api.reportPlayback(
+            session,
+            itemId,
+            positionSeconds,
+            isPaused,
+            playSessionId,
+            durationSeconds,
+        )
+        invalidateHomeCache()
+    }
 
     suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
+
     suspend fun saveShowDebugIcon(enabled: Boolean) = sessionStore.saveShowDebugIcon(enabled)
-    fun syncplayManager(session: AuthSession): SyncplayManager = SyncplaySession.manager(session, sessionStore)
+
+    fun syncplayManager(session: AuthSession): SyncplayManager =
+        SyncplaySession.manager(session, sessionStore)
 
     suspend fun loadSubtitleStyle(): SubtitleStyle =
         sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
@@ -245,13 +272,19 @@ class CatalogRepository(
         sessionStore.cacheSubtitleStyle(normalized)
         return normalized
     }
-    suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData = homeMutex.withLock {
-        val cached = homeCache
-        if (!forceRefresh && cached != null && cached.first > System.currentTimeMillis() - 30_000) {
-            return@withLock cached.second
+
+    suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData =
+        homeMutex.withLock {
+            val cached = homeCache
+            if (
+                !forceRefresh &&
+                    cached != null &&
+                    cached.first > System.currentTimeMillis() - 30_000
+            ) {
+                return@withLock cached.second
+            }
+            api.fetchHome(session).also { homeCache = System.currentTimeMillis() to it }
         }
-        api.fetchHome(session).also { homeCache = System.currentTimeMillis() to it }
-    }
 
     private suspend fun invalidateHomeCache() {
         homeMutex.withLock { homeCache = null }

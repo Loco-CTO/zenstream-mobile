@@ -34,9 +34,8 @@ data class SyncplayGroup(
     val members: List<SyncplayMember>,
 )
 
-fun playableSyncplayItemId(itemId: String?): String? = itemId
-    ?.trim()
-    ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+fun playableSyncplayItemId(itemId: String?): String? =
+    itemId?.trim()?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
 
 fun SyncplayGroup.mediaItemId(): String? = playableSyncplayItemId(itemId)
 
@@ -47,11 +46,13 @@ data class SyncplayUiState(
     val connected: Boolean = false,
     val error: String? = null,
 ) {
-    fun currentMember(): SyncplayMember? = active?.members?.firstOrNull {
-        it.participantId == participantId
-    }
+    fun currentMember(): SyncplayMember? =
+        active?.members?.firstOrNull {
+            it.participantId == participantId
+        }
 
-    fun canControl(userId: String): Boolean = active?.let {
-        it.hostUserId == userId || it.allowViewerControls
-    } == true
+    fun canControl(userId: String): Boolean =
+        active?.let {
+            it.hostUserId == userId || it.allowViewerControls
+        } == true
 }

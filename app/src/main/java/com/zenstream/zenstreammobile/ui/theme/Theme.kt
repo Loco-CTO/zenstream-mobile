@@ -19,29 +19,31 @@ private val ZenViolet = Color(0xFFA78BFA)
 private val ZenDeepViolet = Color(0xFF6D28D9)
 private val ZenOutline = Color(0x1AFFFFFF)
 
-private val ZenDarkColors: ColorScheme = darkColorScheme(
-    primary = ZenViolet,
-    onPrimary = Color.Black,
-    primaryContainer = ZenDeepViolet,
-    onPrimaryContainer = Color.White,
-    secondary = Color(0xFFC4B5FD),
-    onSecondary = Color.Black,
-    background = ZenBlack,
-    onBackground = ZenForeground,
-    surface = ZenBlack,
-    onSurface = ZenForeground,
-    surfaceVariant = ZenSurface,
-    onSurfaceVariant = Color(0xFFB7B0C0),
-    outline = ZenOutline,
-)
+private val ZenDarkColors: ColorScheme =
+    darkColorScheme(
+        primary = ZenViolet,
+        onPrimary = Color.Black,
+        primaryContainer = ZenDeepViolet,
+        onPrimaryContainer = Color.White,
+        secondary = Color(0xFFC4B5FD),
+        onSecondary = Color.Black,
+        background = ZenBlack,
+        onBackground = ZenForeground,
+        surface = ZenBlack,
+        onSurface = ZenForeground,
+        surfaceVariant = ZenSurface,
+        onSurfaceVariant = Color(0xFFB7B0C0),
+        outline = ZenOutline,
+    )
 
 private val ZenTypography = Typography()
-private val ZenShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-)
+private val ZenShapes =
+    Shapes(
+        extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    )
 
 @Composable
 fun ZenStreamTheme(content: @Composable () -> Unit) {

@@ -12,8 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class MainTopBarTest {
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     @Test
     fun showsBrandLogoAndSettingsIcon() {
@@ -24,28 +23,29 @@ class MainTopBarTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.app_logo_description)
-        ).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.settings_description)
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.app_logo_description))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.settings_description))
+            .assertIsDisplayed()
     }
 
     @Test
     fun lucideIconResourcesAreAvailable() {
         listOf(
-            LucideR.drawable.lucide_ic_house,
-            LucideR.drawable.lucide_ic_search,
-            LucideR.drawable.lucide_ic_library,
-            LucideR.drawable.lucide_ic_settings,
-            LucideR.drawable.lucide_ic_play,
-            LucideR.drawable.lucide_ic_pause,
-            LucideR.drawable.lucide_ic_arrow_left,
-            LucideR.drawable.lucide_ic_heart,
-            LucideR.drawable.lucide_ic_captions,
-        ).forEach { resourceId ->
-            assertTrue("Expected a Lucide drawable resource", resourceId != 0)
-        }
+                LucideR.drawable.lucide_ic_house,
+                LucideR.drawable.lucide_ic_search,
+                LucideR.drawable.lucide_ic_library,
+                LucideR.drawable.lucide_ic_settings,
+                LucideR.drawable.lucide_ic_play,
+                LucideR.drawable.lucide_ic_pause,
+                LucideR.drawable.lucide_ic_arrow_left,
+                LucideR.drawable.lucide_ic_heart,
+                LucideR.drawable.lucide_ic_captions,
+            )
+            .forEach { resourceId ->
+                assertTrue("Expected a Lucide drawable resource", resourceId != 0)
+            }
     }
 }

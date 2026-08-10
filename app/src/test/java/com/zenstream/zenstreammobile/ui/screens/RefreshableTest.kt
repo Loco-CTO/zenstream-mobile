@@ -22,14 +22,14 @@ class RefreshableTest {
                 isLoading = true,
                 seasonLoading = true,
                 hasData = true,
-            ),
+            )
         )
         assertTrue(
             shouldShowDetailRefresh(
                 isLoading = true,
                 seasonLoading = false,
                 hasData = true,
-            ),
+            )
         )
     }
 }

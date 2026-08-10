@@ -33,9 +33,8 @@ internal fun SubtitleOverlay(
 ) {
     if (cues.isEmpty()) return
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, bottom = bottomPadding),
+        modifier =
+            modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = bottomPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -50,23 +49,25 @@ internal fun StyledSubtitleLine(text: String, style: SubtitleStyle) {
     val foreground = parseSubtitleColor(style.fontColor, Color.White)
     val outline = parseSubtitleColor(style.borderColor, Color.Black)
     val background = parseSubtitleColor(style.backgroundColor, Color.Black)
-    val textStyle = TextStyle(
-        fontFamily = when (style.fontFamily) {
-            "serif" -> FontFamily.Serif
-            "mono" -> FontFamily.Monospace
-            else -> FontFamily.SansSerif
-        },
-        fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-        fontSize = (22f * style.textScale / 100f).sp,
-        textAlign = TextAlign.Center,
-    )
+    val textStyle =
+        TextStyle(
+            fontFamily =
+                when (style.fontFamily) {
+                    "serif" -> FontFamily.Serif
+                    "mono" -> FontFamily.Monospace
+                    else -> FontFamily.SansSerif
+                },
+            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+            fontSize = (22f * style.textScale / 100f).sp,
+            textAlign = TextAlign.Center,
+        )
     Box(
-        modifier = Modifier
-            .background(
-                background.copy(alpha = style.backgroundOpacity / 100f),
-                RoundedCornerShape(4.dp),
-            )
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier =
+            Modifier.background(
+                    background.copy(alpha = style.backgroundOpacity / 100f),
+                    RoundedCornerShape(4.dp),
+                )
+                .padding(horizontal = 8.dp, vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
         subtitleOutlineOffsets(style.borderSize).forEach { (x, y) ->
@@ -74,9 +75,8 @@ internal fun StyledSubtitleLine(text: String, style: SubtitleStyle) {
                 text = text,
                 color = outline,
                 style = textStyle,
-                modifier = Modifier
-                    .offset(x.dp, y.dp)
-                    .clearAndSetSemantics { hideFromAccessibility() },
+                modifier =
+                    Modifier.offset(x.dp, y.dp).clearAndSetSemantics { hideFromAccessibility() },
             )
         }
         Text(text = text, color = foreground, style = textStyle)

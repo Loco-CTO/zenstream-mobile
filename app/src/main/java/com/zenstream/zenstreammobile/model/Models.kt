@@ -22,7 +22,7 @@ data class MediaItem(
     val seasonId: String? = null,
     val parentId: String? = null,
     val libraryId: String? = null,
-	val lastAddedAt: String? = null,
+    val lastAddedAt: String? = null,
     val parentIndexNumber: Int? = null,
     val indexNumber: Int? = null,
     val overview: String? = null,
@@ -70,12 +70,21 @@ data class MediaRow(
     val libraryName: String? = null,
     val items: List<MediaItem>,
     val wide: Boolean = false,
-	val stackEpisodes: Boolean = false,
+    val stackEpisodes: Boolean = false,
     val label: String? = null,
     val key: String = "${title.name}:${libraryName.orEmpty()}:${label.orEmpty()}",
 )
 
-enum class RowTitle { ContinueWatching, NextUp, MyList, RecentlyPlayed, Genre, NewlyAdded, TopRated, NewReleases }
+enum class RowTitle {
+    ContinueWatching,
+    NextUp,
+    MyList,
+    RecentlyPlayed,
+    Genre,
+    NewlyAdded,
+    TopRated,
+    NewReleases,
+}
 
 data class HomeData(
     val featured: List<MediaItem> = emptyList(),
@@ -87,10 +96,13 @@ data class DerivedHomeData(
     val recentlyPlayed: List<MediaItem> = emptyList(),
     val genreRows: List<MediaRow> = emptyList(),
 ) {
-    fun rows(): List<MediaRow> = listOfNotNull(
-        myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) },
-        recentlyPlayed.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.RecentlyPlayed, items = it) },
-    ) + genreRows.filter { it.items.isNotEmpty() }
+    fun rows(): List<MediaRow> =
+        listOfNotNull(
+            myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) },
+            recentlyPlayed
+                .takeIf { it.isNotEmpty() }
+                ?.let { MediaRow(RowTitle.RecentlyPlayed, items = it) },
+        ) + genreRows.filter { it.items.isNotEmpty() }
 }
 
 fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row ->

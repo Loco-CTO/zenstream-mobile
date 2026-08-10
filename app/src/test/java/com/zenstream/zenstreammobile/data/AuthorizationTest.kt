@@ -6,7 +6,6 @@ import org.junit.Test
 class AuthorizationTest {
     @Test
     fun authenticatedHeaderContainsToken() {
-		assertEquals("Bearer secret", CatalogApi.authorizationHeader("secret"))
+        assertEquals("Bearer secret", CatalogApi.authorizationHeader("secret"))
     }
-
 }

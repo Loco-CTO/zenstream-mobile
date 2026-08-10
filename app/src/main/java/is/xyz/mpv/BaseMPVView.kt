@@ -8,8 +8,8 @@ import android.view.SurfaceView
 
 // Contains only the essential code needed to get a picture on the screen
 
-abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView(context, attrs),
-    SurfaceHolder.Callback {
+abstract class BaseMPVView(context: Context, attrs: AttributeSet?) :
+    SurfaceView(context, attrs), SurfaceHolder.Callback {
     /**
      * Initialize libmpv.
      *
@@ -21,8 +21,10 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView
         /* set normal options (user-supplied config can override) */
         MPVLib.setOptionString("config", "yes")
         MPVLib.setOptionString("config-dir", configDir)
-        for (opt in arrayOf("gpu-shader-cache-dir", "icc-cache-dir"))
-            MPVLib.setOptionString(opt, cacheDir)
+        for (opt in arrayOf("gpu-shader-cache-dir", "icc-cache-dir")) MPVLib.setOptionString(
+            opt,
+            cacheDir,
+        )
         initOptions()
 
         MPVLib.init()
@@ -51,25 +53,21 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView
     }
 
     protected abstract fun initOptions()
+
     protected abstract fun postInitOptions()
 
     protected abstract fun observeProperties()
 
     private var filePath: String? = null
 
-    /**
-     * Set the first file to be played once the player is ready.
-     */
+    /** Set the first file to be played once the player is ready. */
     fun playFile(filePath: String) {
         this.filePath = filePath
     }
 
     private var voInUse: String = "gpu"
 
-    /**
-     * Sets the VO to use.
-     * It is automatically disabled/enabled when the surface dis-/appears.
-     */
+    /** Sets the VO to use. It is automatically disabled/enabled when the surface dis-/appears. */
     fun setVo(vo: String) {
         voInUse = vo
         MPVLib.setOptionString("vo", vo)
@@ -84,7 +82,8 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView
     override fun surfaceCreated(holder: SurfaceHolder) {
         Log.w(TAG, "attaching surface")
         MPVLib.attachSurface(holder.surface)
-        // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
+        // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily
+        // not
         MPVLib.setOptionString("force-window", "yes")
 
         if (filePath != null) {

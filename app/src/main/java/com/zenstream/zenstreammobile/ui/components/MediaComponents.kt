@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -42,10 +43,11 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
-import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.imageBlurHash
+import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
 import com.zenstream.zenstreammobile.data.seriesPosterImageType
@@ -54,9 +56,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import java.time.Instant
-import androidx.compose.ui.platform.LocalLocale
 import kotlin.math.roundToInt
-import com.composables.icons.lucide.R as LucideR
 
 internal val POSTER_CARD_MIN_WIDTH = 140.dp
 internal val POSTER_CARD_MAX_WIDTH = 180.dp
@@ -66,27 +66,30 @@ fun MediaRowView(
     row: MediaRow,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (row.items.isEmpty()) return
-    val title = when (row.title) {
-        RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
-        RowTitle.NextUp -> stringResource(R.string.next_up)
-        RowTitle.MyList -> stringResource(R.string.my_list)
-        RowTitle.RecentlyPlayed -> stringResource(R.string.recently_played)
-        RowTitle.Genre -> row.label.orEmpty()
-        RowTitle.NewlyAdded -> row.libraryName?.let {
-            stringResource(R.string.newly_added_on, it)
-        } ?: stringResource(R.string.new_releases)
+    val title =
+        when (row.title) {
+            RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
+            RowTitle.NextUp -> stringResource(R.string.next_up)
+            RowTitle.MyList -> stringResource(R.string.my_list)
+            RowTitle.RecentlyPlayed -> stringResource(R.string.recently_played)
+            RowTitle.Genre -> row.label.orEmpty()
+            RowTitle.NewlyAdded ->
+                row.libraryName?.let {
+                    stringResource(R.string.newly_added_on, it)
+                } ?: stringResource(R.string.new_releases)
 
-        RowTitle.TopRated -> stringResource(R.string.top_rated)
-        RowTitle.NewReleases -> stringResource(R.string.new_releases)
-    }
-    val resolvedTitle = if (row.title == RowTitle.NewlyAdded || row.libraryName.isNullOrBlank()) {
-        title
-    } else {
-        "${row.libraryName} $title"
-    }
+            RowTitle.TopRated -> stringResource(R.string.top_rated)
+            RowTitle.NewReleases -> stringResource(R.string.new_releases)
+        }
+    val resolvedTitle =
+        if (row.title == RowTitle.NewlyAdded || row.libraryName.isNullOrBlank()) {
+            title
+        } else {
+            "${row.libraryName} $title"
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = resolvedTitle,
@@ -143,8 +146,8 @@ private fun areBatchEpisodes(a: MediaItem, b: MediaItem): Boolean =
         b.type == "Episode" &&
         !a.seriesId.isNullOrBlank() &&
         a.seriesId == b.seriesId &&
-		!a.seasonId.isNullOrBlank() &&
-		a.seasonId == b.seasonId &&
+        !a.seasonId.isNullOrBlank() &&
+        a.seasonId == b.seasonId &&
         a.parentIndexNumber == b.parentIndexNumber &&
         a.indexNumber != null &&
         b.indexNumber != null &&
@@ -166,49 +169,43 @@ private fun StackedEpisodeCard(
     val item = stack.items.first()
     val playDescription = stringResource(R.string.play_description, episodeCardTitle(item))
     Column(
-        modifier = Modifier
-            .width(POSTER_CARD_MIN_WIDTH)
-            .semantics {
-                role = Role.Button
-                contentDescription = playDescription
-            }
-            .clickable { onClick(item) },
+        modifier =
+            Modifier.width(POSTER_CARD_MIN_WIDTH)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = playDescription
+                }
+                .clickable { onClick(item) }
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f),
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 10.dp, top = 10.dp)
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.White.copy(alpha = .10f)),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(start = 10.dp, top = 10.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = .10f))
             )
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 5.dp, top = 5.dp)
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.White.copy(alpha = .16f)),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(start = 5.dp, top = 5.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = .16f))
             )
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 10.dp, bottom = 10.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(end = 10.dp, bottom = 10.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MediaImage(item, session, wide = false, useSeriesPoster = true)
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
                     shape = RoundedCornerShape(50),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
                 ) {
                     Text(
                         text = stack.items.size.toString(),
@@ -248,63 +245,64 @@ fun MediaCard(
     gridCard: Boolean = false,
     useSeriesPoster: Boolean = !wide,
 ) {
-	val locale = LocalLocale.current.platformLocale
-    val cardWidthModifier = if (gridCard && !wide) {
-        Modifier
-            .fillMaxWidth()
-            .widthIn(min = POSTER_CARD_MIN_WIDTH, max = POSTER_CARD_MAX_WIDTH)
-    } else {
-        Modifier.width(if (wide) 224.dp else POSTER_CARD_MIN_WIDTH)
-    }
+    val locale = LocalLocale.current.platformLocale
+    val cardWidthModifier =
+        if (gridCard && !wide) {
+            Modifier.fillMaxWidth()
+                .widthIn(min = POSTER_CARD_MIN_WIDTH, max = POSTER_CARD_MAX_WIDTH)
+        } else {
+            Modifier.width(if (wide) 224.dp else POSTER_CARD_MIN_WIDTH)
+        }
     val playDescription = stringResource(R.string.play_description, item.name)
     Column(
-        modifier = cardWidthModifier
-            .semantics {
-                role = Role.Button
-                contentDescription = playDescription
-            }
-            .clickable { onClick(item) },
+        modifier =
+            cardWidthModifier
+                .semantics {
+                    role = Role.Button
+                    contentDescription = playDescription
+                }
+                .clickable { onClick(item) }
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(if (wide) 16f / 9f else 2f / 3f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .aspectRatio(if (wide) 16f / 9f else 2f / 3f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
             if (item.played || item.unplayedItemCount != null) {
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
                     shape = RoundedCornerShape(50),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                     ) {
-                        if (item.played) Icon(
-                            painter = painterResource(LucideR.drawable.lucide_ic_check),
-                            contentDescription = null,
-                            tint = Color(0xFFBBF7D0),
-                            modifier = Modifier.width(14.dp)
-                        )
-                        else Text(
-                            stringResource(
-                                R.string.episodes_unwatched,
-                                item.unplayedItemCount ?: 0
-                            ), style = MaterialTheme.typography.labelSmall, color = Color.White
-                        )
+                        if (item.played)
+                            Icon(
+                                painter = painterResource(LucideR.drawable.lucide_ic_check),
+                                contentDescription = null,
+                                tint = Color(0xFFBBF7D0),
+                                modifier = Modifier.width(14.dp),
+                            )
+                        else
+                            Text(
+                                stringResource(
+                                    R.string.episodes_unwatched,
+                                    item.unplayedItemCount ?: 0,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                            )
                     }
                 }
             }
             if (showRating && item.communityRating != null) {
                 Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(7.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
@@ -315,7 +313,7 @@ fun MediaCard(
                         modifier = Modifier.width(12.dp),
                     )
                     Text(
-						text = String.format(locale, "%.1f", item.communityRating),
+                        text = String.format(locale, "%.1f", item.communityRating),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = .85f),
                     )
@@ -326,10 +324,7 @@ fun MediaCard(
                     progress = { progress / 100f },
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = Color.White.copy(alpha = .18f),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(3.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                 )
             }
         }
@@ -339,7 +334,7 @@ fun MediaCard(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelLarge,
             color = Color.White.copy(alpha = .82f),
-            modifier = Modifier.padding(top = 7.dp)
+            modifier = Modifier.padding(top = 7.dp),
         )
         Text(
             episodeCardSubtitle(item),
@@ -347,7 +342,7 @@ fun MediaCard(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = .42f),
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }
@@ -359,20 +354,21 @@ fun MediaImage(
     wide: Boolean,
     useSeriesPoster: Boolean = false,
     modifier: Modifier = Modifier,
-    contentDescription: String? = null
+    contentDescription: String? = null,
 ) {
-    val type = when {
-        wide -> landscapeImageType(item)
-        useSeriesPoster -> seriesPosterImageType(item)
-        else -> posterImageType(item)
-    }
+    val type =
+        when {
+            wide -> landscapeImageType(item)
+            useSeriesPoster -> seriesPosterImageType(item)
+            else -> posterImageType(item)
+        }
     val url = type?.let {
         imageUrl(
             session.serverUrl,
             item,
             it,
             if (wide) 448 else 280,
-            if (wide) 252 else 420
+            if (wide) 252 else 420,
         )
     }
     val request = url?.let {
@@ -380,7 +376,8 @@ fun MediaImage(
             .data(it)
             .httpHeaders(
                 NetworkHeaders.Builder()
-					.set("Authorization", CatalogApi.authorizationHeader(session.token)).build()
+                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
+                    .build()
             )
             .crossfade(true)
             .build()
@@ -389,14 +386,14 @@ fun MediaImage(
         model = request,
         imageKey = url,
         blurHash = type?.let { imageBlurHash(item, it) },
-        contentDescription = contentDescription ?: stringResource(
-            R.string.poster_description,
-            item.name
-        ),
+        contentDescription =
+            contentDescription
+                ?: stringResource(
+                    R.string.poster_description,
+                    item.name,
+                ),
         contentScale = ContentScale.Crop,
-        modifier = modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(6.dp)),
+        modifier = modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)),
     )
 }
 
@@ -406,10 +403,13 @@ fun progressPercent(item: MediaItem): Int? {
         return direct.coerceIn(0.0, 100.0).roundToInt().takeIf { it > 0 }
     }
     if (item.runtimeTicks != null && item.playbackPositionTicks != null && item.runtimeTicks > 0) {
-        return ((item.playbackPositionTicks.toDouble() / item.runtimeTicks) * 100).coerceIn(
-            0.0,
-            100.0
-        ).roundToInt().takeIf { it > 0 }
+        return ((item.playbackPositionTicks.toDouble() / item.runtimeTicks) * 100)
+            .coerceIn(
+                0.0,
+                100.0,
+            )
+            .roundToInt()
+            .takeIf { it > 0 }
     }
     return null
 }
@@ -430,8 +430,15 @@ internal fun episodeCardSubtitle(item: MediaItem): String =
         itemSubtitle(item)
     }
 
-fun itemSubtitle(item: MediaItem): String = listOfNotNull(
-    item.productionYear?.toString(),
-    if (item.type == "Episode" && item.parentIndexNumber != null && item.indexNumber != null) "S${item.parentIndexNumber}:E${item.indexNumber}" else null,
-    item.officialRating,
-).joinToString(" · ").ifBlank { item.type.orEmpty() }
+fun itemSubtitle(item: MediaItem): String =
+    listOfNotNull(
+            item.productionYear?.toString(),
+            if (
+                item.type == "Episode" && item.parentIndexNumber != null && item.indexNumber != null
+            )
+                "S${item.parentIndexNumber}:E${item.indexNumber}"
+            else null,
+            item.officialRating,
+        )
+        .joinToString(" · ")
+        .ifBlank { item.type.orEmpty() }

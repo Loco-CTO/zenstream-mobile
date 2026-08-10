@@ -2,21 +2,21 @@ package com.zenstream.zenstreammobile.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
+import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.ui.screens.GestureStartExclusion
-import com.zenstream.zenstreammobile.ui.screens.shouldAutoHidePlaybackControls
 import com.zenstream.zenstreammobile.ui.screens.clampSeekTarget
 import com.zenstream.zenstreammobile.ui.screens.dragSeekDeltaSeconds
 import com.zenstream.zenstreammobile.ui.screens.feedbackSeconds
 import com.zenstream.zenstreammobile.ui.screens.isGestureStartProtected
 import com.zenstream.zenstreammobile.ui.screens.isHorizontalSeekGesture
 import com.zenstream.zenstreammobile.ui.screens.quickSeekDeltaForTap
+import com.zenstream.zenstreammobile.ui.screens.shouldAutoHidePlaybackControls
 import com.zenstream.zenstreammobile.ui.screens.shouldShowAudioSelector
 import com.zenstream.zenstreammobile.ui.screens.shouldShowSubtitleSelector
-import com.zenstream.zenstreammobile.model.PlaybackSegment
-import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.ui.screens.timelinePositionAt
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,10 +31,38 @@ class PlaybackControlsTest {
 
     @Test
     fun controlsCanAutoHideOnlyDuringActivePlayback() {
-        assertTrue(shouldAutoHidePlaybackControls(visible = true, locked = false, menuOpen = false, isPlaying = true))
-        assertFalse(shouldAutoHidePlaybackControls(visible = true, locked = false, menuOpen = false, isPlaying = false))
-        assertFalse(shouldAutoHidePlaybackControls(visible = true, locked = true, menuOpen = false, isPlaying = true))
-        assertFalse(shouldAutoHidePlaybackControls(visible = true, locked = false, menuOpen = true, isPlaying = true))
+        assertTrue(
+            shouldAutoHidePlaybackControls(
+                visible = true,
+                locked = false,
+                menuOpen = false,
+                isPlaying = true,
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlaybackControls(
+                visible = true,
+                locked = false,
+                menuOpen = false,
+                isPlaying = false,
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlaybackControls(
+                visible = true,
+                locked = true,
+                menuOpen = false,
+                isPlaying = true,
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlaybackControls(
+                visible = true,
+                locked = false,
+                menuOpen = true,
+                isPlaying = true,
+            )
+        )
     }
 
     @Test
@@ -60,7 +88,10 @@ class PlaybackControlsTest {
     fun formatsPlaybackSpeedWithoutUnnecessaryTrailingZeros() {
         assertEquals("0.5", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(.5f))
         assertEquals("1", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(1f))
-        assertEquals("1.25", com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(1.25f))
+        assertEquals(
+            "1.25",
+            com.zenstream.zenstreammobile.ui.screens.formatPlaybackSpeedValue(1.25f),
+        )
     }
 
     @Test

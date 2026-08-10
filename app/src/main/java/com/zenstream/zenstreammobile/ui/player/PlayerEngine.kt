@@ -14,15 +14,16 @@ import androidx.media3.ui.PlayerView
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
+import kotlin.math.max
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlin.math.max
 
-internal val mpvCaptionOptions = mapOf(
-    "sub-auto" to "no",
-    "sid" to "no",
-    "secondary-sid" to "no",
-)
+internal val mpvCaptionOptions =
+    mapOf(
+        "sub-auto" to "no",
+        "sid" to "no",
+        "secondary-sid" to "no",
+    )
 
 internal class MpvSurfaceLifecycle {
     private var surfaceReady = false
@@ -30,6 +31,7 @@ internal class MpvSurfaceLifecycle {
     private var destroyed = false
 
     fun canUseSurface(): Boolean = !destroyed
+
     fun hasSurface(): Boolean = surfaceReady
 
     fun markSurfaceCreated() {
@@ -113,7 +115,9 @@ private data class PendingPlayback(
 
 interface PlaybackEngine {
     val state: StateFlow<EngineState>
+
     fun createView(context: Context): View
+
     fun currentPositionSeconds(): Double = state.value.positionSeconds
 
     /** Loads the source, optionally waiting for an authoritative caller to start it. */
@@ -123,10 +127,15 @@ interface PlaybackEngine {
         mimeType: String? = null,
         playWhenReady: Boolean = true,
     )
+
     fun play()
+
     fun pause()
+
     fun seekTo(positionSeconds: Double)
+
     fun setSpeed(value: Float)
+
     fun release()
 }
 
@@ -139,63 +148,85 @@ class Media3PlaybackEngine : PlaybackEngine {
     private var player: ExoPlayer? = null
     private var pending: PendingPlayback? = null
     private val initialSeek = InitialSeekController()
-    private val ticker = object : Runnable {
-        override fun run() {
-            val current = player
-            if (current != null) {
-                val duration = current.duration.takeIf { it > 0 } ?: 0L
-                _state.value = _state.value.copy(
-                    positionSeconds = current.currentPosition / 1000.0,
-                    durationSeconds = duration / 1000.0,
-                    bufferedSeconds = current.bufferedPosition / 1000.0,
-                    isPlaying = current.isPlaying,
-                    isBuffering = current.playbackState == Player.STATE_BUFFERING,
-                    speed = current.playbackParameters.speed,
-                    ready = current.playbackState == Player.STATE_READY,
-                )
+    private val ticker =
+        object : Runnable {
+            override fun run() {
+                val current = player
+                if (current != null) {
+                    val duration = current.duration.takeIf { it > 0 } ?: 0L
+                    _state.value =
+                        _state.value.copy(
+                            positionSeconds = current.currentPosition / 1000.0,
+                            durationSeconds = duration / 1000.0,
+                            bufferedSeconds = current.bufferedPosition / 1000.0,
+                            isPlaying = current.isPlaying,
+                            isBuffering = current.playbackState == Player.STATE_BUFFERING,
+                            speed = current.playbackParameters.speed,
+                            ready = current.playbackState == Player.STATE_READY,
+                        )
+                }
+                handler.postDelayed(this, 250L)
             }
-            handler.postDelayed(this, 250L)
         }
-    }
 
     override fun createView(context: Context): View {
         if (player == null) {
-            player = ExoPlayer.Builder(context.applicationContext).build().also { exo ->
-                exo.trackSelectionParameters = exo.trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                    .build()
-                exo.addListener(object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) {
-                        Log.e(tag, "Media3 playback error code=${error.errorCodeName} message=${error.message}")
-                        _state.value = _state.value.copy(error = error.message ?: "Playback failed")
-                    }
+            player =
+                ExoPlayer.Builder(context.applicationContext).build().also { exo ->
+                    exo.trackSelectionParameters =
+                        exo.trackSelectionParameters
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                            .build()
+                    exo.addListener(
+                        object : Player.Listener {
+                            override fun onPlayerError(error: PlaybackException) {
+                                Log.e(
+                                    tag,
+                                    "Media3 playback error code=${error.errorCodeName} message=${error.message}",
+                                )
+                                _state.value =
+                                    _state.value.copy(error = error.message ?: "Playback failed")
+                            }
 
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        _state.value = _state.value.copy(
-                            ready = playbackState == Player.STATE_READY,
-                            isBuffering = playbackState == Player.STATE_BUFFERING,
-                            ended = playbackState == Player.STATE_ENDED,
-                        )
-                        Log.i(tag, "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}")
-                        if (playbackState == Player.STATE_READY) applyInitialSeek()
-                    }
-                })
-            }
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                _state.value =
+                                    _state.value.copy(
+                                        ready = playbackState == Player.STATE_READY,
+                                        isBuffering = playbackState == Player.STATE_BUFFERING,
+                                        ended = playbackState == Player.STATE_ENDED,
+                                    )
+                                Log.i(
+                                    tag,
+                                    "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
+                                )
+                                if (playbackState == Player.STATE_READY) applyInitialSeek()
+                            }
+                        }
+                    )
+                }
             handler.post(ticker)
         }
-        return PlayerView(context).apply {
-            useController = false
-            subtitleView?.visibility = View.GONE
-            player = this@Media3PlaybackEngine.player
-        }.also { pending?.let { request ->
-            prepare(request.url, request.startPositionSeconds, request.mimeType, request.playWhenReady)
-        } }
+        return PlayerView(context)
+            .apply {
+                useController = false
+                subtitleView?.visibility = View.GONE
+                player = this@Media3PlaybackEngine.player
+            }
+            .also {
+                pending?.let { request ->
+                    prepare(
+                        request.url,
+                        request.startPositionSeconds,
+                        request.mimeType,
+                        request.playWhenReady,
+                    )
+                }
+            }
     }
 
     override fun currentPositionSeconds(): Double =
-        player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0)
-            ?: _state.value.positionSeconds
+        player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0) ?: _state.value.positionSeconds
 
     override fun prepare(
         url: String,
@@ -203,7 +234,10 @@ class Media3PlaybackEngine : PlaybackEngine {
         mimeType: String?,
         playWhenReady: Boolean,
     ) {
-        Log.i(tag, "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds playWhenReady=$playWhenReady")
+        Log.i(
+            tag,
+            "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds playWhenReady=$playWhenReady",
+        )
         val current = player
         if (current == null) {
             pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
@@ -212,12 +246,13 @@ class Media3PlaybackEngine : PlaybackEngine {
         pending = null
         initialSeek.schedule(startPositionSeconds)
         current.playWhenReady = playWhenReady
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .apply {
-                mimeType?.let { setMimeType(it) }
-            }
-            .build()
+        val mediaItem =
+            MediaItem.Builder()
+                .setUri(url)
+                .apply {
+                    mimeType?.let { setMimeType(it) }
+                }
+                .build()
         current.setMediaItem(mediaItem)
         current.prepare()
         _state.value = EngineState()
@@ -268,79 +303,102 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     private var playWhenReady = false
     private var sourceReady = false
     private var sourceLoadPending = false
-    private val eventObserver = object : MPVLib.EventObserver {
-        override fun eventProperty(property: String) = Unit
-        override fun eventProperty(property: String, value: Long) = Unit
-        override fun eventProperty(property: String, value: Boolean) = Unit
-        override fun eventProperty(property: String, value: String) = Unit
-        override fun eventProperty(property: String, value: Double) = Unit
+    private val eventObserver =
+        object : MPVLib.EventObserver {
+            override fun eventProperty(property: String) = Unit
 
-        override fun event(eventId: Int) {
-            if (!released && sourceLoadPending && eventId in MPV_READY_EVENTS) {
-                sourceReady = true
-                sourceLoadPending = false
-                Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
-                _state.value = _state.value.copy(ready = true, isBuffering = false)
-            }
-            if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
-                if (endFileGate.shouldReportEndFile()) {
-                    _state.value = _state.value.copy(ended = true)
+            override fun eventProperty(property: String, value: Long) = Unit
+
+            override fun eventProperty(property: String, value: Boolean) = Unit
+
+            override fun eventProperty(property: String, value: String) = Unit
+
+            override fun eventProperty(property: String, value: Double) = Unit
+
+            override fun event(eventId: Int) {
+                if (!released && sourceLoadPending && eventId in MPV_READY_EVENTS) {
+                    sourceReady = true
+                    sourceLoadPending = false
+                    Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
+                    _state.value = _state.value.copy(ready = true, isBuffering = false)
+                }
+                if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
+                    if (endFileGate.shouldReportEndFile()) {
+                        _state.value = _state.value.copy(ended = true)
+                    }
                 }
             }
         }
-    }
-    private val ticker = object : Runnable {
-        override fun run() {
-            if (released) return
-            if (view == null) return
-            val position = runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
-            val duration = runCatching { MPVLib.getPropertyDouble("duration") }.getOrNull() ?: 0.0
-            val paused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: true
-            if (duration > 0.0) {
-                initialSeek.consume()?.let {
-                    MPVLib.command(arrayOf("seek", it.toString(), "absolute+exact"))
+    private val ticker =
+        object : Runnable {
+            override fun run() {
+                if (released) return
+                if (view == null) return
+                val position =
+                    runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
+                val duration =
+                    runCatching { MPVLib.getPropertyDouble("duration") }.getOrNull() ?: 0.0
+                val paused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: true
+                if (duration > 0.0) {
+                    initialSeek.consume()?.let {
+                        MPVLib.command(arrayOf("seek", it.toString(), "absolute+exact"))
+                    }
                 }
+                _state.value =
+                    _state.value.copy(
+                        positionSeconds = position,
+                        durationSeconds = duration,
+                        bufferedSeconds =
+                            position +
+                                (runCatching {
+                                        MPVLib.getPropertyDouble("demuxer-cache-duration")
+                                    }
+                                    .getOrNull() ?: 0.0),
+                        isPlaying = !paused,
+                        isBuffering =
+                            runCatching {
+                                    MPVLib.getPropertyBoolean("paused-for-cache") == true
+                                }
+                                .getOrDefault(false),
+                        speed =
+                            (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull() ?: 1.0)
+                                .toFloat(),
+                        ready = sourceReady,
+                    )
+                handler.postDelayed(this, 250L)
             }
-            _state.value = _state.value.copy(
-                positionSeconds = position,
-                durationSeconds = duration,
-                bufferedSeconds = position + (runCatching {
-                    MPVLib.getPropertyDouble("demuxer-cache-duration")
-                }.getOrNull() ?: 0.0),
-                isPlaying = !paused,
-                isBuffering = runCatching {
-                    MPVLib.getPropertyBoolean("paused-for-cache") == true
-                }.getOrDefault(false),
-                speed = (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull()
-                    ?: 1.0).toFloat(),
-                ready = sourceReady,
-            )
-            handler.postDelayed(this, 250L)
         }
-    }
 
     override fun createView(context: Context): View {
         check(!released) { "Playback engine has been released" }
         if (view == null) {
             val configDir = context.filesDir.resolve("mpv-config").apply { mkdirs() }
             val cacheDir = context.cacheDir.resolve("mpv-cache").apply { mkdirs() }
-            view = MpvSurfaceView(context) { playWhenReady }.also {
-                it.initialize(configDir.absolutePath, cacheDir.absolutePath)
-            }
+            view =
+                MpvSurfaceView(context) { playWhenReady }
+                    .also {
+                        it.initialize(configDir.absolutePath, cacheDir.absolutePath)
+                    }
             MPVLib.addObserver(eventObserver)
             handler.post(ticker)
         }
-        return view!!.also { pending?.let { request ->
-            prepare(request.url, request.startPositionSeconds, request.mimeType, request.playWhenReady)
-        } }
+        return view!!.also {
+            pending?.let { request ->
+                prepare(
+                    request.url,
+                    request.startPositionSeconds,
+                    request.mimeType,
+                    request.playWhenReady,
+                )
+            }
+        }
     }
 
     override fun currentPositionSeconds(): Double {
         if (released || view == null) return _state.value.positionSeconds
         return runCatching { MPVLib.getPropertyDouble("time-pos") }
             .getOrNull()
-            ?.takeIf { it.isFinite() && it >= 0.0 }
-            ?: _state.value.positionSeconds
+            ?.takeIf { it.isFinite() && it >= 0.0 } ?: _state.value.positionSeconds
     }
 
     override fun prepare(
@@ -438,7 +496,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             holder: android.view.SurfaceHolder,
             format: Int,
             width: Int,
-            height: Int
+            height: Int,
         ) {
             if (lifecycle.canUseSurface()) super.surfaceChanged(holder, format, width, height)
         }
@@ -467,14 +525,16 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
     }
 }
 
-private val MPV_READY_EVENTS = setOf(
-    MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED,
-    MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART,
-    MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG,
-    MPVLib.MpvEvent.MPV_EVENT_AUDIO_RECONFIG,
-)
+private val MPV_READY_EVENTS =
+    setOf(
+        MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED,
+        MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART,
+        MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG,
+        MPVLib.MpvEvent.MPV_EVENT_AUDIO_RECONFIG,
+    )
 
-fun createPlaybackEngine(engine: PlayerEngine, context: Context): PlaybackEngine = when (engine) {
-    PlayerEngine.MEDIA3 -> Media3PlaybackEngine()
-    PlayerEngine.MPV -> MpvPlaybackEngine(context)
-}
+fun createPlaybackEngine(engine: PlayerEngine, context: Context): PlaybackEngine =
+    when (engine) {
+        PlayerEngine.MEDIA3 -> Media3PlaybackEngine()
+        PlayerEngine.MPV -> MpvPlaybackEngine(context)
+    }

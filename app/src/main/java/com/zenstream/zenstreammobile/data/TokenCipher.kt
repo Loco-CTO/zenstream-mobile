@@ -27,11 +27,11 @@ class TokenCipher {
         cipher.init(
             Cipher.DECRYPT_MODE,
             key(),
-            GCMParameterSpec(GCM_TAG_LENGTH, bytes.copyOfRange(0, GCM_IV_LENGTH))
+            GCMParameterSpec(GCM_TAG_LENGTH, bytes.copyOfRange(0, GCM_IV_LENGTH)),
         )
         return String(
             cipher.doFinal(bytes.copyOfRange(GCM_IV_LENGTH, bytes.size)),
-            StandardCharsets.UTF_8
+            StandardCharsets.UTF_8,
         )
     }
 
@@ -39,18 +39,20 @@ class TokenCipher {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         val existing = store.getKey(keyAlias, null) as? SecretKey
         if (existing != null) return existing
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).apply {
-            init(
-                KeyGenParameterSpec.Builder(
-                    keyAlias,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+            .apply {
+                init(
+                    KeyGenParameterSpec.Builder(
+                            keyAlias,
+                            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                        )
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setUserAuthenticationRequired(false)
+                        .build()
                 )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setUserAuthenticationRequired(false)
-                    .build()
-            )
-        }.generateKey()
+            }
+            .generateKey()
     }
 
     companion object {

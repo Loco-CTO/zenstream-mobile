@@ -82,19 +82,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
-import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.imageBlurHash
-import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
@@ -103,30 +102,32 @@ import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun HomeScreen(
     repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
 ) {
-    val vm: HomeViewModel = viewModel(
-        key = "home-${session.userId}",
-        factory = HomeViewModel.Factory(repository, session)
-    )
+    val vm: HomeViewModel =
+        viewModel(
+            key = "home-${session.userId}",
+            factory = HomeViewModel.Factory(repository, session),
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     when {
-        state.error -> ErrorState(
-            padding,
-            R.string.library_load_failed,
-            vm::load
-        )
+        state.error ->
+            ErrorState(
+                padding,
+                R.string.library_load_failed,
+                vm::load,
+            )
 
         state.loading && state.data == null -> CenterLoading(padding)
 
@@ -145,18 +146,21 @@ fun HomeScreen(
                         FeaturedHero(
                             data?.featured.orEmpty(),
                             session,
-                            showEmptyLibrary = !state.loading &&
-                                    data?.rows.isNullOrEmpty() && data?.featured.isNullOrEmpty(),
+                            showEmptyLibrary =
+                                !state.loading &&
+                                    data?.rows.isNullOrEmpty() &&
+                                    data?.featured.isNullOrEmpty(),
                             onItemClick = onItemClick,
                         )
                     }
                     items(
                         data?.rows.orEmpty(),
-                        key = { it.key }) { row ->
+                        key = { it.key },
+                    ) { row ->
                         MediaRowView(
                             row,
                             session,
-                            onItemClick
+                            onItemClick,
                         )
                     }
                 }
@@ -167,7 +171,7 @@ fun HomeScreen(
 
 @OptIn(
     ExperimentalMaterial3Api::class,
-    androidx.compose.foundation.ExperimentalFoundationApi::class
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
 @Composable
 internal fun FeaturedHero(
@@ -182,50 +186,43 @@ internal fun FeaturedHero(
             return
         }
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.Bottom
+            modifier = Modifier.fillMaxWidth().height(300.dp).padding(20.dp),
+            verticalArrangement = Arrangement.Bottom,
         ) {
             Text(
                 stringResource(R.string.empty_library),
                 style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.semantics { heading() })
+                modifier = Modifier.semantics { heading() },
+            )
             Text(
                 stringResource(R.string.empty_library_hint),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         return
     }
     val pagerState = rememberPagerState(pageCount = { items.size })
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val featureBarHeight = calculateFeatureBarHeight(maxWidth, screenHeightDp)
         Box(
-            Modifier
-                .fillMaxWidth()
+            Modifier.fillMaxWidth()
                 .height(featureBarHeight)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black)
         ) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val item = items[page]
-                val openDescription = stringResource(
-                    R.string.open_details_description,
-                    item.name,
-                )
+                val openDescription =
+                    stringResource(
+                        R.string.open_details_description,
+                        item.name,
+                    )
                 Box(
-                    Modifier
-                        .fillMaxSize()
+                    Modifier.fillMaxSize()
                         .clickable { onItemClick(item) }
                         .semantics(mergeDescendants = true) {
                             role = Role.Button
@@ -234,70 +231,73 @@ internal fun FeaturedHero(
                 ) {
                     val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
                     val request = url?.let {
-                        ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
-                            NetworkHeaders.Builder()
-                                .set(
-                                    "Authorization",
-                                    CatalogApi.authorizationHeader(session.token)
-                                )
-                                .build()
-                        ).crossfade(true).build()
+                        ImageRequest.Builder(LocalContext.current)
+                            .data(it)
+                            .httpHeaders(
+                                NetworkHeaders.Builder()
+                                    .set(
+                                        "Authorization",
+                                        CatalogApi.authorizationHeader(session.token),
+                                    )
+                                    .build()
+                            )
+                            .crossfade(true)
+                            .build()
                     }
                     BlurHashAsyncImage(
                         model = request,
                         imageKey = url,
                         blurHash = imageBlurHash(item, "Backdrop"),
-                        contentDescription = stringResource(
-                            R.string.backdrop_description,
-                            item.name
-                        ),
+                        contentDescription =
+                            stringResource(
+                                R.string.backdrop_description,
+                                item.name,
+                            ),
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .alpha(.58f)
+                        modifier = Modifier.fillMaxSize().alpha(.58f),
                     )
                     Box(
-                        Modifier
-                            .fillMaxSize()
+                        Modifier.fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
                                     listOf(
                                         Color.Transparent,
-                                        Color(0xFF080808)
+                                        Color(0xFF080808),
                                     )
                                 )
                             )
                     )
                     Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.align(Alignment.BottomStart).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
                         val logoRequest = logoUrl?.let {
-                            ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
-                                NetworkHeaders.Builder()
-                                    .set(
-                                        "Authorization",
-                                        CatalogApi.authorizationHeader(session.token)
-                                    )
-                                    .build()
-                            ).crossfade(true).build()
+                            ImageRequest.Builder(LocalContext.current)
+                                .data(it)
+                                .httpHeaders(
+                                    NetworkHeaders.Builder()
+                                        .set(
+                                            "Authorization",
+                                            CatalogApi.authorizationHeader(session.token),
+                                        )
+                                        .build()
+                                )
+                                .crossfade(true)
+                                .build()
                         }
                         if (logoRequest != null) {
                             BlurHashAsyncImage(
                                 model = logoRequest,
                                 imageKey = logoUrl,
                                 blurHash = null,
-                                contentDescription = stringResource(
-                                    R.string.logo_description,
-                                    item.name
-                                ),
+                                contentDescription =
+                                    stringResource(
+                                        R.string.logo_description,
+                                        item.name,
+                                    ),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .size(260.dp, 72.dp)
-                                    .semantics { heading() },
+                                modifier = Modifier.size(260.dp, 72.dp).semantics { heading() },
                             )
                         } else {
                             Text(
@@ -306,12 +306,13 @@ internal fun FeaturedHero(
                                 color = Color.White,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.semantics { heading() })
+                                modifier = Modifier.semantics { heading() },
+                            )
                         }
                         Text(
                             itemSubtitle(item),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = .65f)
+                            color = Color.White.copy(alpha = .65f),
                         )
                     }
                 }
@@ -319,20 +320,17 @@ internal fun FeaturedHero(
         }
     }
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp), horizontalArrangement = Arrangement.Center
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.Center,
     ) {
         repeat(items.size) { index ->
             Box(
-                Modifier
-                    .padding(horizontal = 3.dp)
+                Modifier.padding(horizontal = 3.dp)
                     .size(if (index == pagerState.currentPage) 18.dp else 6.dp, 4.dp)
                     .clip(MaterialTheme.shapes.small)
                     .background(
-                        if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary else Color.White.copy(
-                            alpha = .25f
-                        )
+                        if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
+                        else Color.White.copy(alpha = .25f)
                     )
             )
         }
@@ -353,20 +351,22 @@ fun SearchScreen(
     repository: SearchDataSource,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
 ) {
-    val vm: SearchViewModel = viewModel(
-        key = "search-${session.userId}",
-        factory = SearchViewModel.Factory(repository, session)
-    )
+    val vm: SearchViewModel =
+        viewModel(
+            key = "search-${session.userId}",
+            factory = SearchViewModel.Factory(repository, session),
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val density = LocalDensity.current
-    val topBarVisibility = remember(density) {
-        ScrollVisibilityController(
-            hideDistance = with(density) { 56.dp.toPx() },
-            revealDistance = with(density) { 64.dp.toPx() },
-        )
-    }
+    val topBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { 56.dp.toPx() },
+                revealDistance = with(density) { 64.dp.toPx() },
+            )
+        }
     var topBarVisible by remember { mutableStateOf(true) }
     val topBarScrollConnection = remember {
         object : NestedScrollConnection {
@@ -375,10 +375,11 @@ fun SearchScreen(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                topBarVisible = topBarVisibility.onNestedScroll(
-                    consumedY = consumed.y,
-                    availableY = available.y,
-                )
+                topBarVisible =
+                    topBarVisibility.onNestedScroll(
+                        consumedY = consumed.y,
+                        availableY = available.y,
+                    )
                 return Offset.Zero
             }
         }
@@ -386,17 +387,17 @@ fun SearchScreen(
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(padding)
-    ) {
+    Column(Modifier.fillMaxSize().padding(padding)) {
         AnimatedVisibility(
             visible = topBarVisible,
-            enter = expandVertically(expandFrom = Alignment.Top) +
-                    slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
-                    slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+            enter =
+                expandVertically(expandFrom = Alignment.Top) +
+                    slideInVertically(initialOffsetY = { -it }) +
+                    fadeIn(),
+            exit =
+                shrinkVertically(shrinkTowards = Alignment.Top) +
+                    slideOutVertically(targetOffsetY = { -it }) +
+                    fadeOut(),
         ) {
             Column {
                 OutlinedTextField(
@@ -405,28 +406,27 @@ fun SearchScreen(
                     leadingIcon = {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_search),
-                            contentDescription = null
+                            contentDescription = null,
                         )
                     },
                     trailingIcon = {
-                        if (state.query.isNotEmpty()) IconButton(onClick = {
-                            vm.updateQuery(
-                                ""
-                            )
-                        }) {
-                            Icon(
-                                painter = painterResource(LucideR.drawable.lucide_ic_x),
-                                contentDescription = stringResource(R.string.close)
-                            )
-                        }
+                        if (state.query.isNotEmpty())
+                            IconButton(
+                                onClick = {
+                                    vm.updateQuery("")
+                                }
+                            ) {
+                                Icon(
+                                    painter = painterResource(LucideR.drawable.lucide_ic_x),
+                                    contentDescription = stringResource(R.string.close),
+                                )
+                            }
                     },
                     placeholder = { Text(stringResource(R.string.search_placeholder)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { vm.retry() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
                 if (state.query.trim().length >= 2 && !state.loading && !state.error) {
                     Text(
@@ -441,34 +441,36 @@ fun SearchScreen(
         PullToRefreshLayout(
             isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
             onRefresh = vm::refresh,
-            modifier = Modifier
-                .weight(1f)
-                .nestedScroll(topBarScrollConnection),
+            modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
         ) {
             when {
                 state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
                 state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, vm::retry)
                 state.query.trim().length < 2 -> Unit
 
-                state.results.isEmpty() -> Text(
-                    stringResource(R.string.no_search_results),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(20.dp)
-                )
+                state.results.isEmpty() ->
+                    Text(
+                        stringResource(R.string.no_search_results),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp),
+                    )
 
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    items(state.results, key = { it.id }) { item ->
-                        Box(
-                            Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.TopCenter
-                        ) { MediaCardForSearch(item, session, onItemClick) }
+                else ->
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        items(state.results, key = { it.id }) { item ->
+                            Box(
+                                Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                MediaCardForSearch(item, session, onItemClick)
+                            }
+                        }
                     }
-                }
             }
         }
     }
@@ -478,7 +480,7 @@ fun SearchScreen(
 private fun MediaCardForSearch(
     item: MediaItem,
     session: AuthSession,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
 ) {
     com.zenstream.zenstreammobile.ui.components.MediaCard(
         item,
@@ -494,21 +496,23 @@ fun LibraryScreen(
     repository: LibraryDataSource,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
 ) {
-    val vm: LibraryViewModel = viewModel(
-        key = "library-${session.userId}",
-        factory = LibraryViewModel.Factory(repository, session)
-    )
+    val vm: LibraryViewModel =
+        viewModel(
+            key = "library-${session.userId}",
+            factory = LibraryViewModel.Factory(repository, session),
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val density = LocalDensity.current
-    val topBarVisibility = remember(density) {
-        ScrollVisibilityController(
-            hideDistance = with(density) { 56.dp.toPx() },
-            revealDistance = with(density) { 64.dp.toPx() },
-        )
-    }
+    val topBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { 56.dp.toPx() },
+                revealDistance = with(density) { 64.dp.toPx() },
+            )
+        }
     var topBarVisible by remember { mutableStateOf(true) }
     val topBarScrollConnection = remember {
         object : NestedScrollConnection {
@@ -517,10 +521,11 @@ fun LibraryScreen(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                topBarVisible = topBarVisibility.onNestedScroll(
-                    consumedY = consumed.y,
-                    availableY = available.y,
-                )
+                topBarVisible =
+                    topBarVisibility.onNestedScroll(
+                        consumedY = consumed.y,
+                        availableY = available.y,
+                    )
                 return Offset.Zero
             }
         }
@@ -533,45 +538,47 @@ fun LibraryScreen(
         state.items.size,
         state.totalRecordCount,
         state.loading,
-        state.loadingMore
+        state.loadingMore,
     ) {
         snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
             if (
                 lastVisible >= 0 &&
-                lastVisible >= state.items.size - 4 &&
-                state.items.size < state.totalRecordCount &&
-                !state.loading &&
-                !state.loadingMore
+                    lastVisible >= state.items.size - 4 &&
+                    state.items.size < state.totalRecordCount &&
+                    !state.loading &&
+                    !state.loadingMore
             ) {
                 vm.loadMore()
             }
         }
     }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(padding)
-    ) {
+    Column(Modifier.fillMaxSize().padding(padding)) {
         AnimatedVisibility(
             visible = topBarVisible,
-            enter = expandVertically(expandFrom = Alignment.Top) +
-                    slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
-                    slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+            enter =
+                expandVertically(expandFrom = Alignment.Top) +
+                    slideInVertically(initialOffsetY = { -it }) +
+                    fadeIn(),
+            exit =
+                shrinkVertically(shrinkTowards = Alignment.Top) +
+                    slideOutVertically(targetOffsetY = { -it }) +
+                    fadeOut(),
         ) {
             Column {
                 if (state.libraries.isNotEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(
                             state.libraries,
-                            key = { it.id }) { library ->
+                            key = { it.id },
+                        ) { library ->
                             FilterChip(
                                 selected = state.selected?.id == library.id,
                                 onClick = { vm.select(library) },
-                                label = { Text(library.name) })
+                                label = { Text(library.name) },
+                            )
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -583,27 +590,28 @@ fun LibraryScreen(
         PullToRefreshLayout(
             isRefreshing = shouldShowPullToRefresh(state.loading, state.items.isNotEmpty()),
             onRefresh = vm::refresh,
-            modifier = Modifier
-                .weight(1f)
-                .nestedScroll(topBarScrollConnection),
+            modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
         ) {
             when {
                 state.loading && state.items.isEmpty() -> CenterLoading(PaddingValues())
-                state.error && state.items.isEmpty() -> ErrorState(
-                    PaddingValues(),
-                    R.string.library_load_page_failed,
-                    { vm.loadLibraries(state.selected?.id) },
-                )
+                state.error && state.items.isEmpty() ->
+                    ErrorState(
+                        PaddingValues(),
+                        R.string.library_load_page_failed,
+                        { vm.loadLibraries(state.selected?.id) },
+                    )
 
-                !state.loading && state.libraries.isEmpty() -> EmptyState(
-                    stringResource(R.string.no_libraries),
-                    stringResource(R.string.no_libraries_hint),
-                )
+                !state.loading && state.libraries.isEmpty() ->
+                    EmptyState(
+                        stringResource(R.string.no_libraries),
+                        stringResource(R.string.no_libraries_hint),
+                    )
 
-                !state.loading && state.items.isEmpty() -> EmptyState(
-                    stringResource(R.string.empty_library),
-                    stringResource(R.string.empty_library_hint),
-                )
+                !state.loading && state.items.isEmpty() ->
+                    EmptyState(
+                        stringResource(R.string.empty_library),
+                        stringResource(R.string.empty_library_hint),
+                    )
 
                 else -> {
                     LazyVerticalGrid(
@@ -626,16 +634,15 @@ fun LibraryScreen(
                                 key = "library-loading-more",
                                 span = {
                                     androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
-                                }) {
+                                },
+                            ) {
                                 Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 16.dp),
+                                    Modifier.fillMaxWidth().padding(vertical = 16.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp
+                                        strokeWidth = 2.dp,
                                     )
                                 }
                             }
@@ -645,7 +652,8 @@ fun LibraryScreen(
                                 key = "library-load-more-error",
                                 span = {
                                     androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
-                                }) {
+                                },
+                            ) {
                                 InlineLoadMoreError(onRetry = vm::loadMore)
                             }
                         }
@@ -659,13 +667,11 @@ fun LibraryScreen(
 @Composable
 private fun LibraryHeader(
     state: com.zenstream.zenstreammobile.ui.LibraryUiState,
-    onSortChanged: (LibrarySort) -> Unit
+    onSortChanged: (LibrarySort) -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -684,27 +690,31 @@ private fun LibraryHeader(
             onClick = {
                 onSortChanged(
                     state.sort.copy(
-                        sortOrder = if (state.sort.sortOrder == SortOrder.Ascending) {
-                            SortOrder.Descending
-                        } else {
-                            SortOrder.Ascending
-                        },
-                    ),
+                        sortOrder =
+                            if (state.sort.sortOrder == SortOrder.Ascending) {
+                                SortOrder.Descending
+                            } else {
+                                SortOrder.Ascending
+                            }
+                    )
                 )
             },
             enabled = state.selected != null,
         ) {
             Icon(
-                painter = painterResource(
-                    if (state.sort.sortOrder == SortOrder.Ascending) {
-                        LucideR.drawable.lucide_ic_arrow_up
-                    } else {
-                        LucideR.drawable.lucide_ic_arrow_down
-                    },
-                ),
-                contentDescription = stringResource(
-                    if (state.sort.sortOrder == SortOrder.Ascending) R.string.sort_descending else R.string.sort_ascending,
-                ),
+                painter =
+                    painterResource(
+                        if (state.sort.sortOrder == SortOrder.Ascending) {
+                            LucideR.drawable.lucide_ic_arrow_up
+                        } else {
+                            LucideR.drawable.lucide_ic_arrow_down
+                        }
+                    ),
+                contentDescription =
+                    stringResource(
+                        if (state.sort.sortOrder == SortOrder.Ascending) R.string.sort_descending
+                        else R.string.sort_ascending
+                    ),
             )
         }
         Box {
@@ -716,58 +726,60 @@ private fun LibraryHeader(
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 LibrarySortBy.entries
-                    .filter { it != LibrarySortBy.LastAdded || state.selected?.supportsLastAdded == true }
+                    .filter {
+                        it != LibrarySortBy.LastAdded || state.selected?.supportsLastAdded == true
+                    }
                     .forEach { sortBy ->
-                    DropdownMenuItem(
-                        text = { Text(sortLabel(sortBy)) },
-                        onClick = {
-                            menuExpanded = false
-                            onSortChanged(state.sort.copy(sortBy = sortBy))
-                        },
-                        leadingIcon = if (sortBy == state.sort.sortBy) {
-                            {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_check),
-                                    contentDescription = null
-                                )
-                            }
-                        } else null,
-                    )
-                }
+                        DropdownMenuItem(
+                            text = { Text(sortLabel(sortBy)) },
+                            onClick = {
+                                menuExpanded = false
+                                onSortChanged(state.sort.copy(sortBy = sortBy))
+                            },
+                            leadingIcon =
+                                if (sortBy == state.sort.sortBy) {
+                                    {
+                                        Icon(
+                                            painterResource(LucideR.drawable.lucide_ic_check),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                } else null,
+                        )
+                    }
             }
         }
     }
 }
 
 @Composable
-private fun sortLabel(sortBy: LibrarySortBy): String = when (sortBy) {
-    LibrarySortBy.Rating -> stringResource(R.string.sort_rating)
-    LibrarySortBy.Title -> stringResource(R.string.sort_title)
-    LibrarySortBy.Added -> stringResource(R.string.sort_date_added)
-    LibrarySortBy.LastAdded -> stringResource(R.string.sort_last_added)
-    LibrarySortBy.Release -> stringResource(R.string.sort_release_date)
-    LibrarySortBy.Runtime -> stringResource(R.string.sort_runtime)
-}
+private fun sortLabel(sortBy: LibrarySortBy): String =
+    when (sortBy) {
+        LibrarySortBy.Rating -> stringResource(R.string.sort_rating)
+        LibrarySortBy.Title -> stringResource(R.string.sort_title)
+        LibrarySortBy.Added -> stringResource(R.string.sort_date_added)
+        LibrarySortBy.LastAdded -> stringResource(R.string.sort_last_added)
+        LibrarySortBy.Release -> stringResource(R.string.sort_release_date)
+        LibrarySortBy.Runtime -> stringResource(R.string.sort_runtime)
+    }
 
 @Composable
 private fun EmptyState(title: String, detail: String) {
     Column(
-        Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             detail,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }
@@ -775,15 +787,13 @@ private fun EmptyState(title: String, detail: String) {
 @Composable
 private fun InlineLoadMoreError(onRetry: () -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             stringResource(R.string.library_load_more_failed),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.width(8.dp))
         Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
@@ -794,7 +804,7 @@ private fun InlineLoadMoreError(onRetry: () -> Unit) {
 private fun LibraryPosterCard(
     item: MediaItem,
     session: AuthSession,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
 ) {
     com.zenstream.zenstreammobile.ui.components.MediaCard(
         item = item,
@@ -813,45 +823,48 @@ private fun snapshotFlowLastVisibleIndex(gridState: LazyGridState) = snapshotFlo
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
-    Scaffold(topBar = {
-        TopAppBar(
-            title = {
-                Text(
-                    itemName,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                        contentDescription = stringResource(R.string.back)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        itemName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-        )
-    }, containerColor = MaterialTheme.colorScheme.background) { padding ->
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                            contentDescription = stringResource(R.string.back),
+                        )
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    ),
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { padding ->
         Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
+            Modifier.fillMaxSize().padding(padding).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_play),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(64.dp)
+                modifier = Modifier.size(64.dp),
             )
             Spacer(Modifier.height(20.dp))
             Text(
                 stringResource(R.string.media_playback_failed),
                 style = MaterialTheme.typography.titleLarge,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }
@@ -860,37 +873,34 @@ fun PlaybackPlaceholderScreen(itemName: String, onBack: () -> Unit) {
 @Composable
 private fun CenterLoading(padding: PaddingValues) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .padding(padding),
-        contentAlignment = Alignment.Center
-    ) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+        Modifier.fillMaxSize().padding(padding),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+    }
 }
 
 @Composable
 private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit) {
     Column(
-        Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(24.dp),
+        Modifier.fillMaxSize().padding(padding).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
             stringResource(message),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyLarge,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
             Icon(
                 painterResource(LucideR.drawable.lucide_ic_refresh_cw),
-                contentDescription = null
-            ); Spacer(
-            Modifier.width(6.dp)
-        ); Text(stringResource(R.string.retry))
+                contentDescription = null,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.retry))
         }
     }
 }

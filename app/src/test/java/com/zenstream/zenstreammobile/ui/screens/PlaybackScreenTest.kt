@@ -35,6 +35,9 @@ class PlaybackScreenTest {
         assertEquals(true, shouldShowPlayerLoading(null, false, true, true, true, false))
         assertEquals(true, shouldShowPlayerLoading(null, false, true, false, true, true))
         assertEquals(false, shouldShowPlayerLoading(null, false, true, false, true, false))
-        assertEquals(false, shouldShowPlayerLoading("Playback failed", true, false, true, true, true))
+        assertEquals(
+            false,
+            shouldShowPlayerLoading("Playback failed", true, false, true, true, true),
+        )
     }
 }

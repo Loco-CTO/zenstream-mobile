@@ -61,8 +61,9 @@ class ScrollVisibilityControllerTest {
         assertFalse(controller.onNestedScroll(consumedY = -56f, availableY = 0f))
     }
 
-    private fun controller() = ScrollVisibilityController(
-        hideDistance = 56f,
-        revealDistance = 64f
-    )
+    private fun controller() =
+        ScrollVisibilityController(
+            hideDistance = 56f,
+            revealDistance = 64f,
+        )
 }

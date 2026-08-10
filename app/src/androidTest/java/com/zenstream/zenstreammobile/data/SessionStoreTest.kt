@@ -15,15 +15,18 @@ import org.junit.runner.RunWith
 class SessionStoreTest {
     @Test
     fun persistsEncryptedSessionAndClearsIdentity() = runBlocking {
-        val store = SessionStore(
-            InstrumentationRegistry.getInstrumentation().targetContext,
-            dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
-        )
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+            )
         store.clearAll()
         store.saveOrchestratorUrl("https://orchestrator.example")
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.saveServerConfig("https://orchestrator.example")
-        store.saveSession(AuthSession("https://orchestrator.example", "secret-token", "user-1", "User"))
+        store.saveSession(
+            AuthSession("https://orchestrator.example", "secret-token", "user-1", "User")
+        )
         assertEquals("secret-token", store.session.first()!!.token)
         store.clearSession()
         assertNull(store.session.first())
@@ -35,10 +38,11 @@ class SessionStoreTest {
 
     @Test
     fun subtitleStyleIsDeviceLocalAndSurvivesSessionClears() = runBlocking {
-        val store = SessionStore(
-            InstrumentationRegistry.getInstrumentation().targetContext,
-            dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
-        )
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName = INSTRUMENTATION_SESSION_DATA_STORE_NAME,
+            )
         store.clearAll()
         val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
 
@@ -49,4 +53,3 @@ class SessionStoreTest {
         assertEquals(style, store.cachedSubtitleStyle())
     }
 }
-

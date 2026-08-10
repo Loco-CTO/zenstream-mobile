@@ -2,22 +2,22 @@ package com.zenstream.zenstreammobile.ui
 
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
-import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,11 +45,12 @@ class HomeViewModelTest {
         val featured = CompletableDeferred<List<MediaItem>>()
         val continueWatching = CompletableDeferred<List<MediaItem>>()
         val nextUp = CompletableDeferred<List<MediaItem>>()
-        val source = FakeHomeDataSource(
-            featuredRequest = { featured.await() },
-            continueWatchingRequest = { continueWatching.await() },
-            nextUpRequest = { nextUp.await() },
-        )
+        val source =
+            FakeHomeDataSource(
+                featuredRequest = { featured.await() },
+                continueWatchingRequest = { continueWatching.await() },
+                nextUpRequest = { nextUp.await() },
+            )
         val viewModel = HomeViewModel(source, session)
         runCurrent()
 
@@ -58,7 +59,9 @@ class HomeViewModelTest {
         assertEquals(listOf(RowTitle.NextUp), viewModel.uiState.value.data?.rows?.map { it.title })
         assertTrue(viewModel.uiState.value.loading)
 
-        featured.complete(listOf(MediaItem("featured", "Featured", backdropImageTags = listOf("tag"))))
+        featured.complete(
+            listOf(MediaItem("featured", "Featured", backdropImageTags = listOf("tag")))
+        )
         continueWatching.complete(listOf(MediaItem("continue", "Continue")))
         advanceUntilIdle()
 
@@ -76,33 +79,66 @@ class HomeViewModelTest {
         val second = Library("second", "Second", "movies")
         val firstData = CompletableDeferred<LibraryData>()
         val secondData = CompletableDeferred<LibraryData>()
-        val source = FakeHomeDataSource(
-            librariesRequest = { listOf(first, second) },
-            libraryDataRequest = { library -> if (library == first) firstData.await() else secondData.await() },
-        )
+        val source =
+            FakeHomeDataSource(
+                librariesRequest = { listOf(first, second) },
+                libraryDataRequest = { library ->
+                    if (library == first) firstData.await() else secondData.await()
+                },
+            )
         val viewModel = HomeViewModel(source, session)
         runCurrent()
 
-        secondData.complete(LibraryData(second, listOf(MediaRow(RowTitle.NewlyAdded, second.name, listOf(MediaItem("second", "Second"))))))
+        secondData.complete(
+            LibraryData(
+                second,
+                listOf(
+                    MediaRow(
+                        RowTitle.NewlyAdded,
+                        second.name,
+                        listOf(MediaItem("second", "Second")),
+                    )
+                ),
+            )
+        )
         runCurrent()
-        assertEquals(listOf("Second"), viewModel.uiState.value.data?.rows?.map { it.items.single().name })
+        assertEquals(
+            listOf("Second"),
+            viewModel.uiState.value.data?.rows?.map { it.items.single().name },
+        )
 
-        firstData.complete(LibraryData(first, listOf(MediaRow(RowTitle.NewlyAdded, first.name, listOf(MediaItem("first", "First"))))))
+        firstData.complete(
+            LibraryData(
+                first,
+                listOf(
+                    MediaRow(RowTitle.NewlyAdded, first.name, listOf(MediaItem("first", "First")))
+                ),
+            )
+        )
         advanceUntilIdle()
-        assertEquals(listOf("First", "Second"), viewModel.uiState.value.data?.rows?.map { it.items.single().name })
+        assertEquals(
+            listOf("First", "Second"),
+            viewModel.uiState.value.data?.rows?.map { it.items.single().name },
+        )
     }
 
     @Test
     fun recentlyPlayedAndGenreRowsFollowLibraryRowsAsTheirRequestCompletes() = runTest {
         val derived = CompletableDeferred<DerivedHomeData>()
         val library = Library("movies", "Movies", "movies")
-        val source = FakeHomeDataSource(
-            derivedRequest = { derived.await() },
-            librariesRequest = { listOf(library) },
-            libraryDataRequest = {
-                LibraryData(it, listOf(MediaRow(RowTitle.NewlyAdded, it.name, listOf(MediaItem("new", "New")))))
-            },
-        )
+        val source =
+            FakeHomeDataSource(
+                derivedRequest = { derived.await() },
+                librariesRequest = { listOf(library) },
+                libraryDataRequest = {
+                    LibraryData(
+                        it,
+                        listOf(
+                            MediaRow(RowTitle.NewlyAdded, it.name, listOf(MediaItem("new", "New")))
+                        ),
+                    )
+                },
+            )
         val viewModel = HomeViewModel(source, session)
         runCurrent()
 
@@ -110,10 +146,16 @@ class HomeViewModelTest {
             DerivedHomeData(
                 myList = listOf(MediaItem("favorite", "Favorite")),
                 recentlyPlayed = listOf(MediaItem("recent", "Recent")),
-                genreRows = listOf(
-                    MediaRow(RowTitle.Genre, items = listOf(MediaItem("drama", "Drama")), label = "Drama", key = "genre:drama"),
-                ),
-            ),
+                genreRows =
+                    listOf(
+                        MediaRow(
+                            RowTitle.Genre,
+                            items = listOf(MediaItem("drama", "Drama")),
+                            label = "Drama",
+                            key = "genre:drama",
+                        )
+                    ),
+            )
         )
         advanceUntilIdle()
 
@@ -126,9 +168,12 @@ class HomeViewModelTest {
 
     @Test
     fun metadataPreferenceRefreshForcesANewHomeRequest() = runTest {
-        val source = FakeHomeDataSource(featuredRequest = {
-            listOf(MediaItem("before", "Before", backdropImageTags = listOf("tag")))
-        })
+        val source =
+            FakeHomeDataSource(
+                featuredRequest = {
+                    listOf(MediaItem("before", "Before", backdropImageTags = listOf("tag")))
+                }
+            )
         val viewModel = HomeViewModel(source, session)
         advanceUntilIdle()
 
@@ -157,12 +202,20 @@ private class FakeHomeDataSource(
 
     override suspend fun clearSession() = Unit
 
-    override suspend fun homeFeatured(session: AuthSession): List<MediaItem> = featuredRequest().also { featuredRequests += 1 }
-    override suspend fun homeContinueWatching(session: AuthSession): List<MediaItem> = continueWatchingRequest()
+    override suspend fun homeFeatured(session: AuthSession): List<MediaItem> =
+        featuredRequest().also { featuredRequests += 1 }
+
+    override suspend fun homeContinueWatching(session: AuthSession): List<MediaItem> =
+        continueWatchingRequest()
+
     override suspend fun homeNextUp(session: AuthSession): List<MediaItem> = nextUpRequest()
+
     override suspend fun homeDerived(session: AuthSession): DerivedHomeData = derivedRequest()
+
     override suspend fun homeLibraries(session: AuthSession): List<Library> = librariesRequest()
-    override suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData = libraryDataRequest(library)
+
+    override suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData =
+        libraryDataRequest(library)
 
     fun publishMetadataRefresh() {
         _catalogRefreshRevision.value += 1

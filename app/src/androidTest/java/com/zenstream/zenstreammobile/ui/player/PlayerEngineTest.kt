@@ -18,7 +18,9 @@ class PlayerEngineTest {
         val engine = Media3PlaybackEngine()
         var playerView: PlayerView? = null
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            playerView = engine.createView(InstrumentationRegistry.getInstrumentation().targetContext) as PlayerView
+            playerView =
+                engine.createView(InstrumentationRegistry.getInstrumentation().targetContext)
+                    as PlayerView
         }
 
         assertNotNull(playerView?.subtitleView)

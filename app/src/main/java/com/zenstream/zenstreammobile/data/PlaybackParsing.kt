@@ -7,10 +7,7 @@ import com.zenstream.zenstreammobile.model.TrickplayPreview
 import kotlin.math.floor
 
 fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
-    val lines = input.removePrefix("\uFEFF")
-        .replace("\r\n", "\n")
-        .replace('\r', '\n')
-        .split('\n')
+    val lines = input.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n').split('\n')
     var index = 0
     while (index < lines.size) {
         // Do not use a timing-line regex here. Android's regex implementation
@@ -23,44 +20,48 @@ fun parseWebVttCues(input: String): List<SubtitleCue> = buildList {
             continue
         }
         val start = parseVttTimestamp(timingLine.substring(0, arrowIndex).trim())
-        val end = parseVttTimestamp(
-            timingLine.substring(arrowIndex + 3).trim().substringBefore(' ').trim(),
-        )
+        val end =
+            parseVttTimestamp(
+                timingLine.substring(arrowIndex + 3).trim().substringBefore(' ').trim()
+            )
         index++
-        val text = buildList {
-            while (index < lines.size && lines[index].isNotBlank()) {
-                add(lines[index])
-                index++
-            }
-        }.joinToString("\n")
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("""<[^>]+>"""), "")
-            .let(::stripAssOverrideTags)
-            .replace("&amp;", "&", ignoreCase = true)
-            .replace("&lt;", "<", ignoreCase = true)
-            .replace("&gt;", ">", ignoreCase = true)
-            .replace("&nbsp;", " ", ignoreCase = true)
-            .trim()
+        val text =
+            buildList {
+                    while (index < lines.size && lines[index].isNotBlank()) {
+                        add(lines[index])
+                        index++
+                    }
+                }
+                .joinToString("\n")
+                .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+                .replace(Regex("""<[^>]+>"""), "")
+                .let(::stripAssOverrideTags)
+                .replace("&amp;", "&", ignoreCase = true)
+                .replace("&lt;", "<", ignoreCase = true)
+                .replace("&gt;", ">", ignoreCase = true)
+                .replace("&nbsp;", " ", ignoreCase = true)
+                .trim()
         if (start != null && end != null && end > start && text.isNotBlank()) {
             add(SubtitleCue(start, end, text))
         }
     }
 }
 
-private fun stripAssOverrideTags(input: String): String = buildString(input.length) {
-    var index = 0
-    while (index < input.length) {
-        if (input[index] == '{' && input.getOrNull(index + 1) == '\\') {
-            val end = input.indexOf('}', startIndex = index + 2)
-            if (end >= 0) {
-                index = end + 1
-                continue
+private fun stripAssOverrideTags(input: String): String =
+    buildString(input.length) {
+        var index = 0
+        while (index < input.length) {
+            if (input[index] == '{' && input.getOrNull(index + 1) == '\\') {
+                val end = input.indexOf('}', startIndex = index + 2)
+                if (end >= 0) {
+                    index = end + 1
+                    continue
+                }
             }
+            append(input[index])
+            index++
         }
-        append(input[index])
-        index++
     }
-}
 
 fun activeSubtitleCues(
     cues: List<SubtitleCue>,
@@ -79,7 +80,8 @@ internal fun isCurrentSubtitleRequest(
     currentTrack: Int?,
     requestedSourceId: String?,
     currentSourceId: String?,
-): Boolean = requestGeneration == currentGeneration &&
+): Boolean =
+    requestGeneration == currentGeneration &&
         requestedTrack == currentTrack &&
         requestedSourceId == currentSourceId
 
@@ -92,12 +94,13 @@ private fun parseVttTimestamp(value: String): Double? {
     return hours * 3600 + minutes * 60 + secondsPart
 }
 
-fun normalizeSubtitleStyle(style: SubtitleStyle): SubtitleStyle = style.copy(
-    fontFamily = style.fontFamily.takeIf { it in setOf("sans", "serif", "mono") } ?: "sans",
-    textScale = style.textScale.coerceIn(50f, 200f),
-    borderSize = style.borderSize.coerceIn(0f, 8f),
-    backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 100f),
-)
+fun normalizeSubtitleStyle(style: SubtitleStyle): SubtitleStyle =
+    style.copy(
+        fontFamily = style.fontFamily.takeIf { it in setOf("sans", "serif", "mono") } ?: "sans",
+        textScale = style.textScale.coerceIn(50f, 200f),
+        borderSize = style.borderSize.coerceIn(0f, 8f),
+        backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 100f),
+    )
 
 fun trickplayPreview(
     source: MediaSource?,
@@ -105,13 +108,20 @@ fun trickplayPreview(
 ): TrickplayPreview? {
     if (!timeSeconds.isFinite() || timeSeconds < 0.0) return null
     val manifest = source?.trickplay ?: return null
-    if (manifest.state != "ready" || manifest.frameWidth <= 0 || manifest.frameHeight <= 0 ||
-        !manifest.intervalSeconds.isFinite() || manifest.intervalSeconds <= 0.0 ||
-        manifest.columns <= 0 || manifest.rows <= 0 || manifest.frameCount <= 0
-    ) return null
+    if (
+        manifest.state != "ready" ||
+            manifest.frameWidth <= 0 ||
+            manifest.frameHeight <= 0 ||
+            !manifest.intervalSeconds.isFinite() ||
+            manifest.intervalSeconds <= 0.0 ||
+            manifest.columns <= 0 ||
+            manifest.rows <= 0 ||
+            manifest.frameCount <= 0
+    )
+        return null
 
-    val thumbnail = floor(timeSeconds / manifest.intervalSeconds).toInt()
-        .coerceIn(0, manifest.frameCount - 1)
+    val thumbnail =
+        floor(timeSeconds / manifest.intervalSeconds).toInt().coerceIn(0, manifest.frameCount - 1)
     val columns = manifest.columns
     val rows = manifest.rows
     val tileSize = columns * rows

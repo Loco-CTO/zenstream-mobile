@@ -5,53 +5,59 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-val versionProperties = Properties().apply {
-    val versionFile = rootProject.file("version.properties")
-    if (versionFile.isFile) {
-        versionFile.inputStream().use(::load)
+val versionProperties =
+    Properties().apply {
+        val versionFile = rootProject.file("version.properties")
+        if (versionFile.isFile) {
+            versionFile.inputStream().use(::load)
+        }
     }
-}
 
 fun configuredValue(name: String): String? = providers.gradleProperty(name).orNull
 
 fun configuredOrEnvironmentValue(propertyName: String, environmentName: String): String? =
-    providers.gradleProperty(propertyName)
+    providers
+        .gradleProperty(propertyName)
         .orElse(providers.environmentVariable(environmentName))
         .orNull
 
-val semanticVersion = configuredValue("zenstreamVersion")
-    ?: versionProperties.getProperty("version")
-    ?: "0.0.1"
-val semanticVersionMatch = Regex("(\\d+)\\.(\\d+)\\.(\\d+)").matchEntire(semanticVersion)
-    ?: error("zenstreamVersion must use semantic version format X.Y.Z")
+val semanticVersion =
+    configuredValue("zenstreamVersion") ?: versionProperties.getProperty("version") ?: "0.0.1"
+val semanticVersionMatch =
+    Regex("(\\d+)\\.(\\d+)\\.(\\d+)").matchEntire(semanticVersion)
+        ?: error("zenstreamVersion must use semantic version format X.Y.Z")
 val semanticMinor = semanticVersionMatch.groupValues[2].toLong()
 val semanticPatch = semanticVersionMatch.groupValues[3].toLong()
+
 require(semanticMinor in 0..999L && semanticPatch in 0..999L) {
     "zenstreamVersion minor and patch components must be below 1000"
 }
-val semanticVersionCode = semanticVersionMatch.groupValues[1].toLong() * 1_000_000L +
+
+val semanticVersionCode =
+    semanticVersionMatch.groupValues[1].toLong() * 1_000_000L +
         semanticMinor * 1_000L +
         semanticPatch
+
 require(semanticVersionCode in 1..2_100_000_000L) {
     "zenstreamVersion produces an Android versionCode outside the supported range"
 }
 
-val mainVersion = configuredValue("zenstreamMain")
-    ?.toIntOrNull()
-    ?.takeIf { it >= 0 }
-    ?: Regex("\\\"main\\\"\\s*:\\s*(\\d+)")
-        .find(rootProject.file(".main-version.json").takeIf { it.isFile }?.readText().orEmpty())
-        ?.groupValues
-        ?.get(1)
-        ?.toIntOrNull()
-        ?.takeIf { it >= 0 }
-    ?: 0
+val mainVersion =
+    configuredValue("zenstreamMain")?.toIntOrNull()?.takeIf { it >= 0 }
+        ?: Regex("\\\"main\\\"\\s*:\\s*(\\d+)")
+            .find(rootProject.file(".main-version.json").takeIf { it.isFile }?.readText().orEmpty())
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+            ?.takeIf { it >= 0 }
+        ?: 0
 val releaseBuild = configuredValue("zenstreamRelease") == "true"
-val displayVersion = if (releaseBuild || mainVersion == 0) {
-    semanticVersion
-} else {
-    "$semanticVersion-main.$mainVersion"
-}
+val displayVersion =
+    if (releaseBuild || mainVersion == 0) {
+        semanticVersion
+    } else {
+        "$semanticVersion-main.$mainVersion"
+    }
 
 val releaseStoreFile =
     configuredOrEnvironmentValue("releaseStoreFile", "ANDROID_RELEASE_STORE_FILE")
@@ -60,12 +66,14 @@ val releaseStorePassword =
 val releaseKeyAlias = configuredOrEnvironmentValue("releaseKeyAlias", "ANDROID_RELEASE_KEY_ALIAS")
 val releaseKeyPassword =
     configuredOrEnvironmentValue("releaseKeyPassword", "ANDROID_RELEASE_KEY_PASSWORD")
-val hasReleaseSigning = listOf(
-    releaseStoreFile,
-    releaseStorePassword,
-    releaseKeyAlias,
-    releaseKeyPassword,
-).all { !it.isNullOrBlank() }
+val hasReleaseSigning =
+    listOf(
+            releaseStoreFile,
+            releaseStorePassword,
+            releaseKeyAlias,
+            releaseKeyPassword,
+        )
+        .all { !it.isNullOrBlank() }
 
 val ciDebugStoreFile =
     configuredOrEnvironmentValue("ciDebugStoreFile", "ANDROID_CI_DEBUG_STORE_FILE")
@@ -74,12 +82,14 @@ val ciDebugStorePassword =
 val ciDebugKeyAlias = configuredOrEnvironmentValue("ciDebugKeyAlias", "ANDROID_CI_DEBUG_KEY_ALIAS")
 val ciDebugKeyPassword =
     configuredOrEnvironmentValue("ciDebugKeyPassword", "ANDROID_CI_DEBUG_KEY_PASSWORD")
-val hasCiDebugSigning = listOf(
-    ciDebugStoreFile,
-    ciDebugStorePassword,
-    ciDebugKeyAlias,
-    ciDebugKeyPassword,
-).all { !it.isNullOrBlank() }
+val hasCiDebugSigning =
+    listOf(
+            ciDebugStoreFile,
+            ciDebugStorePassword,
+            ciDebugKeyAlias,
+            ciDebugKeyPassword,
+        )
+        .all { !it.isNullOrBlank() }
 
 if (releaseBuild && !hasReleaseSigning) {
     error("A stable release build requires Android release signing configuration")

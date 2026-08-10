@@ -10,20 +10,20 @@ import org.junit.runner.RunWith
 class OrchestratorConfigAndroidTest {
     @Test
     fun parsesProxyCapability() {
-		parseProxyConfig("{\"catalog\":true}")
+        parseProxyConfig("{\"catalog\":true}")
     }
 
     @Test
-	fun normalizesOrchestratorUrl() {
+    fun normalizesOrchestratorUrl() {
         assertEquals(
             "https://orchestrator.example",
-			normalizeServerUrl(" https://orchestrator.example/ ")
+            normalizeServerUrl(" https://orchestrator.example/ "),
         )
     }
 
     @Test
-	fun acceptsHttpOrchestratorUrl() {
-		assertEquals("http://remote.example", normalizeServerUrl("http://remote.example/"))
+    fun acceptsHttpOrchestratorUrl() {
+        assertEquals("http://remote.example", normalizeServerUrl("http://remote.example/"))
     }
 
     @Test

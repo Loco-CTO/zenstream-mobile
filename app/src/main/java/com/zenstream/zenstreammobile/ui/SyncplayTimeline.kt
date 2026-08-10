@@ -1,12 +1,12 @@
 package com.zenstream.zenstreammobile.ui
 
 import com.zenstream.zenstreammobile.model.SyncplayGroup
+import kotlin.math.ceil
+import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.ceil
-import kotlin.math.max
 
 internal data class SyncplayTimelineTarget(
     val positionSeconds: Double,
@@ -20,16 +20,18 @@ internal fun syncplayTimelineTarget(
 ): SyncplayTimelineTarget {
     val waitingForStart = room.playbackState == "playing" && serverNow < room.effectiveAt
     val shouldPlay = room.playbackState == "playing" && !waitingForStart
-    val position = if (shouldPlay) {
-        room.anchorPosition + max(0.0, serverNow - room.anchorServerTime)
-    } else {
-        room.anchorPosition
-    }
-    val startDelayMillis = if (waitingForStart) {
-        ceil((room.effectiveAt - serverNow) * 1_000.0).toLong() + START_GRACE_MILLIS
-    } else {
-        null
-    }
+    val position =
+        if (shouldPlay) {
+            room.anchorPosition + max(0.0, serverNow - room.anchorServerTime)
+        } else {
+            room.anchorPosition
+        }
+    val startDelayMillis =
+        if (waitingForStart) {
+            ceil((room.effectiveAt - serverNow) * 1_000.0).toLong() + START_GRACE_MILLIS
+        } else {
+            null
+        }
     return SyncplayTimelineTarget(position, shouldPlay, startDelayMillis)
 }
 
@@ -44,15 +46,14 @@ internal fun syncplayWaitingForMembers(room: SyncplayGroup?, itemId: String): Bo
     // An explicit pause must remain a pause. A stale loading flag from a prior
     // transition is not a reason to obscure the player with the readiness UI.
     if (!room.resumeWhenReady && room.playbackState == "paused") return false
-    return room.resumeWhenReady && (
-        room.members.isEmpty() || room.members.any { member ->
-            member.watchingTogether && (
-                !member.viewing ||
-                    member.loading ||
-                    member.readyGeneration != room.mediaGeneration
-                )
-        }
-    )
+    return room.resumeWhenReady &&
+        (room.members.isEmpty() ||
+            room.members.any { member ->
+                member.watchingTogether &&
+                    (!member.viewing ||
+                        member.loading ||
+                        member.readyGeneration != room.mediaGeneration)
+            })
 }
 
 internal class SyncplayTimelineScheduler(
@@ -98,8 +99,7 @@ internal class SyncplayTimelineScheduler(
                 delay(RECONCILIATION_INTERVAL_MILLIS)
                 currentRoom()
                     ?.takeIf { sameSyncplayTimeline(it, room) }
-                    ?.let { current -> apply(current, serverNow()) }
-                    ?: return@launch
+                    ?.let { current -> apply(current, serverNow()) } ?: return@launch
             }
         }
     }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.launchPlayback
@@ -58,6 +60,9 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
+import com.zenstream.zenstreammobile.ui.components.ToastHost
+import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
@@ -66,12 +71,7 @@ import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
-import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
-import com.zenstream.zenstreammobile.ui.components.ToastHost
-import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import com.composables.icons.lucide.R as LucideR
 
 private const val HOME = "home"
 private const val SEARCH = "search"
@@ -83,10 +83,11 @@ private const val SETTINGS = "settings"
 fun ZenStreamApp(appState: AppUiState, repository: CatalogRepository, appViewModel: AppViewModel) {
     when {
         appState.loading -> LoadingScreen()
-        appState.showSetup -> ServerSetupScreen(
-            initialServerUrl = appState.orchestratorUrl,
-            onConfigured = appViewModel::configureServer,
-        )
+        appState.showSetup ->
+            ServerSetupScreen(
+                initialServerUrl = appState.orchestratorUrl,
+                onConfigured = appViewModel::configureServer,
+            )
 
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
         appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
@@ -106,7 +107,7 @@ private fun LoadingScreen() {
 private fun MainScaffold(
     repository: CatalogRepository,
     session: AuthSession,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
 ) {
     val syncplay = remember(session) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
@@ -120,18 +121,18 @@ private fun MainScaffold(
             NavigationDestination(
                 HOME,
                 com.zenstream.zenstreammobile.R.string.home,
-                LucideR.drawable.lucide_ic_house
+                LucideR.drawable.lucide_ic_house,
             ),
             NavigationDestination(
                 SEARCH,
                 com.zenstream.zenstreammobile.R.string.search,
-                LucideR.drawable.lucide_ic_search
+                LucideR.drawable.lucide_ic_search,
             ),
             NavigationDestination(
                 LIBRARY,
                 com.zenstream.zenstreammobile.R.string.library,
-                LucideR.drawable.lucide_ic_library
-            )
+                LucideR.drawable.lucide_ic_library,
+            ),
         )
     }
     val density = LocalDensity.current
@@ -159,18 +160,20 @@ private fun MainScaffold(
             followedGeneration = null
         }
     }
-    val bottomBarVisibility = remember(density) {
-        ScrollVisibilityController(
-            hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
-            revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
-        )
-    }
-    val topBarVisibility = remember(density) {
-        ScrollVisibilityController(
-            hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
-            revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() }
-        )
-    }
+    val bottomBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+                revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
+            )
+        }
+    val topBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+                revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
+            )
+        }
     var bottomBarVisible by remember { mutableStateOf(true) }
     var topBarVisible by remember { mutableStateOf(true) }
     val scrollConnection = remember {
@@ -178,16 +181,18 @@ private fun MainScaffold(
             override fun onPostScroll(
                 consumed: Offset,
                 available: Offset,
-                source: NestedScrollSource
+                source: NestedScrollSource,
             ): Offset {
-                bottomBarVisible = bottomBarVisibility.onNestedScroll(
-                    consumedY = consumed.y,
-                    availableY = available.y,
-                )
-                topBarVisible = topBarVisibility.onNestedScroll(
-                    consumedY = consumed.y,
-                    availableY = available.y,
-                )
+                bottomBarVisible =
+                    bottomBarVisibility.onNestedScroll(
+                        consumedY = consumed.y,
+                        availableY = available.y,
+                    )
+                topBarVisible =
+                    topBarVisibility.onNestedScroll(
+                        consumedY = consumed.y,
+                        availableY = available.y,
+                    )
                 return Offset.Zero
             }
         }
@@ -198,23 +203,25 @@ private fun MainScaffold(
         topBarVisible = topBarVisibility.resetForRoute()
     }
 
-    val chromeHidden = currentRoute == DETAIL.substringBefore("/") ||
-            currentRoute == SETTINGS
+    val chromeHidden = currentRoute == DETAIL.substringBefore("/") || currentRoute == SETTINGS
 
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!chromeHidden) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
+                    modifier =
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
                 ) {
                     AnimatedVisibility(
                         visible = topBarVisible,
-                        enter = expandVertically(expandFrom = Alignment.Top) +
-                                slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                        exit = shrinkVertically(shrinkTowards = Alignment.Top) +
-                                slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                        enter =
+                            expandVertically(expandFrom = Alignment.Top) +
+                                slideInVertically(initialOffsetY = { -it }) +
+                                fadeIn(),
+                        exit =
+                            shrinkVertically(shrinkTowards = Alignment.Top) +
+                                slideOutVertically(targetOffsetY = { -it }) +
+                                fadeOut(),
                     ) {
                         MainTopBar(
                             syncplay = syncplay,
@@ -238,21 +245,25 @@ private fun MainScaffold(
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .navigationBarsPadding()
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .navigationBarsPadding()
                 ) {
                     AnimatedVisibility(
                         visible = bottomBarVisible,
-                        enter = expandVertically(expandFrom = Alignment.Bottom) +
-                                slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                        exit = shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                                slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                        enter =
+                            expandVertically(expandFrom = Alignment.Bottom) +
+                                slideInVertically(initialOffsetY = { it }) +
+                                fadeIn(),
+                        exit =
+                            shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                                slideOutVertically(targetOffsetY = { it }) +
+                                fadeOut(),
                     ) {
                         androidx.compose.material3.NavigationBar(
                             containerColor = Color.Transparent,
-                            windowInsets = WindowInsets(0, 0, 0, 0)
+                            windowInsets = WindowInsets(0, 0, 0, 0),
                         ) {
                             destinations.forEach { destination ->
                                 NavigationBarItem(
@@ -267,7 +278,7 @@ private fun MainScaffold(
                                     icon = {
                                         Icon(
                                             painter = painterResource(destination.icon),
-                                            contentDescription = null
+                                            contentDescription = null,
                                         )
                                     },
                                     label = {
@@ -290,66 +301,75 @@ private fun MainScaffold(
             NavHost(
                 navController,
                 startDestination = HOME,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .nestedScroll(scrollConnection)
+                modifier = Modifier.fillMaxSize().nestedScroll(scrollConnection),
             ) {
-            composable(HOME) {
-                HomeScreen(
-                    repository,
-                    session,
-                    padding,
-                    onItemClick = { item -> navigateToDetail(navController, item.id) })
-            }
-            composable(SEARCH) {
-                SearchScreen(
-                    repository,
-                    session,
-                    padding
-                ) { item -> navigateToDetail(navController, item.id) }
-            }
-            composable(LIBRARY) {
-                LibraryScreen(
-                    repository,
-                    session,
-                    padding
-                ) { item -> navigateToDetail(navController, item.id) }
-            }
-            composable(
-                DETAIL,
-                arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
-            ) { entry ->
-                val itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty())
-                DetailScreen(
-                    repository = repository,
-                    session = session,
-                    itemId = itemId,
-                    outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    onBack = { navController.popBackStack() },
-                    onOpenItem = { item -> navigateToDetail(navController, item.id) },
-                    onPlay = { item, tracks -> scope.launch {
-                        val active = syncplay.state.value.active
-                        if (active == null || syncplay.state.value.canControl(session.userId)) {
-                            if (active != null) {
-                                syncplay.command("media", 0.0, true, item.id)
-                                syncplay.state.value.active?.let { updated ->
-                                    followedGeneration = updated.mediaItemId()?.let { itemId ->
-                                        "${updated.id}:${updated.mediaGeneration}:$itemId"
+                composable(HOME) {
+                    HomeScreen(
+                        repository,
+                        session,
+                        padding,
+                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                    )
+                }
+                composable(SEARCH) {
+                    SearchScreen(
+                        repository,
+                        session,
+                        padding,
+                    ) { item ->
+                        navigateToDetail(navController, item.id)
+                    }
+                }
+                composable(LIBRARY) {
+                    LibraryScreen(
+                        repository,
+                        session,
+                        padding,
+                    ) { item ->
+                        navigateToDetail(navController, item.id)
+                    }
+                }
+                composable(
+                    DETAIL,
+                    arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
+                ) { entry ->
+                    val itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty())
+                    DetailScreen(
+                        repository = repository,
+                        session = session,
+                        itemId = itemId,
+                        outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                        onBack = { navController.popBackStack() },
+                        onOpenItem = { item -> navigateToDetail(navController, item.id) },
+                        onPlay = { item, tracks ->
+                            scope.launch {
+                                val active = syncplay.state.value.active
+                                if (
+                                    active == null ||
+                                        syncplay.state.value.canControl(session.userId)
+                                ) {
+                                    if (active != null) {
+                                        syncplay.command("media", 0.0, true, item.id)
+                                        syncplay.state.value.active?.let { updated ->
+                                            followedGeneration =
+                                                updated.mediaItemId()?.let { itemId ->
+                                                    "${updated.id}:${updated.mediaGeneration}:$itemId"
+                                                }
+                                        }
                                     }
+                                    navigateToPlayback(context, item.id, item.name, tracks)
                                 }
                             }
-                            navigateToPlayback(context, item.id, item.name, tracks)
-                        }
-                    } },
-                )
-            }
-            composable(SETTINGS) {
-                SettingsScreen(
-                    repository = repository,
-                    onBack = { navController.popBackStack() },
-                    onLogout = onLogout,
-                )
-            }
+                        },
+                    )
+                }
+                composable(SETTINGS) {
+                    SettingsScreen(
+                        repository = repository,
+                        onBack = { navController.popBackStack() },
+                        onLogout = onLogout,
+                    )
+                }
             }
             SyncplayToastNotifications(
                 manager = syncplay,
@@ -363,9 +383,9 @@ private fun MainScaffold(
 }
 
 private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
-	navController.navigate("detail/${Uri.encode(itemId)}") {
-		launchSingleTop = true
-	}
+    navController.navigate("detail/${Uri.encode(itemId)}") {
+        launchSingleTop = true
+    }
 }
 
 private fun navigateToPlayback(
@@ -389,9 +409,8 @@ internal fun MainTopBar(
         title = {
             Image(
                 painter = painterResource(com.zenstream.zenstreammobile.R.mipmap.zenstream_logo),
-                contentDescription = stringResource(
-                    com.zenstream.zenstreammobile.R.string.app_logo_description
-                ),
+                contentDescription =
+                    stringResource(com.zenstream.zenstreammobile.R.string.app_logo_description),
                 modifier = Modifier.size(32.dp),
             )
         },
@@ -410,31 +429,35 @@ internal fun MainTopBar(
                 androidx.compose.material3.IconButton(onClick = onSettings) {
                     Icon(
                         painter = painterResource(LucideR.drawable.lucide_ic_settings),
-                        contentDescription = stringResource(com.zenstream.zenstreammobile.R.string.settings_description),
+                        contentDescription =
+                            stringResource(
+                                com.zenstream.zenstreammobile.R.string.settings_description
+                            ),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-        ),
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            ),
     )
 }
 
 private data class NavigationDestination(
     val route: String,
     val label: Int,
-    @androidx.annotation.DrawableRes val icon: Int
+    @androidx.annotation.DrawableRes val icon: Int,
 )
 
 internal class ScrollVisibilityController(
     private val hideDistance: Float,
-    private val revealDistance: Float
+    private val revealDistance: Float,
 ) {
     private enum class ScrollDirection {
         HIDE,
-        REVEAL
+        REVEAL,
     }
 
     private var direction: ScrollDirection? = null
@@ -442,24 +465,26 @@ internal class ScrollVisibilityController(
     private var isVisible = true
 
     /**
-     * Applies only movement consumed by a scrollable child. Unconsumed upward
-     * drags are common on empty/short screens and must not hide the chrome.
+     * Applies only movement consumed by a scrollable child. Unconsumed upward drags are common on
+     * empty/short screens and must not hide the chrome.
      */
-    fun onNestedScroll(consumedY: Float, availableY: Float): Boolean = onScroll(
-        deltaY = consumedY,
-        atTop = availableY > 0f && consumedY == 0f,
-    )
+    fun onNestedScroll(consumedY: Float, availableY: Float): Boolean =
+        onScroll(
+            deltaY = consumedY,
+            atTop = availableY > 0f && consumedY == 0f,
+        )
 
     fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
         if (atTop) {
             return reset(visible = true)
         }
 
-        val nextDirection = when {
-            deltaY < 0f -> ScrollDirection.HIDE
-            deltaY > 0f -> ScrollDirection.REVEAL
-            else -> return isVisible
-        }
+        val nextDirection =
+            when {
+                deltaY < 0f -> ScrollDirection.HIDE
+                deltaY > 0f -> ScrollDirection.REVEAL
+                else -> return isVisible
+            }
 
         if (direction != nextDirection) {
             direction = nextDirection
@@ -468,13 +493,15 @@ internal class ScrollVisibilityController(
         accumulatedDistance += kotlin.math.abs(deltaY)
 
         when (nextDirection) {
-            ScrollDirection.HIDE -> if (accumulatedDistance >= hideDistance) {
-                isVisible = false
-            }
+            ScrollDirection.HIDE ->
+                if (accumulatedDistance >= hideDistance) {
+                    isVisible = false
+                }
 
-            ScrollDirection.REVEAL -> if (accumulatedDistance >= revealDistance) {
-                isVisible = true
-            }
+            ScrollDirection.REVEAL ->
+                if (accumulatedDistance >= revealDistance) {
+                    isVisible = true
+                }
         }
         return isVisible
     }

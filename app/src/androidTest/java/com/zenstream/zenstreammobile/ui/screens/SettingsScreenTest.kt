@@ -14,8 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SettingsScreenTest {
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     @Test
     fun rootShowsSettingsSectionsVersionAndLogout() {
@@ -30,9 +29,11 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.settings_version)).assertIsDisplayed()
-        composeRule.onNodeWithText(
-            context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
+            )
+            .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
         composeRule.runOnIdle { assertTrue(loggedOut) }
     }

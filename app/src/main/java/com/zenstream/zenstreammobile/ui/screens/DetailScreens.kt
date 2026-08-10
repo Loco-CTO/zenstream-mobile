@@ -1,6 +1,5 @@
 package com.zenstream.zenstreammobile.ui.screens
 
-import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,12 +69,12 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
-import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.imageBlurHash
-import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -86,11 +85,11 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.DetailViewModel
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
 import java.util.Locale
-import com.composables.icons.lucide.R as LucideR
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,15 +102,14 @@ fun DetailScreen(
     onOpenItem: (MediaItem) -> Unit,
     onPlay: (MediaItem, PlaybackTrackSelection?) -> Unit,
 ) {
-    val vm: DetailViewModel = viewModel(
-        key = "detail-${session.userId}-$itemId",
-        factory = DetailViewModel.Factory(repository, session, itemId),
-    )
+    val vm: DetailViewModel =
+        viewModel(
+            key = "detail-${session.userId}-$itemId",
+            factory = DetailViewModel.Factory(repository, session, itemId),
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val title = state.data?.item?.name.orEmpty()
-    val parentSeries = state.data
-        ?.takeIf { it.item.type == "Episode" }
-        ?.parentSeries
+    val parentSeries = state.data?.takeIf { it.item.type == "Episode" }?.parentSeries
 
     Scaffold(
         modifier = Modifier.padding(outerPadding),
@@ -127,37 +125,40 @@ fun DetailScreen(
     ) { innerPadding ->
         when {
             state.loading && state.data == null -> CenterLoading(innerPadding)
-            state.error && state.data == null -> ErrorState(
-                innerPadding,
-                R.string.detail_load_failed,
-                vm::load,
-            )
+            state.error && state.data == null ->
+                ErrorState(
+                    innerPadding,
+                    R.string.detail_load_failed,
+                    vm::load,
+                )
 
-            state.data != null -> DetailContent(
-                data = state.data!!,
-                session = session,
-                padding = innerPadding,
-                loading = state.seasonLoading,
-                isRefreshing = shouldShowDetailRefresh(
-                    isLoading = state.loading,
-                    seasonLoading = state.seasonLoading,
-                    hasData = state.data != null,
-                ),
-                actionBusy = state.actionBusy,
-                actionError = state.actionError,
-                onPlay = { item -> onPlay(item, vm.playbackTrackSelection()) },
-                onOpenItem = onOpenItem,
-                onRefresh = vm::load,
-                onSelectSeason = vm::selectSeason,
-                onTogglePlayed = vm::togglePlayed,
-                onToggleFavorite = vm::toggleFavorite,
-                onToggleSeasonPlayed = vm::toggleSeasonPlayed,
-                onToggleSeasonFavorite = vm::toggleSeasonFavorite,
-                trackSource = state.trackSource,
-                trackSelection = state.trackSelection,
-                onSelectAudioTrack = vm::selectAudioTrack,
-                onSelectSubtitleTrack = vm::selectSubtitleTrack,
-            )
+            state.data != null ->
+                DetailContent(
+                    data = state.data!!,
+                    session = session,
+                    padding = innerPadding,
+                    loading = state.seasonLoading,
+                    isRefreshing =
+                        shouldShowDetailRefresh(
+                            isLoading = state.loading,
+                            seasonLoading = state.seasonLoading,
+                            hasData = state.data != null,
+                        ),
+                    actionBusy = state.actionBusy,
+                    actionError = state.actionError,
+                    onPlay = { item -> onPlay(item, vm.playbackTrackSelection()) },
+                    onOpenItem = onOpenItem,
+                    onRefresh = vm::load,
+                    onSelectSeason = vm::selectSeason,
+                    onTogglePlayed = vm::togglePlayed,
+                    onToggleFavorite = vm::toggleFavorite,
+                    onToggleSeasonPlayed = vm::toggleSeasonPlayed,
+                    onToggleSeasonFavorite = vm::toggleSeasonFavorite,
+                    trackSource = state.trackSource,
+                    trackSelection = state.trackSelection,
+                    onSelectAudioTrack = vm::selectAudioTrack,
+                    onSelectSubtitleTrack = vm::selectSubtitleTrack,
+                )
         }
     }
 }
@@ -206,7 +207,11 @@ internal fun DetailContent(
                     onTogglePlayed = onTogglePlayed,
                     onToggleFavorite = onToggleFavorite,
                 )
-                if (mediaItem.type in setOf("Movie", "Episode") && trackSource != null && trackSelection != null) {
+                if (
+                    mediaItem.type in setOf("Movie", "Episode") &&
+                        trackSource != null &&
+                        trackSelection != null
+                ) {
                     DetailTrackChoices(
                         source = trackSource,
                         selection = trackSelection,
@@ -226,11 +231,13 @@ internal fun DetailContent(
             if (mediaItem.genres.isNotEmpty()) {
                 item { GenreRow(mediaItem.genres) }
             }
-            mediaItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                item {
-                    ExpandableOverview(overview)
+            mediaItem.overview
+                ?.takeIf { it.isNotBlank() }
+                ?.let { overview ->
+                    item {
+                        ExpandableOverview(overview)
+                    }
                 }
-            }
             if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
                 item {
                     EpisodeSection(
@@ -265,7 +272,10 @@ internal fun DetailContent(
     }
 }
 
-private enum class DetailTrackPicker { Audio, Subtitles }
+private enum class DetailTrackPicker {
+    Audio,
+    Subtitles,
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -279,34 +289,40 @@ private fun DetailTrackChoices(
     val subtitles = source.mediaStreams.filter { it.type.equals("subtitle", true) }
     var picker by remember(source.id) { mutableStateOf<DetailTrackPicker?>(null) }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (audio.size > 1) {
             DetailTrackPickerRow(
                 label = stringResource(R.string.audio_track),
-                value = audio.firstOrNull { it.index == selection.audioStreamId }
-                    ?.let { detailTrackLabel(it) }
-                    ?: stringResource(R.string.player_audio_track_format, selection.audioStreamId ?: 0),
+                value =
+                    audio
+                        .firstOrNull { it.index == selection.audioStreamId }
+                        ?.let { detailTrackLabel(it) }
+                        ?: stringResource(
+                            R.string.player_audio_track_format,
+                            selection.audioStreamId ?: 0,
+                        ),
                 onClick = { picker = DetailTrackPicker.Audio },
             )
         }
         if (subtitles.isNotEmpty()) {
             DetailTrackPickerRow(
                 label = stringResource(R.string.subtitle_track),
-                value = subtitles.firstOrNull { it.index == selection.subtitleStreamIndex }
-                    ?.let { detailTrackLabel(it) }
-                    ?: stringResource(R.string.subtitles_off),
+                value =
+                    subtitles
+                        .firstOrNull { it.index == selection.subtitleStreamIndex }
+                        ?.let { detailTrackLabel(it) } ?: stringResource(R.string.subtitles_off),
                 onClick = { picker = DetailTrackPicker.Subtitles },
             )
         }
     }
     val currentPicker = picker ?: return
-    val title = stringResource(
-        if (currentPicker == DetailTrackPicker.Audio) R.string.audio_track else R.string.subtitle_track,
-    )
+    val title =
+        stringResource(
+            if (currentPicker == DetailTrackPicker.Audio) R.string.audio_track
+            else R.string.subtitle_track
+        )
     ModalBottomSheet(
         onDismissRequest = { picker = null },
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
@@ -314,18 +330,15 @@ private fun DetailTrackChoices(
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                    .semantics { heading() },
+                modifier =
+                    Modifier.padding(horizontal = 4.dp, vertical = 4.dp).semantics { heading() },
             )
             if (currentPicker == DetailTrackPicker.Subtitles) {
                 DetailTrackOption(
@@ -340,11 +353,12 @@ private fun DetailTrackChoices(
             (if (currentPicker == DetailTrackPicker.Audio) audio else subtitles).forEach { stream ->
                 DetailTrackOption(
                     label = detailTrackLabel(stream),
-                    selected = if (currentPicker == DetailTrackPicker.Audio) {
-                        selection.audioStreamId == stream.index
-                    } else {
-                        selection.subtitleStreamIndex == stream.index
-                    },
+                    selected =
+                        if (currentPicker == DetailTrackPicker.Audio) {
+                            selection.audioStreamId == stream.index
+                        } else {
+                            selection.subtitleStreamIndex == stream.index
+                        },
                     onClick = {
                         picker = null
                         if (currentPicker == DetailTrackPicker.Audio) onSelectAudio(stream.index)
@@ -359,11 +373,10 @@ private fun DetailTrackChoices(
 @Composable
 private fun DetailTrackPickerRow(label: String, value: String, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button },
+        modifier =
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).semantics {
+                role = Role.Button
+            },
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.small,
@@ -389,13 +402,16 @@ private fun DetailTrackPickerRow(label: String, value: String, onClick: () -> Un
 @Composable
 private fun DetailTrackOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button },
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .16f) else Color.Transparent,
-        contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        modifier =
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).semantics {
+                role = Role.Button
+            },
+        color =
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .16f)
+            else Color.Transparent,
+        contentColor =
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.small,
     ) {
         Text(
@@ -408,11 +424,13 @@ private fun DetailTrackOption(label: String, selected: Boolean, onClick: () -> U
 
 @Composable
 private fun detailTrackLabel(stream: MediaStream): String =
-    stream.displayTitle ?: stream.language ?: stringResource(
-        if (stream.type.equals("audio", true)) R.string.player_audio_track_format
-        else R.string.player_subtitle_track_format,
-        stream.index,
-    )
+    stream.displayTitle
+        ?: stream.language
+        ?: stringResource(
+            if (stream.type.equals("audio", true)) R.string.player_audio_track_format
+            else R.string.player_subtitle_track_format,
+            stream.index,
+        )
 
 private fun playTarget(data: DetailData): MediaItem = detailPlaybackTarget(data.item, data.episodes)
 
@@ -420,11 +438,7 @@ private fun playTarget(data: DetailData): MediaItem = detailPlaybackTarget(data.
 private fun ExpandableOverview(overview: String) {
     var expanded by remember(overview) { mutableStateOf(false) }
     var canExpand by remember(overview) { mutableStateOf(false) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Text(
             overview,
             maxLines = if (expanded) Int.MAX_VALUE else OVERVIEW_COLLAPSED_LINES,
@@ -441,7 +455,11 @@ private fun ExpandableOverview(overview: String) {
                 contentPadding = PaddingValues(horizontal = 0.dp),
             ) {
                 Icon(
-                    painter = painterResource(if (expanded) LucideR.drawable.lucide_ic_chevron_up else LucideR.drawable.lucide_ic_chevron_down),
+                    painter =
+                        painterResource(
+                            if (expanded) LucideR.drawable.lucide_ic_chevron_up
+                            else LucideR.drawable.lucide_ic_chevron_down
+                        ),
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(4.dp))
@@ -485,13 +503,14 @@ internal fun DetailTopBar(
             IconButton(onClick = onBack) {
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                    stringResource(R.string.back)
+                    stringResource(R.string.back),
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-        ),
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            ),
     )
 }
 
@@ -504,45 +523,33 @@ private fun DetailHero(item: MediaItem, parentSeries: MediaItem?, session: AuthS
     val artworkType =
         if (item.type == "Episode") landscapeImageType(item) else posterImageType(item)
     val artwork = artworkType?.let { imageUrl(session.serverUrl, item, it, 480, 720) }
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(290.dp)
-            .background(Color.Black),
-    ) {
+    Box(Modifier.fillMaxWidth().height(290.dp).background(Color.Black)) {
         AuthenticatedImage(
             url = backdrop,
             session = session,
             blurHash = backdropItem?.let { imageBlurHash(it, "Backdrop") },
             description = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .alpha(.52f),
+            modifier = Modifier.fillMaxSize().alpha(.52f),
             scale = ContentScale.Crop,
         )
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF080808))),
-                ),
+            Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF080808))))
         )
         Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             AuthenticatedImage(
                 url = artwork,
-            session = session,
-            blurHash = artworkType?.let { imageBlurHash(item, it) },
+                session = session,
+                blurHash = artworkType?.let { imageBlurHash(item, it) },
                 description = stringResource(R.string.poster_description, item.name),
-                modifier = Modifier
-                    .width(if (item.type == "Episode") 170.dp else 104.dp)
-                    .aspectRatio(if (item.type == "Episode") 16f / 9f else 2f / 3f)
-                    .clip(RoundedCornerShape(8.dp)),
+                modifier =
+                    Modifier.width(if (item.type == "Episode") 170.dp else 104.dp)
+                        .aspectRatio(if (item.type == "Episode") 16f / 9f else 2f / 3f)
+                        .clip(RoundedCornerShape(8.dp)),
                 scale = if (item.type == "Episode") ContentScale.Fit else ContentScale.Crop,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -607,16 +614,14 @@ private fun DetailActions(
     val favoriteLabel =
         stringResource(if (item.favorite) R.string.remove_favorite else R.string.add_favorite)
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Button(onClick = onPlay, enabled = !busy) {
             Icon(
                 painterResource(LucideR.drawable.lucide_ic_play),
-                stringResource(R.string.play_description, item.name)
+                stringResource(R.string.play_description, item.name),
             )
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.play))
@@ -624,27 +629,33 @@ private fun DetailActions(
         IconButton(
             onClick = onTogglePlayed,
             enabled = !busy,
-            modifier = Modifier.semantics {
-                contentDescription = watchedLabel
-            },
+            modifier =
+                Modifier.semantics {
+                    contentDescription = watchedLabel
+                },
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_check),
                 null,
-                tint = if (item.played) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint =
+                    if (item.played) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(
             onClick = onToggleFavorite,
             enabled = !busy,
-            modifier = Modifier.semantics {
-                contentDescription = favoriteLabel
-            },
+            modifier =
+                Modifier.semantics {
+                    contentDescription = favoriteLabel
+                },
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_heart),
                 null,
-                tint = if (item.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint =
+                    if (item.favorite) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -653,10 +664,7 @@ private fun DetailActions(
 @Composable
 private fun GenreRow(genres: List<String>) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         genres.forEach { genre ->
@@ -679,9 +687,7 @@ private fun EpisodeSection(
     val selected = data.seasons.firstOrNull { it.id == data.selectedSeasonId }
     val loadingDescription = stringResource(R.string.loading)
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
@@ -705,10 +711,10 @@ private fun EpisodeSection(
     Spacer(Modifier.height(4.dp))
     if (loading) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(128.dp)
-                .semantics { contentDescription = loadingDescription },
+            modifier =
+                Modifier.fillMaxWidth().height(128.dp).semantics {
+                    contentDescription = loadingDescription
+                },
             contentAlignment = Alignment.Center,
         ) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -722,7 +728,7 @@ private fun EpisodeSection(
     } else {
         Column(
             Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             data.episodes.forEach { episode ->
                 EpisodeRow(episode, session, onClick = { onOpenItem(episode) })
@@ -745,11 +751,11 @@ private fun SeasonPicker(
     var expanded by remember(selected?.id) { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clickable(enabled = !loading) { expanded = true }
-                .semantics { role = Role.Button },
+            modifier =
+                Modifier.fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(enabled = !loading) { expanded = true }
+                    .semantics { role = Role.Button },
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             shape = MaterialTheme.shapes.small,
@@ -774,7 +780,11 @@ private fun SeasonPicker(
                     fontWeight = FontWeight.Medium,
                 )
                 Icon(
-                    painter = painterResource(if (expanded) LucideR.drawable.lucide_ic_chevron_up else LucideR.drawable.lucide_ic_chevron_down),
+                    painter =
+                        painterResource(
+                            if (expanded) LucideR.drawable.lucide_ic_chevron_up
+                            else LucideR.drawable.lucide_ic_chevron_down
+                        ),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -788,9 +798,7 @@ private fun SeasonPicker(
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("season_drawer_list"),
+                    modifier = Modifier.fillMaxWidth().testTag("season_drawer_list"),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -799,37 +807,44 @@ private fun SeasonPicker(
                             stringResource(R.string.select_season),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .padding(horizontal = 4.dp, vertical = 4.dp)
-                                .semantics { heading() },
+                            modifier =
+                                Modifier.padding(horizontal = 4.dp, vertical = 4.dp).semantics {
+                                    heading()
+                                },
                         )
                     }
                     items(seasons, key = { it.id }) { season ->
                         val isSelected = season.id == selected?.id
-                        val seasonWatchedLabel = stringResource(
-                            if (season.played) R.string.mark_unwatched else R.string.mark_watched,
-                        )
-                        val seasonFavoriteLabel = stringResource(
-                            if (season.favorite) R.string.remove_favorite else R.string.add_favorite,
-                        )
+                        val seasonWatchedLabel =
+                            stringResource(
+                                if (season.played) R.string.mark_unwatched
+                                else R.string.mark_watched
+                            )
+                        val seasonFavoriteLabel =
+                            stringResource(
+                                if (season.favorite) R.string.remove_favorite
+                                else R.string.add_favorite
+                            )
                         Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .clickable(enabled = !loading && !actionBusy) {
+                            modifier =
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(
+                                    enabled = !loading && !actionBusy
+                                ) {
                                     expanded = false
                                     onSelectSeason(season.id)
                                 },
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = .16f)
-                            } else {
-                                Color.Transparent
-                            },
-                            contentColor = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = .16f)
+                                } else {
+                                    Color.Transparent
+                                },
+                            contentColor =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                             shape = MaterialTheme.shapes.small,
                         ) {
                             Row(
@@ -851,35 +866,39 @@ private fun SeasonPicker(
                                 IconButton(
                                     onClick = { onToggleSeasonPlayed(season.id) },
                                     enabled = !loading && !actionBusy,
-                                    modifier = Modifier.semantics {
-                                        contentDescription = seasonWatchedLabel
-                                    },
+                                    modifier =
+                                        Modifier.semantics {
+                                            contentDescription = seasonWatchedLabel
+                                        },
                                 ) {
                                     Icon(
                                         painter = painterResource(LucideR.drawable.lucide_ic_check),
                                         contentDescription = null,
-                                        tint = if (season.played) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
+                                        tint =
+                                            if (season.played) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
                                     )
                                 }
                                 IconButton(
                                     onClick = { onToggleSeasonFavorite(season.id) },
                                     enabled = !loading && !actionBusy,
-                                    modifier = Modifier.semantics {
-                                        contentDescription = seasonFavoriteLabel
-                                    },
+                                    modifier =
+                                        Modifier.semantics {
+                                            contentDescription = seasonFavoriteLabel
+                                        },
                                 ) {
                                     Icon(
                                         painter = painterResource(LucideR.drawable.lucide_ic_heart),
                                         contentDescription = null,
-                                        tint = if (season.favorite) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
+                                        tint =
+                                            if (season.favorite) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
                                     )
                                 }
                             }
@@ -899,24 +918,16 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
     val type = landscapeImageType(item)
     val url = type?.let { imageUrl(session.serverUrl, item, it, 320, 180) }
     Column(
-        Modifier
-            .fillMaxWidth()
+        Modifier.fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
-            .semantics { role = Role.Button },
+            .semantics { role = Role.Button }
     ) {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                Modifier
-                    .width(128.dp)
-                    .height(72.dp)
-                    .clip(RoundedCornerShape(6.dp))
-            ) {
+            Box(Modifier.width(128.dp).height(72.dp).clip(RoundedCornerShape(6.dp))) {
                 AuthenticatedImage(
                     url,
                     session,
@@ -929,27 +940,21 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     Surface(
                         color = Color.Black.copy(alpha = .65f),
                         shape = CircleShape,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(5.dp),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
                     ) {
                         Icon(
                             painter = painterResource(LucideR.drawable.lucide_ic_check),
                             contentDescription = stringResource(R.string.watched_description),
                             tint = Color(0xFFBBF7D0),
-                            modifier = Modifier
-                                .padding(5.dp)
-                                .size(14.dp),
+                            modifier = Modifier.padding(5.dp).size(14.dp),
                         )
                     }
                 }
                 progressPercent(item)?.let { progress ->
                     LinearProgressIndicator(
                         progress = { progress / 100f },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(3.dp),
+                        modifier =
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                     )
                 }
             }
@@ -966,7 +971,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -990,35 +995,33 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             items(credits, key = { it.id ?: "${it.name}-${it.role}-${it.creditType}" }) { person ->
-			val url = person.primaryImageTag
-            Column(Modifier.width(96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                AuthenticatedImage(
-                    url,
-                    session,
-                    stringResource(R.string.person_description, person.name),
-                    Modifier
-                        .size(72.dp)
-                        .clip(CircleShape),
-                    ContentScale.Crop,
-                    person.imageBlurHash,
-                )
-                Text(
-                    person.name,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-                Text(
-                    person.role ?: person.type.orEmpty(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val url = person.primaryImageTag
+                Column(Modifier.width(96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    AuthenticatedImage(
+                        url,
+                        session,
+                        stringResource(R.string.person_description, person.name),
+                        Modifier.size(72.dp).clip(CircleShape),
+                        ContentScale.Crop,
+                        person.imageBlurHash,
+                    )
+                    Text(
+                        person.name,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Text(
+                        person.role ?: person.type.orEmpty(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
-    }
     }
 }
 
@@ -1028,9 +1031,7 @@ private fun SectionTitle(@androidx.annotation.StringRes title: Int) {
         stringResource(title),
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = .78f),
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .semantics { heading() },
+        modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
     )
 }
 
@@ -1044,10 +1045,15 @@ private fun AuthenticatedImage(
     blurHash: String? = null,
 ) {
     val request = url?.let {
-        ImageRequest.Builder(LocalContext.current).data(it).httpHeaders(
-            NetworkHeaders.Builder()
-				.set("Authorization", CatalogApi.authorizationHeader(session.token)).build(),
-        ).crossfade(true).build()
+        ImageRequest.Builder(LocalContext.current)
+            .data(it)
+            .httpHeaders(
+                NetworkHeaders.Builder()
+                    .set("Authorization", CatalogApi.authorizationHeader(session.token))
+                    .build()
+            )
+            .crossfade(true)
+            .build()
     }
     BlurHashAsyncImage(
         model = request,
@@ -1055,16 +1061,15 @@ private fun AuthenticatedImage(
         blurHash = blurHash,
         contentDescription = description,
         contentScale = scale,
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant)
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
     )
 }
 
 @Composable
 private fun CenterLoading(padding: PaddingValues) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .padding(padding), contentAlignment = Alignment.Center
+        Modifier.fillMaxSize().padding(padding),
+        contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
@@ -1073,23 +1078,20 @@ private fun CenterLoading(padding: PaddingValues) {
 @Composable
 private fun ErrorState(padding: PaddingValues, message: Int, onRetry: () -> Unit) {
     Column(
-        Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(24.dp),
+        Modifier.fillMaxSize().padding(padding).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
             stringResource(message),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) {
             Icon(
                 painterResource(LucideR.drawable.lucide_ic_refresh_cw),
-                stringResource(R.string.retry)
+                stringResource(R.string.retry),
             )
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.retry))
