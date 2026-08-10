@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
+import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -19,7 +20,10 @@ class CatalogApiTest {
         assertEquals(
             "https://server/api/catalog/items/movie-1/images/Primary?language=en&access=ticket-1",
             authenticatedImageUrl(
-                "https://server/api/catalog/items/movie-1/images/Primary?language=en",
+                resolveImageUrl(
+                    "https://server",
+                    "/api/catalog/items/movie-1/images/Primary?language=en",
+                ),
                 "ticket-1",
             ),
         )

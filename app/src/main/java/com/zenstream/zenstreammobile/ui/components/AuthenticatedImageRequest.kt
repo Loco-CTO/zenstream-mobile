@@ -15,7 +15,8 @@ fun authenticatedImageRequest(
     url: String,
     session: AuthSession,
 ): ImageRequest {
-    val requestUrl = authenticatedImageUrl(url, session.resourceTicket)
+    val requestUrl =
+        authenticatedImageUrl(resolveImageUrl(session.serverUrl, url), session.resourceTicket)
     return ImageRequest.Builder(context)
         .data(requestUrl)
         .httpHeaders(
@@ -26,6 +27,9 @@ fun authenticatedImageRequest(
         .crossfade(true)
         .build()
 }
+
+internal fun resolveImageUrl(serverUrl: String, url: String): String =
+    if (url.startsWith("/")) "${serverUrl.trimEnd('/')}$url" else url
 
 internal fun authenticatedImageUrl(url: String, resourceTicket: String?): String =
     resourceTicket?.takeIf(String::isNotBlank)?.let { ticket ->
