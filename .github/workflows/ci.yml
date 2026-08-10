@@ -47,13 +47,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-ci-debug.jks"
           test -s "$RUNNER_TEMP/zenstream-ci-debug.jks"
 
-      - name: Run lint, tests, and debug build
+      - name: Run formatting, lint, tests, and debug build
         env:
           ANDROID_CI_DEBUG_STORE_FILE: ${{ runner.temp }}/zenstream-ci-debug.jks
           ANDROID_CI_DEBUG_STORE_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_PASSWORD }}
           ANDROID_CI_DEBUG_KEY_ALIAS: ${{ secrets.ANDROID_CI_DEBUG_KEY_ALIAS }}
           ANDROID_CI_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEY_PASSWORD }}
-        run: bash ./gradlew lint test assembleDebug
+        run: bash ./gradlew spotlessCheck lint test assembleDebug
 
       - name: Prepare debug APK
         id: apk
