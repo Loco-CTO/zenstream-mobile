@@ -63,6 +63,16 @@ internal fun catalogEvents(message: String): List<CatalogChange> =
         }
         .getOrDefault(emptyList())
 
+internal fun catalogEventsUrl(serverUrl: String, ticket: String) =
+    serverUrl
+        .toHttpUrl()
+        .newBuilder()
+        // OkHttp upgrades HTTP(S) requests to WebSockets; HttpUrl itself only supports
+        // HTTP(S) schemes, so do not replace the scheme with ws/wss here.
+        .addPathSegments("api/ws/catalog")
+        .addQueryParameter("ticket", ticket)
+        .build()
+
 class CatalogEventsClient(
     private val session: AuthSession,
     private val onChanged: (CatalogChange) -> Unit,
@@ -90,14 +100,7 @@ class CatalogEventsClient(
             reconnect()
             return
         }
-        val base = session.serverUrl.toHttpUrl()
-        val url =
-            base
-                .newBuilder()
-                .scheme(if (base.isHttps) "wss" else "ws")
-                .addPathSegments("api/ws/catalog")
-                .addQueryParameter("ticket", ticket)
-                .build()
+        val url = catalogEventsUrl(session.serverUrl, ticket)
         socket =
             client.newWebSocket(
                 Request.Builder().url(url).build(),
