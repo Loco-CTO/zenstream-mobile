@@ -16,12 +16,4 @@ spotless {
             it.setContinuationIndent(4)
         }
     }
-    kotlinGradle {
-        target("*.gradle.kts", "app/*.gradle.kts")
-        ktfmt(ktfmtVersion).googleStyle().configure {
-            it.setMaxWidth(100)
-            it.setBlockIndent(4)
-            it.setContinuationIndent(4)
-        }
-    }
 }
