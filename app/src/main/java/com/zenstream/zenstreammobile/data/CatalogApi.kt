@@ -1009,10 +1009,9 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
     val metadata = item.optJSONObject("metadata") ?: JSONObject()
     val state = item.optJSONObject("userState") ?: JSONObject()
     val images = metadata.optJSONObject("images") ?: JSONObject()
-    fun image(category: String) =
-        images.optJSONObject(category)?.optString("url")?.takeIf { it.isNotBlank() }
+    fun image(category: String) = images.optJSONObject(category)?.optNullableString("url")
     fun imageBlurHash(category: String) =
-        images.optJSONObject(category)?.optString("blurHash")?.takeIf { it.isNotBlank() }
+        images.optJSONObject(category)?.optNullableString("blurHash")
     val type =
         when (item.optString("type")) {
             "movie" -> "Movie"
@@ -1032,14 +1031,16 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
                     MediaPerson(
                         name = person.optString("name"),
                         role =
-                            (if (creditType == "cast") person.optString("character")
-                                else person.optString("job"))
-                                .ifBlank { null },
-                        type = person.optString("department").ifBlank { null },
-                        primaryImageTag = image?.optString("url")?.ifBlank { null },
-                        id = person.optString("id").ifBlank { null },
+                            if (creditType == "cast") {
+                                person.optNullableString("character")
+                            } else {
+                                person.optNullableString("job")
+                            },
+                        type = person.optNullableString("department"),
+                        primaryImageTag = image?.optNullableString("url"),
+                        id = person.optNullableString("id"),
                         creditType = creditType,
-                        imageBlurHash = image?.optString("blurHash")?.ifBlank { null },
+                        imageBlurHash = image?.optNullableString("blurHash"),
                     )
                 }
                 .filter { it.name.isNotBlank() }
@@ -1418,14 +1419,21 @@ private fun people(item: JSONObject): List<MediaPerson> =
                     ?.let {
                         MediaPerson(
                             name = it,
-                            role = person.optString("Role").ifBlank { null },
-                            type = person.optString("Type").ifBlank { null },
-                            primaryImageTag = person.optString("PrimaryImageTag").ifBlank { null },
+                            role = person.optNullableString("Role"),
+                            type = person.optNullableString("Type"),
+                            primaryImageTag = person.optNullableString("PrimaryImageTag"),
                         )
                     }
             }
             .filterNotNull()
     } ?: emptyList()
+
+internal fun JSONObject.optNullableString(key: String): String? {
+    if (!has(key) || isNull(key)) return null
+    return optString(key)
+        .trim()
+        .takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+}
 
 private fun JSONObject.optIntOrNull(key: String): Int? =
     if (has(key) && !isNull(key)) optInt(key) else null
