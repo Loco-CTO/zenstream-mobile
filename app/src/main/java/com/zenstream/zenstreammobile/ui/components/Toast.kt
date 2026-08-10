@@ -230,8 +230,10 @@ private fun SyncplayNotification.message(resources: Resources): String? =
         is SyncplayNotification.LeftGroup -> resources.getString(R.string.syncplay_left_group, name)
         is SyncplayNotification.MemberJoined ->
             resources.getString(R.string.syncplay_member_joined, name)
-        is SyncplayNotification.MemberLeft -> resources.getString(R.string.syncplay_member_left, name)
-        is SyncplayNotification.GroupEnded -> resources.getString(R.string.syncplay_group_ended, name)
+        is SyncplayNotification.MemberLeft ->
+            resources.getString(R.string.syncplay_member_left, name)
+        is SyncplayNotification.GroupEnded ->
+            resources.getString(R.string.syncplay_group_ended, name)
         SyncplayNotification.ViewerControlsEnabled ->
             resources.getString(R.string.syncplay_viewer_controls_enabled)
         SyncplayNotification.ViewerControlsDisabled ->
