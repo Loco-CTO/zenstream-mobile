@@ -82,10 +82,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
@@ -103,6 +99,7 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
@@ -230,20 +227,8 @@ internal fun FeaturedHero(
                         }
                 ) {
                     val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
-                    val request = url?.let {
-                        ImageRequest.Builder(LocalContext.current)
-                            .data(it)
-                            .httpHeaders(
-                                NetworkHeaders.Builder()
-                                    .set(
-                                        "Authorization",
-                                        CatalogApi.authorizationHeader(session.token),
-                                    )
-                                    .build()
-                            )
-                            .crossfade(true)
-                            .build()
-                    }
+                    val request =
+                        url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
                     BlurHashAsyncImage(
                         model = request,
                         imageKey = url,
@@ -272,20 +257,10 @@ internal fun FeaturedHero(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         val logoUrl = imageUrl(session.serverUrl, item, "Logo", 680, 260)
-                        val logoRequest = logoUrl?.let {
-                            ImageRequest.Builder(LocalContext.current)
-                                .data(it)
-                                .httpHeaders(
-                                    NetworkHeaders.Builder()
-                                        .set(
-                                            "Authorization",
-                                            CatalogApi.authorizationHeader(session.token),
-                                        )
-                                        .build()
-                                )
-                                .crossfade(true)
-                                .build()
-                        }
+                        val logoRequest =
+                            logoUrl?.let {
+                                authenticatedImageRequest(LocalContext.current, it, session)
+                            }
                         if (logoRequest != null) {
                             BlurHashAsyncImage(
                                 model = logoRequest,
