@@ -608,8 +608,7 @@ class PlaybackViewModel(
         if (room != null) {
             if (!manager.state.value.canControl(session.userId)) return
             viewModelScope.launch {
-                val shouldResume =
-                    room.playbackState == "playing" || room.resumeWhenReady
+                val shouldResume = room.playbackState == "playing" || room.resumeWhenReady
                 manager.command("seek", target, shouldResume, currentItemId)
             }
         } else seekTo(target)

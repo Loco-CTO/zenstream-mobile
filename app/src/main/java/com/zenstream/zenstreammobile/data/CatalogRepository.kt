@@ -71,6 +71,7 @@ class CatalogRepository(
 ) : HomeDataSource, LibraryDataSource, SearchDataSource {
 
     suspend fun revokeSession(session: AuthSession) = api.logout(session)
+
     private val homeMutex = Mutex()
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
