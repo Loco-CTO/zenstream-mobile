@@ -1,7 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.os.Build
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -159,7 +158,6 @@ fun PlaybackScreen(
                 ),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    BackHandler(enabled = !state.closeRequested, onBack = vm::requestClose)
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val latestState by rememberUpdatedState(state)
     val playbackScope = rememberCoroutineScope()
@@ -463,7 +461,7 @@ fun PlaybackScreen(
                     color = Color.White,
                     textAlign = TextAlign.Center,
                 )
-                Button(onClick = vm::requestClose) { Text(stringResourceCompat(R.string.back)) }
+                Button(onClick = onBack) { Text(stringResourceCompat(R.string.back)) }
             }
         }
 

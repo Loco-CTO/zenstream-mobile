@@ -69,11 +69,10 @@ data class MediaRow(
     val title: RowTitle,
     val libraryName: String? = null,
     val items: List<MediaItem>,
-    val libraryId: String? = null,
     val wide: Boolean = false,
     val stackEpisodes: Boolean = false,
     val label: String? = null,
-    val key: String = "${title.name}:${libraryId ?: libraryName.orEmpty()}:${label.orEmpty()}",
+    val key: String = "${title.name}:${libraryName.orEmpty()}:${label.orEmpty()}",
 )
 
 enum class RowTitle {
@@ -154,8 +153,5 @@ data class DetailData(
     val seasons: List<MediaItem> = emptyList(),
     val episodes: List<MediaItem> = emptyList(),
     val similar: List<MediaItem> = emptyList(),
-    val collectionItems: List<MediaItem> = emptyList(),
     val selectedSeasonId: String? = null,
-    val rootEntityId: String? = null,
-    val catalogGeneration: Long? = null,
 )

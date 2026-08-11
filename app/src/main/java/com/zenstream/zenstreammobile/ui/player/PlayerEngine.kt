@@ -172,51 +172,39 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun createView(context: Context): View {
         if (player == null) {
             player =
-                ExoPlayer.Builder(context.applicationContext)
-                    .setAudioAttributes(
-                        androidx.media3.common.AudioAttributes.Builder()
-                            .setUsage(C.USAGE_MEDIA)
-                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                            .build(),
-                        true,
-                    )
-                    .setHandleAudioBecomingNoisy(true)
-                    .build()
-                    .also { exo ->
-                        exo.trackSelectionParameters =
-                            exo.trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                .build()
-                        exo.addListener(
-                            object : Player.Listener {
-                                override fun onPlayerError(error: PlaybackException) {
-                                    Log.e(
-                                        tag,
-                                        "Media3 playback error code=${error.errorCodeName} message=${error.message}",
-                                    )
-                                    _state.value =
-                                        _state.value.copy(
-                                            error = error.message ?: "Playback failed"
-                                        )
-                                }
-
-                                override fun onPlaybackStateChanged(playbackState: Int) {
-                                    _state.value =
-                                        _state.value.copy(
-                                            ready = playbackState == Player.STATE_READY,
-                                            isBuffering = playbackState == Player.STATE_BUFFERING,
-                                            ended = playbackState == Player.STATE_ENDED,
-                                        )
-                                    Log.i(
-                                        tag,
-                                        "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
-                                    )
-                                    if (playbackState == Player.STATE_READY) applyInitialSeek()
-                                }
+                ExoPlayer.Builder(context.applicationContext).build().also { exo ->
+                    exo.trackSelectionParameters =
+                        exo.trackSelectionParameters
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                            .build()
+                    exo.addListener(
+                        object : Player.Listener {
+                            override fun onPlayerError(error: PlaybackException) {
+                                Log.e(
+                                    tag,
+                                    "Media3 playback error code=${error.errorCodeName} message=${error.message}",
+                                )
+                                _state.value =
+                                    _state.value.copy(error = error.message ?: "Playback failed")
                             }
-                        )
-                    }
+
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                _state.value =
+                                    _state.value.copy(
+                                        ready = playbackState == Player.STATE_READY,
+                                        isBuffering = playbackState == Player.STATE_BUFFERING,
+                                        ended = playbackState == Player.STATE_ENDED,
+                                    )
+                                Log.i(
+                                    tag,
+                                    "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
+                                )
+                                if (playbackState == Player.STATE_READY) applyInitialSeek()
+                            }
+                        }
+                    )
+                }
             handler.post(ticker)
         }
         return PlayerView(context)
