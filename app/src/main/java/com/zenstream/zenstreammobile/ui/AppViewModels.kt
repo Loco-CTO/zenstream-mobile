@@ -297,7 +297,7 @@ private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Bool
 }
 
 private fun HomeData.withDerivedRows(derivedRows: List<MediaRow>): HomeData {
-    val derivedTitles = setOf(RowTitle.MyList, RowTitle.RecentlyPlayed, RowTitle.Genre)
+    val derivedTitles = setOf(RowTitle.MyList, RowTitle.Genre)
     val globalRows =
         rows.filter { it.libraryName == null && it.title !in derivedTitles } + derivedRows
     return copy(rows = orderedHomeRows(globalRows + rows.filter { it.libraryName != null }))

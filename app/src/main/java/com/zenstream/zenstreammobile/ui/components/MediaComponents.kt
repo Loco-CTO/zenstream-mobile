@@ -69,15 +69,11 @@ fun MediaRowView(
             RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
             RowTitle.NextUp -> stringResource(R.string.next_up)
             RowTitle.MyList -> stringResource(R.string.my_list)
-            RowTitle.RecentlyPlayed -> stringResource(R.string.recently_played)
             RowTitle.Genre -> row.label.orEmpty()
             RowTitle.NewlyAdded ->
                 row.libraryName?.let {
                     stringResource(R.string.newly_added_on, it)
                 } ?: stringResource(R.string.new_releases)
-
-            RowTitle.TopRated -> stringResource(R.string.top_rated)
-            RowTitle.NewReleases -> stringResource(R.string.new_releases)
         }
     val resolvedTitle =
         if (row.title == RowTitle.NewlyAdded || row.libraryName.isNullOrBlank()) {

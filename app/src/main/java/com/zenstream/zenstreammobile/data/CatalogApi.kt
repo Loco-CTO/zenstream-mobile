@@ -539,46 +539,30 @@ class CatalogApi(
         requestTimeoutMillis: Long? = null,
     ): LibraryData =
         withContext(Dispatchers.IO) {
-            coroutineScope {
-                fun path(sortBy: String) =
-                    "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=$sortBy&sortOrder=descending"
-                val recent = async {
-                    catalogItems(
-                        requestJson(
-                            session,
-                            path(if (library.supportsLastAdded) "lastAdded" else "added"),
-                            requestTimeoutMillis = requestTimeoutMillis,
-                        )
-                    )
-                }
-                val topRated = async {
-                    catalogItems(
-                        requestJson(
-                            session,
-                            path("rating"),
-                            requestTimeoutMillis = requestTimeoutMillis,
-                        )
-                    )
-                }
-                val newReleases = async {
-                    catalogItems(
-                        requestJson(
-                            session,
-                            path("release"),
-                            requestTimeoutMillis = requestTimeoutMillis,
-                        )
-                    )
-                }
-                LibraryData(
-                    library,
-                    listOf(
-                            MediaRow(RowTitle.NewlyAdded, library.name, recent.await()),
-                            MediaRow(RowTitle.TopRated, library.name, topRated.await()),
-                            MediaRow(RowTitle.NewReleases, library.name, newReleases.await()),
-                        )
-                        .filter { it.items.isNotEmpty() },
+            val path =
+                "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=${if (library.supportsLastAdded) "lastAdded" else "added"}&sortOrder=descending"
+            val items = catalogItems(requestJson(session, path, requestTimeoutMillis = requestTimeoutMillis))
+            LibraryData(
+                library,
+                items.takeIf { it.isNotEmpty() }?.let {
+                    listOf(MediaRow(RowTitle.NewlyAdded, library.name, it))
+                }.orEmpty(),
+            )
+        }
+
+    suspend fun fetchHomeLibraryData(
+        session: AuthSession,
+        library: Library,
+        requestTimeoutMillis: Long? = null,
+    ): LibraryData =
+        withContext(Dispatchers.IO) {
+            val json =
+                requestJson(
+                    session,
+                    "/api/catalog/home?section=library&libraryId=${android.net.Uri.encode(library.id)}",
+                    requestTimeoutMillis = requestTimeoutMillis,
                 )
-            }
+            parseHomeLibraryData(json, library)
         }
 
     suspend fun fetchLibraryPage(
@@ -956,12 +940,10 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
         )
     val libraryRows =
         jsonArray(payload, "libraryRows").mapNotNull { row ->
+            if (row.optString("titleKey") != "newlyAddedOn") return@mapNotNull null
             val title =
                 when (row.optString("titleKey")) {
-                    "newlyAdded",
                     "newlyAddedOn" -> RowTitle.NewlyAdded
-                    "topRated" -> RowTitle.TopRated
-                    "newReleases" -> RowTitle.NewReleases
                     else -> return@mapNotNull null
                 }
             val items = catalogItems(row)
@@ -984,6 +966,27 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                 .filter { it.backdropImageTags.isNotEmpty() }
                 .take(5),
         rows = orderedHomeRows(globalRows + parseDerivedHomeData(payload).rows() + libraryRows),
+    )
+}
+
+internal fun parseHomeLibraryData(payload: JSONObject, library: Library): LibraryData {
+    val row =
+        jsonArray(payload, "libraryRows")
+            .firstOrNull { it.optString("titleKey") == "newlyAddedOn" }
+            ?: return LibraryData(library, emptyList())
+    val items = catalogItems(row)
+    return LibraryData(
+        library,
+        items.takeIf { it.isNotEmpty() }?.let {
+            listOf(
+                MediaRow(
+                    RowTitle.NewlyAdded,
+                    library.name,
+                    it,
+                    stackEpisodes = row.optBoolean("stackEpisodes", false),
+                )
+            )
+        }.orEmpty(),
     )
 }
 

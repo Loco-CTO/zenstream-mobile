@@ -79,11 +79,8 @@ enum class RowTitle {
     ContinueWatching,
     NextUp,
     MyList,
-    RecentlyPlayed,
     Genre,
     NewlyAdded,
-    TopRated,
-    NewReleases,
 }
 
 data class HomeData(
@@ -99,9 +96,6 @@ data class DerivedHomeData(
     fun rows(): List<MediaRow> =
         listOfNotNull(
             myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) },
-            recentlyPlayed
-                .takeIf { it.isNotEmpty() }
-                ?.let { MediaRow(RowTitle.RecentlyPlayed, items = it) },
         ) + genreRows.filter { it.items.isNotEmpty() }
 }
 
@@ -109,11 +103,10 @@ fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row 
     when {
         row.title == RowTitle.ContinueWatching -> 0
         row.title == RowTitle.NextUp -> 1
-        row.title == RowTitle.MyList -> 2
-        row.libraryName != null -> 3
-        row.title == RowTitle.RecentlyPlayed -> 4
-        row.title == RowTitle.Genre -> 5
-        else -> 3
+        row.libraryName != null -> 2
+        row.title == RowTitle.MyList -> 3
+        row.title == RowTitle.Genre -> 4
+        else -> 5
     }
 }
 

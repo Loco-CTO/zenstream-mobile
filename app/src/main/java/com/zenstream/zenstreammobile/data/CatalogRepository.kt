@@ -243,7 +243,7 @@ class CatalogRepository(
         api.getLibraries(session, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun homeLibraryData(session: AuthSession, library: Library) =
-        api.fetchLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
+        api.fetchHomeLibraryData(session, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
 
     override suspend fun libraries(session: AuthSession) = api.getLibraries(session)
 
