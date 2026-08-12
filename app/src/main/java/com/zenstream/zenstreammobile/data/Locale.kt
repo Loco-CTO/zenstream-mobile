@@ -6,8 +6,7 @@ const val JAPANESE_LOCALE = "ja"
 enum class InterfaceLocaleMode(val storageValue: String) {
     Automatic("auto"),
     English(ENGLISH_LOCALE),
-    Japanese(JAPANESE_LOCALE),
-    ;
+    Japanese(JAPANESE_LOCALE);
 
     companion object {
         fun fromStorageValue(value: String?): InterfaceLocaleMode =

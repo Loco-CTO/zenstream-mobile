@@ -97,8 +97,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
         InterfaceLocalePreference(mode, mode.storageValue, metadataPreference)
     }
     var metadataSave: suspend (String?) -> MetadataPreference = { language ->
-        metadataPreference =
-            MetadataPreference(listOf("en", "ja"), language, language ?: "en")
+        metadataPreference = MetadataPreference(listOf("en", "ja"), language, language ?: "en")
         metadataPreference
     }
 

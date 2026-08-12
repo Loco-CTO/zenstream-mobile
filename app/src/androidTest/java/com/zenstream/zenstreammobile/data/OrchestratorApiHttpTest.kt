@@ -63,8 +63,7 @@ class OrchestratorApiHttpTest {
         val session = AuthSession(serverUrl, "test-token", "user-1", "Test")
         store.saveServerConfig(serverUrl)
         store.saveSession(session)
-        val repository =
-            CatalogRepository(CatalogApi(), store, OrchestratorApi(OkHttpClient()))
+        val repository = CatalogRepository(CatalogApi(), store, OrchestratorApi(OkHttpClient()))
 
         server.enqueue(MockResponse().setResponseCode(403))
         runCatching { repository.syncInterfaceLocale(session) }

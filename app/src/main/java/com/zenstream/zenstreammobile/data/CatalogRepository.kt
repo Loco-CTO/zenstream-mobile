@@ -12,11 +12,11 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -130,62 +130,55 @@ class CatalogRepository(
         return api.authenticate(server, username, password).also { sessionStore.saveSession(it) }
     }
 
-    suspend fun syncInterfaceLocale(current: AuthSession) =
-        interfaceLocaleMutex.withLock {
-            val mode = interfaceLocaleMode.first()
-            val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-            val remoteLocale =
-                authenticatedOrchestratorRequest {
-                    orchestratorApi.fetchLocale(current.serverUrl, current.token)
-                }
-            var localeChanged = false
-            if (remoteLocale != resolvedLocale) {
-                val savedLocale =
-                    authenticatedOrchestratorRequest {
-                        orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
-                    }
-                check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
-                localeChanged = true
-            }
-
-            val previousMetadataLanguage = metadataLanguage.first()
-            val metadataPreference = loadMetadataPreferenceOrNull(current)
-            if (metadataPreference != null) {
-                sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
-            }
-            if (
-                localeChanged ||
-                    metadataPreference?.effectiveLanguage != null &&
-                        metadataPreference.effectiveLanguage != previousMetadataLanguage
-            ) {
-                invalidateCatalogMetadata()
-            }
+    suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
+        val mode = interfaceLocaleMode.first()
+        val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
+        val remoteLocale = authenticatedOrchestratorRequest {
+            orchestratorApi.fetchLocale(current.serverUrl, current.token)
         }
+        var localeChanged = false
+        if (remoteLocale != resolvedLocale) {
+            val savedLocale = authenticatedOrchestratorRequest {
+                orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
+            }
+            check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
+            localeChanged = true
+        }
+
+        val previousMetadataLanguage = metadataLanguage.first()
+        val metadataPreference = loadMetadataPreferenceOrNull(current)
+        if (metadataPreference != null) {
+            sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
+        }
+        if (
+            localeChanged ||
+                metadataPreference?.effectiveLanguage != null &&
+                    metadataPreference.effectiveLanguage != previousMetadataLanguage
+        ) {
+            invalidateCatalogMetadata()
+        }
+    }
 
     override suspend fun saveInterfaceLocaleMode(
         mode: InterfaceLocaleMode
-    ): InterfaceLocalePreference =
-        interfaceLocaleMutex.withLock {
-            val current = session.first() ?: error("Authentication required")
-            val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-            val savedLocale =
-                authenticatedOrchestratorRequest {
-                    orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
-                }
-            check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
-            sessionStore.saveInterfaceLocaleMode(mode)
-
-            val metadataPreference = loadMetadataPreferenceOrNull(current)
-            if (metadataPreference != null) {
-                sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
-            }
-            invalidateCatalogMetadata()
-            InterfaceLocalePreference(mode, savedLocale, metadataPreference)
+    ): InterfaceLocalePreference = interfaceLocaleMutex.withLock {
+        val current = session.first() ?: error("Authentication required")
+        val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
+        val savedLocale = authenticatedOrchestratorRequest {
+            orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
         }
+        check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
+        sessionStore.saveInterfaceLocaleMode(mode)
 
-    private suspend fun loadMetadataPreferenceOrNull(
-        current: AuthSession
-    ): MetadataPreference? =
+        val metadataPreference = loadMetadataPreferenceOrNull(current)
+        if (metadataPreference != null) {
+            sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
+        }
+        invalidateCatalogMetadata()
+        InterfaceLocalePreference(mode, savedLocale, metadataPreference)
+    }
+
+    private suspend fun loadMetadataPreferenceOrNull(current: AuthSession): MetadataPreference? =
         try {
             authenticatedOrchestratorRequest {
                 orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token)
