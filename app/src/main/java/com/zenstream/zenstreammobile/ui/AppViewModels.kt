@@ -76,14 +76,11 @@ class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            combine(repository.orchestratorUrl, repository.session) { orchestrator, session ->
-                    orchestrator to session
+            repository.session.collectLatest { session ->
+                if (session != null) {
+                    runCatching { repository.syncInterfaceLocale(session) }
                 }
-                .collectLatest { (orchestrator, session) ->
-                    if (!orchestrator.isNullOrBlank() && session != null) {
-                        runCatching { repository.refreshLocale(orchestrator, session.token) }
-                    }
-                }
+            }
         }
     }
 
