@@ -199,12 +199,22 @@ class CatalogApiTest {
             parseHomeLibraryData(
                 JSONObject().put(
                     "newlyAdded",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("libraryId", "movies")
-                            .put("libraryName", "Movies")
-                            .put("items", JSONArray().put(catalogItem("movie", "Movie")))
-                    ),
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("libraryId", "shows")
+                                .put("libraryName", "Shows")
+                                .put(
+                                    "items",
+                                    JSONArray().put(catalogItem("episode", "Episode")),
+                                ),
+                        )
+                        .put(
+                            JSONObject()
+                                .put("libraryId", "movies")
+                                .put("libraryName", "Movies")
+                                .put("items", JSONArray().put(catalogItem("movie", "Movie"))),
+                        ),
                 ),
                 library,
             )
