@@ -1,7 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
-import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.Library
+import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
@@ -176,15 +176,20 @@ class CatalogApiTest {
         val library = Library("shows", "Shows", "tvshows")
         val data =
             parseHomeLibraryData(
-                JSONObject().put(
-                    "libraryRows",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("titleKey", "newlyAddedOn")
-                            .put("stackEpisodes", true)
-                            .put("items", JSONArray().put(catalogItem("episode", "Episode")))
+                JSONObject()
+                    .put(
+                        "libraryRows",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("titleKey", "newlyAddedOn")
+                                    .put("stackEpisodes", true)
+                                    .put(
+                                        "items",
+                                        JSONArray().put(catalogItem("episode", "Episode")),
+                                    )
+                            ),
                     ),
-                ),
                 library,
             )
         assertEquals(RowTitle.NewlyAdded, data.rows.single().title)
@@ -197,25 +202,26 @@ class CatalogApiTest {
         val library = Library("movies", "Movies", "movies")
         val data =
             parseHomeLibraryData(
-                JSONObject().put(
-                    "newlyAdded",
-                    JSONArray()
-                        .put(
-                            JSONObject()
-                                .put("libraryId", "shows")
-                                .put("libraryName", "Shows")
-                                .put(
-                                    "items",
-                                    JSONArray().put(catalogItem("episode", "Episode")),
-                                ),
-                        )
-                        .put(
-                            JSONObject()
-                                .put("libraryId", "movies")
-                                .put("libraryName", "Movies")
-                                .put("items", JSONArray().put(catalogItem("movie", "Movie"))),
-                        ),
-                ),
+                JSONObject()
+                    .put(
+                        "newlyAdded",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("libraryId", "shows")
+                                    .put("libraryName", "Shows")
+                                    .put(
+                                        "items",
+                                        JSONArray().put(catalogItem("episode", "Episode")),
+                                    )
+                            )
+                            .put(
+                                JSONObject()
+                                    .put("libraryId", "movies")
+                                    .put("libraryName", "Movies")
+                                    .put("items", JSONArray().put(catalogItem("movie", "Movie")))
+                            ),
+                    ),
                 library,
             )
         assertEquals("movie", data.rows.single().items.single().id)

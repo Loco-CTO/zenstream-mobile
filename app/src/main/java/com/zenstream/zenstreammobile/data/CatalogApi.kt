@@ -540,12 +540,18 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             val path =
                 "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&pageSize=18&sortBy=${if (library.supportsLastAdded) "lastAdded" else "added"}&sortOrder=descending"
-            val items = catalogItems(requestJson(session, path, requestTimeoutMillis = requestTimeoutMillis))
+            val items =
+                catalogItems(
+                    requestJson(session, path, requestTimeoutMillis = requestTimeoutMillis)
+                )
             LibraryData(
                 library,
-                items.takeIf { it.isNotEmpty() }?.let {
-                    listOf(MediaRow(RowTitle.NewlyAdded, library.name, it))
-                }.orEmpty(),
+                items
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        listOf(MediaRow(RowTitle.NewlyAdded, library.name, it))
+                    }
+                    .orEmpty(),
             )
         }
 
@@ -986,26 +992,27 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
         return (id.isBlank() && name.isBlank()) || id == library.id || name == library.name
     }
     val row =
-        jsonArray(payload, "libraryRows")
-            .firstOrNull {
-                it.optString("titleKey") == "newlyAddedOn" && belongsToLibrary(it)
-            }
-            ?: jsonArray(payload, "newlyAdded")
-                .firstOrNull(::belongsToLibrary)
+        jsonArray(payload, "libraryRows").firstOrNull {
+            it.optString("titleKey") == "newlyAddedOn" && belongsToLibrary(it)
+        }
+            ?: jsonArray(payload, "newlyAdded").firstOrNull(::belongsToLibrary)
             ?: return LibraryData(library, emptyList())
     val items = catalogItems(row)
     return LibraryData(
         library,
-        items.takeIf { it.isNotEmpty() }?.let {
-            listOf(
-                MediaRow(
-                    RowTitle.NewlyAdded,
-                    library.name,
-                    it,
-                    stackEpisodes = row.optBoolean("stackEpisodes", false),
+        items
+            .takeIf { it.isNotEmpty() }
+            ?.let {
+                listOf(
+                    MediaRow(
+                        RowTitle.NewlyAdded,
+                        library.name,
+                        it,
+                        stackEpisodes = row.optBoolean("stackEpisodes", false),
+                    )
                 )
-            )
-        }.orEmpty(),
+            }
+            .orEmpty(),
     )
 }
 

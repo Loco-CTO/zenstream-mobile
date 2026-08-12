@@ -95,7 +95,7 @@ data class DerivedHomeData(
 ) {
     fun rows(): List<MediaRow> =
         listOfNotNull(
-            myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) },
+            myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) }
         ) + genreRows.filter { it.items.isNotEmpty() }
 }
 
