@@ -164,6 +164,11 @@
     <string name="sort_runtime">再生時間</string>
     <string name="rating_description">%1$sの評価</string>
 	<string name="appearance_group">&#x5916;&#x89B3;</string>
+	<string name="interface_language">&#x8868;&#x793A;&#x8A00;&#x8A9E;</string>
+	<string name="interface_language_automatic">&#x81EA;&#x52D5;&#xFF08;&#x30C7;&#x30D0;&#x30A4;&#x30B9;&#x306E;&#x8A00;&#x8A9E;&#xFF09;</string>
+	<string name="language_english">English</string>
+	<string name="language_japanese">&#x65E5;&#x672C;&#x8A9E;</string>
+	<string name="interface_language_save_failed">&#x8868;&#x793A;&#x8A00;&#x8A9E;&#x3092;&#x4FDD;&#x5B58;&#x3067;&#x304D;&#x307E;&#x305B;&#x3093;&#x3067;&#x3057;&#x305F;&#x3002;</string>
 	<string name="preferred_metadata_language">&#x512A;&#x5148;&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;&#x8A00;&#x8A9E;</string>
 	<string name="metadata_language_automatic">&#x81EA;&#x52D5; (%1$s)</string>
 	<string name="metadata_language_save_failed">&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;&#x8A00;&#x8A9E;&#x3092;&#x4FDD;&#x5B58;&#x3067;&#x304D;&#x307E;&#x305B;&#x3093;&#x3067;&#x3057;&#x305F;&#x3002;</string>
