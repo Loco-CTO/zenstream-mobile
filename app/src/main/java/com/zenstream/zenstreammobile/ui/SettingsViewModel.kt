@@ -132,20 +132,22 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
                         if (metadata != null && metadataGeneration == metadataSaveGeneration) {
                             confirmedMetadataLanguage = metadata.explicitLanguage
                         }
-                        _uiState.value =
+                        val localeState =
                             _uiState.value.copy(
                                 interfaceLocaleMode = result.mode,
                                 interfaceLocaleSaving = false,
                                 interfaceLocaleSaveError = false,
-                                metadataLanguages =
-                                    metadata?.languages ?: _uiState.value.metadataLanguages,
-                                metadataLanguage =
-                                    if (metadata != null) metadata.explicitLanguage
-                                    else _uiState.value.metadataLanguage,
-                                effectiveMetadataLanguage =
-                                    metadata?.effectiveLanguage
-                                        ?: _uiState.value.effectiveMetadataLanguage,
                             )
+                        _uiState.value =
+                            if (metadata != null && metadataGeneration == metadataSaveGeneration) {
+                                localeState.copy(
+                                    metadataLanguages = metadata.languages,
+                                    metadataLanguage = metadata.explicitLanguage,
+                                    effectiveMetadataLanguage = metadata.effectiveLanguage,
+                                )
+                            } else {
+                                localeState
+                            }
                     }
                     .onFailure {
                         if (generation != interfaceLocaleSaveGeneration) return@onFailure

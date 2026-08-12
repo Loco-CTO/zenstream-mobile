@@ -85,6 +85,36 @@ class SettingsViewModelTest {
         assertEquals(InterfaceLocaleMode.Japanese, viewModel.uiState.value.interfaceLocaleMode)
         assertFalse(viewModel.uiState.value.interfaceLocaleSaving)
     }
+
+    @Test
+    fun localeRefreshCannotOverwriteANewerMetadataSave() = runTest {
+        val localeSave = CompletableDeferred<Unit>()
+        val source = FakeSettingsDataSource()
+        source.localeSave = { mode ->
+            localeSave.await()
+            source.interfaceLocaleMode.value = mode
+            InterfaceLocalePreference(
+                mode,
+                "ja",
+                MetadataPreference(listOf("en", "ja"), null, "en"),
+            )
+        }
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        viewModel.setInterfaceLocaleMode(InterfaceLocaleMode.Japanese)
+        runCurrent()
+        viewModel.setMetadataLanguage("ja")
+        runCurrent()
+        assertEquals("ja", viewModel.uiState.value.metadataLanguage)
+
+        localeSave.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals("ja", viewModel.uiState.value.metadataLanguage)
+        assertEquals("ja", viewModel.uiState.value.effectiveMetadataLanguage)
+        assertFalse(viewModel.uiState.value.metadataSaving)
+    }
 }
 
 private class FakeSettingsDataSource : SettingsDataSource {
