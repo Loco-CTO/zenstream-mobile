@@ -157,17 +157,18 @@ class CatalogApiTest {
                 RowTitle.ContinueWatching,
                 RowTitle.NextUp,
                 RowTitle.NewlyAdded,
+                RowTitle.TopRated,
                 RowTitle.MyList,
                 RowTitle.Genre,
             ),
             home.rows.map { it.title },
         )
         assertEquals(
-            listOf(null, null, "Shows", null, null),
+            listOf(null, null, "Shows", "Movies", null, null),
             home.rows.map { it.libraryName },
         )
-        assertEquals("Drama", home.rows[4].label)
-        assertEquals("genre:drama", home.rows[4].key)
+        assertEquals("Drama", home.rows[5].label)
+        assertEquals("genre:drama", home.rows[5].key)
         assertTrue(home.rows[2].stackEpisodes)
     }
 
@@ -189,12 +190,24 @@ class CatalogApiTest {
                                         JSONArray().put(catalogItem("episode", "Episode")),
                                     )
                             ),
+                            .put(
+                                JSONObject()
+                                    .put("titleKey", "topRated")
+                                    .put(
+                                        "items",
+                                        JSONArray().put(catalogItem("rated", "Rated")),
+                                    )
+                            ),
                     ),
                 library,
             )
-        assertEquals(RowTitle.NewlyAdded, data.rows.single().title)
-        assertTrue(data.rows.single().stackEpisodes)
-        assertEquals("episode", data.rows.single().items.single().id)
+        assertEquals(
+            listOf(RowTitle.NewlyAdded, RowTitle.TopRated),
+            data.rows.map { it.title },
+        )
+        assertTrue(data.rows.first().stackEpisodes)
+        assertEquals("episode", data.rows.first().items.single().id)
+        assertEquals("rated", data.rows.last().items.single().id)
     }
 
     @Test
