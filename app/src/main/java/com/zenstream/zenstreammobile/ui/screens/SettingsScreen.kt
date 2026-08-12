@@ -48,6 +48,7 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 
@@ -151,10 +152,22 @@ fun SettingsScreen(
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
                             ) {
+                                InterfaceLanguageSelector(
+                                    selected = state.interfaceLocaleMode,
+                                    enabled = !state.interfaceLocaleSaving,
+                                    onChange = vm::setInterfaceLocaleMode,
+                                )
+                                if (state.interfaceLocaleSaveError)
+                                    Text(
+                                        stringResource(R.string.interface_language_save_failed),
+                                        color = MaterialThemeError,
+                                        modifier = Modifier.padding(16.dp),
+                                    )
                                 MetadataLanguageSelector(
                                     languages = state.metadataLanguages,
                                     selected = state.metadataLanguage,
                                     effective = state.effectiveMetadataLanguage,
+                                    enabled = !state.metadataSaving,
                                     onChange = vm::setMetadataLanguage,
                                 )
                                 if (state.metadataSaveError)
@@ -249,10 +262,47 @@ internal fun SettingsRootContent(
 }
 
 @Composable
+internal fun InterfaceLanguageSelector(
+    selected: InterfaceLocaleMode,
+    enabled: Boolean,
+    onChange: (InterfaceLocaleMode) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel =
+        when (selected) {
+            InterfaceLocaleMode.Automatic -> stringResource(R.string.interface_language_automatic)
+            InterfaceLocaleMode.English -> stringResource(R.string.language_english)
+            InterfaceLocaleMode.Japanese -> stringResource(R.string.language_japanese)
+        }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.interface_language)) },
+        supportingContent = { Text(selectedLabel) },
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        listOf(
+                InterfaceLocaleMode.Automatic to R.string.interface_language_automatic,
+                InterfaceLocaleMode.English to R.string.language_english,
+                InterfaceLocaleMode.Japanese to R.string.language_japanese,
+            )
+            .forEach { (mode, label) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(label)) },
+                    onClick = {
+                        onChange(mode)
+                        expanded = false
+                    },
+                )
+            }
+    }
+}
+
+@Composable
 private fun MetadataLanguageSelector(
     languages: List<String>,
     selected: String?,
     effective: String,
+    enabled: Boolean,
     onChange: (String?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -261,7 +311,7 @@ private fun MetadataLanguageSelector(
         supportingContent = {
             Text(selected ?: stringResource(R.string.metadata_language_automatic, effective))
         },
-        modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { expanded = true },
     )
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         DropdownMenuItem(
