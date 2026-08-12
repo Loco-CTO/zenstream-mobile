@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -64,15 +65,42 @@ interface SearchDataSource : CatalogRefreshSource {
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
 
+interface SettingsDataSource {
+    val interfaceLocaleMode: Flow<InterfaceLocaleMode>
+    val playerEngine: Flow<PlayerEngine>
+    val showDebugIcon: Flow<Boolean>
+
+    suspend fun loadMetadataPreference(): MetadataPreference
+
+    suspend fun saveMetadataPreference(language: String?): MetadataPreference
+
+    suspend fun saveInterfaceLocaleMode(mode: InterfaceLocaleMode): InterfaceLocalePreference
+
+    suspend fun savePlayerEngine(engine: PlayerEngine)
+
+    suspend fun saveShowDebugIcon(enabled: Boolean)
+
+    suspend fun loadSubtitleStyle(): SubtitleStyle
+
+    suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle
+}
+
+data class InterfaceLocalePreference(
+    val mode: InterfaceLocaleMode,
+    val locale: String,
+    val metadataPreference: MetadataPreference?,
+)
+
 class CatalogRepository(
     private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
-) : HomeDataSource, LibraryDataSource, SearchDataSource {
+) : HomeDataSource, LibraryDataSource, SearchDataSource, SettingsDataSource {
 
     suspend fun revokeSession(session: AuthSession) = api.logout(session)
 
     private val homeMutex = Mutex()
+    private val interfaceLocaleMutex = Mutex()
     private var homeCache: Pair<Long, HomeData>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
     override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
@@ -80,9 +108,10 @@ class CatalogRepository(
     val orchestratorUrl: Flow<String?> = sessionStore.orchestratorUrl
     val session: Flow<AuthSession?> = sessionStore.session
     val locale: Flow<String> = sessionStore.locale
+    override val interfaceLocaleMode: Flow<InterfaceLocaleMode> = sessionStore.interfaceLocaleMode
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
-    val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
-    val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
+    override val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
+    override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -101,23 +130,96 @@ class CatalogRepository(
         return api.authenticate(server, username, password).also { sessionStore.saveSession(it) }
     }
 
-    suspend fun refreshLocale(orchestratorUrl: String, token: String) {
-        sessionStore.saveLocale(orchestratorApi.fetchLocale(orchestratorUrl, token))
-        runCatching { orchestratorApi.fetchMetadataPreference(orchestratorUrl, token) }
-            .onSuccess { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
-    }
+    suspend fun syncInterfaceLocale(current: AuthSession) =
+        interfaceLocaleMutex.withLock {
+            val mode = interfaceLocaleMode.first()
+            val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
+            val remoteLocale =
+                authenticatedOrchestratorRequest {
+                    orchestratorApi.fetchLocale(current.serverUrl, current.token)
+                }
+            var localeChanged = false
+            if (remoteLocale != resolvedLocale) {
+                val savedLocale =
+                    authenticatedOrchestratorRequest {
+                        orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
+                    }
+                check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
+                localeChanged = true
+            }
 
-    suspend fun loadMetadataPreference(): MetadataPreference {
-        val current = session.first() ?: error("Authentication required")
-        return orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token).also {
-            sessionStore.saveMetadataLanguage(it.effectiveLanguage)
+            val previousMetadataLanguage = metadataLanguage.first()
+            val metadataPreference = loadMetadataPreferenceOrNull(current)
+            if (metadataPreference != null) {
+                sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
+            }
+            if (
+                localeChanged ||
+                    metadataPreference?.effectiveLanguage != null &&
+                        metadataPreference.effectiveLanguage != previousMetadataLanguage
+            ) {
+                invalidateCatalogMetadata()
+            }
         }
+
+    override suspend fun saveInterfaceLocaleMode(
+        mode: InterfaceLocaleMode
+    ): InterfaceLocalePreference =
+        interfaceLocaleMutex.withLock {
+            val current = session.first() ?: error("Authentication required")
+            val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
+            val savedLocale =
+                authenticatedOrchestratorRequest {
+                    orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
+                }
+            check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
+            sessionStore.saveInterfaceLocaleMode(mode)
+
+            val metadataPreference = loadMetadataPreferenceOrNull(current)
+            if (metadataPreference != null) {
+                sessionStore.saveMetadataLanguage(metadataPreference.effectiveLanguage)
+            }
+            invalidateCatalogMetadata()
+            InterfaceLocalePreference(mode, savedLocale, metadataPreference)
+        }
+
+    private suspend fun loadMetadataPreferenceOrNull(
+        current: AuthSession
+    ): MetadataPreference? =
+        try {
+            authenticatedOrchestratorRequest {
+                orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token)
+            }
+        } catch (error: OrchestratorException) {
+            if (error.statusCode == 401) throw error
+            null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    private suspend fun <T> authenticatedOrchestratorRequest(block: suspend () -> T): T =
+        try {
+            block()
+        } catch (error: OrchestratorException) {
+            if (error.statusCode == 401) clearSession()
+            throw error
+        }
+
+    override suspend fun loadMetadataPreference(): MetadataPreference {
+        val current = session.first() ?: error("Authentication required")
+        return authenticatedOrchestratorRequest {
+                orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token)
+            }
+            .also { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
     }
 
-    suspend fun saveMetadataPreference(language: String?): MetadataPreference {
+    override suspend fun saveMetadataPreference(language: String?): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
-        return orchestratorApi
-            .setMetadataPreference(current.serverUrl, current.token, language)
+        return authenticatedOrchestratorRequest {
+                orchestratorApi.setMetadataPreference(current.serverUrl, current.token, language)
+            }
             .also {
                 sessionStore.saveMetadataLanguage(it.effectiveLanguage)
                 invalidateCatalogMetadata()
@@ -230,17 +332,19 @@ class CatalogRepository(
         invalidateHomeCache()
     }
 
-    suspend fun savePlayerEngine(engine: PlayerEngine) = sessionStore.savePlayerEngine(engine)
+    override suspend fun savePlayerEngine(engine: PlayerEngine) =
+        sessionStore.savePlayerEngine(engine)
 
-    suspend fun saveShowDebugIcon(enabled: Boolean) = sessionStore.saveShowDebugIcon(enabled)
+    override suspend fun saveShowDebugIcon(enabled: Boolean) =
+        sessionStore.saveShowDebugIcon(enabled)
 
     fun syncplayManager(session: AuthSession): SyncplayManager =
         SyncplaySession.manager(session, sessionStore)
 
-    suspend fun loadSubtitleStyle(): SubtitleStyle =
+    override suspend fun loadSubtitleStyle(): SubtitleStyle =
         sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
 
-    suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle {
+    override suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle {
         val normalized = normalizeSubtitleStyle(style)
         sessionStore.cacheSubtitleStyle(normalized)
         return normalized

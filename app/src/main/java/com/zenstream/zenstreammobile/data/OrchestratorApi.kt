@@ -32,23 +32,24 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
 
     suspend fun fetchLocale(orchestratorUrl: String, token: String): String =
         withContext(Dispatchers.IO) {
-            val orchestrator = normalizeServerUrl(orchestratorUrl)
-            val request =
-                Request.Builder()
-                    .url("$orchestrator/api/preferences/locale".toHttpUrl())
-                    .header("Accept", "application/json")
-                    .header("Authorization", "Bearer $token")
-                    .get()
-                    .build()
-            val response = httpClient.newCall(request).execute()
-            response.use {
-                if (!it.isSuccessful)
-                    throw OrchestratorException(
-                        it.code,
-                        "Orchestrator request failed with ${it.code}",
+            parseLocale(
+                authenticatedJson(orchestratorUrl, token, "/api/preferences/locale").toString()
+            )
+        }
+
+    suspend fun setLocale(orchestratorUrl: String, token: String, locale: String): String =
+        withContext(Dispatchers.IO) {
+            require(isSupportedLocale(locale)) { "Unsupported interface locale" }
+            parseLocale(
+                authenticatedJson(
+                        orchestratorUrl,
+                        token,
+                        "/api/preferences/locale",
+                        "PATCH",
+                        JSONObject().put("locale", locale).toString(),
                     )
-                parseLocale(it.body?.string().orEmpty())
-            }
+                    .toString()
+            )
         }
 
     suspend fun fetchMetadataPreference(
