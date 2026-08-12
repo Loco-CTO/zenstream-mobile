@@ -25,6 +25,8 @@
     <string name="play_next">次のエピソードを再生</string>
     <string name="stop_playing">再生を停止</string>
     <string name="newly_added_on">%1$s の新着</string>
+    <string name="top_rated">高評価</string>
+    <string name="top_rated_on">%1$s の高評価</string>
     <string name="logout">ログアウト</string>
     <string name="loading">読み込み中…</string>
     <string name="retry">再試行</string>

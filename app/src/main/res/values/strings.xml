@@ -25,6 +25,8 @@
     <string name="play_next">Play next</string>
     <string name="stop_playing">Stop playing</string>
     <string name="newly_added_on">Newly Added on %1$s</string>
+    <string name="top_rated">Top Rated</string>
+    <string name="top_rated_on">Top Rated on %1$s</string>
     <string name="logout">Log out</string>
     <string name="loading">Loading…</string>
     <string name="retry">Retry</string>
