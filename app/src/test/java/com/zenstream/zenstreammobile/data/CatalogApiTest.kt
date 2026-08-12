@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
@@ -155,22 +156,40 @@ class CatalogApiTest {
             listOf(
                 RowTitle.ContinueWatching,
                 RowTitle.NextUp,
-                RowTitle.MyList,
                 RowTitle.NewlyAdded,
-                RowTitle.TopRated,
-                RowTitle.NewReleases,
-                RowTitle.RecentlyPlayed,
+                RowTitle.MyList,
                 RowTitle.Genre,
             ),
             home.rows.map { it.title },
         )
         assertEquals(
-            listOf(null, null, null, "Shows", "Movies", "Shows", null, null),
+            listOf(null, null, "Shows", null, null),
             home.rows.map { it.libraryName },
         )
-        assertEquals("Drama", home.rows[7].label)
-        assertEquals("genre:drama", home.rows[7].key)
-        assertTrue(home.rows[3].stackEpisodes)
+        assertEquals("Drama", home.rows[4].label)
+        assertEquals("genre:drama", home.rows[4].key)
+        assertTrue(home.rows[2].stackEpisodes)
+    }
+
+    @Test
+    fun parsesPerLibraryHomeSectionWithEpisodeStacking() {
+        val library = Library("shows", "Shows", "tvshows")
+        val data =
+            parseHomeLibraryData(
+                JSONObject().put(
+                    "libraryRows",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("titleKey", "newlyAddedOn")
+                            .put("stackEpisodes", true)
+                            .put("items", JSONArray().put(catalogItem("episode", "Episode")))
+                    ),
+                ),
+                library,
+            )
+        assertEquals(RowTitle.NewlyAdded, data.rows.single().title)
+        assertTrue(data.rows.single().stackEpisodes)
+        assertEquals("episode", data.rows.single().items.single().id)
     }
 
     @Test

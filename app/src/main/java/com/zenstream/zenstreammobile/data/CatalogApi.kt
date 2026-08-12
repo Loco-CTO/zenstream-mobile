@@ -941,11 +941,6 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
     val libraryRows =
         jsonArray(payload, "libraryRows").mapNotNull { row ->
             if (row.optString("titleKey") != "newlyAddedOn") return@mapNotNull null
-            val title =
-                when (row.optString("titleKey")) {
-                    "newlyAddedOn" -> RowTitle.NewlyAdded
-                    else -> return@mapNotNull null
-                }
             val items = catalogItems(row)
             val libraryName =
                 row.optString("libraryName").takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -953,7 +948,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                 .takeIf { it.isNotEmpty() }
                 ?.let {
                     MediaRow(
-                        title,
+                        RowTitle.NewlyAdded,
                         libraryName,
                         it,
                         stackEpisodes = row.optBoolean("stackEpisodes", false),

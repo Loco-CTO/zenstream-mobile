@@ -21,12 +21,10 @@
     <string name="continue_watching">Continue Watching</string>
     <string name="next_up">Next Up</string>
     <string name="my_list">My List</string>
-    <string name="recently_played">Recently Played</string>
+    <string name="newly_added">Newly Added</string>
     <string name="play_next">Play next</string>
     <string name="stop_playing">Stop playing</string>
     <string name="newly_added_on">Newly Added on %1$s</string>
-    <string name="top_rated">Top Rated Anime</string>
-    <string name="new_releases">New Releases</string>
     <string name="logout">Log out</string>
     <string name="loading">Loading…</string>
     <string name="retry">Retry</string>

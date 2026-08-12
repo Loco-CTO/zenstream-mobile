@@ -73,7 +73,7 @@ fun MediaRowView(
             RowTitle.NewlyAdded ->
                 row.libraryName?.let {
                     stringResource(R.string.newly_added_on, it)
-                } ?: stringResource(R.string.new_releases)
+                } ?: stringResource(R.string.newly_added)
         }
     val resolvedTitle =
         if (row.title == RowTitle.NewlyAdded || row.libraryName.isNullOrBlank()) {

@@ -123,7 +123,7 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun recentlyPlayedAndGenreRowsFollowLibraryRowsAsTheirRequestCompletes() = runTest {
+    fun myListAndGenreRowsFollowLibraryRowsAsTheirRequestCompletes() = runTest {
         val derived = CompletableDeferred<DerivedHomeData>()
         val library = Library("movies", "Movies", "movies")
         val source =
@@ -160,7 +160,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf(RowTitle.MyList, RowTitle.NewlyAdded, RowTitle.RecentlyPlayed, RowTitle.Genre),
+            listOf(RowTitle.NewlyAdded, RowTitle.MyList, RowTitle.Genre),
             viewModel.uiState.value.data?.rows?.map { it.title },
         )
         assertFalse(viewModel.uiState.value.loading)
