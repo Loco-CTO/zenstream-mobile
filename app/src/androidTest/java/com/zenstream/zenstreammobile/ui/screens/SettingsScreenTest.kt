@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -50,5 +51,24 @@ class SettingsScreenTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
         composeRule.runOnIdle { assertEquals(SettingsSection.Player, selected) }
+    }
+
+    @Test
+    fun interfaceLanguageSelectorReturnsTheChosenDeviceMode() {
+        var selected = InterfaceLocaleMode.Automatic
+        composeRule.setContent {
+            ZenStreamTheme {
+                InterfaceLanguageSelector(
+                    selected = selected,
+                    enabled = true,
+                    onChange = { selected = it },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.interface_language)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.language_japanese)).performClick()
+        composeRule.runOnIdle { assertEquals(InterfaceLocaleMode.Japanese, selected) }
     }
 }

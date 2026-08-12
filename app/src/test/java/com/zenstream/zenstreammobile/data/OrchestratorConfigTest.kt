@@ -36,4 +36,25 @@ class OrchestratorConfigTest {
         assertEquals("ja", normalizeLocale("ja"))
         assertEquals("en", normalizeLocale("fr"))
     }
+
+    @Test
+    fun automaticInterfaceLocaleUsesTheFirstSupportedSystemLanguageFamily() {
+        assertEquals(
+            "ja",
+            resolveInterfaceLocale(InterfaceLocaleMode.Automatic, listOf("fr-FR", "ja-JP")),
+        )
+        assertEquals(
+            "en",
+            resolveInterfaceLocale(InterfaceLocaleMode.Automatic, listOf("de-DE")),
+        )
+    }
+
+    @Test
+    fun explicitInterfaceLocaleIgnoresTheSystemAndInvalidStorageDefaultsToAutomatic() {
+        assertEquals(
+            "ja",
+            resolveInterfaceLocale(InterfaceLocaleMode.Japanese, listOf("en-GB")),
+        )
+        assertEquals(InterfaceLocaleMode.Automatic, InterfaceLocaleMode.fromStorageValue("fr"))
+    }
 }

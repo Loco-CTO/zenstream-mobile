@@ -52,4 +52,25 @@ class SessionStoreTest {
         store.clearAll()
         assertEquals(style, store.cachedSubtitleStyle())
     }
+
+    @Test
+    fun interfaceLocaleModeIsDeviceLocalAndSurvivesAllClears() = runBlocking {
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_locale",
+                systemLanguageTags = { listOf("en-GB", "ja-JP") },
+            )
+        store.saveInterfaceLocaleMode(InterfaceLocaleMode.Automatic)
+        assertEquals("en", store.locale.first())
+
+        store.saveInterfaceLocaleMode(InterfaceLocaleMode.Japanese)
+        store.clearSession()
+        assertEquals(InterfaceLocaleMode.Japanese, store.interfaceLocaleMode.first())
+        assertEquals("ja", store.locale.first())
+
+        store.clearAll()
+        assertEquals(InterfaceLocaleMode.Japanese, store.interfaceLocaleMode.first())
+        store.saveInterfaceLocaleMode(InterfaceLocaleMode.Automatic)
+    }
 }
