@@ -29,6 +29,7 @@ import java.io.IOException
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -554,13 +555,29 @@ class CatalogApi(
         requestTimeoutMillis: Long? = null,
     ): LibraryData =
         withContext(Dispatchers.IO) {
-            val json =
+            val dedicated =
+                try {
+                    requestJson(
+                        session,
+                        "/api/catalog/home?section=library&libraryId=${android.net.Uri.encode(library.id)}",
+                        requestTimeoutMillis = requestTimeoutMillis,
+                    )
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    null
+                }
+            val parsed = dedicated?.let { parseHomeLibraryData(it, library) }
+            if (parsed != null && parsed.rows.isNotEmpty()) {
+                return@withContext parsed
+            }
+            val aggregate =
                 requestJson(
                     session,
-                    "/api/catalog/home?section=library&libraryId=${android.net.Uri.encode(library.id)}",
+                    "/api/catalog/home",
                     requestTimeoutMillis = requestTimeoutMillis,
                 )
-            parseHomeLibraryData(json, library)
+            parseHomeLibraryData(aggregate, library)
         }
 
     suspend fun fetchLibraryPage(
@@ -963,9 +980,18 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
 }
 
 internal fun parseHomeLibraryData(payload: JSONObject, library: Library): LibraryData {
+    fun belongsToLibrary(row: JSONObject): Boolean {
+        val id = row.optString("libraryId")
+        val name = row.optString("libraryName")
+        return (id.isBlank() && name.isBlank()) || id == library.id || name == library.name
+    }
     val row =
         jsonArray(payload, "libraryRows")
-            .firstOrNull { it.optString("titleKey") == "newlyAddedOn" }
+            .firstOrNull {
+                it.optString("titleKey") == "newlyAddedOn" && belongsToLibrary(it)
+            }
+            ?: jsonArray(payload, "newlyAdded")
+                .firstOrNull(::belongsToLibrary)
             ?: return LibraryData(library, emptyList())
     val items = catalogItems(row)
     return LibraryData(

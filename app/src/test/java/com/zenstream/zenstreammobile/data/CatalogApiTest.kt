@@ -193,6 +193,26 @@ class CatalogApiTest {
     }
 
     @Test
+    fun parsesLegacyNewlyAddedHomeRowsWhenDedicatedSectionIsUnavailable() {
+        val library = Library("movies", "Movies", "movies")
+        val data =
+            parseHomeLibraryData(
+                JSONObject().put(
+                    "newlyAdded",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("libraryId", "movies")
+                            .put("libraryName", "Movies")
+                            .put("items", JSONArray().put(catalogItem("movie", "Movie")))
+                    ),
+                ),
+                library,
+            )
+        assertEquals("movie", data.rows.single().items.single().id)
+        assertEquals(RowTitle.NewlyAdded, data.rows.single().title)
+    }
+
+    @Test
     fun parsesCatalogItemWithCanonicalArtworkAndState() {
         val item =
             catalogMediaItem(
