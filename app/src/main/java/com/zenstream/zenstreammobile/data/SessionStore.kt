@@ -43,6 +43,10 @@ class SessionStore(
     context: Context,
     private val cipher: TokenCipher = TokenCipher(),
     dataStoreName: String = DEFAULT_SESSION_DATA_STORE_NAME,
+    private val systemLanguageTags: () -> List<String> = {
+        val appContext = context.applicationContext ?: context
+        appContext.resources.configuration.locales.toLanguageTags().split(',')
+    },
 ) {
     private val dataStore = sessionDataStore(context, dataStoreName)
 
@@ -54,6 +58,7 @@ class SessionStore(
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val locale = stringPreferencesKey("locale")
+        val interfaceLocaleMode = stringPreferencesKey("interface_locale_mode")
         val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
@@ -70,8 +75,15 @@ class SessionStore(
 
     val orchestratorUrl: Flow<String?> = dataStore.data.map { it[Keys.orchestratorUrl] }
 
+    val interfaceLocaleMode: Flow<InterfaceLocaleMode> =
+        dataStore.data
+            .map { InterfaceLocaleMode.fromStorageValue(it[Keys.interfaceLocaleMode]) }
+            .distinctUntilChanged()
+
     val locale: Flow<String> =
-        dataStore.data.map { normalizeLocale(it[Keys.locale]) }.distinctUntilChanged()
+        interfaceLocaleMode
+            .map { mode -> resolveInterfaceLocale(mode, systemLanguageTags()) }
+            .distinctUntilChanged()
 
     val metadataLanguage: Flow<String> =
         dataStore.data.map { it[Keys.metadataLanguage] ?: "en" }.distinctUntilChanged()
@@ -152,9 +164,12 @@ class SessionStore(
         }
     }
 
-    suspend fun saveLocale(locale: String) {
-        dataStore.edit { it[Keys.locale] = normalizeLocale(locale) }
+    suspend fun saveInterfaceLocaleMode(mode: InterfaceLocaleMode) {
+        dataStore.edit { it[Keys.interfaceLocaleMode] = mode.storageValue }
     }
+
+    fun resolveInterfaceLocale(mode: InterfaceLocaleMode): String =
+        resolveInterfaceLocale(mode, systemLanguageTags())
 
     suspend fun saveMetadataLanguage(language: String) {
         dataStore.edit { it[Keys.metadataLanguage] = language.ifBlank { "en" } }
