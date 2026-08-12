@@ -81,6 +81,7 @@ enum class RowTitle {
     MyList,
     Genre,
     NewlyAdded,
+    TopRated,
 }
 
 data class HomeData(
@@ -103,10 +104,11 @@ fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row 
     when {
         row.title == RowTitle.ContinueWatching -> 0
         row.title == RowTitle.NextUp -> 1
-        row.libraryName != null -> 2
-        row.title == RowTitle.MyList -> 3
-        row.title == RowTitle.Genre -> 4
-        else -> 5
+        row.title == RowTitle.NewlyAdded -> 2
+        row.title == RowTitle.TopRated -> 3
+        row.title == RowTitle.MyList -> 4
+        row.title == RowTitle.Genre -> 5
+        else -> 6
     }
 }
 

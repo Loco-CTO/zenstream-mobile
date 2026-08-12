@@ -961,7 +961,12 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
         )
     val libraryRows =
         jsonArray(payload, "libraryRows").mapNotNull { row ->
-            if (row.optString("titleKey") != "newlyAddedOn") return@mapNotNull null
+            val title =
+                when (row.optString("titleKey")) {
+                    "newlyAddedOn" -> RowTitle.NewlyAdded
+                    "topRated" -> RowTitle.TopRated
+                    else -> return@mapNotNull null
+                }
             val items = catalogItems(row)
             val libraryName =
                 row.optString("libraryName").takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -969,7 +974,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                 .takeIf { it.isNotEmpty() }
                 ?.let {
                     MediaRow(
-                        RowTitle.NewlyAdded,
+                        title,
                         libraryName,
                         it,
                         stackEpisodes = row.optBoolean("stackEpisodes", false),
@@ -991,13 +996,33 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
         val name = row.optString("libraryName")
         return (id.isBlank() && name.isBlank()) || id == library.id || name == library.name
     }
-    val row =
-        jsonArray(payload, "libraryRows").firstOrNull {
-            it.optString("titleKey") == "newlyAddedOn" && belongsToLibrary(it)
-        }
-            ?: jsonArray(payload, "newlyAdded").firstOrNull(::belongsToLibrary)
-            ?: return LibraryData(library, emptyList())
-    val items = catalogItems(row)
+    val canonicalRows =
+        jsonArray(payload, "libraryRows")
+            .filter(::belongsToLibrary)
+            .mapNotNull { row ->
+                val title =
+                    when (row.optString("titleKey")) {
+                        "newlyAddedOn" -> RowTitle.NewlyAdded
+                        "topRated" -> RowTitle.TopRated
+                        else -> return@mapNotNull null
+                    }
+                catalogItems(row)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        MediaRow(
+                            title,
+                            library.name,
+                            it,
+                            stackEpisodes = row.optBoolean("stackEpisodes", false),
+                        )
+                    }
+            }
+            .sortedBy { if (it.title == RowTitle.NewlyAdded) 0 else 1 }
+    if (canonicalRows.isNotEmpty()) return LibraryData(library, canonicalRows)
+
+    val legacyRow = jsonArray(payload, "newlyAdded").firstOrNull(::belongsToLibrary)
+        ?: return LibraryData(library, emptyList())
+    val items = catalogItems(legacyRow)
     return LibraryData(
         library,
         items
@@ -1008,7 +1033,7 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
                         RowTitle.NewlyAdded,
                         library.name,
                         it,
-                        stackEpisodes = row.optBoolean("stackEpisodes", false),
+                        stackEpisodes = legacyRow.optBoolean("stackEpisodes", false),
                     )
                 )
             }

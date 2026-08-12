@@ -74,9 +74,16 @@ fun MediaRowView(
                 row.libraryName?.let {
                     stringResource(R.string.newly_added_on, it)
                 } ?: stringResource(R.string.newly_added)
+            RowTitle.TopRated ->
+                row.libraryName?.let {
+                    stringResource(R.string.top_rated_on, it)
+                } ?: stringResource(R.string.top_rated)
         }
     val resolvedTitle =
-        if (row.title == RowTitle.NewlyAdded || row.libraryName.isNullOrBlank()) {
+        if (row.title == RowTitle.NewlyAdded ||
+            row.title == RowTitle.TopRated ||
+            row.libraryName.isNullOrBlank()
+        ) {
             title
         } else {
             "${row.libraryName} $title"
