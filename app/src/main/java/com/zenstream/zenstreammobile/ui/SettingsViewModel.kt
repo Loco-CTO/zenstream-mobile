@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
+import com.zenstream.zenstreammobile.data.SettingsDataSource
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,8 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class SettingsUiState(
+    val interfaceLocaleMode: InterfaceLocaleMode = InterfaceLocaleMode.Automatic,
+    val interfaceLocaleSaving: Boolean = false,
+    val interfaceLocaleSaveError: Boolean = false,
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
     val showDebugIcon: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -21,14 +28,30 @@ data class SettingsUiState(
     val metadataLanguages: List<String> = emptyList(),
     val metadataLanguage: String? = null,
     val effectiveMetadataLanguage: String = "en",
+    val metadataSaving: Boolean = false,
     val metadataSaveError: Boolean = false,
 )
 
-class SettingsViewModel(private val repository: CatalogRepository) : ViewModel() {
+class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    private val interfaceLocaleSaveMutex = Mutex()
+    private val metadataSaveMutex = Mutex()
+    private var interfaceLocaleSaveGeneration = 0L
+    private var metadataSaveGeneration = 0L
+    private var confirmedInterfaceLocaleMode = InterfaceLocaleMode.Automatic
+    private var confirmedMetadataLanguage: String? = null
+
     init {
+        viewModelScope.launch {
+            repository.interfaceLocaleMode.collectLatest { mode ->
+                confirmedInterfaceLocaleMode = mode
+                if (!_uiState.value.interfaceLocaleSaving) {
+                    _uiState.value = _uiState.value.copy(interfaceLocaleMode = mode)
+                }
+            }
+        }
         viewModelScope.launch {
             repository.playerEngine.collectLatest { engine ->
                 _uiState.value = _uiState.value.copy(playerEngine = engine)
@@ -39,9 +62,7 @@ class SettingsViewModel(private val repository: CatalogRepository) : ViewModel()
                 _uiState.value = _uiState.value.copy(showDebugIcon = enabled)
             }
         }
-        viewModelScope.launch {
-            refreshSettings()
-        }
+        viewModelScope.launch { refreshSettings() }
     }
 
     fun refresh() {
@@ -49,31 +70,29 @@ class SettingsViewModel(private val repository: CatalogRepository) : ViewModel()
     }
 
     private suspend fun refreshSettings() {
+        _uiState.value = _uiState.value.copy(refreshing = true)
         refreshSubtitleStyle()
-        runCatching { repository.loadMetadataPreference() }
-            .onSuccess {
-                _uiState.value =
-                    _uiState.value.copy(
-                        metadataLanguages = it.languages,
-                        metadataLanguage = it.explicitLanguage,
-                        effectiveMetadataLanguage = it.effectiveLanguage,
-                    )
-            }
+        val generation = metadataSaveGeneration
+        metadataSaveMutex.withLock {
+            runCatching { repository.loadMetadataPreference() }
+                .onSuccess {
+                    confirmedMetadataLanguage = it.explicitLanguage
+                    if (generation == metadataSaveGeneration) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                metadataLanguages = it.languages,
+                                metadataLanguage = it.explicitLanguage,
+                                effectiveMetadataLanguage = it.effectiveLanguage,
+                            )
+                    }
+                }
+        }
+        _uiState.value = _uiState.value.copy(refreshing = false)
     }
 
     private suspend fun refreshSubtitleStyle() {
-        _uiState.value = _uiState.value.copy(refreshing = true)
         runCatching { repository.loadSubtitleStyle() }
-            .onSuccess {
-                _uiState.value =
-                    _uiState.value.copy(
-                        subtitleStyle = it,
-                        refreshing = false,
-                    )
-            }
-            .onFailure {
-                _uiState.value = _uiState.value.copy(refreshing = false)
-            }
+            .onSuccess { _uiState.value = _uiState.value.copy(subtitleStyle = it) }
     }
 
     fun setPlayerEngine(engine: PlayerEngine) {
@@ -93,18 +112,87 @@ class SettingsViewModel(private val repository: CatalogRepository) : ViewModel()
         }
     }
 
-    fun setMetadataLanguage(language: String?) {
-        _uiState.value = _uiState.value.copy(metadataLanguage = language, metadataSaveError = false)
+    fun setInterfaceLocaleMode(mode: InterfaceLocaleMode) {
+        val generation = ++interfaceLocaleSaveGeneration
+        val metadataGeneration = metadataSaveGeneration
+        _uiState.value =
+            _uiState.value.copy(
+                interfaceLocaleMode = mode,
+                interfaceLocaleSaving = true,
+                interfaceLocaleSaveError = false,
+            )
         viewModelScope.launch {
-            runCatching { repository.saveMetadataPreference(language) }
-                .onSuccess {
-                    _uiState.value =
-                        _uiState.value.copy(
-                            metadataLanguage = it.explicitLanguage,
-                            effectiveMetadataLanguage = it.effectiveLanguage,
-                        )
-                }
-                .onFailure { _uiState.value = _uiState.value.copy(metadataSaveError = true) }
+            interfaceLocaleSaveMutex.withLock {
+                if (generation != interfaceLocaleSaveGeneration) return@withLock
+                runCatching { repository.saveInterfaceLocaleMode(mode) }
+                    .onSuccess { result ->
+                        confirmedInterfaceLocaleMode = result.mode
+                        if (generation != interfaceLocaleSaveGeneration) return@onSuccess
+                        val metadata = result.metadataPreference
+                        if (metadata != null && metadataGeneration == metadataSaveGeneration) {
+                            confirmedMetadataLanguage = metadata.explicitLanguage
+                        }
+                        _uiState.value =
+                            _uiState.value.copy(
+                                interfaceLocaleMode = result.mode,
+                                interfaceLocaleSaving = false,
+                                interfaceLocaleSaveError = false,
+                                metadataLanguages =
+                                    metadata?.languages ?: _uiState.value.metadataLanguages,
+                                metadataLanguage =
+                                    if (metadata != null) metadata.explicitLanguage
+                                    else _uiState.value.metadataLanguage,
+                                effectiveMetadataLanguage =
+                                    metadata?.effectiveLanguage
+                                        ?: _uiState.value.effectiveMetadataLanguage,
+                            )
+                    }
+                    .onFailure {
+                        if (generation != interfaceLocaleSaveGeneration) return@onFailure
+                        _uiState.value =
+                            _uiState.value.copy(
+                                interfaceLocaleMode = confirmedInterfaceLocaleMode,
+                                interfaceLocaleSaving = false,
+                                interfaceLocaleSaveError = true,
+                            )
+                    }
+            }
+        }
+    }
+
+    fun setMetadataLanguage(language: String?) {
+        val generation = ++metadataSaveGeneration
+        _uiState.value =
+            _uiState.value.copy(
+                metadataLanguage = language,
+                metadataSaving = true,
+                metadataSaveError = false,
+            )
+        viewModelScope.launch {
+            metadataSaveMutex.withLock {
+                if (generation != metadataSaveGeneration) return@withLock
+                runCatching { repository.saveMetadataPreference(language) }
+                    .onSuccess {
+                        confirmedMetadataLanguage = it.explicitLanguage
+                        if (generation != metadataSaveGeneration) return@onSuccess
+                        _uiState.value =
+                            _uiState.value.copy(
+                                metadataLanguage = it.explicitLanguage,
+                                effectiveMetadataLanguage = it.effectiveLanguage,
+                                metadataSaving = false,
+                                metadataSaveError = false,
+                            )
+                    }
+                    .onFailure {
+                        if (generation != metadataSaveGeneration) return@onFailure
+                        _uiState.value =
+                            _uiState.value.copy(
+                                metadataLanguage = confirmedMetadataLanguage,
+                                metadataSaving = false,
+                                metadataSaveError = true,
+                            )
+                    }
+            }
         }
     }
 
