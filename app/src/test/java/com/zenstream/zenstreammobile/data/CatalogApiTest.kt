@@ -189,7 +189,7 @@ class CatalogApiTest {
                                         "items",
                                         JSONArray().put(catalogItem("episode", "Episode")),
                                     )
-                            ),
+                            )
                             .put(
                                 JSONObject()
                                     .put("titleKey", "topRated")
