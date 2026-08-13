@@ -85,22 +85,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
-import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.model.LibrarySort
-import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.SortOrder
+import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
-import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
@@ -487,9 +487,7 @@ fun FavoritesScreen(
                         stringResource(R.string.no_favorites_hint),
                     )
                 else ->
-                    LazyColumn(
-                        contentPadding = PaddingValues(bottom = 20.dp),
-                    ) {
+                    LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
                                 FavoriteSection(
@@ -528,7 +526,12 @@ fun FavoritesScreen(
                                 Box(
                                     Modifier.fillMaxWidth().padding(vertical = 16.dp),
                                     contentAlignment = Alignment.Center,
-                                ) { CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) }
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
                             }
                         }
                         if (state.loadMoreError) {
@@ -571,20 +574,23 @@ private fun FavoritesHeader(
                     sort.copy(
                         sortOrder =
                             if (sort.sortOrder == SortOrder.Ascending) SortOrder.Descending
-                            else SortOrder.Ascending,
+                            else SortOrder.Ascending
                     )
                 )
             }
         ) {
             Icon(
-                painter = painterResource(
-                    if (sort.sortOrder == SortOrder.Ascending) LucideR.drawable.lucide_ic_arrow_up
-                    else LucideR.drawable.lucide_ic_arrow_down
-                ),
-                contentDescription = stringResource(
-                    if (sort.sortOrder == SortOrder.Ascending) R.string.sort_descending
-                    else R.string.sort_ascending
-                ),
+                painter =
+                    painterResource(
+                        if (sort.sortOrder == SortOrder.Ascending)
+                            LucideR.drawable.lucide_ic_arrow_up
+                        else LucideR.drawable.lucide_ic_arrow_down
+                    ),
+                contentDescription =
+                    stringResource(
+                        if (sort.sortOrder == SortOrder.Ascending) R.string.sort_descending
+                        else R.string.sort_ascending
+                    ),
             )
         }
         Box {
@@ -601,7 +607,8 @@ private fun FavoritesHeader(
                             Text(
                                 when (sortBy) {
                                     FavoriteSortBy.Title -> stringResource(R.string.sort_title)
-                                    FavoriteSortBy.DateAdded -> stringResource(R.string.sort_date_added)
+                                    FavoriteSortBy.DateAdded ->
+                                        stringResource(R.string.sort_date_added)
                                 }
                             )
                         },

@@ -4,20 +4,20 @@ import android.util.Log
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.DetailData
+import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
-import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
-import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedFavorites
+import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -1049,8 +1049,9 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
             .sortedBy { if (it.title == RowTitle.NewlyAdded) 0 else 1 }
     if (canonicalRows.isNotEmpty()) return LibraryData(library, canonicalRows)
 
-    val legacyRow = jsonArray(payload, "newlyAdded").firstOrNull(::belongsToLibrary)
-        ?: return LibraryData(library, emptyList())
+    val legacyRow =
+        jsonArray(payload, "newlyAdded").firstOrNull(::belongsToLibrary)
+            ?: return LibraryData(library, emptyList())
     val items = catalogItems(legacyRow)
     return LibraryData(
         library,

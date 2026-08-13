@@ -9,10 +9,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.model.LibrarySort
-import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -211,15 +211,17 @@ class SessionStore(
         val preferences = dataStore.data.first()
         val stored = preferences[Keys.librarySorts].orEmpty()
         if (stored.isBlank()) return null
-        val value = runCatching { JSONObject(stored).optJSONObject(favoriteSortKey(userId)) }.getOrNull()
-            ?: return null
+        val value =
+            runCatching { JSONObject(stored).optJSONObject(favoriteSortKey(userId)) }.getOrNull()
+                ?: return null
         return runCatching { favoriteSortFromJson(value) }.getOrNull()
     }
 
     suspend fun cacheFavoriteSort(userId: String, sort: FavoriteSort) {
-        val current = dataStore.data.first()[Keys.librarySorts]?.let {
-            runCatching { JSONObject(it) }.getOrNull()
-        } ?: JSONObject()
+        val current =
+            dataStore.data.first()[Keys.librarySorts]?.let {
+                runCatching { JSONObject(it) }.getOrNull()
+            } ?: JSONObject()
         current.put(favoriteSortKey(userId), favoriteSortToJson(sort))
         dataStore.edit { it[Keys.librarySorts] = current.toString() }
     }
@@ -303,10 +305,12 @@ private fun favoriteSortToJson(sort: FavoriteSort): JSONObject =
 
 private fun favoriteSortFromJson(value: JSONObject): FavoriteSort =
     FavoriteSort(
-        sortBy = runCatching { FavoriteSortBy.valueOf(value.optString("sortBy")) }
-            .getOrDefault(FavoriteSortBy.Title),
-        sortOrder = runCatching { SortOrder.valueOf(value.optString("sortOrder")) }
-            .getOrDefault(SortOrder.Ascending),
+        sortBy =
+            runCatching { FavoriteSortBy.valueOf(value.optString("sortBy")) }
+                .getOrDefault(FavoriteSortBy.Title),
+        sortOrder =
+            runCatching { SortOrder.valueOf(value.optString("sortOrder")) }
+                .getOrDefault(SortOrder.Ascending),
     )
 
 internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =
