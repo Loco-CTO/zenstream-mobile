@@ -6,8 +6,10 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
@@ -65,6 +67,21 @@ interface SearchDataSource : CatalogRefreshSource {
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
 
+interface FavoritesDataSource : CatalogRefreshSource {
+    suspend fun clearSession()
+
+    suspend fun favoritesPage(
+        session: AuthSession,
+        startIndex: Int,
+        limit: Int,
+        sort: FavoriteSort,
+    ): PagedFavorites
+
+    suspend fun cachedFavoriteSort(userId: String): FavoriteSort?
+
+    suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort)
+}
+
 interface SettingsDataSource {
     val interfaceLocaleMode: Flow<InterfaceLocaleMode>
     val playerEngine: Flow<PlayerEngine>
@@ -95,7 +112,7 @@ class CatalogRepository(
     private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
-) : HomeDataSource, LibraryDataSource, SearchDataSource, SettingsDataSource {
+) : HomeDataSource, LibraryDataSource, SearchDataSource, FavoritesDataSource, SettingsDataSource {
 
     suspend fun revokeSession(session: AuthSession) = api.logout(session)
 
@@ -262,6 +279,19 @@ class CatalogRepository(
 
     override suspend fun search(session: AuthSession, query: String) = api.search(session, query)
 
+    override suspend fun favoritesPage(
+        session: AuthSession,
+        startIndex: Int,
+        limit: Int,
+        sort: FavoriteSort,
+    ) = api.fetchFavoritesPage(session, startIndex, limit, sort)
+
+    override suspend fun cachedFavoriteSort(userId: String): FavoriteSort? =
+        sessionStore.cachedFavoriteSort(userId)
+
+    override suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort) =
+        sessionStore.cacheFavoriteSort(userId, sort)
+
     override suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? =
         sessionStore.cachedLibrarySort(userId, libraryId)
 
@@ -273,7 +303,7 @@ class CatalogRepository(
 
     suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
         api.setFavorite(session, itemId, favorite)
-        invalidateHomeCache()
+        invalidateCatalogState()
     }
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) {
@@ -358,6 +388,13 @@ class CatalogRepository(
 
     private suspend fun invalidateHomeCache() {
         homeMutex.withLock { homeCache = null }
+    }
+
+    private suspend fun invalidateCatalogState() {
+        homeMutex.withLock {
+            homeCache = null
+            _catalogRefreshRevision.value += 1
+        }
     }
 
     private suspend fun invalidateCatalogMetadata() {

@@ -87,16 +87,20 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.FavoriteSort
+import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchViewModel
+import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
@@ -447,6 +451,206 @@ fun SearchScreen(
                     }
             }
         }
+    }
+}
+
+@Composable
+fun FavoritesScreen(
+    repository: FavoritesDataSource,
+    session: AuthSession,
+    padding: PaddingValues,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    val vm: FavoritesViewModel =
+        viewModel(
+            key = "favorites-${session.userId}",
+            factory = FavoritesViewModel.Factory(repository, session),
+        )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val episodes = state.items.filter { it.type.equals("Episode", ignoreCase = true) }
+    val movies = state.items.filter { it.type.equals("Movie", ignoreCase = true) }
+    val series = state.items.filter { it.type.equals("Series", ignoreCase = true) }
+    Column(Modifier.fillMaxSize().padding(padding)) {
+        FavoritesHeader(state.sort, state.totalRecordCount, vm::setSort)
+        PullToRefreshLayout(
+            isRefreshing = shouldShowPullToRefresh(state.loading, state.items.isNotEmpty()),
+            onRefresh = vm::refresh,
+            modifier = Modifier.weight(1f),
+        ) {
+            when {
+                state.loading && state.items.isEmpty() -> CenterLoading(PaddingValues())
+                state.error && state.items.isEmpty() ->
+                    ErrorState(PaddingValues(), R.string.favorites_load_failed, vm::refresh)
+                !state.loading && state.items.isEmpty() ->
+                    EmptyState(
+                        stringResource(R.string.no_favorites),
+                        stringResource(R.string.no_favorites_hint),
+                    )
+                else ->
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 20.dp),
+                    ) {
+                        if (episodes.isNotEmpty()) {
+                            item(key = "favorite-episodes") {
+                                FavoriteSection(
+                                    R.string.favorite_episodes,
+                                    episodes,
+                                    session,
+                                    wide = true,
+                                    onItemClick,
+                                )
+                            }
+                        }
+                        if (movies.isNotEmpty()) {
+                            item(key = "favorite-movies") {
+                                FavoriteSection(
+                                    R.string.favorite_movies,
+                                    movies,
+                                    session,
+                                    wide = false,
+                                    onItemClick,
+                                )
+                            }
+                        }
+                        if (series.isNotEmpty()) {
+                            item(key = "favorite-series") {
+                                FavoriteSection(
+                                    R.string.favorite_series,
+                                    series,
+                                    session,
+                                    wide = false,
+                                    onItemClick,
+                                )
+                            }
+                        }
+                        if (state.loadingMore) {
+                            item(key = "favorites-loading-more") {
+                                Box(
+                                    Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) { CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) }
+                            }
+                        }
+                        if (state.loadMoreError) {
+                            item(key = "favorites-load-more-error") {
+                                InlineLoadMoreError(onRetry = vm::refresh)
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoritesHeader(
+    sort: FavoriteSort,
+    total: Int,
+    onSortChanged: (FavoriteSort) -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.favorites),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                stringResource(R.string.favorite_item_count, total),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(
+            onClick = {
+                onSortChanged(
+                    sort.copy(
+                        sortOrder =
+                            if (sort.sortOrder == SortOrder.Ascending) SortOrder.Descending
+                            else SortOrder.Ascending,
+                    )
+                )
+            }
+        ) {
+            Icon(
+                painter = painterResource(
+                    if (sort.sortOrder == SortOrder.Ascending) LucideR.drawable.lucide_ic_arrow_up
+                    else LucideR.drawable.lucide_ic_arrow_down
+                ),
+                contentDescription = stringResource(
+                    if (sort.sortOrder == SortOrder.Ascending) R.string.sort_descending
+                    else R.string.sort_ascending
+                ),
+            )
+        }
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_list_filter),
+                    contentDescription = stringResource(R.string.sort_by),
+                )
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                FavoriteSortBy.entries.forEach { sortBy ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                when (sortBy) {
+                                    FavoriteSortBy.Title -> stringResource(R.string.sort_title)
+                                    FavoriteSortBy.DateAdded -> stringResource(R.string.sort_date_added)
+                                }
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onSortChanged(sort.copy(sortBy = sortBy))
+                        },
+                        leadingIcon =
+                            if (sortBy == sort.sortBy) {
+                                { Icon(painterResource(LucideR.drawable.lucide_ic_check), null) }
+                            } else null,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteSection(
+    title: Int,
+    items: List<MediaItem>,
+    session: AuthSession,
+    wide: Boolean,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            stringResource(title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items, key = { it.id }) { item ->
+                com.zenstream.zenstreammobile.ui.components.MediaCard(
+                    item = item,
+                    session = session,
+                    wide = wide,
+                    onClick = onItemClick,
+                    gridCard = false,
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

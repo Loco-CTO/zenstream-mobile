@@ -9,6 +9,7 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
@@ -16,6 +17,7 @@ import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -606,6 +608,33 @@ class CatalogApi(
                 library = library,
                 items = parsed,
                 totalRecordCount = json.optInt("total", parsed.size),
+            )
+        }
+
+    suspend fun fetchFavoritesPage(
+        session: AuthSession,
+        startIndex: Int,
+        limit: Int,
+        sort: FavoriteSort,
+    ): PagedFavorites =
+        withContext(Dispatchers.IO) {
+            val page = startIndex / limit + 1
+            val json =
+                requestJson(
+                    session,
+                    "/api/catalog/favorites",
+                    query =
+                        mapOf(
+                            "page" to page.toString(),
+                            "pageSize" to limit.toString(),
+                            "sortBy" to sort.sortBy.apiValue,
+                            "sortOrder" to sort.sortOrder.apiValue,
+                        ),
+                )
+            val parsed = catalogItems(json)
+            PagedFavorites(
+                items = parsed,
+                totalRecordCount = json.optInt("total", startIndex + parsed.size),
             )
         }
 

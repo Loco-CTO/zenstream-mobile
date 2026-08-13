@@ -11,6 +11,8 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.FavoriteSort
+import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -205,6 +207,23 @@ class SessionStore(
         dataStore.edit { it[Keys.librarySorts] = current.toString() }
     }
 
+    suspend fun cachedFavoriteSort(userId: String): FavoriteSort? {
+        val preferences = dataStore.data.first()
+        val stored = preferences[Keys.librarySorts].orEmpty()
+        if (stored.isBlank()) return null
+        val value = runCatching { JSONObject(stored).optJSONObject(favoriteSortKey(userId)) }.getOrNull()
+            ?: return null
+        return runCatching { favoriteSortFromJson(value) }.getOrNull()
+    }
+
+    suspend fun cacheFavoriteSort(userId: String, sort: FavoriteSort) {
+        val current = dataStore.data.first()[Keys.librarySorts]?.let {
+            runCatching { JSONObject(it) }.getOrNull()
+        } ?: JSONObject()
+        current.put(favoriteSortKey(userId), favoriteSortToJson(sort))
+        dataStore.edit { it[Keys.librarySorts] = current.toString() }
+    }
+
     suspend fun cachedSubtitleStyle(): SubtitleStyle? {
         val preferences = dataStore.data.first()
         val stored =
@@ -260,6 +279,8 @@ class SessionStore(
 
 private fun librarySortKey(userId: String, libraryId: String): String = "$userId\u0000$libraryId"
 
+private fun favoriteSortKey(userId: String): String = "$userId\u0000favorites"
+
 private fun librarySortToJson(sort: LibrarySort): JSONObject =
     JSONObject().put("sortBy", sort.sortBy.name).put("sortOrder", sort.sortOrder.name)
 
@@ -275,6 +296,17 @@ private fun librarySortFromJson(value: JSONObject): LibrarySort =
                     SortOrder.valueOf(value.optString("sortOrder"))
                 }
                 .getOrDefault(SortOrder.Descending),
+    )
+
+private fun favoriteSortToJson(sort: FavoriteSort): JSONObject =
+    JSONObject().put("sortBy", sort.sortBy.name).put("sortOrder", sort.sortOrder.name)
+
+private fun favoriteSortFromJson(value: JSONObject): FavoriteSort =
+    FavoriteSort(
+        sortBy = runCatching { FavoriteSortBy.valueOf(value.optString("sortBy")) }
+            .getOrDefault(FavoriteSortBy.Title),
+        sortOrder = runCatching { SortOrder.valueOf(value.optString("sortOrder")) }
+            .getOrDefault(SortOrder.Ascending),
     )
 
 internal fun legacySubtitleStyleFrom(preferences: Preferences): SubtitleStyle? =

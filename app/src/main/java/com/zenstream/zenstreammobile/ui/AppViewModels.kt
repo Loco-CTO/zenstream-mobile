@@ -8,6 +8,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
@@ -15,9 +16,12 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.FavoriteSortBy
+import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.orderedHomeRows
@@ -619,6 +623,127 @@ class SearchViewModel(
             SearchViewModel(repository, session) as T
     }
 }
+
+data class FavoritesUiState(
+    val loading: Boolean = true,
+    val sort: FavoriteSort = FavoriteSort(),
+    val items: List<MediaItem> = emptyList(),
+    val totalRecordCount: Int = 0,
+    val loadingMore: Boolean = false,
+    val error: Boolean = false,
+    val loadMoreError: Boolean = false,
+)
+
+class FavoritesViewModel(
+    private val repository: FavoritesDataSource,
+    private val session: AuthSession,
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(FavoritesUiState())
+    val uiState = _uiState.asStateFlow()
+    private var requestGeneration = 0L
+    private var requestJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val stored = runCatching { repository.cachedFavoriteSort(session.userId) }.getOrNull()
+            _uiState.update { it.copy(sort = stored ?: FavoriteSort()) }
+            load()
+        }
+        viewModelScope.launch {
+            repository.catalogRefreshRevision.drop(1).collectLatest { refresh() }
+        }
+    }
+
+    fun refresh() = load()
+
+    fun setSort(sort: FavoriteSort) {
+        if (_uiState.value.sort == sort) return
+        _uiState.update { it.copy(sort = sort) }
+        val generation = beginLoad()
+        requestJob = viewModelScope.launch {
+            runCatching { repository.saveFavoriteSort(session.userId, sort) }
+            if (generation == requestGeneration) loadPages(generation, sort)
+        }
+    }
+
+    private fun load() {
+        val generation = beginLoad()
+        val sort = _uiState.value.sort
+        requestJob = viewModelScope.launch { loadPages(generation, sort) }
+    }
+
+    private fun beginLoad(): Long {
+        requestJob?.cancel()
+        val generation = ++requestGeneration
+        _uiState.update {
+            it.copy(
+                loading = true,
+                items = emptyList(),
+                totalRecordCount = 0,
+                error = false,
+                loadMoreError = false,
+                loadingMore = false,
+            )
+        }
+        return generation
+    }
+
+    private suspend fun loadPages(generation: Long, sort: FavoriteSort) {
+        var startIndex = 0
+        var allItems = emptyList<MediaItem>()
+        var total = 0
+        try {
+            while (generation == requestGeneration) {
+                if (startIndex > 0) _uiState.update { it.copy(loadingMore = true) }
+                val page = repository.favoritesPage(session, startIndex, FAVORITES_PAGE_SIZE, sort)
+                total = page.totalRecordCount
+                val merged = uniqueItems(allItems + page.items)
+                val madeProgress = merged.size > allItems.size
+                allItems = merged
+                _uiState.update {
+                    it.copy(
+                        loading = false,
+                        loadingMore = startIndex + page.items.size < total,
+                        items = allItems,
+                        totalRecordCount = total,
+                        error = false,
+                        loadMoreError = false,
+                    )
+                }
+                if (allItems.size >= total || page.items.isEmpty() || !madeProgress) break
+                startIndex += page.items.size
+            }
+            if (generation == requestGeneration) {
+                _uiState.update { it.copy(loading = false, loadingMore = false) }
+            }
+        } catch (error: Throwable) {
+            if (error is CancellationException || generation != requestGeneration) throw error
+            if ((error as? CatalogException)?.statusCode == 401) repository.clearSession()
+            _uiState.update {
+                it.copy(
+                    loading = false,
+                    loadingMore = false,
+                    error = it.items.isEmpty(),
+                    loadMoreError = it.items.isNotEmpty(),
+                )
+            }
+        }
+    }
+
+    private fun uniqueItems(items: List<MediaItem>): List<MediaItem> {
+        val seen = HashSet<String>()
+        return items.filter { seen.add(it.id) }
+    }
+
+    class Factory(private val repository: FavoritesDataSource, private val session: AuthSession) :
+        ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            FavoritesViewModel(repository, session) as T
+    }
+}
+
+private const val FAVORITES_PAGE_SIZE = 100
 
 internal fun rankSearchResults(items: List<MediaItem>, query: String): List<MediaItem> {
     val terms = query.trim().lowercase().split(Regex("\\s+")).filter(String::isNotBlank)

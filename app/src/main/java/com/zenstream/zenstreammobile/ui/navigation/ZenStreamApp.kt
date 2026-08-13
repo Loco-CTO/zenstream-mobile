@@ -64,6 +64,7 @@ import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
+import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
@@ -76,6 +77,7 @@ import kotlinx.coroutines.launch
 private const val HOME = "home"
 private const val SEARCH = "search"
 private const val LIBRARY = "library"
+private const val FAVORITES = "favorites"
 private const val DETAIL = "detail/{itemId}"
 private const val SETTINGS = "settings"
 
@@ -132,6 +134,11 @@ private fun MainScaffold(
                 LIBRARY,
                 com.zenstream.zenstreammobile.R.string.library,
                 LucideR.drawable.lucide_ic_library,
+            ),
+            NavigationDestination(
+                FAVORITES,
+                com.zenstream.zenstreammobile.R.string.favorites,
+                LucideR.drawable.lucide_ic_heart,
             ),
         )
     }
@@ -322,6 +329,15 @@ private fun MainScaffold(
                 }
                 composable(LIBRARY) {
                     LibraryScreen(
+                        repository,
+                        session,
+                        padding,
+                    ) { item ->
+                        navigateToDetail(navController, item.id)
+                    }
+                }
+                composable(FAVORITES) {
+                    FavoritesScreen(
                         repository,
                         session,
                         padding,

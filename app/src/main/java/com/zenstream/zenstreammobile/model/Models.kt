@@ -136,6 +136,21 @@ data class LibrarySort(
     val sortOrder: SortOrder = SortOrder.Descending,
 )
 
+enum class FavoriteSortBy(val apiValue: String) {
+    Title("title"),
+    DateAdded("dateAdded"),
+}
+
+data class FavoriteSort(
+    val sortBy: FavoriteSortBy = FavoriteSortBy.Title,
+    val sortOrder: SortOrder = SortOrder.Ascending,
+)
+
+data class PagedFavorites(
+    val items: List<MediaItem>,
+    val totalRecordCount: Int,
+)
+
 data class PagedLibrary(
     val library: Library,
     val items: List<MediaItem>,
