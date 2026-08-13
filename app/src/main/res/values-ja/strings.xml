@@ -18,6 +18,7 @@
     <string name="home">ホーム</string>
     <string name="search">検索</string>
     <string name="library">ライブラリ</string>
+    <string name="favorites">お気に入り</string>
     <string name="continue_watching">視聴を続ける</string>
     <string name="next_up">次に見る</string>
     <string name="my_list">マイリスト</string>
@@ -154,6 +155,13 @@
     <string name="no_libraries">ライブラリが見つかりません</string>
     <string name="no_libraries_hint">Orchestratorでメディアライブラリへのアクセスを許可して、このページを更新してください。</string>
     <string name="library_item_count">%1$d件</string>
+    <string name="favorite_episodes">お気に入りのエピソード</string>
+    <string name="favorite_movies">お気に入りの映画</string>
+    <string name="favorite_series">お気に入りのシリーズ</string>
+    <string name="favorite_item_count">お気に入り %1$d件</string>
+    <string name="no_favorites">お気に入りはまだありません。</string>
+    <string name="no_favorites_hint">お気に入りに追加した作品がここに表示されます。</string>
+    <string name="favorites_load_failed">お気に入りを読み込めませんでした</string>
     <string name="sort_by">並び順</string>
     <string name="sort_ascending">昇順</string>
     <string name="sort_descending">降順</string>

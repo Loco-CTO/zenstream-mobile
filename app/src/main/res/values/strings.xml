@@ -18,6 +18,7 @@
     <string name="home">Home</string>
     <string name="search">Search</string>
     <string name="library">Library</string>
+    <string name="favorites">Favorites</string>
     <string name="continue_watching">Continue Watching</string>
     <string name="next_up">Next Up</string>
     <string name="my_list">My List</string>
@@ -42,6 +43,13 @@
     <string name="no_libraries">No libraries found</string>
     <string name="no_libraries_hint">Add a media library and refresh this page.</string>
     <string name="library_item_count">%1$d items</string>
+    <string name="favorite_episodes">Favorite Episodes</string>
+    <string name="favorite_movies">Favorite Movies</string>
+    <string name="favorite_series">Favorite Series</string>
+    <string name="favorite_item_count">%1$d favorites</string>
+    <string name="no_favorites">You have no favorites yet.</string>
+    <string name="no_favorites_hint">Add titles to favorites to see them here.</string>
+    <string name="favorites_load_failed">Could not load your favorites</string>
     <string name="play">Play</string>
     <string name="info">Info</string>
     <string name="media_playback_failed">This media could not be played.</string>
