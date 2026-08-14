@@ -184,12 +184,13 @@ private fun parsePlaybackPreference(value: JSONObject): PlaybackPreference {
     fun options(key: String): List<PlaybackLanguageOption> {
         val array = value.optJSONArray(key) ?: return emptyList()
         return List(array.length()) { index ->
-            val option = array.optJSONObject(index) ?: JSONObject()
-            PlaybackLanguageOption(
-                value = option.optString("value"),
-                label = option.optString("label").ifBlank { option.optString("value") },
-            )
-        }.filter { it.value.isNotBlank() }
+                val option = array.optJSONObject(index) ?: JSONObject()
+                PlaybackLanguageOption(
+                    value = option.optString("value"),
+                    label = option.optString("label").ifBlank { option.optString("value") },
+                )
+            }
+            .filter { it.value.isNotBlank() }
     }
     return PlaybackPreference(
         audioLanguage = nullableString("audioLanguage"),

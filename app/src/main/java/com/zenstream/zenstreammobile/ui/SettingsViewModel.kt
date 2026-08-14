@@ -31,10 +31,11 @@ data class SettingsUiState(
     val effectiveMetadataLanguage: String = "en",
     val metadataSaving: Boolean = false,
     val metadataSaveError: Boolean = false,
-    val playbackPreference: PlaybackPreference = PlaybackPreference(null, null, emptyList(), emptyList()),
+    val playbackPreference: PlaybackPreference =
+        PlaybackPreference(null, null, emptyList(), emptyList()),
     val playbackSaving: Boolean = false,
     val playbackSaveError: Boolean = false,
-    )
+)
 
 class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -133,12 +134,16 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
                 subtitleLanguage = subtitleLanguage,
             )
         _uiState.value =
-            _uiState.value.copy(playbackPreference = next, playbackSaving = true, playbackSaveError = false)
+            _uiState.value.copy(
+                playbackPreference = next,
+                playbackSaving = true,
+                playbackSaveError = false,
+            )
         viewModelScope.launch {
             playbackSaveMutex.withLock {
                 runCatching {
-                    repository.savePlaybackPreference(audioLanguage, subtitleLanguage)
-                }
+                        repository.savePlaybackPreference(audioLanguage, subtitleLanguage)
+                    }
                     .onSuccess {
                         confirmedPlaybackPreference = it
                         _uiState.value =

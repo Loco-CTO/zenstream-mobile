@@ -199,9 +199,7 @@ class PlaybackViewModel(
                         ?.let { preferredTrackIndex(it, playbackPreference?.audioLanguage) }
                 }
             loadPlayback(
-                PlaybackOptions(
-                    audioStreamId = initialAudioStreamId ?: preferredAudioStreamId,
-                )
+                PlaybackOptions(audioStreamId = initialAudioStreamId ?: preferredAudioStreamId)
             )
         }
         viewModelScope.launch {

@@ -103,6 +103,19 @@ class PlaybackViewModelTest {
     }
 
     @Test
+    fun prefersSavedLanguageThenDefaultAndSupportsSubtitleOff() {
+        val tracks =
+            listOf(
+                MediaStream(1, "Audio", language = "ja"),
+                MediaStream(2, "Audio", language = "en", isDefault = true),
+            )
+
+        assertEquals(1, preferredTrackIndex(tracks, "ja"))
+        assertEquals(2, preferredTrackIndex(tracks, "fr"))
+        assertNull(preferredSubtitleIndex(tracks, "off"))
+    }
+
+    @Test
     fun syncplayTimelineUsesTheAuthoritativeClockForPausedScheduledAndLatePlayback() {
         val paused = syncplayRoom(playbackState = "paused", anchorPosition = 12.0)
         val scheduled = syncplayRoom(playbackState = "playing", effectiveAt = 101.0)

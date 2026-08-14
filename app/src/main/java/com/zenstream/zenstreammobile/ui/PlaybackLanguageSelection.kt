@@ -6,11 +6,11 @@ internal fun preferredTrackIndex(
     tracks: List<MediaStream>,
     language: String?,
 ): Int? =
-    tracks.firstOrNull {
-        language != null && it.language?.equals(language, ignoreCase = true) == true
-    }?.index
-        ?: tracks.firstOrNull { it.isDefault }?.index
-        ?: tracks.firstOrNull()?.index
+    tracks
+        .firstOrNull {
+            language != null && it.language?.equals(language, ignoreCase = true) == true
+        }
+        ?.index ?: tracks.firstOrNull { it.isDefault }?.index ?: tracks.firstOrNull()?.index
 
 internal fun preferredSubtitleIndex(
     tracks: List<MediaStream>,

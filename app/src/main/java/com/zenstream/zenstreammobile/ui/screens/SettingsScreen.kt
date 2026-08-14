@@ -133,7 +133,8 @@ fun SettingsScreen(
                                     onChange = {
                                         vm.setPlaybackPreference(
                                             audioLanguage = it,
-                                            subtitleLanguage = state.playbackPreference.subtitleLanguage,
+                                            subtitleLanguage =
+                                                state.playbackPreference.subtitleLanguage,
                                         )
                                     },
                                 )

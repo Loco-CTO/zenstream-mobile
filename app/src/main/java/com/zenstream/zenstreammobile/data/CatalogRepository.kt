@@ -399,19 +399,18 @@ class CatalogRepository(
     override suspend fun savePlaybackPreference(
         audioLanguage: String?,
         subtitleLanguage: String?,
-    ): PlaybackPreference =
-        playbackPreferenceMutex.withLock {
-            val current = session.first() ?: error("Authentication required")
-            authenticatedOrchestratorRequest {
-                    orchestratorApi.setPlaybackPreference(
-                        current.serverUrl,
-                        current.token,
-                        audioLanguage,
-                        subtitleLanguage,
-                    )
-                }
-                .also { playbackPreferenceCache = System.currentTimeMillis() to it }
-        }
+    ): PlaybackPreference = playbackPreferenceMutex.withLock {
+        val current = session.first() ?: error("Authentication required")
+        authenticatedOrchestratorRequest {
+                orchestratorApi.setPlaybackPreference(
+                    current.serverUrl,
+                    current.token,
+                    audioLanguage,
+                    subtitleLanguage,
+                )
+            }
+            .also { playbackPreferenceCache = System.currentTimeMillis() to it }
+    }
 
     suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData =
         homeMutex.withLock {
