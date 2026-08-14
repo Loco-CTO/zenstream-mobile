@@ -48,6 +48,7 @@ import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
+import com.zenstream.zenstreammobile.data.PlaybackLanguageOption
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 
@@ -123,6 +124,39 @@ fun SettingsScreen(
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
                             ) {
+                                PlaybackLanguageSelector(
+                                    title = stringResource(R.string.audio_language),
+                                    options = state.playbackPreference.audioLanguages,
+                                    selected = state.playbackPreference.audioLanguage,
+                                    offAllowed = false,
+                                    enabled = !state.playbackSaving,
+                                    onChange = {
+                                        vm.setPlaybackPreference(
+                                            audioLanguage = it,
+                                            subtitleLanguage = state.playbackPreference.subtitleLanguage,
+                                        )
+                                    },
+                                )
+                                PlaybackLanguageSelector(
+                                    title = stringResource(R.string.subtitle_language),
+                                    options = state.playbackPreference.subtitleLanguages,
+                                    selected = state.playbackPreference.subtitleLanguage,
+                                    offAllowed = true,
+                                    enabled = !state.playbackSaving,
+                                    onChange = {
+                                        vm.setPlaybackPreference(
+                                            audioLanguage = state.playbackPreference.audioLanguage,
+                                            subtitleLanguage = it,
+                                        )
+                                    },
+                                )
+                                if (state.playbackSaveError) {
+                                    Text(
+                                        stringResource(R.string.playback_language_save_failed),
+                                        color = MaterialThemeError,
+                                        modifier = Modifier.padding(16.dp),
+                                    )
+                                }
                                 EngineSelector(state.playerEngine, vm::setPlayerEngine)
                                 ListItem(
                                     headlineContent = {
@@ -306,6 +340,58 @@ private fun MetadataLanguageSelector(
                 text = { Text(language) },
                 onClick = {
                     onChange(language)
+                    expanded = false
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackLanguageSelector(
+    title: String,
+    options: List<PlaybackLanguageOption>,
+    selected: String?,
+    offAllowed: Boolean,
+    enabled: Boolean,
+    onChange: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val automatic = stringResource(R.string.language_automatic)
+    val off = stringResource(R.string.subtitles_off)
+    val selectedLabel =
+        when {
+            selected == null -> automatic
+            selected == "off" -> off
+            else -> options.firstOrNull { it.value == selected }?.label ?: automatic
+        }
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(selectedLabel) },
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(automatic) },
+            onClick = {
+                onChange(null)
+                expanded = false
+            },
+        )
+        options.forEach { option ->
+            DropdownMenuItem(
+                text = { Text(option.label) },
+                onClick = {
+                    onChange(option.value)
+                    expanded = false
+                },
+            )
+        }
+        if (offAllowed) {
+            DropdownMenuItem(
+                text = { Text(off) },
+                onClick = {
+                    onChange("off")
                     expanded = false
                 },
             )

@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.ui
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.data.InterfaceLocalePreference
 import com.zenstream.zenstreammobile.data.MetadataPreference
+import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SettingsDataSource
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -130,6 +131,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
         metadataPreference = MetadataPreference(listOf("en", "ja"), language, language ?: "en")
         metadataPreference
     }
+    var playbackPreference = PlaybackPreference(null, null, emptyList(), emptyList())
 
     override suspend fun loadMetadataPreference() = metadataPreference
 
@@ -148,4 +150,14 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override suspend fun loadSubtitleStyle() = SubtitleStyle()
 
     override suspend fun saveSubtitleStyle(style: SubtitleStyle) = style
+
+    override suspend fun loadPlaybackPreference() = playbackPreference
+
+    override suspend fun savePlaybackPreference(
+        audioLanguage: String?,
+        subtitleLanguage: String?,
+    ): PlaybackPreference {
+        playbackPreference = playbackPreference.copy(audioLanguage, subtitleLanguage)
+        return playbackPreference
+    }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
@@ -779,13 +780,15 @@ data class DetailUiState(
     val trackSelection: PlaybackTrackSelection? = null,
 )
 
-internal fun defaultTrackSelection(source: MediaSource): PlaybackTrackSelection {
+internal fun defaultTrackSelection(
+    source: MediaSource,
+    preference: PlaybackPreference? = null,
+): PlaybackTrackSelection {
     val audio = source.mediaStreams.filter { it.type.equals("audio", true) }
     val subtitles = source.mediaStreams.filter { it.type.equals("subtitle", true) }
     return PlaybackTrackSelection(
-        audioStreamId = audio.firstOrNull { it.isDefault }?.index ?: audio.firstOrNull()?.index,
-        subtitleStreamIndex =
-            subtitles.firstOrNull { it.isDefault }?.index ?: subtitles.firstOrNull()?.index,
+        audioStreamId = preferredTrackIndex(audio, preference?.audioLanguage),
+        subtitleStreamIndex = preferredSubtitleIndex(subtitles, preference?.subtitleLanguage),
         hasSubtitleSelection = subtitles.isNotEmpty(),
     )
 }
@@ -939,7 +942,11 @@ class DetailViewModel(
             _uiState.value =
                 _uiState.value.copy(
                     trackSource = source,
-                    trackSelection = defaultTrackSelection(source),
+                    trackSelection =
+                        defaultTrackSelection(
+                            source,
+                            runCatching { repository.loadPlaybackPreference() }.getOrNull(),
+                        ),
                 )
         }
     }

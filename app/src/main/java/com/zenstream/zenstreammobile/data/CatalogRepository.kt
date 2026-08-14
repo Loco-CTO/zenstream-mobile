@@ -100,6 +100,13 @@ interface SettingsDataSource {
     suspend fun loadSubtitleStyle(): SubtitleStyle
 
     suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle
+
+    suspend fun loadPlaybackPreference(): PlaybackPreference
+
+    suspend fun savePlaybackPreference(
+        audioLanguage: String?,
+        subtitleLanguage: String?,
+    ): PlaybackPreference
 }
 
 data class InterfaceLocalePreference(
@@ -118,7 +125,9 @@ class CatalogRepository(
 
     private val homeMutex = Mutex()
     private val interfaceLocaleMutex = Mutex()
+    private val playbackPreferenceMutex = Mutex()
     private var homeCache: Pair<Long, HomeData>? = null
+    private var playbackPreferenceCache: Pair<Long, PlaybackPreference>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
     override val catalogRefreshRevision: StateFlow<Long> = _catalogRefreshRevision
     val serverUrl: Flow<String?> = sessionStore.serverUrl
@@ -239,6 +248,7 @@ class CatalogRepository(
     override suspend fun clearSession() {
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
+        playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
         sessionStore.clearSession()
     }
 
@@ -372,6 +382,36 @@ class CatalogRepository(
         sessionStore.cacheSubtitleStyle(normalized)
         return normalized
     }
+
+    override suspend fun loadPlaybackPreference(): PlaybackPreference =
+        playbackPreferenceMutex.withLock {
+            val current = session.first() ?: error("Authentication required")
+            val cached = playbackPreferenceCache
+            if (cached != null && cached.first > System.currentTimeMillis() - 30_000) {
+                return@withLock cached.second
+            }
+            authenticatedOrchestratorRequest {
+                    orchestratorApi.fetchPlaybackPreference(current.serverUrl, current.token)
+                }
+                .also { playbackPreferenceCache = System.currentTimeMillis() to it }
+        }
+
+    override suspend fun savePlaybackPreference(
+        audioLanguage: String?,
+        subtitleLanguage: String?,
+    ): PlaybackPreference =
+        playbackPreferenceMutex.withLock {
+            val current = session.first() ?: error("Authentication required")
+            authenticatedOrchestratorRequest {
+                    orchestratorApi.setPlaybackPreference(
+                        current.serverUrl,
+                        current.token,
+                        audioLanguage,
+                        subtitleLanguage,
+                    )
+                }
+                .also { playbackPreferenceCache = System.currentTimeMillis() to it }
+        }
 
     suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData =
         homeMutex.withLock {

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
+import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SettingsDataSource
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -30,7 +31,10 @@ data class SettingsUiState(
     val effectiveMetadataLanguage: String = "en",
     val metadataSaving: Boolean = false,
     val metadataSaveError: Boolean = false,
-)
+    val playbackPreference: PlaybackPreference = PlaybackPreference(null, null, emptyList(), emptyList()),
+    val playbackSaving: Boolean = false,
+    val playbackSaveError: Boolean = false,
+    )
 
 class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -38,10 +42,12 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
 
     private val interfaceLocaleSaveMutex = Mutex()
     private val metadataSaveMutex = Mutex()
+    private val playbackSaveMutex = Mutex()
     private var interfaceLocaleSaveGeneration = 0L
     private var metadataSaveGeneration = 0L
     private var confirmedInterfaceLocaleMode = InterfaceLocaleMode.Automatic
     private var confirmedMetadataLanguage: String? = null
+    private var confirmedPlaybackPreference = _uiState.value.playbackPreference
 
     init {
         viewModelScope.launch {
@@ -72,6 +78,11 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
     private suspend fun refreshSettings() {
         _uiState.value = _uiState.value.copy(refreshing = true)
         refreshSubtitleStyle()
+        runCatching { repository.loadPlaybackPreference() }
+            .onSuccess {
+                confirmedPlaybackPreference = it
+                _uiState.value = _uiState.value.copy(playbackPreference = it)
+            }
         val generation = metadataSaveGeneration
         metadataSaveMutex.withLock {
             runCatching { repository.loadMetadataPreference() }
@@ -109,6 +120,43 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
         viewModelScope.launch {
             runCatching { repository.saveSubtitleStyle(next) }
                 .onFailure { _uiState.value = _uiState.value.copy(subtitleSaveError = true) }
+        }
+    }
+
+    fun setPlaybackPreference(
+        audioLanguage: String?,
+        subtitleLanguage: String?,
+    ) {
+        val next =
+            _uiState.value.playbackPreference.copy(
+                audioLanguage = audioLanguage,
+                subtitleLanguage = subtitleLanguage,
+            )
+        _uiState.value =
+            _uiState.value.copy(playbackPreference = next, playbackSaving = true, playbackSaveError = false)
+        viewModelScope.launch {
+            playbackSaveMutex.withLock {
+                runCatching {
+                    repository.savePlaybackPreference(audioLanguage, subtitleLanguage)
+                }
+                    .onSuccess {
+                        confirmedPlaybackPreference = it
+                        _uiState.value =
+                            _uiState.value.copy(
+                                playbackPreference = it,
+                                playbackSaving = false,
+                                playbackSaveError = false,
+                            )
+                    }
+                    .onFailure {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                playbackPreference = confirmedPlaybackPreference,
+                                playbackSaving = false,
+                                playbackSaveError = true,
+                            )
+                    }
+            }
         }
     }
 

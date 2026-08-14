@@ -9,6 +9,18 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
+data class PlaybackLanguageOption(
+    val value: String,
+    val label: String,
+)
+
+data class PlaybackPreference(
+    val audioLanguage: String?,
+    val subtitleLanguage: String?,
+    val audioLanguages: List<PlaybackLanguageOption>,
+    val subtitleLanguages: List<PlaybackLanguageOption>,
+)
+
 class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
     suspend fun fetchConfig(orchestratorUrl: String) =
         withContext(Dispatchers.IO) {
@@ -102,6 +114,37 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
             )
         }
 
+    suspend fun fetchPlaybackPreference(
+        orchestratorUrl: String,
+        token: String,
+    ): PlaybackPreference =
+        withContext(Dispatchers.IO) {
+            parsePlaybackPreference(
+                authenticatedJson(orchestratorUrl, token, "/api/preferences/playback")
+            )
+        }
+
+    suspend fun setPlaybackPreference(
+        orchestratorUrl: String,
+        token: String,
+        audioLanguage: String?,
+        subtitleLanguage: String?,
+    ): PlaybackPreference =
+        withContext(Dispatchers.IO) {
+            parsePlaybackPreference(
+                authenticatedJson(
+                    orchestratorUrl,
+                    token,
+                    "/api/preferences/playback",
+                    "PATCH",
+                    JSONObject()
+                        .put("audioLanguage", audioLanguage ?: JSONObject.NULL)
+                        .put("subtitleLanguage", subtitleLanguage ?: JSONObject.NULL)
+                        .toString(),
+                )
+            )
+        }
+
     private fun authenticatedJson(
         serverUrl: String,
         token: String,
@@ -133,6 +176,28 @@ data class MetadataPreference(
     val explicitLanguage: String?,
     val effectiveLanguage: String,
 )
+
+private fun parsePlaybackPreference(value: JSONObject): PlaybackPreference {
+    fun nullableString(key: String): String? =
+        value.opt(key)?.takeUnless { it == JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }
+
+    fun options(key: String): List<PlaybackLanguageOption> {
+        val array = value.optJSONArray(key) ?: return emptyList()
+        return List(array.length()) { index ->
+            val option = array.optJSONObject(index) ?: JSONObject()
+            PlaybackLanguageOption(
+                value = option.optString("value"),
+                label = option.optString("label").ifBlank { option.optString("value") },
+            )
+        }.filter { it.value.isNotBlank() }
+    }
+    return PlaybackPreference(
+        audioLanguage = nullableString("audioLanguage"),
+        subtitleLanguage = nullableString("subtitleLanguage"),
+        audioLanguages = options("audioLanguages"),
+        subtitleLanguages = options("subtitleLanguages"),
+    )
+}
 
 fun parseProxyConfig(body: String) {
     if (!Regex("\\\"catalog\\\"\\s*:\\s*true").containsMatchIn(body))

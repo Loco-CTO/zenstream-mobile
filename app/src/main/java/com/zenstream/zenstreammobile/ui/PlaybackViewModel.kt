@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
@@ -99,13 +100,12 @@ internal fun selectSubtitleTrack(
     currentTrack: Int?,
     selectionInitialized: Boolean,
     subtitles: List<MediaStream>,
+    preferredLanguage: String? = null,
 ): Int? {
     if (selectionInitialized) {
         return currentTrack?.takeIf { selected -> subtitles.any { it.index == selected } }
     }
-    return currentTrack
-        ?: subtitles.firstOrNull { it.isDefault }?.index
-        ?: subtitles.firstOrNull()?.index
+    return currentTrack ?: preferredSubtitleIndex(subtitles, preferredLanguage)
 }
 
 internal fun shouldHandlePlaybackCompletion(
@@ -173,12 +173,14 @@ class PlaybackViewModel(
     private var nextUpFallbackGeneration: Long? = null
     private var transitionInProgress = false
     private var syncplayTimelineKey: String? = null
+    private var playbackPreference: PlaybackPreference? = null
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
             val subtitleStyle = repository.loadSubtitleStyle()
+            playbackPreference = runCatching { repository.loadPlaybackPreference() }.getOrNull()
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
@@ -186,7 +188,21 @@ class PlaybackViewModel(
                     selectedSubtitle = initialSubtitleStreamIndex,
                 )
             createEngine(engineType)
-            loadPlayback(PlaybackOptions(audioStreamId = initialAudioStreamId))
+            val preferredAudioStreamId =
+                if (initialAudioStreamId != null || playbackPreference?.audioLanguage == null) {
+                    null
+                } else {
+                    runCatching { repository.playbackSource(session, currentItemId) }
+                        .getOrNull()
+                        ?.mediaStreams
+                        ?.filter { it.type.equals("audio", true) }
+                        ?.let { preferredTrackIndex(it, playbackPreference?.audioLanguage) }
+                }
+            loadPlayback(
+                PlaybackOptions(
+                    audioStreamId = initialAudioStreamId ?: preferredAudioStreamId,
+                )
+            )
         }
         viewModelScope.launch {
             repository.showDebugIcon.collectLatest { enabled ->
@@ -367,13 +383,16 @@ class PlaybackViewModel(
 
             val selectedAudio =
                 requestOptions.audioStreamId
-                    ?: data.audioTracks.firstOrNull { it.isDefault }?.index
-                    ?: data.audioTracks.firstOrNull()?.index
+                    ?: preferredTrackIndex(
+                        data.audioTracks,
+                        playbackPreference?.audioLanguage,
+                    )
             val selectedSubtitle =
                 selectSubtitleTrack(
                     currentTrack = _uiState.value.selectedSubtitle,
                     selectionInitialized = subtitleSelectionInitialized,
                     subtitles = data.subtitles,
+                    preferredLanguage = playbackPreference?.subtitleLanguage,
                 )
             val requestedOrResumeStartSeconds =
                 if (hasCurrentPlayback || requestOptions.startPositionSeconds > 0) {

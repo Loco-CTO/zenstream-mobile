@@ -81,6 +81,10 @@
     <string name="settings">Settings</string>
     <string name="player_group">Player</string>
     <string name="subtitles_group">Subtitles</string>
+    <string name="audio_language">Audio language</string>
+    <string name="subtitle_language">Subtitle language</string>
+    <string name="language_automatic">Automatic</string>
+    <string name="playback_language_save_failed">Could not save playback language settings.</string>
     <string name="settings_version_value">Version %1$s</string>
     <string name="player_engine">Player engine</string>
     <string name="player_engine_media3">Media3</string>
