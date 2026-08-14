@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -18,7 +19,7 @@ class SettingsScreenTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun rootShowsSettingsSectionsVersionAndLogout() {
+    fun rootShowsSettingsSectionsFooterVersionAndLogout() {
         var loggedOut = false
         composeRule.setContent {
             ZenStreamTheme {
@@ -29,12 +30,12 @@ class SettingsScreenTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.settings_version)).assertIsDisplayed()
+        val versionFooter =
+            context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
+        composeRule.onNodeWithText(versionFooter).assertIsDisplayed()
         composeRule
-            .onNodeWithText(
-                context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
-            )
-            .assertIsDisplayed()
+            .onNodeWithText(versionFooter.substringBefore(BuildConfig.ZENSTREAM_VERSION).trim())
+            .assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
         composeRule.runOnIdle { assertTrue(loggedOut) }
     }

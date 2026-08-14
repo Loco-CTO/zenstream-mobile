@@ -61,7 +61,6 @@
     <string name="player_group">プレーヤー</string>
     <string name="subtitles_group">字幕</string>
     <string name="player_engine">プレーヤーエンジン</string>
-    <string name="settings_version">&#x30D0;&#x30FC;&#x30B8;&#x30E7;&#x30F3;</string>
     <string name="settings_version_value">&#x30D0;&#x30FC;&#x30B8;&#x30E7;&#x30F3; %1$s</string>
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>

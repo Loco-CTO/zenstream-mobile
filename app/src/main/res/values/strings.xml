@@ -81,7 +81,6 @@
     <string name="settings">Settings</string>
     <string name="player_group">Player</string>
     <string name="subtitles_group">Subtitles</string>
-    <string name="settings_version">Version</string>
     <string name="settings_version_value">Version %1$s</string>
     <string name="player_engine">Player engine</string>
     <string name="player_engine_media3">Media3</string>

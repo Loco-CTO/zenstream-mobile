@@ -79,7 +79,6 @@ fun SettingsScreen(
                             SettingsSection.Appearance -> stringResource(R.string.appearance_group)
                             SettingsSection.Player -> stringResource(R.string.player_group)
                             SettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
-                            SettingsSection.Version -> stringResource(R.string.settings_version)
                         }
                     )
                 },
@@ -198,19 +197,6 @@ fun SettingsScreen(
                             }
                         }
 
-                    SettingsSection.Version ->
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
-                            ) {
-                                ListItem(
-                                    headlineContent = {
-                                        Text(stringResource(R.string.settings_version))
-                                    },
-                                    supportingContent = { Text(BuildConfig.ZENSTREAM_VERSION) },
-                                )
-                            }
-                        }
                 }
             }
         }
@@ -222,7 +208,6 @@ internal enum class SettingsSection {
     Appearance,
     Player,
     Subtitles,
-    Version,
 }
 
 @Composable
@@ -242,9 +227,6 @@ internal fun SettingsRootContent(
         }
         SettingsMenuItem(stringResource(R.string.subtitles_group)) {
             onOpenSection(SettingsSection.Subtitles)
-        }
-        SettingsMenuItem(stringResource(R.string.settings_version)) {
-            onOpenSection(SettingsSection.Version)
         }
         androidx.compose.material3.Button(
             onClick = onLogout,
