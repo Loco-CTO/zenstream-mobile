@@ -27,7 +27,7 @@ class SubtitleColorPickerTest {
     fun convertsPrimaryAndNeutralColorsBetweenRgbAndHsv() {
         assertEquals(HsvColor(0f, 1f, 1f), rgbToHsv(RgbColor(255, 0, 0)))
         assertEquals(HsvColor(120f, 1f, 1f), rgbToHsv(RgbColor(0, 255, 0)))
-        assertEquals(HsvColor(0f, 0f, 0.5f), rgbToHsv(RgbColor(128, 128, 128)))
+        assertEquals(HsvColor(0f, 0f, 128f / 255f), rgbToHsv(RgbColor(128, 128, 128)))
         assertEquals(RgbColor(255, 0, 255), hsvToRgb(HsvColor(300f, 1f, 1f)))
     }
 

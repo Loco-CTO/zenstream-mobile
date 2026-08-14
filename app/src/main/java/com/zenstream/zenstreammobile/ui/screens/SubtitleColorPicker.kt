@@ -32,7 +32,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -159,6 +158,8 @@ private fun SubtitleColorPickerDialog(
     }
     var rgb by remember(initialColor) { mutableStateOf(initialColor) }
     var hsv by remember(initialColor) { mutableStateOf(rgbToHsv(initialColor)) }
+    val previewDescription = stringResource(R.string.subtitle_color_preview)
+    val valueDescription = stringResource(R.string.subtitle_color_value, rgb.toHex())
 
     fun updateRgb(next: RgbColor) {
         rgb = next.clamped()
@@ -193,16 +194,14 @@ private fun SubtitleColorPickerDialog(
                             .clip(RoundedCornerShape(8.dp))
                             .background(rgb.toComposeColor())
                             .semantics {
-                                contentDescription =
-                                    stringResource(R.string.subtitle_color_preview)
+                                contentDescription = previewDescription
                             }
                 )
                 Text(
                     rgb.toHex(),
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.semantics {
-                        contentDescription =
-                            stringResource(R.string.subtitle_color_value, rgb.toHex())
+                        contentDescription = valueDescription
                     },
                 )
                 RgbSlider(
@@ -306,6 +305,7 @@ private fun HueField(hue: Float, onChange: (Float) -> Unit) {
 
 @Composable
 private fun RgbSlider(label: String, value: Int, onChange: (Int) -> Unit) {
+    val sliderDescription = stringResource(R.string.subtitle_color_slider, label)
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label)
@@ -318,7 +318,7 @@ private fun RgbSlider(label: String, value: Int, onChange: (Int) -> Unit) {
             steps = 254,
             modifier =
                 Modifier.semantics {
-                    contentDescription = stringResource(R.string.subtitle_color_slider, label)
+                    contentDescription = sliderDescription
                 },
         )
     }
