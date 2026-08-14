@@ -144,6 +144,17 @@
     <string name="subtitle_background_color">Background color</string>
     <string name="subtitle_background_opacity">Background opacity</string>
     <string name="subtitle_preview">Preview</string>
+    <string name="subtitle_color_picker_title">Choose %1$s</string>
+    <string name="subtitle_color_current_value">Current color %1$s</string>
+    <string name="subtitle_color_preview">Selected color preview</string>
+    <string name="subtitle_color_value">Selected color %1$s</string>
+    <string name="subtitle_color_red">Red</string>
+    <string name="subtitle_color_green">Green</string>
+    <string name="subtitle_color_blue">Blue</string>
+    <string name="subtitle_color_slider">%1$s channel</string>
+    <string name="subtitle_color_hue">Hue</string>
+    <string name="subtitle_color_saturation_value">Saturation and brightness</string>
+    <string name="done">Done</string>
     <string name="subtitle_save_failed">Subtitle preferences could not be saved.</string>
     <string name="detail_title">Details</string>
     <string name="detail_load_failed">Could not load this title.</string>

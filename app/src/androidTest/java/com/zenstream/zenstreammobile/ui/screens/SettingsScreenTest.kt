@@ -2,9 +2,17 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -71,5 +79,30 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.interface_language)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.language_japanese)).performClick()
         composeRule.runOnIdle { assertEquals(InterfaceLocaleMode.Japanese, selected) }
+    }
+
+    @Test
+    fun subtitleColorFieldOpensVisualPickerAndRgbSliderUpdatesColor() {
+        var selected by mutableStateOf("#ffffff")
+        composeRule.setContent {
+            ZenStreamTheme {
+                SubtitleColorField(
+                    label = "Text color",
+                    value = selected,
+                    onChange = { selected = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Text color").performClick()
+        composeRule.onNodeWithText("Choose Text color").assertIsDisplayed()
+        composeRule.onNodeWithText("#ffffff").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Red channel").assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule
+            .onNodeWithContentDescription("Red channel")
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress(128f) }
+        composeRule.runOnIdle { assertEquals("#80ffff", selected) }
     }
 }

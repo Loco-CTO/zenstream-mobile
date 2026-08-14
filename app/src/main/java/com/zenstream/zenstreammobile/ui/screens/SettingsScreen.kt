@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -196,7 +195,6 @@ fun SettingsScreen(
                                 }
                             }
                         }
-
                 }
             }
         }
@@ -417,7 +415,7 @@ private fun SubtitleSettings(
     ) {
         onChange { copy(textScale = it) }
     }
-    ColorField(stringResource(R.string.subtitle_font_color), style.fontColor) {
+    SubtitleColorField(stringResource(R.string.subtitle_font_color), style.fontColor) {
         onChange {
             copy(fontColor = it)
         }
@@ -430,12 +428,12 @@ private fun SubtitleSettings(
     ) {
         onChange { copy(borderSize = it) }
     }
-    ColorField(stringResource(R.string.subtitle_border_color), style.borderColor) {
+    SubtitleColorField(stringResource(R.string.subtitle_border_color), style.borderColor) {
         onChange {
             copy(borderColor = it)
         }
     }
-    ColorField(
+    SubtitleColorField(
         stringResource(R.string.subtitle_background_color),
         style.backgroundColor,
     ) {
@@ -486,21 +484,6 @@ private fun SliderRow(
         }
         Slider(value = value, onValueChange = onChange, valueRange = range)
     }
-}
-
-@Composable
-private fun ColorField(label: String, value: String, onChange: (String) -> Unit) {
-    var text by remember(value) { mutableStateOf(value) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            if (Regex("^#[0-9a-fA-F]{6}$").matches(it)) onChange(it)
-        },
-        label = { Text(label) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-    )
 }
 
 private val MaterialThemeError = Color(0xFFFF8A80)

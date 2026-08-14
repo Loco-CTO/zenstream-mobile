@@ -116,6 +116,17 @@
     <string name="subtitle_background_color">背景色</string>
     <string name="subtitle_background_opacity">背景の透明度</string>
     <string name="subtitle_preview">プレビュー</string>
+    <string name="subtitle_color_picker_title">%1$sを選択</string>
+    <string name="subtitle_color_current_value">現在の色 %1$s</string>
+    <string name="subtitle_color_preview">選択した色のプレビュー</string>
+    <string name="subtitle_color_value">選択した色 %1$s</string>
+    <string name="subtitle_color_red">赤</string>
+    <string name="subtitle_color_green">緑</string>
+    <string name="subtitle_color_blue">青</string>
+    <string name="subtitle_color_slider">%1$sチャンネル</string>
+    <string name="subtitle_color_hue">色相</string>
+    <string name="subtitle_color_saturation_value">彩度と明るさ</string>
+    <string name="done">完了</string>
     <string name="subtitle_save_failed">字幕設定を保存できませんでした。</string>
     <string name="detail_title">詳細</string>
     <string name="detail_load_failed">このタイトルを読み込めませんでした。</string>
