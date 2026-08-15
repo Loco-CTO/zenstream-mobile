@@ -254,6 +254,8 @@ class CatalogRepository(
 
     suspend fun clearAll() {
         SyncplaySession.clear()
+        homeMutex.withLock { homeCache = null }
+        playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
         sessionStore.clearAll()
     }
 
@@ -434,6 +436,7 @@ class CatalogRepository(
             homeCache = null
             _catalogRefreshRevision.value += 1
         }
+        playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
     }
 
     private suspend fun invalidateCatalogMetadata() {
@@ -441,5 +444,6 @@ class CatalogRepository(
             homeCache = null
             _catalogRefreshRevision.value += 1
         }
+        playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
     }
 }
