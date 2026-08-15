@@ -1,15 +1,15 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -96,9 +96,11 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("#ffffff").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Red channel").assertIsDisplayed()
 
-        composeRule
-            .onNodeWithContentDescription("Red channel")
-            .performSemanticsAction(SemanticsActions.SetProgress) { it(128f) }
+        composeRule.onNodeWithContentDescription("Red channel").performSemanticsAction(
+            SemanticsActions.SetProgress
+        ) {
+            it(128f)
+        }
         composeRule.runOnIdle { assertEquals("#80ffff", selected) }
     }
 }

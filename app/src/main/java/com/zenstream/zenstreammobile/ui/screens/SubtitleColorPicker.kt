@@ -2,19 +2,20 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -26,8 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -105,10 +104,11 @@ internal fun hsvToRgb(color: HsvColor): RgbColor {
             else -> Triple(chroma, 0f, x)
         }
     return RgbColor(
-        ((red + match) * 255f).roundToInt(),
-        ((green + match) * 255f).roundToInt(),
-        ((blue + match) * 255f).roundToInt(),
-    ).clamped()
+            ((red + match) * 255f).roundToInt(),
+            ((green + match) * 255f).roundToInt(),
+            ((blue + match) * 255f).roundToInt(),
+        )
+        .clamped()
 }
 
 @Composable
@@ -155,9 +155,10 @@ private fun SubtitleColorPickerDialog(
     onChange: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val initialColor = remember(initialValue) {
-        parseHexColor(initialValue) ?: RgbColor(255, 255, 255)
-    }
+    val initialColor =
+        remember(initialValue) {
+            parseHexColor(initialValue) ?: RgbColor(255, 255, 255)
+        }
     var rgb by remember(initialColor) { mutableStateOf(initialColor) }
     var hsv by remember(initialColor) { mutableStateOf(rgbToHsv(initialColor)) }
     val previewDescription = stringResource(R.string.subtitle_color_preview)
@@ -170,7 +171,11 @@ private fun SubtitleColorPickerDialog(
     }
 
     fun updateHsv(next: HsvColor) {
-        hsv = next.copy(saturation = next.saturation.coerceIn(0f, 1f), value = next.value.coerceIn(0f, 1f))
+        hsv =
+            next.copy(
+                saturation = next.saturation.coerceIn(0f, 1f),
+                value = next.value.coerceIn(0f, 1f),
+            )
         rgb = hsvToRgb(hsv)
         onChange(rgb.toHex())
     }
@@ -205,9 +210,10 @@ private fun SubtitleColorPickerDialog(
                 Text(
                     rgb.toHex(),
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.semantics {
-                        contentDescription = valueDescription
-                    },
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = valueDescription
+                        },
                 )
                 RgbSlider(
                     label = stringResource(R.string.subtitle_color_red),
@@ -259,7 +265,7 @@ private fun SaturationValueField(
                         }
                     }
                 }
-                .semantics { contentDescription = description },
+                .semantics { contentDescription = description }
     ) {
         val hueColor = hsvToRgb(HsvColor(hue, 1f, 1f)).toComposeColor()
         drawRect(Brush.horizontalGradient(listOf(Color.White, hueColor)))
@@ -294,7 +300,7 @@ private fun HueField(hue: Float, onChange: (Float) -> Unit) {
                         }
                     }
                 }
-                .semantics { contentDescription = description },
+                .semantics { contentDescription = description }
     ) {
         val colors =
             (0..6).map { index -> hsvToRgb(HsvColor(index * 60f, 1f, 1f)).toComposeColor() }
