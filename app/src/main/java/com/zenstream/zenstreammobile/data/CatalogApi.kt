@@ -801,10 +801,15 @@ class CatalogApi(
     private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
         catalogMediaItem(requestJson(session, "/api/catalog/items/$itemId"))
 
-    private suspend fun getChildren(session: AuthSession, parent: MediaItem): List<MediaItem> {
+    private suspend fun getChildren(
+        session: AuthSession,
+        parent: MediaItem,
+        view: String? = null,
+    ): List<MediaItem> {
         val libraryId = parent.libraryId ?: return emptyList()
+        val viewSuffix = view?.let { "&view=${android.net.Uri.encode(it)}" }.orEmpty()
         val path =
-            "/api/catalog/items?libraryId=${android.net.Uri.encode(libraryId)}&parentId=${android.net.Uri.encode(parent.id)}&pageSize=100"
+            "/api/catalog/items?libraryId=${android.net.Uri.encode(libraryId)}&parentId=${android.net.Uri.encode(parent.id)}&pageSize=100$viewSuffix"
         return catalogItems(requestJson(session, path))
     }
 
@@ -817,7 +822,7 @@ class CatalogApi(
         seasonId: String,
     ): List<MediaItem> {
         @Suppress("UNUSED_VARIABLE") val ignoredSeriesId = seriesId
-        return getChildren(session, getItem(session, seasonId))
+        return getChildren(session, getItem(session, seasonId), view = "full")
             .sortedWith(compareBy(nullsLast()) { it.indexNumber })
     }
 

@@ -816,6 +816,7 @@ class DetailViewModel(
     fun load() {
         loadJob?.cancel()
         val generation = ++loadGeneration
+        val requestedSeasonId = _uiState.value.data?.selectedSeasonId
         loadJob = viewModelScope.launch {
             _uiState.value =
                 _uiState.value.copy(
@@ -827,13 +828,14 @@ class DetailViewModel(
                     repository.detail(
                         session,
                         itemId,
-                        _uiState.value.data?.selectedSeasonId,
+                        requestedSeasonId,
                     )
                 }
                 .onSuccess {
                     if (generation != loadGeneration) return@onSuccess
-                    _uiState.value = DetailUiState(loading = false, data = it)
-                    loadTrackSource(generation, it.item)
+                    val data = keepSelectedSeason(it, requestedSeasonId)
+                    _uiState.value = DetailUiState(loading = false, data = data)
+                    loadTrackSource(generation, data.item)
                 }
                 .onFailure {
                     if (generation != loadGeneration) return@onFailure
@@ -868,8 +870,9 @@ class DetailViewModel(
             runCatching { repository.detail(session, itemId, seasonId) }
                 .onSuccess {
                     if (generation != loadGeneration) return@onSuccess
-                    _uiState.value = DetailUiState(loading = false, data = it)
-                    loadTrackSource(generation, it.item)
+                    val data = keepSelectedSeason(it, seasonId)
+                    _uiState.value = DetailUiState(loading = false, data = data)
+                    loadTrackSource(generation, data.item)
                 }
                 .onFailure {
                     if (generation != loadGeneration) return@onFailure
@@ -1049,4 +1052,14 @@ class DetailViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             DetailViewModel(repository, session, itemId) as T
     }
+}
+
+internal fun keepSelectedSeason(data: DetailData, requestedSeasonId: String?): DetailData {
+    val availableSeasonIds = data.seasons.map { it.id }.toSet()
+    val selectedSeasonId =
+        requestedSeasonId?.takeIf { it in availableSeasonIds }
+            ?: data.selectedSeasonId?.takeIf { it in availableSeasonIds }
+            ?: data.seasons.firstOrNull { it.indexNumber == 1 }?.id
+            ?: data.seasons.firstOrNull()?.id
+    return data.copy(selectedSeasonId = selectedSeasonId)
 }
