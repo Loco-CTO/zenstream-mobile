@@ -526,9 +526,11 @@ class PlaybackViewModel(
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
             repeat(TRICKPLAY_MANIFEST_ATTEMPTS) { attempt ->
-                val manifest = runCatching {
-                    repository.trickplay(session, currentItemId, sourceId)
-                }.getOrNull()
+                val manifest =
+                    runCatching {
+                            repository.trickplay(session, currentItemId, sourceId)
+                        }
+                        .getOrNull()
                 if (loadGeneration != playbackGeneration) return@launch
                 if (manifest?.state == "ready" && manifest.sheets.isNotEmpty()) {
                     val current = _uiState.value.playback ?: return@launch
