@@ -7,6 +7,7 @@ import android.view.View
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SyncplayManager
@@ -525,11 +526,9 @@ class PlaybackViewModel(
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
             repeat(TRICKPLAY_MANIFEST_ATTEMPTS) { attempt ->
-                val manifest =
-                    runCatching {
-                            repository.trickplay(session, currentItemId, sourceId)
-                        }
-                        .getOrNull()
+                val manifest = runCatching {
+                    repository.trickplay(session, currentItemId, sourceId)
+                }.getOrNull()
                 if (loadGeneration != playbackGeneration) return@launch
                 if (manifest?.state == "ready" && manifest.sheets.isNotEmpty()) {
                     val current = _uiState.value.playback ?: return@launch
@@ -582,20 +581,23 @@ class PlaybackViewModel(
                 val state = _uiState.value.engine
                 val commandAcks = viewerCommandAcks.toList()
                 viewerCommandAcks.clear()
-                val result =
-                    runCatching {
-                            repository.heartbeatPlaybackViewer(
-                                session,
-                                viewerSessionId,
-                                currentPlayerPositionSeconds(),
-                                state.durationSeconds,
-                                !state.isPlaying,
-                                playback.sessionId,
-                                commandAcks,
-                            )
-                        }
-                        .getOrNull()
+                val heartbeatResult = runCatching {
+                    repository.heartbeatPlaybackViewer(
+                        session,
+                        viewerSessionId,
+                        currentPlayerPositionSeconds(),
+                        state.durationSeconds,
+                        !state.isPlaying,
+                        playback.sessionId,
+                        commandAcks,
+                    )
+                }
+                val result = heartbeatResult.getOrNull()
                 if (result == null) {
+                    val error = heartbeatResult.exceptionOrNull()
+                    if (error is CatalogException && error.statusCode in setOf(401, 404, 410)) {
+                        return@launch
+                    }
                     viewerCommandAcks.addAll(0, commandAcks)
                     delay(2_000)
                     continue
