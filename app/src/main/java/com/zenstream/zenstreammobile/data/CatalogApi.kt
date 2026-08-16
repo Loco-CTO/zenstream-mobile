@@ -25,13 +25,13 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
+import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.TrickplayManifest
+import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.model.ViewerCommand
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
-import com.zenstream.zenstreammobile.model.RowTitle
-import com.zenstream.zenstreammobile.model.TrickplayManifest
-import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
 import java.util.UUID
@@ -279,7 +279,7 @@ class CatalogApi(
                             JSONObject()
                                 .put("id", ack.id)
                                 .put("success", ack.success)
-                                .put("error", ack.error),
+                                .put("error", ack.error)
                         )
                     }
                 }
@@ -306,20 +306,22 @@ class CatalogApi(
                         emptyList()
                     } else {
                         List(commands.length()) { index ->
-                            commands.optJSONObject(index)
-                        }.mapNotNull { command ->
-                            command
-                                ?.optString("id")
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let {
-                                    ViewerCommand(
-                                        id = it,
-                                        action = command.optString("action"),
-                                        issuedAt = command.optString("issuedAt").ifBlank { null },
-                                    )
-                                }
-                        }
-                    },
+                                commands.optJSONObject(index)
+                            }
+                            .mapNotNull { command ->
+                                command
+                                    ?.optString("id")
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let {
+                                        ViewerCommand(
+                                            id = it,
+                                            action = command.optString("action"),
+                                            issuedAt =
+                                                command.optString("issuedAt").ifBlank { null },
+                                        )
+                                    }
+                            }
+                    }
             )
         }
 

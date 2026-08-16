@@ -71,9 +71,7 @@ data class ViewerCommandAck(
     val error: String? = null,
 )
 
-data class ViewerHeartbeat(
-    val commands: List<ViewerCommand> = emptyList(),
-)
+data class ViewerHeartbeat(val commands: List<ViewerCommand> = emptyList())
 
 data class ViewerEnd(
     val workerSessionId: String? = null,

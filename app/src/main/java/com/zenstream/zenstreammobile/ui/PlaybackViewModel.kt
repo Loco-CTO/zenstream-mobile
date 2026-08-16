@@ -584,16 +584,17 @@ class PlaybackViewModel(
                 viewerCommandAcks.clear()
                 val result =
                     runCatching {
-                        repository.heartbeatPlaybackViewer(
-                            session,
-                            viewerSessionId,
-                            currentPlayerPositionSeconds(),
-                            state.durationSeconds,
-                            !state.isPlaying,
-                            playback.sessionId,
-                            commandAcks,
-                        )
-                    }.getOrNull()
+                            repository.heartbeatPlaybackViewer(
+                                session,
+                                viewerSessionId,
+                                currentPlayerPositionSeconds(),
+                                state.durationSeconds,
+                                !state.isPlaying,
+                                playback.sessionId,
+                                commandAcks,
+                            )
+                        }
+                        .getOrNull()
                 if (result == null) {
                     viewerCommandAcks.addAll(0, commandAcks)
                     delay(2_000)

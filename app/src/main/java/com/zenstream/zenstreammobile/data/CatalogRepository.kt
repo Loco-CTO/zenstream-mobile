@@ -156,9 +156,9 @@ class CatalogRepository(
 
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
-        return api
-            .authenticate(server, username, password, sessionStore.deviceId())
-            .also { sessionStore.saveSession(it) }
+        return api.authenticate(server, username, password, sessionStore.deviceId()).also {
+            sessionStore.saveSession(it)
+        }
     }
 
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
