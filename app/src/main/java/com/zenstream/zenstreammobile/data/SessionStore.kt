@@ -67,6 +67,7 @@ class SessionStore(
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
+        val deviceId = stringPreferencesKey("device_id")
     }
 
     // `server_url` is retained as a migration key, but it now always contains
@@ -265,6 +266,16 @@ class SessionStore(
     }
 
     suspend fun currentServerUrl(): String? = serverUrl.first()
+
+    suspend fun deviceId(): String {
+        val existing = dataStore.data.first()[Keys.deviceId]
+        if (!existing.isNullOrBlank()) return existing
+        val generated = java.util.UUID.randomUUID().toString()
+        dataStore.edit { prefs ->
+            if (prefs[Keys.deviceId].isNullOrBlank()) prefs[Keys.deviceId] = generated
+        }
+        return dataStore.data.first()[Keys.deviceId] ?: generated
+    }
 
     suspend fun syncplayParticipantId(): String {
         val existing = dataStore.data.first()[Keys.syncplayParticipantId]

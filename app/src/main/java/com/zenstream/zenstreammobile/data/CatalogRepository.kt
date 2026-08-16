@@ -14,6 +14,9 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.model.ViewerCommandAck
+import com.zenstream.zenstreammobile.model.ViewerEnd
+import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -153,7 +156,9 @@ class CatalogRepository(
 
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
-        return api.authenticate(server, username, password).also { sessionStore.saveSession(it) }
+        return api
+            .authenticate(server, username, password, sessionStore.deviceId())
+            .also { sessionStore.saveSession(it) }
     }
 
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
@@ -327,7 +332,10 @@ class CatalogRepository(
         session: AuthSession,
         itemId: String,
         options: PlaybackOptions = PlaybackOptions(),
-    ): PlaybackData = api.playback(session, itemId, options)
+    ): PlaybackData {
+        api.setDeviceId(sessionStore.deviceId())
+        return api.playback(session, itemId, options)
+    }
 
     suspend fun playbackSource(session: AuthSession, itemId: String) =
         api.playbackSource(session, itemId)
@@ -337,6 +345,32 @@ class CatalogRepository(
 
     suspend fun cancelPlaybackSession(session: AuthSession, sessionId: String) =
         api.cancelPlaybackSession(session, sessionId)
+
+    suspend fun heartbeatPlaybackViewer(
+        session: AuthSession,
+        viewerSessionId: String,
+        positionSeconds: Double,
+        durationSeconds: Double,
+        paused: Boolean,
+        workerSessionId: String?,
+        commandAcks: List<ViewerCommandAck> = emptyList(),
+    ): ViewerHeartbeat {
+        api.setDeviceId(sessionStore.deviceId())
+        return api.heartbeatPlaybackViewer(
+            session,
+            viewerSessionId,
+            positionSeconds,
+            durationSeconds,
+            paused,
+            workerSessionId,
+            commandAcks,
+        )
+    }
+
+    suspend fun endPlaybackViewer(
+        session: AuthSession,
+        viewerSessionId: String,
+    ): ViewerEnd = api.endPlaybackViewer(session, viewerSessionId)
 
     suspend fun trickplay(session: AuthSession, itemId: String, sourceId: String?) =
         api.trickplay(session, itemId, sourceId)

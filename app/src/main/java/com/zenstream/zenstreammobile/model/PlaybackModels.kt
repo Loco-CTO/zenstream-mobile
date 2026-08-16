@@ -56,6 +56,28 @@ data class MediaSource(
     val container: String? = null,
     val transcodingContainer: String? = null,
     val bitrate: Int? = null,
+    val viewerSessionId: String? = null,
+)
+
+data class ViewerCommand(
+    val id: String,
+    val action: String,
+    val issuedAt: String? = null,
+)
+
+data class ViewerCommandAck(
+    val id: String,
+    val success: Boolean,
+    val error: String? = null,
+)
+
+data class ViewerHeartbeat(
+    val commands: List<ViewerCommand> = emptyList(),
+)
+
+data class ViewerEnd(
+    val workerSessionId: String? = null,
+    val stopWorker: Boolean = false,
 )
 
 data class TrickplayPreview(
@@ -89,6 +111,7 @@ data class PlaybackData(
     val mode: String? = null,
     val sessionState: String? = null,
     val sessionId: String? = null,
+    val viewerSessionId: String? = null,
     val url: String? = null,
     val durationSeconds: Double? = null,
     val startPositionSeconds: Double = 0.0,

@@ -25,6 +25,7 @@ import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.SyncplayGroup
+import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
@@ -154,6 +155,7 @@ class PlaybackViewModel(
     private var playbackEngine: PlaybackEngine? = null
     private var engineJob: Job? = null
     private var progressJob: Job? = null
+    private var viewerHeartbeatJob: Job? = null
     private var progressFlushJob: Job? = null
     private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var playbackLoadJob: Job? = null
@@ -174,6 +176,8 @@ class PlaybackViewModel(
     private var transitionInProgress = false
     private var syncplayTimelineKey: String? = null
     private var playbackPreference: PlaybackPreference? = null
+    private val handledViewerCommands = mutableSetOf<String>()
+    private val viewerCommandAcks = mutableListOf<ViewerCommandAck>()
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
@@ -334,9 +338,13 @@ class PlaybackViewModel(
     private fun loadPlayback(options: PlaybackOptions = PlaybackOptions()) {
         val loadGeneration = ++playbackGeneration
         progressFlushJob?.cancel()
+        viewerHeartbeatJob?.cancel()
         playbackLoadJob?.cancel()
         trickplayJob?.cancel()
         playbackLoadJob = viewModelScope.launch {
+            _uiState.value.playback?.let { outgoing ->
+                if (outgoing.viewerSessionId != null) cancelPlaybackSession(outgoing)
+            }
             val hasCurrentPlayback = _uiState.value.playback?.item?.id == currentItemId
             val currentPosition = currentPlayerPositionSeconds()
             val requestedStartSeconds =
@@ -468,6 +476,7 @@ class PlaybackViewModel(
             transitionInProgress = false
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()
+            startViewerHeartbeat()
             loadTrickplay(
                 loadGeneration,
                 playbackData.source.id,
@@ -557,6 +566,61 @@ class PlaybackViewModel(
             while (true) {
                 delay(10_000)
                 reportProgress()
+            }
+        }
+    }
+
+    private fun startViewerHeartbeat() {
+        viewerHeartbeatJob?.cancel()
+        val viewerSessionId = _uiState.value.playback?.viewerSessionId ?: return
+        handledViewerCommands.clear()
+        viewerCommandAcks.clear()
+        viewerHeartbeatJob = viewModelScope.launch {
+            while (true) {
+                val playback = _uiState.value.playback
+                if (playback?.viewerSessionId != viewerSessionId) return@launch
+                val state = _uiState.value.engine
+                val commandAcks = viewerCommandAcks.toList()
+                viewerCommandAcks.clear()
+                val result =
+                    runCatching {
+                        repository.heartbeatPlaybackViewer(
+                            session,
+                            viewerSessionId,
+                            currentPlayerPositionSeconds(),
+                            state.durationSeconds,
+                            !state.isPlaying,
+                            playback.sessionId,
+                            commandAcks,
+                        )
+                    }.getOrNull()
+                if (result == null) {
+                    viewerCommandAcks.addAll(0, commandAcks)
+                    delay(2_000)
+                    continue
+                }
+                for (command in result.commands) {
+                    if (!handledViewerCommands.add(command.id)) continue
+                    var success = true
+                    var error: String? = null
+                    try {
+                        when (command.action.lowercase()) {
+                            "pause" -> playbackEngine?.pause()
+                            "resume" -> playbackEngine?.play()
+                            "stop" -> {
+                                requestClose()
+                                break
+                            }
+                            else -> error = "Unsupported playback command."
+                        }
+                        if (error != null) success = false
+                    } catch (caught: Exception) {
+                        success = false
+                        error = caught.message ?: "Playback command failed."
+                    }
+                    viewerCommandAcks += ViewerCommandAck(command.id, success, error)
+                }
+                delay(2_000)
             }
         }
     }
@@ -827,6 +891,7 @@ class PlaybackViewModel(
         pendingCompletionGeneration = null
         nextUpFallbackGeneration = null
         progressFlushJob?.cancel()
+        viewerHeartbeatJob?.cancel()
         playbackLoadJob?.cancel()
         trickplayJob?.cancel()
         subtitleJob?.cancel()
@@ -835,8 +900,20 @@ class PlaybackViewModel(
     }
 
     private suspend fun cancelPlaybackSession(playback: PlaybackData?) {
-        val sessionId = playback?.sessionId ?: return
-        if (playback.mode == "direct") return
+        if (playback == null) return
+        var stopWorker = playback.mode != "direct"
+        playback.viewerSessionId?.let { viewerId ->
+            runCatching { repository.endPlaybackViewer(session, viewerId) }
+                .onSuccess { result -> stopWorker = result.stopWorker }
+                .onFailure { error ->
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "viewer session cancellation failed viewerSessionId=$viewerId error=${error.message}",
+                    )
+                }
+        }
+        val sessionId = playback.sessionId ?: return
+        if (playback.mode == "direct" || !stopWorker) return
         runCatching { repository.cancelPlaybackSession(session, sessionId) }
             .onFailure { error ->
                 Log.w(
@@ -937,6 +1014,7 @@ class PlaybackViewModel(
 
     override fun onCleared() {
         progressJob?.cancel()
+        viewerHeartbeatJob?.cancel()
         progressFlushJob?.let { job ->
             job.invokeOnCompletion { progressReportingScope.cancel() }
         } ?: progressReportingScope.cancel()

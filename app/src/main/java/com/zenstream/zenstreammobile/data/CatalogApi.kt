@@ -1,6 +1,8 @@
 package com.zenstream.zenstreammobile.data
 
+import android.os.Build
 import android.util.Log
+import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.DetailData
@@ -23,6 +25,10 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
+import com.zenstream.zenstreammobile.model.ViewerCommand
+import com.zenstream.zenstreammobile.model.ViewerCommandAck
+import com.zenstream.zenstreammobile.model.ViewerEnd
+import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
@@ -54,13 +60,36 @@ data class EpisodeNeighbors(
 
 class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
-    private val deviceId: String = UUID.randomUUID().toString(),
+    private var deviceId: String = UUID.randomUUID().toString(),
 ) {
-    suspend fun authenticate(serverUrl: String, username: String, password: String): AuthSession =
+    fun setDeviceId(value: String) {
+        if (value.isNotBlank()) deviceId = value
+    }
+
+    private fun deviceMetadata(): JSONObject =
+        JSONObject()
+            .put("deviceId", deviceId)
+            .put("deviceType", "mobile")
+            .put("operatingSystem", "Android ${Build.VERSION.RELEASE}")
+            .put("deviceName", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+            .put("clientName", "ZenStream Android")
+            .put("clientVersion", BuildConfig.ZENSTREAM_VERSION)
+
+    suspend fun authenticate(
+        serverUrl: String,
+        username: String,
+        password: String,
+        persistedDeviceId: String? = null,
+    ): AuthSession =
         withContext(Dispatchers.IO) {
+            persistedDeviceId?.let(::setDeviceId)
             val server = normalizeServerUrl(serverUrl)
             val body =
-                JSONObject().put("username", username.trim()).put("password", password).toString()
+                JSONObject()
+                    .put("username", username.trim())
+                    .put("password", password)
+                    .put("device", deviceMetadata())
+                    .toString()
             val json =
                 requestJson(
                     server = server,
@@ -118,6 +147,7 @@ class CatalogApi(
                     body =
                         JSONObject()
                             .put("engine", capabilities.engine)
+                            .put("device", deviceMetadata())
                             .put("sourceId", negotiatedOptions.sourceId)
                             .put("requestedMode", negotiatedOptions.requestedMode)
                             .put("forceTranscoding", negotiatedOptions.forceTranscoding)
@@ -163,6 +193,7 @@ class CatalogApi(
                 mode = json.optString("mode").ifBlank { null },
                 sessionState = json.optString("sessionState").ifBlank { null },
                 sessionId = sessionId,
+                viewerSessionId = json.optString("viewerSessionId").ifBlank { null },
                 url = json.optString("url").ifBlank { null },
                 durationSeconds = json.optDoubleOrNull("durationSeconds"),
                 startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
@@ -228,6 +259,84 @@ class CatalogApi(
                 session,
                 "/api/playback/sessions/${android.net.Uri.encode(sessionId)}",
                 method = "DELETE",
+            )
+        }
+
+    suspend fun heartbeatPlaybackViewer(
+        session: AuthSession,
+        viewerSessionId: String,
+        positionSeconds: Double,
+        durationSeconds: Double,
+        paused: Boolean,
+        workerSessionId: String?,
+        commandAcks: List<ViewerCommandAck> = emptyList(),
+    ): ViewerHeartbeat =
+        withContext(Dispatchers.IO) {
+            val acks =
+                JSONArray().apply {
+                    commandAcks.take(32).forEach { ack ->
+                        put(
+                            JSONObject()
+                                .put("id", ack.id)
+                                .put("success", ack.success)
+                                .put("error", ack.error),
+                        )
+                    }
+                }
+            val body =
+                JSONObject()
+                    .put("positionSeconds", positionSeconds.coerceAtLeast(0.0))
+                    .put("paused", paused)
+                    .put("commandAcks", acks)
+            durationSeconds
+                .takeIf { it.isFinite() && it > 0 }
+                ?.let { body.put("durationSeconds", it) }
+            workerSessionId?.let { body.put("workerSessionId", it) }
+            val json =
+                requestJson(
+                    session,
+                    "/api/playback/viewers/${android.net.Uri.encode(viewerSessionId)}/heartbeat",
+                    method = "POST",
+                    body = body.toString(),
+                )
+            val commands = json.optJSONArray("commands")
+            ViewerHeartbeat(
+                commands =
+                    if (commands == null) {
+                        emptyList()
+                    } else {
+                        List(commands.length()) { index ->
+                            commands.optJSONObject(index)
+                        }.mapNotNull { command ->
+                            command
+                                ?.optString("id")
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let {
+                                    ViewerCommand(
+                                        id = it,
+                                        action = command.optString("action"),
+                                        issuedAt = command.optString("issuedAt").ifBlank { null },
+                                    )
+                                }
+                        }
+                    },
+            )
+        }
+
+    suspend fun endPlaybackViewer(
+        session: AuthSession,
+        viewerSessionId: String,
+    ): ViewerEnd =
+        withContext(Dispatchers.IO) {
+            val json =
+                requestJson(
+                    session,
+                    "/api/playback/viewers/${android.net.Uri.encode(viewerSessionId)}",
+                    method = "DELETE",
+                )
+            ViewerEnd(
+                workerSessionId = json.optString("workerSessionId").ifBlank { null },
+                stopWorker = json.optBoolean("stopWorker", false),
             )
         }
 
