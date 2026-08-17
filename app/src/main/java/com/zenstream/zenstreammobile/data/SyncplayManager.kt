@@ -80,12 +80,12 @@ class SyncplayManager(
 
     suspend fun refresh() = mutex.withLock {
         val groups = api.groups(session, participant())
-        adoptGroups(groups, announceChanges = true)
+        adoptGroups(groups, emitNotifications = true)
     }
 
     private suspend fun refreshConnectionSnapshot() = mutex.withLock {
         val groups = api.groups(session, participant())
-        adoptGroups(groups, announceChanges = false)
+        adoptGroups(groups, emitNotifications = false)
     }
 
     suspend fun create(): SyncplayGroup = mutex.withLock {
@@ -415,7 +415,7 @@ class SyncplayManager(
                     val groups = value.optJSONArray("groups").toGroups()
                     Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket groups count=${groups.size}")
                     scope.launch {
-                        mutex.withLock { adoptGroups(groups, announceChanges = false) }
+                        mutex.withLock { adoptGroups(groups, emitNotifications = false) }
                     }
                 }
                 "group" ->
@@ -481,7 +481,7 @@ class SyncplayManager(
         }
     }
 
-    private fun adoptGroups(groups: List<SyncplayGroup>, announceChanges: Boolean) {
+    private fun adoptGroups(groups: List<SyncplayGroup>, emitNotifications: Boolean) {
         val previous = _state.value
         val latestGroups =
             groups.mapNotNull { incoming ->
@@ -503,7 +503,7 @@ class SyncplayManager(
             group.members.any { it.participantId == participant() }
         }
         _state.value = previous.copy(groups = latestGroups, active = next)
-        if (announceChanges) announceChanges(previous.active, next)
+        if (emitNotifications) announceChanges(previous.active, next)
         hydrated = true
     }
 
