@@ -378,12 +378,9 @@ class SyncplayManager(
     private inner class SocketEvents(
         private val ended: CompletableDeferred<Unit>,
         private val generation: Long,
-    ) :
-        WebSocketListener() {
+    ) : WebSocketListener() {
         private fun isCurrent(webSocket: WebSocket): Boolean =
-            !stopped &&
-                connectionGeneration.get() == generation &&
-                socket === webSocket
+            !stopped && connectionGeneration.get() == generation && socket === webSocket
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
             if (!isCurrent(webSocket)) return
@@ -483,13 +480,12 @@ class SyncplayManager(
 
     private fun adoptGroups(groups: List<SyncplayGroup>, emitNotifications: Boolean) {
         val previous = _state.value
-        val latestGroups =
-            groups.mapNotNull { incoming ->
-                if (incoming.revision <= (endedRevisions[incoming.id] ?: -1)) return@mapNotNull null
-                previous.groups
-                    .firstOrNull { it.id == incoming.id }
-                    .let { known -> latestSyncplayGroup(known, incoming) } ?: incoming
-            }
+        val latestGroups = groups.mapNotNull { incoming ->
+            if (incoming.revision <= (endedRevisions[incoming.id] ?: -1)) return@mapNotNull null
+            previous.groups
+                .firstOrNull { it.id == incoming.id }
+                .let { known -> latestSyncplayGroup(known, incoming) } ?: incoming
+        }
         val active =
             previous.active?.let { current ->
                 latestGroups
