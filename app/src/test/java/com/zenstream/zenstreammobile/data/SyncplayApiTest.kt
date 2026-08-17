@@ -111,4 +111,26 @@ class SyncplayApiTest {
         assertEquals(8, latestSyncplayGroup(older, newer)?.revision)
         assertEquals(8, latestSyncplayGroup(newer, null)?.revision)
     }
+
+    @Test
+    fun doesNotReapplyAnEqualGroupRevision() {
+        val known = parseSyncplayGroup(JSONObject().put("id", "room-1").put("revision", 8))
+        val equal = parseSyncplayGroup(JSONObject().put("id", "room-1").put("revision", 8))
+        val newer = parseSyncplayGroup(JSONObject().put("id", "room-1").put("revision", 9))
+
+        assertEquals(known, latestSyncplayGroup(known, equal))
+        assertFalse(shouldAdoptSyncplayGroup(known, known, equal))
+        assertTrue(shouldAdoptSyncplayGroup(known, known, newer))
+    }
+
+    @Test
+    fun deduplicatesOnlyTheSameStateNotificationKey() {
+        val deduper = SyncplayNotificationDeduper(capacity = 2)
+
+        assertTrue(deduper.shouldEmit("room-1:8:viewer-controls:true"))
+        assertFalse(deduper.shouldEmit("room-1:8:viewer-controls:true"))
+        assertTrue(deduper.shouldEmit("room-1:9:viewer-controls:false"))
+        assertTrue(deduper.shouldEmit("room-1:10:viewer-controls:true"))
+        assertTrue(deduper.shouldEmit("room-1:8:viewer-controls:true"))
+    }
 }

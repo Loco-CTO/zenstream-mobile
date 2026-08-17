@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayUiState
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -44,12 +45,16 @@ class SyncplayManager(
     private val _notifications = MutableSharedFlow<SyncplayNotification>(extraBufferCapacity = 32)
     val notifications: SharedFlow<SyncplayNotification> = _notifications.asSharedFlow()
     private var socket: WebSocket? = null
-    private var stopped = false
+    @Volatile private var stopped = false
+    private val connectionGeneration = AtomicLong(0)
+    private var connectionJob: Job? = null
     private var presenceSequence = 0
     private var serverOffsetSeconds = 0.0
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
     private var hydrated = false
+    private val endedRevisions = mutableMapOf<String, Int>()
+    private val stateNotificationDeduper = SyncplayNotificationDeduper()
     private val presenceLock = Any()
     private var pendingPresence: PresenceReport? = null
     private var presenceWorker: Job? = null
@@ -75,7 +80,12 @@ class SyncplayManager(
 
     suspend fun refresh() = mutex.withLock {
         val groups = api.groups(session, participant())
-        adoptGroups(groups)
+        adoptGroups(groups, announceChanges = true)
+    }
+
+    private suspend fun refreshConnectionSnapshot() = mutex.withLock {
+        val groups = api.groups(session, participant())
+        adoptGroups(groups, announceChanges = false)
     }
 
     suspend fun create(): SyncplayGroup = mutex.withLock {
@@ -313,6 +323,7 @@ class SyncplayManager(
 
     fun stop() {
         stopped = true
+        connectionGeneration.incrementAndGet()
         synchronized(presenceLock) {
             pendingPresence = null
             presenceWorker?.cancel()
@@ -326,19 +337,28 @@ class SyncplayManager(
     }
 
     private fun connect() {
-        scope.launch {
+        if (connectionJob?.isActive == true) return
+        connectionJob = scope.launch {
             while (!stopped) {
+                val generation = connectionGeneration.incrementAndGet()
                 val ended = CompletableDeferred<Unit>()
                 connectionEnded = ended
                 try {
                     val ticket = api.socketTicket(session)
+                    if (stopped || connectionGeneration.get() != generation) return@launch
                     val url =
                         "${session.serverUrl}/api/ws/syncplay?ticket=${android.net.Uri.encode(ticket)}&participantId=${android.net.Uri.encode(participant())}"
-                    socket =
+                    val webSocket =
                         socketClient.newWebSocket(
                             Request.Builder().url(url.toHttpUrl()).build(),
-                            SocketEvents(ended),
+                            SocketEvents(ended, generation),
                         )
+                    socket = webSocket
+                    if (stopped || connectionGeneration.get() != generation) {
+                        if (socket === webSocket) socket = null
+                        webSocket.close(1000, "Session ended")
+                        return@launch
+                    }
                     ended.await()
                 } catch (error: Exception) {
                     if (!stopped) {
@@ -355,12 +375,29 @@ class SyncplayManager(
         }
     }
 
-    private inner class SocketEvents(private val ended: CompletableDeferred<Unit>) :
+    private inner class SocketEvents(
+        private val ended: CompletableDeferred<Unit>,
+        private val generation: Long,
+    ) :
         WebSocketListener() {
+        private fun isCurrent(webSocket: WebSocket): Boolean =
+            !stopped &&
+                connectionGeneration.get() == generation &&
+                socket === webSocket
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (!isCurrent(webSocket)) return
             _state.value = _state.value.copy(connected = true, error = null)
             Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket connected")
-            scope.launch { refresh() }
+            scope.launch {
+                runCatching { refreshConnectionSnapshot() }
+                    .onFailure { error ->
+                        Log.w(
+                            SYNCPLAY_LOG_TAG,
+                            "Syncplay reconnect snapshot failed: ${error.javaClass.simpleName}",
+                        )
+                    }
+            }
             syncClock(webSocket)
             scope.launch {
                 while (!stopped && _state.value.connected && socket === webSocket) {
@@ -371,12 +408,15 @@ class SyncplayManager(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (!isCurrent(webSocket)) return
             val value = runCatching { JSONObject(text) }.getOrNull() ?: return
             when (value.optString("type")) {
                 "groups" -> {
                     val groups = value.optJSONArray("groups").toGroups()
                     Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket groups count=${groups.size}")
-                    scope.launch { mutex.withLock { adoptGroups(groups) } }
+                    scope.launch {
+                        mutex.withLock { adoptGroups(groups, announceChanges = false) }
+                    }
                 }
                 "group" ->
                     value.optJSONObject("group")?.let { raw ->
@@ -406,7 +446,7 @@ class SyncplayManager(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            if (socket === webSocket) {
+            if (socket === webSocket && connectionGeneration.get() == generation) {
                 socket = null
                 _state.value = _state.value.copy(connected = false)
             }
@@ -414,7 +454,7 @@ class SyncplayManager(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            if (socket === webSocket) {
+            if (socket === webSocket && connectionGeneration.get() == generation) {
                 socket = null
                 _state.value = _state.value.copy(connected = false)
                 Log.w(SYNCPLAY_LOG_TAG, "Syncplay socket failed: ${t.javaClass.simpleName}")
@@ -441,13 +481,15 @@ class SyncplayManager(
         }
     }
 
-    private fun adoptGroups(groups: List<SyncplayGroup>) {
+    private fun adoptGroups(groups: List<SyncplayGroup>, announceChanges: Boolean) {
         val previous = _state.value
-        val latestGroups = groups.map { incoming ->
-            previous.groups
-                .firstOrNull { it.id == incoming.id }
-                .let { known -> latestSyncplayGroup(known, incoming) } ?: incoming
-        }
+        val latestGroups =
+            groups.mapNotNull { incoming ->
+                if (incoming.revision <= (endedRevisions[incoming.id] ?: -1)) return@mapNotNull null
+                previous.groups
+                    .firstOrNull { it.id == incoming.id }
+                    .let { known -> latestSyncplayGroup(known, incoming) } ?: incoming
+            }
         val active =
             previous.active?.let { current ->
                 latestGroups
@@ -461,7 +503,7 @@ class SyncplayManager(
             group.members.any { it.participantId == participant() }
         }
         _state.value = previous.copy(groups = latestGroups, active = next)
-        announceChanges(previous.active, next)
+        if (announceChanges) announceChanges(previous.active, next)
         hydrated = true
     }
 
@@ -470,8 +512,8 @@ class SyncplayManager(
         val known = previous.groups.firstOrNull { it.id == group.id }
         val activeKnown = previous.active?.takeIf { it.id == group.id }
         if (
-            (known?.revision ?: -1) > group.revision ||
-                (activeKnown?.revision ?: -1) > group.revision
+            group.revision <= (endedRevisions[group.id] ?: -1) ||
+                !shouldAdoptSyncplayGroup(known, activeKnown, group)
         ) {
             Log.d(
                 SYNCPLAY_LOG_TAG,
@@ -479,6 +521,7 @@ class SyncplayManager(
             )
             return
         }
+        endedRevisions.remove(group.id)
         Log.d(
             SYNCPLAY_LOG_TAG,
             "Syncplay adopted group id=${group.id} revision=${group.revision} timeline=${group.timelineRevision} state=${group.playbackState}",
@@ -498,46 +541,72 @@ class SyncplayManager(
     private fun end(id: String, revision: Int, notification: SyncplayNotification? = null) {
         val current = _state.value
         val known = current.groups.firstOrNull { it.id == id }
-        if (known != null && known.revision > revision) return
+        val knownRevision =
+            maxOf(known?.revision ?: -1, current.active?.takeIf { it.id == id }?.revision ?: -1)
+        if (revision <= maxOf(knownRevision, endedRevisions[id] ?: -1)) return
+        endedRevisions[id] = revision
         val active = current.active?.takeIf { it.id != id }
         _state.value = current.copy(groups = current.groups.filter { it.id != id }, active = active)
         if (hydrated && current.active?.id == id) {
-            notify(notification ?: SyncplayNotification.GroupEnded(current.active.name))
+            notifyOnce(
+                "group:$id:$revision:ended",
+                notification ?: SyncplayNotification.GroupEnded(current.active.name),
+            )
         }
     }
 
     private fun announceChanges(previous: SyncplayGroup?, next: SyncplayGroup?) {
         if (!hydrated || previous == null) return
         if (next == null) {
-            notify(SyncplayNotification.GroupEnded(previous.name))
+            notifyOnce(
+                "group:${previous.id}:${previous.revision}:ended",
+                SyncplayNotification.GroupEnded(previous.name),
+            )
             return
         }
-        if (previous.id != next.id) return
+        if (previous.id != next.id || next.revision <= previous.revision) return
         if (
             !previous.hostDisconnectedAt.isFiniteOrNull() &&
                 next.hostDisconnectedAt.isFiniteOrNull()
         ) {
-            notify(SyncplayNotification.HostDisconnected)
+            notifyOnce(
+                "group:${next.id}:${next.revision}:host-disconnected",
+                SyncplayNotification.HostDisconnected,
+            )
         }
         if (previous.allowViewerControls != next.allowViewerControls) {
-            notify(
+            notifyOnce(
+                "group:${next.id}:${next.revision}:viewer-controls:${next.allowViewerControls}",
                 if (next.allowViewerControls) {
                     SyncplayNotification.ViewerControlsEnabled
                 } else {
                     SyncplayNotification.ViewerControlsDisabled
-                }
+                },
             )
         }
         val before = previous.members.associateBy { it.participantId }
         val after = next.members.associateBy { it.participantId }
         next.members
             .filter { it.participantId != participant() && it.participantId !in before }
-            .forEach { notify(SyncplayNotification.MemberJoined(it.username)) }
+            .forEach {
+                notifyOnce(
+                    "group:${next.id}:${next.revision}:member-joined:${it.participantId}",
+                    SyncplayNotification.MemberJoined(it.username),
+                )
+            }
         previous.members
             .filter { it.participantId != participant() && it.participantId !in after }
-            .forEach { notify(SyncplayNotification.MemberLeft(it.username)) }
+            .forEach {
+                notifyOnce(
+                    "group:${next.id}:${next.revision}:member-left:${it.participantId}",
+                    SyncplayNotification.MemberLeft(it.username),
+                )
+            }
         if (next.itemId != null && next.mediaGeneration != previous.mediaGeneration) {
-            notify(SyncplayNotification.NowPlaying(next.itemId))
+            notifyOnce(
+                "group:${next.id}:${next.revision}:now-playing:${next.mediaGeneration}:${next.itemId}",
+                SyncplayNotification.NowPlaying(next.itemId),
+            )
         }
     }
 
@@ -545,6 +614,10 @@ class SyncplayManager(
 
     private fun notify(notification: SyncplayNotification) {
         _notifications.tryEmit(notification)
+    }
+
+    private fun notifyOnce(key: String, notification: SyncplayNotification) {
+        if (stateNotificationDeduper.shouldEmit(key)) _notifications.tryEmit(notification)
     }
 
     private fun participant(): String =
@@ -579,9 +652,28 @@ internal fun latestSyncplayGroup(
 ): SyncplayGroup? =
     when {
         incoming == null -> known
-        known != null && known.revision > incoming.revision -> known
+        known != null && known.revision >= incoming.revision -> known
         else -> incoming
     }
+
+internal fun shouldAdoptSyncplayGroup(
+    known: SyncplayGroup?,
+    activeKnown: SyncplayGroup?,
+    incoming: SyncplayGroup,
+): Boolean =
+    (known == null || incoming.revision > known.revision) &&
+        (activeKnown == null || incoming.revision > activeKnown.revision)
+
+internal class SyncplayNotificationDeduper(private val capacity: Int = 256) {
+    private val keys = LinkedHashSet<String>()
+
+    @Synchronized
+    fun shouldEmit(key: String): Boolean {
+        if (!keys.add(key)) return false
+        while (keys.size > capacity) keys.remove(keys.first())
+        return true
+    }
+}
 
 internal fun syncplaySocketClient(): OkHttpClient =
     OkHttpClient.Builder()
