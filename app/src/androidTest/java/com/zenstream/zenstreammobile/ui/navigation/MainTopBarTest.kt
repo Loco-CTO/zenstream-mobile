@@ -1,8 +1,8 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.platform.app.InstrumentationRegistry
 import com.composables.icons.lucide.R as LucideR
@@ -28,8 +28,8 @@ class MainTopBarTest {
             .onNodeWithContentDescription(context.getString(R.string.app_logo_description))
             .assertIsDisplayed()
         composeRule
-            .onNodeWithContentDescription(context.getString(R.string.settings_description))
-            .assertDoesNotExist()
+            .onAllNodesWithContentDescription(context.getString(R.string.settings_description))
+            .assertCountEquals(0)
     }
 
     @Test
