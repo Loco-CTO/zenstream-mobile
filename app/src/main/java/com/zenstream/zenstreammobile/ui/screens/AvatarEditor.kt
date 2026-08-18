@@ -125,7 +125,6 @@ fun AvatarEditorDialog(
                 .getOrNull()
         if (info == null) {
             selectedUri = null
-            sourceInfo = null
             sourceDimensions = null
         } else {
             selectedUri = uri
@@ -613,18 +612,16 @@ private fun AvatarEditorChooseAnother(
     saving: Boolean,
     onChooseAnother: () -> Unit,
 ) {
-    TextButton(
-        onClick = onChooseAnother,
-        enabled = !saving,
-        modifier = Modifier.padding(horizontal = 20.dp),
-    ) {
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_image),
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.avatar_choose_another))
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        TextButton(onClick = onChooseAnother, enabled = !saving) {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_image),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.avatar_choose_another))
+        }
     }
 }
 
