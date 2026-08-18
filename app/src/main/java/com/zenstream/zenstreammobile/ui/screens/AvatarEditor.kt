@@ -3,9 +3,6 @@ package com.zenstream.zenstreammobile.ui.screens
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +87,9 @@ fun AvatarEditorDialog(
     repository: CatalogRepository,
     onSessionChanged: (AuthSession) -> Unit,
     onDismiss: () -> Unit,
+    pickedUri: Uri? = null,
+    onPickImage: () -> Unit = {},
+    onPickedImageConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -112,30 +112,27 @@ fun AvatarEditorDialog(
     val fileInvalid = stringResource(R.string.avatar_file_invalid)
     val uploadFailed = stringResource(R.string.avatar_upload_failed)
     val removeFailed = stringResource(R.string.avatar_remove_failed)
-    val picker =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            sourceError = null
-            editorError = null
-            val info =
-                runCatching { resolver.avatarSourceInfo(uri) }
-                    .onFailure { error ->
-                        sourceError =
-                            when (error) {
-                                is com.zenstream.zenstreammobile.data.AvatarFileTooLargeException ->
-                                    fileTooLarge
-                                is com.zenstream.zenstreammobile.data.AvatarUnsupportedFormatException ->
-                                    unsupported
-                                else -> fileInvalid
-                            }
-                    }
-                    .getOrNull()
-            if (info == null) {
-                selectedUri = null
-                sourceInfo = null
-                sourceDimensions = null
-                return@rememberLauncherForActivityResult
-            }
+    val selectUri: (Uri) -> Unit = { uri ->
+        sourceError = null
+        editorError = null
+        val info =
+            runCatching { resolver.avatarSourceInfo(uri) }
+                .onFailure { error ->
+                    sourceError =
+                        when (error) {
+                            is com.zenstream.zenstreammobile.data.AvatarFileTooLargeException ->
+                                fileTooLarge
+                            is com.zenstream.zenstreammobile.data.AvatarUnsupportedFormatException ->
+                                unsupported
+                            else -> fileInvalid
+                        }
+                }
+                .getOrNull()
+        if (info == null) {
+            selectedUri = null
+            sourceInfo = null
+            sourceDimensions = null
+        } else {
             selectedUri = uri
             sourceInfo = info
             sourceDimensions = null
@@ -144,6 +141,14 @@ fun AvatarEditorDialog(
             pan = AvatarPan()
             rotation = 0
         }
+    }
+
+    LaunchedEffect(pickedUri) {
+        pickedUri?.let {
+            selectUri(it)
+            onPickedImageConsumed()
+        }
+    }
 
     LaunchedEffect(selectedUri) {
         val uri = selectedUri ?: return@LaunchedEffect
@@ -217,13 +222,7 @@ fun AvatarEditorDialog(
                     if (selectedUri == null) {
                         AvatarPickCard(
                             enabled = !saving,
-                            onPick = {
-                                picker.launch(
-                                    PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageOnly
-                                    )
-                                )
-                            },
+                            onPick = onPickImage,
                         )
                         if (session.avatarVersion != null) {
                             OutlinedButton(
@@ -396,13 +395,7 @@ fun AvatarEditorDialog(
                             EditorActions(
                                 saving = saving,
                                 hasExistingAvatar = session.avatarVersion != null,
-                                onChooseAnother = {
-                                    picker.launch(
-                                        PickVisualMediaRequest(
-                                            ActivityResultContracts.PickVisualMedia.ImageOnly
-                                        )
-                                    )
-                                },
+                                onChooseAnother = onPickImage,
                                 onCancel = onDismiss,
                                 onRemove = removeAvatar,
                                 onSave = {

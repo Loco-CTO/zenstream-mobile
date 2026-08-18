@@ -2,11 +2,16 @@ package com.zenstream.zenstreammobile
 
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -17,6 +22,12 @@ import com.zenstream.zenstreammobile.ui.navigation.ZenStreamApp
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 
 class MainActivity : ComponentActivity() {
+    private var avatarPickerResult by mutableStateOf<Uri?>(null)
+    private val avatarPicker =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            avatarPickerResult = uri
+        }
+
     private val repository by lazy {
         CatalogRepository(CatalogApi(), SessionStore(applicationContext))
     }
@@ -34,7 +45,20 @@ class MainActivity : ComponentActivity() {
             ZenStreamTheme {
                 val appState by appViewModel.uiState.collectAsStateWithLifecycle()
                 ZenStreamLocale(appState.locale) {
-                    ZenStreamApp(appState, repository, appViewModel)
+                    ZenStreamApp(
+                        appState = appState,
+                        repository = repository,
+                        appViewModel = appViewModel,
+                        onPickAvatar = {
+                            avatarPicker.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        },
+                        avatarPickerResult = avatarPickerResult,
+                        onAvatarPickerResultConsumed = { avatarPickerResult = null },
+                    )
                 }
             }
         }

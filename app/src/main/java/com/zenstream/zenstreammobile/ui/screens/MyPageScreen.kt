@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,9 @@ fun MyPageScreen(
     repository: CatalogRepository,
     session: AuthSession,
     onLogout: () -> Unit,
+    onPickAvatar: () -> Unit = {},
+    avatarPickerResult: Uri? = null,
+    onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
     var editorOpen by remember { mutableStateOf(false) }
     SettingsScreen(
@@ -54,6 +58,9 @@ fun MyPageScreen(
             repository = repository,
             onSessionChanged = {},
             onDismiss = { editorOpen = false },
+            pickedUri = avatarPickerResult,
+            onPickImage = onPickAvatar,
+            onPickedImageConsumed = onAvatarPickerResultConsumed,
         )
     }
 }

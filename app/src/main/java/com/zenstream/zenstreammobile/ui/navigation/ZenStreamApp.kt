@@ -82,7 +82,14 @@ private const val MYPAGE = "my-page"
 private const val DETAIL = "detail/{itemId}"
 
 @Composable
-fun ZenStreamApp(appState: AppUiState, repository: CatalogRepository, appViewModel: AppViewModel) {
+fun ZenStreamApp(
+    appState: AppUiState,
+    repository: CatalogRepository,
+    appViewModel: AppViewModel,
+    onPickAvatar: () -> Unit = {},
+    avatarPickerResult: Uri? = null,
+    onAvatarPickerResultConsumed: () -> Unit = {},
+) {
     when {
         appState.loading -> LoadingScreen()
         appState.showSetup ->
@@ -92,7 +99,15 @@ fun ZenStreamApp(appState: AppUiState, repository: CatalogRepository, appViewMod
             )
 
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
-        appState.session != null -> MainScaffold(repository, appState.session, appViewModel::logout)
+        appState.session != null ->
+            MainScaffold(
+                repository = repository,
+                session = appState.session,
+                onLogout = appViewModel::logout,
+                onPickAvatar = onPickAvatar,
+                avatarPickerResult = avatarPickerResult,
+                onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
+            )
         else -> LoadingScreen()
     }
 }
@@ -110,6 +125,9 @@ private fun MainScaffold(
     repository: CatalogRepository,
     session: AuthSession,
     onLogout: () -> Unit,
+    onPickAvatar: () -> Unit,
+    avatarPickerResult: Uri?,
+    onAvatarPickerResultConsumed: () -> Unit,
 ) {
     val syncplay = remember(session.token) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
@@ -351,6 +369,9 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         onLogout = onLogout,
+                        onPickAvatar = onPickAvatar,
+                        avatarPickerResult = avatarPickerResult,
+                        onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
                     )
                 }
                 composable(
