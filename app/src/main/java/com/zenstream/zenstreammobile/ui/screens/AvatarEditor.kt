@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,7 +61,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
@@ -87,6 +91,18 @@ fun AvatarEditorDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val imageLoader =
+        remember(context) {
+            ImageLoader.Builder(context)
+                .components {
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        add(AnimatedImageDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                .build()
+        }
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
@@ -531,6 +547,7 @@ private fun AvatarEditorPreview(
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
+            imageLoader = imageLoader,
             model = ImageRequest.Builder(context).data(uri).build(),
             contentDescription = stringResource(R.string.avatar_preview),
             contentScale = ContentScale.Fit,
