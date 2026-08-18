@@ -270,11 +270,7 @@ private fun MainScaffold(
                             currentRoute = currentRoute,
                             session = session,
                             onDestinationClick = { route ->
-                                navController.navigate(route) {
-                                    popUpTo(HOME) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navigateToMainDestination(navController, route)
                             },
                         )
                     }
@@ -386,6 +382,22 @@ private fun navigateToDetail(navController: androidx.navigation.NavHostControlle
     }
 }
 
+internal fun navigateToMainDestination(
+    navController: androidx.navigation.NavHostController,
+    route: String,
+) {
+    // Search is a transient route pushed above the main destinations. Remove it before restoring
+    // the selected tab so a saved Search entry cannot remain visible over the requested page.
+    navController.popBackStack(SEARCH, inclusive = true)
+    if (navController.currentDestination?.route == route) return
+
+    navController.navigate(route) {
+        popUpTo(HOME) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 private fun navigateToSearch(navController: androidx.navigation.NavHostController) {
     navController.navigate(SEARCH) {
         launchSingleTop = true
@@ -465,7 +477,7 @@ internal fun mainNavigationDestinations(): List<NavigationDestination> =
         NavigationDestination(
             LIBRARY,
             com.zenstream.zenstreammobile.R.string.library,
-            LucideR.drawable.lucide_ic_library,
+            LucideR.drawable.lucide_ic_library_big,
         ),
         NavigationDestination(
             MYPAGE,

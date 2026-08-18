@@ -64,7 +64,7 @@ class MainTopBarTest {
         listOf(
                 LucideR.drawable.lucide_ic_house,
                 LucideR.drawable.lucide_ic_search,
-                LucideR.drawable.lucide_ic_library,
+                LucideR.drawable.lucide_ic_library_big,
                 LucideR.drawable.lucide_ic_settings,
                 LucideR.drawable.lucide_ic_play,
                 LucideR.drawable.lucide_ic_pause,
