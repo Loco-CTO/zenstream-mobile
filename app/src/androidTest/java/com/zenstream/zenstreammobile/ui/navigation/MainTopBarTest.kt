@@ -27,9 +27,12 @@ class MainTopBarTest {
         composeRule
             .onNodeWithContentDescription(context.getString(R.string.app_logo_description))
             .assertIsDisplayed()
-        composeRule
-            .onAllNodesWithContentDescription(context.getString(R.string.settings_description))
-            .assertCountEquals(0)
+        assertTrue(
+            composeRule
+                .onAllNodesWithContentDescription(context.getString(R.string.settings_description))
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
     }
 
     @Test
