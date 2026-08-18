@@ -12,12 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-private val ZenBlack = Color(0xFF080808)
-private val ZenSurface = Color(0xFF111111)
-private val ZenForeground = Color(0xFFF2F2F2)
+private val ZenBlack = Color(0xFF08090B)
+private val ZenSurface = Color(0xFF141318)
+private val ZenSurfaceContainer = Color(0xFF1B1920)
+private val ZenForeground = Color(0xFFF7F3FB)
 private val ZenViolet = Color(0xFFA78BFA)
 private val ZenDeepViolet = Color(0xFF6D28D9)
-private val ZenOutline = Color(0x1AFFFFFF)
+private val ZenOutline = Color(0x33FFFFFF)
 
 private val ZenDarkColors: ColorScheme =
     darkColorScheme(
@@ -29,10 +30,10 @@ private val ZenDarkColors: ColorScheme =
         onSecondary = Color.Black,
         background = ZenBlack,
         onBackground = ZenForeground,
-        surface = ZenBlack,
+        surface = ZenSurface,
         onSurface = ZenForeground,
-        surfaceVariant = ZenSurface,
-        onSurfaceVariant = Color(0xFFB7B0C0),
+        surfaceVariant = ZenSurfaceContainer,
+        onSurfaceVariant = Color(0xFFC2BACB),
         outline = ZenOutline,
     )
 
@@ -41,8 +42,8 @@ private val ZenShapes =
     Shapes(
         extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
         small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-        medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        large = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
     )
 
 @Composable
