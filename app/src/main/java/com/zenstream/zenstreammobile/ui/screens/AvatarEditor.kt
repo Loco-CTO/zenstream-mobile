@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
@@ -77,6 +78,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -241,18 +243,24 @@ fun AvatarEditorDialog(
                         }
                     },
                     actions = {
-                        IconButton(
-                            onClick = { saveAvatar() },
-                            enabled =
-                                !saving &&
-                                    selectedUri != null &&
-                                    sourceDimensions != null &&
-                                    viewport != null,
-                        ) {
-                            Icon(
-                                painter = painterResource(LucideR.drawable.lucide_ic_check),
-                                contentDescription = stringResource(R.string.save),
+                        if (saving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(horizontal = 16.dp).size(22.dp),
+                                strokeWidth = 2.dp,
                             )
+                        } else {
+                            IconButton(
+                                onClick = { saveAvatar() },
+                                enabled =
+                                    selectedUri != null &&
+                                        sourceDimensions != null &&
+                                        viewport != null,
+                            ) {
+                                Icon(
+                                    painter = painterResource(LucideR.drawable.lucide_ic_check),
+                                    contentDescription = stringResource(R.string.save),
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
