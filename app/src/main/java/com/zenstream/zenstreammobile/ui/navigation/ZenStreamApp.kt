@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.TopAppBar
@@ -51,6 +52,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.launchPlayback
@@ -62,6 +64,7 @@ import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
+import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
@@ -80,6 +83,9 @@ private const val LIBRARY = "library"
 private const val FAVORITES = "favorites"
 private const val MYPAGE = "my-page"
 private const val DETAIL = "detail/{itemId}"
+
+internal fun shouldShowMainSearchAction(route: String): Boolean =
+    route == HOME || route == FAVORITES || route == LIBRARY
 
 @Composable
 fun ZenStreamApp(
@@ -136,35 +142,6 @@ private fun MainScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route?.substringBefore("/") ?: HOME
-    val destinations = remember {
-        listOf(
-            NavigationDestination(
-                HOME,
-                com.zenstream.zenstreammobile.R.string.home,
-                LucideR.drawable.lucide_ic_house,
-            ),
-            NavigationDestination(
-                SEARCH,
-                com.zenstream.zenstreammobile.R.string.search,
-                LucideR.drawable.lucide_ic_search,
-            ),
-            NavigationDestination(
-                LIBRARY,
-                com.zenstream.zenstreammobile.R.string.library,
-                LucideR.drawable.lucide_ic_library,
-            ),
-            NavigationDestination(
-                FAVORITES,
-                com.zenstream.zenstreammobile.R.string.favorites,
-                LucideR.drawable.lucide_ic_heart,
-            ),
-            NavigationDestination(
-                MYPAGE,
-                com.zenstream.zenstreammobile.R.string.my_page,
-                LucideR.drawable.lucide_ic_user_round,
-            ),
-        )
-    }
     val density = LocalDensity.current
     val context = LocalContext.current
     var followedGeneration by remember { mutableStateOf<String?>(null) }
@@ -257,6 +234,8 @@ private fun MainScaffold(
                         MainTopBar(
                             syncplay = syncplay,
                             session = session,
+                            showSearchAction = shouldShowMainSearchAction(currentRoute),
+                            onSearch = { navigateToSearch(navController) },
                             onReturnToView = { group ->
                                 group.mediaItemId()?.let { launchPlayback(context, it, "") }
                             },
@@ -287,36 +266,17 @@ private fun MainScaffold(
                                 slideOutVertically(targetOffsetY = { it }) +
                                 fadeOut(),
                     ) {
-                        androidx.compose.material3.NavigationBar(
-                            containerColor = Color.Transparent,
-                            windowInsets = WindowInsets(0, 0, 0, 0),
-                        ) {
-                            destinations.forEach { destination ->
-                                NavigationBarItem(
-                                    selected = currentRoute == destination.route,
-                                    onClick = {
-                                        navController.navigate(destination.route) {
-                                            popUpTo(HOME) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    icon = {
-                                        Icon(
-                                            painter = painterResource(destination.icon),
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    label = {
-                                        androidx.compose.material3.Text(
-                                            androidx.compose.ui.res.stringResource(
-                                                destination.label
-                                            )
-                                        )
-                                    },
-                                )
-                            }
-                        }
+                        MainNavigationBar(
+                            currentRoute = currentRoute,
+                            session = session,
+                            onDestinationClick = { route ->
+                                navController.navigate(route) {
+                                    popUpTo(HOME) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -426,6 +386,13 @@ private fun navigateToDetail(navController: androidx.navigation.NavHostControlle
     }
 }
 
+private fun navigateToSearch(navController: androidx.navigation.NavHostController) {
+    navController.navigate(SEARCH) {
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 private fun navigateToPlayback(
     context: Context,
     itemId: String,
@@ -441,6 +408,8 @@ internal fun MainTopBar(
     syncplay: SyncplayManager? = null,
     session: AuthSession? = null,
     onReturnToView: (SyncplayGroup) -> Unit = {},
+    showSearchAction: Boolean = false,
+    onSearch: () -> Unit = {},
 ) {
     TopAppBar(
         title = {
@@ -452,6 +421,14 @@ internal fun MainTopBar(
             )
         },
         actions = {
+            if (showSearchAction) {
+                IconButton(onClick = onSearch) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        contentDescription = stringResource(R.string.search),
+                    )
+                }
+            }
             if (syncplay != null && session != null) {
                 SyncplayGroupMenu(
                     manager = syncplay,
@@ -467,11 +444,74 @@ internal fun MainTopBar(
     )
 }
 
-private data class NavigationDestination(
+internal data class NavigationDestination(
     val route: String,
     val label: Int,
-    @androidx.annotation.DrawableRes val icon: Int,
+    @androidx.annotation.DrawableRes val icon: Int? = null,
 )
+
+internal fun mainNavigationDestinations(): List<NavigationDestination> =
+    listOf(
+        NavigationDestination(
+            HOME,
+            com.zenstream.zenstreammobile.R.string.home,
+            LucideR.drawable.lucide_ic_house,
+        ),
+        NavigationDestination(
+            FAVORITES,
+            com.zenstream.zenstreammobile.R.string.favorites,
+            LucideR.drawable.lucide_ic_heart,
+        ),
+        NavigationDestination(
+            LIBRARY,
+            com.zenstream.zenstreammobile.R.string.library,
+            LucideR.drawable.lucide_ic_library,
+        ),
+        NavigationDestination(
+            MYPAGE,
+            com.zenstream.zenstreammobile.R.string.my_page,
+        ),
+    )
+
+@Composable
+internal fun MainNavigationBar(
+    currentRoute: String,
+    session: AuthSession,
+    onDestinationClick: (String) -> Unit,
+) {
+    androidx.compose.material3.NavigationBar(
+        containerColor = Color.Transparent,
+        windowInsets = WindowInsets(0, 0, 0, 0),
+    ) {
+        mainNavigationDestinations().forEach { destination ->
+            NavigationBarItem(
+                selected = currentRoute == destination.route,
+                onClick = { onDestinationClick(destination.route) },
+                icon = {
+                    if (destination.route == MYPAGE) {
+                        UserAvatar(
+                            session = session,
+                            userId = session.userId,
+                            username = session.username,
+                            modifier = Modifier.size(24.dp),
+                            contentDescription = stringResource(R.string.my_page),
+                        )
+                    } else {
+                        destination.icon?.let { icon ->
+                            Icon(
+                                painter = painterResource(icon),
+                                contentDescription = null,
+                            )
+                        }
+                    }
+                },
+                label = {
+                    androidx.compose.material3.Text(stringResource(destination.label))
+                },
+            )
+        }
+    }
+}
 
 internal class ScrollVisibilityController(
     private val hideDistance: Float,

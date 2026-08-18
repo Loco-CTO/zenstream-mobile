@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
@@ -33,6 +34,29 @@ class MainTopBarTest {
                 .fetchSemanticsNodes()
                 .isEmpty()
         )
+        assertTrue(
+            composeRule
+                .onAllNodesWithContentDescription(context.getString(R.string.search))
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun searchActionInvokesCallbackWhenEnabled() {
+        var searchClicked = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                MainTopBar(showSearchAction = true, onSearch = { searchClicked = true })
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.search))
+            .assertIsDisplayed()
+            .performClick()
+        assertTrue(searchClicked)
     }
 
     @Test
