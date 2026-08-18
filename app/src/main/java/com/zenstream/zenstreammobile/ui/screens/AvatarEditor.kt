@@ -525,6 +525,7 @@ private fun AvatarEditorPreview(
         Box(
             modifier =
                 Modifier.fillMaxWidth()
+                    .padding(horizontal = 12.dp)
                     .aspectRatio(1f, matchHeightConstraintsFirst = true)
                     .clip(RoundedCornerShape(2.dp))
                     .onSizeChanged(onViewportChanged)
