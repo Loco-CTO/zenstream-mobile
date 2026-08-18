@@ -156,7 +156,7 @@ fun AvatarEditorDialog(
                         AvatarImageDimensions(options.outWidth, options.outHeight)
                     } else null
                 }
-        }
+            }
         if (sourceDimensions == null) sourceError = fileInvalid
     }
 
@@ -223,7 +223,7 @@ fun AvatarEditorDialog(
                                         ActivityResultContracts.PickVisualMedia.ImageOnly
                                     )
                                 )
-                            }
+                            },
                         )
                         if (session.avatarVersion != null) {
                             OutlinedButton(
