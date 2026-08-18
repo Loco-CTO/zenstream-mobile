@@ -95,6 +95,7 @@
     <string name="avatar_preview">Avatar preview</string>
     <string name="avatar_pan_hint">Drag to pan. Pinch or use the slider to zoom.</string>
     <string name="avatar_zoom">Zoom</string>
+    <string name="avatar_rotate">Rotate</string>
     <string name="avatar_rotate_counter_clockwise">Rotate counter-clockwise</string>
     <string name="avatar_rotate_clockwise">Rotate clockwise</string>
     <string name="avatar_processing">Processing…</string>

@@ -25,10 +25,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -94,9 +94,6 @@ fun AvatarEditorDialog(
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
-    var sourceInfo by remember {
-        mutableStateOf<com.zenstream.zenstreammobile.data.AvatarSourceInfo?>(null)
-    }
     var sourceDimensions by remember { mutableStateOf<AvatarImageDimensions?>(null) }
     var sourceError by remember { mutableStateOf<String?>(null) }
     var editorError by remember { mutableStateOf<String?>(null) }
@@ -110,7 +107,6 @@ fun AvatarEditorDialog(
     val unsupported = stringResource(R.string.avatar_unsupported_format)
     val fileInvalid = stringResource(R.string.avatar_file_invalid)
     val uploadFailed = stringResource(R.string.avatar_upload_failed)
-    val removeFailed = stringResource(R.string.avatar_remove_failed)
     val selectUri: (Uri) -> Unit = { uri ->
         sourceError = null
         editorError = null
@@ -133,7 +129,6 @@ fun AvatarEditorDialog(
             sourceDimensions = null
         } else {
             selectedUri = uri
-            sourceInfo = info
             sourceDimensions = null
             viewport = null
             zoom = 1f
@@ -162,22 +157,6 @@ fun AvatarEditorDialog(
                 }
             }
         if (sourceDimensions == null) sourceError = fileInvalid
-    }
-
-    val removeAvatar: () -> Unit = {
-        if (!saving) {
-            saving = true
-            editorError = null
-            scope.launch {
-                runCatching { repository.removeAvatar(session) }
-                    .onSuccess {
-                        onSessionChanged(it)
-                        onDismiss()
-                    }
-                    .onFailure { editorError = removeFailed }
-                saving = false
-            }
-        }
     }
 
     fun saveAvatar() {
@@ -282,31 +261,6 @@ fun AvatarEditorDialog(
                             onPick = onPickImage,
                             modifier = Modifier.padding(horizontal = 20.dp),
                         )
-                        if (session.avatarVersion != null) {
-                            OutlinedButton(
-                                onClick = removeAvatar,
-                                enabled = !saving,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                            ) {
-                                if (saving) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.avatar_processing))
-                                } else {
-                                    Text(stringResource(R.string.remove_avatar))
-                                }
-                            }
-                            editorError?.let { message ->
-                                Text(
-                                    message,
-                                    color = Color(0xFFFF8A80),
-                                    modifier = Modifier.padding(horizontal = 20.dp),
-                                )
-                            }
-                        }
                     } else {
                         sourceDimensions?.let { dimensions ->
                             AvatarEditorPreview(
@@ -366,35 +320,11 @@ fun AvatarEditorDialog(
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                horizontalArrangement = Arrangement.Center,
                             ) {
                                 AvatarEditorIconAction(
                                     icon = LucideR.drawable.lucide_ic_refresh_cw,
-                                    label =
-                                        stringResource(R.string.avatar_rotate_counter_clockwise),
-                                    mirrored = true,
-                                    onClick = {
-                                        val nextRotation = (rotation + 270) % 360
-                                        rotation = nextRotation
-                                        viewport?.let { size ->
-                                            pan =
-                                                clampAvatarPan(
-                                                    dimensions,
-                                                    com.zenstream.zenstreammobile.data
-                                                        .AvatarViewport(
-                                                            size.width,
-                                                            size.height,
-                                                        ),
-                                                    zoom,
-                                                    rotation,
-                                                    pan,
-                                                )
-                                        }
-                                    },
-                                )
-                                AvatarEditorIconAction(
-                                    icon = LucideR.drawable.lucide_ic_refresh_cw,
-                                    label = stringResource(R.string.avatar_rotate_clockwise),
+                                    label = stringResource(R.string.avatar_rotate),
                                     onClick = {
                                         val nextRotation = (rotation + 90) % 360
                                         rotation = nextRotation
@@ -415,21 +345,6 @@ fun AvatarEditorDialog(
                                     },
                                 )
                             }
-                            sourceInfo?.let { info ->
-                                Text(
-                                    text =
-                                        stringResource(
-                                            R.string.avatar_file_details,
-                                            info.mimeType,
-                                            formatBytes(info.sizeBytes),
-                                        ),
-                                    color = Color.White.copy(alpha = .58f),
-                                    style =
-                                        androidx.compose.material3.MaterialTheme.typography
-                                            .labelSmall,
-                                    modifier = Modifier.padding(horizontal = 20.dp),
-                                )
-                            }
                             editorError?.let { message ->
                                 Text(
                                     message,
@@ -437,12 +352,9 @@ fun AvatarEditorDialog(
                                     modifier = Modifier.padding(horizontal = 20.dp),
                                 )
                             }
-                            EditorActions(
+                            AvatarEditorChooseAnother(
                                 saving = saving,
-                                hasExistingAvatar = session.avatarVersion != null,
                                 onChooseAnother = onPickImage,
-                                onCancel = onDismiss,
-                                onRemove = removeAvatar,
                             )
                         }
                             ?: if (sourceError == null) {
@@ -575,7 +487,7 @@ private fun AvatarEditorPreview(
                 imageLoader = imageLoader,
                 model = ImageRequest.Builder(context).data(uri).build(),
                 contentDescription = stringResource(R.string.avatar_preview),
-                contentScale = ContentScale.FillBounds,
+                contentScale = ContentScale.Fit,
                 modifier =
                     Modifier.width(imageWidth).height(imageHeight).graphicsLayer {
                         scaleX = zoom
@@ -679,17 +591,13 @@ private fun AvatarEditorIconAction(
     icon: Int,
     label: String,
     onClick: () -> Unit,
-    mirrored: Boolean = false,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(onClick = onClick) {
             Icon(
                 painter = painterResource(icon),
                 contentDescription = label,
-                modifier =
-                    Modifier.size(28.dp).graphicsLayer {
-                        if (mirrored) scaleX = -1f
-                    },
+                modifier = Modifier.size(28.dp),
             )
         }
         Text(
@@ -701,38 +609,22 @@ private fun AvatarEditorIconAction(
 }
 
 @Composable
-private fun EditorActions(
+private fun AvatarEditorChooseAnother(
     saving: Boolean,
-    hasExistingAvatar: Boolean,
     onChooseAnother: () -> Unit,
-    onCancel: () -> Unit,
-    onRemove: () -> Unit,
 ) {
-    Column(
+    TextButton(
+        onClick = onChooseAnother,
+        enabled = !saving,
         modifier = Modifier.padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
-                onClick = onChooseAnother,
-                enabled = !saving,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(stringResource(R.string.avatar_choose_another))
-            }
-            OutlinedButton(onClick = onCancel, enabled = !saving, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.cancel))
-            }
-        }
-        if (hasExistingAvatar) {
-            OutlinedButton(
-                onClick = onRemove,
-                enabled = !saving,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.remove_avatar))
-            }
-        }
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_image),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.avatar_choose_another))
     }
 }
 
