@@ -60,6 +60,39 @@ class CatalogApiHttpTest {
     }
 
     @Test
+    fun loginParsesTheNullableAvatarVersion() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("token", "login-token")
+                        .put(
+                            "user",
+                            JSONObject()
+                                .put("id", "user-1")
+                                .put("username", "Test")
+                                .put("avatarVersion", "v-login"),
+                        )
+                        .toString()
+                )
+        )
+        server.enqueue(MockResponse().setBody(JSONObject().put("ticket", "resource-ticket").toString()))
+
+        val session =
+            CatalogApi(deviceId = "device-id").authenticate(
+                serverUrl = server.url("/").toString(),
+                username = "Test",
+                password = "password",
+        )
+
+        assertEquals("v-login", session.avatarVersion)
+        val loginRequest = server.takeRequest()
+        assertEquals("POST", loginRequest.method)
+        assertEquals("/api/auth/login", loginRequest.path)
+        assertEquals("GET", server.takeRequest().method)
+    }
+
+    @Test
     fun writesWatchedAndFavoriteStateWithCatalogStatePatches() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
         server.enqueue(MockResponse().setResponseCode(204))
