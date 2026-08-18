@@ -617,22 +617,22 @@ private fun AvatarEditorPreview(
                 drawLine(
                     lineColor,
                     Offset(size.width / 3f, 0f),
-                    Offset(size.width / 3f, size.height.toFloat()),
+                    Offset(size.width / 3f, size.height),
                 )
                 drawLine(
                     lineColor,
                     Offset(size.width * 2f / 3f, 0f),
-                    Offset(size.width * 2f / 3f, size.height.toFloat()),
+                    Offset(size.width * 2f / 3f, size.height),
                 )
                 drawLine(
                     lineColor,
                     Offset(0f, size.height / 3f),
-                    Offset(size.width.toFloat(), size.height / 3f),
+                    Offset(size.width, size.height / 3f),
                 )
                 drawLine(
                     lineColor,
                     Offset(0f, size.height * 2f / 3f),
-                    Offset(size.width.toFloat(), size.height * 2f / 3f),
+                    Offset(size.width, size.height * 2f / 3f),
                 )
             }
         }
