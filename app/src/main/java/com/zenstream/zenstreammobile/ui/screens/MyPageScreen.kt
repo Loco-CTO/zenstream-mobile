@@ -252,8 +252,8 @@ internal fun AvatarActionSheet(
     onUpload: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val sheetSurface = Color(0xFF151518)
-    val actionSurface = Color(0xFF1D1D21)
+    val sheetSurface = MaterialTheme.colorScheme.background
+    val actionSurface = MaterialTheme.colorScheme.surfaceVariant
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
