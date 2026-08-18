@@ -69,6 +69,7 @@ import coil3.request.ImageRequest
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.AVATAR_MAX_BYTES
+import com.zenstream.zenstreammobile.data.AvatarFileTooLargeException
 import com.zenstream.zenstreammobile.data.AvatarImageDimensions
 import com.zenstream.zenstreammobile.data.AvatarPan
 import com.zenstream.zenstreammobile.data.CatalogException
@@ -155,8 +156,24 @@ fun AvatarEditorDialog(
                         AvatarImageDimensions(options.outWidth, options.outHeight)
                     } else null
                 }
-            }
+        }
         if (sourceDimensions == null) sourceError = fileInvalid
+    }
+
+    val removeAvatar: () -> Unit = {
+        if (!saving) {
+            saving = true
+            editorError = null
+            scope.launch {
+                runCatching { repository.removeAvatar(session) }
+                    .onSuccess {
+                        onSessionChanged(it)
+                        onDismiss()
+                    }
+                    .onFailure { editorError = removeFailed }
+                saving = false
+            }
+        }
     }
 
     Dialog(
@@ -199,6 +216,7 @@ fun AvatarEditorDialog(
                     )
                     if (selectedUri == null) {
                         AvatarPickCard(
+                            enabled = !saving,
                             onPick = {
                                 picker.launch(
                                     PickVisualMediaRequest(
@@ -207,6 +225,27 @@ fun AvatarEditorDialog(
                                 )
                             }
                         )
+                        if (session.avatarVersion != null) {
+                            OutlinedButton(
+                                onClick = removeAvatar,
+                                enabled = !saving,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (saving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.avatar_processing))
+                                } else {
+                                    Text(stringResource(R.string.remove_avatar))
+                                }
+                            }
+                            editorError?.let { message ->
+                                Text(message, color = Color(0xFFFF8A80))
+                            }
+                        }
                     } else {
                         sourceDimensions?.let { dimensions ->
                             AvatarEditorPreview(
@@ -365,20 +404,7 @@ fun AvatarEditorDialog(
                                     )
                                 },
                                 onCancel = onDismiss,
-                                onRemove = {
-                                    if (saving) return@EditorActions
-                                    saving = true
-                                    editorError = null
-                                    scope.launch {
-                                        runCatching { repository.removeAvatar(session) }
-                                            .onSuccess {
-                                                onSessionChanged(it)
-                                                onDismiss()
-                                            }
-                                            .onFailure { editorError = removeFailed }
-                                        saving = false
-                                    }
-                                },
+                                onRemove = removeAvatar,
                                 onSave = {
                                     if (saving) return@EditorActions
                                     val size = viewport
@@ -417,8 +443,9 @@ fun AvatarEditorDialog(
                                             .onFailure { error ->
                                                 editorError =
                                                     if (
-                                                        error is CatalogException &&
-                                                            error.statusCode == 413
+                                                        (error is CatalogException &&
+                                                            error.statusCode == 413) ||
+                                                            error is AvatarFileTooLargeException
                                                     ) {
                                                         fileTooLarge
                                                     } else uploadFailed
@@ -462,9 +489,12 @@ fun AvatarEditorDialog(
 }
 
 @Composable
-private fun AvatarPickCard(onPick: () -> Unit) {
+private fun AvatarPickCard(enabled: Boolean = true, onPick: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1.2f).clickable(onClick = onPick),
+        modifier =
+            Modifier.fillMaxWidth()
+                .aspectRatio(1.2f)
+                .clickable(enabled = enabled, onClick = onPick),
         color = Color(0xFF16161A),
         shape = RoundedCornerShape(20.dp),
     ) {
