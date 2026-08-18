@@ -427,10 +427,15 @@ fun AvatarEditorDialog(
                                     style =
                                         androidx.compose.material3.MaterialTheme.typography
                                             .labelSmall,
+                                    modifier = Modifier.padding(horizontal = 20.dp),
                                 )
                             }
                             editorError?.let { message ->
-                                Text(message, color = Color(0xFFFF8A80))
+                                Text(
+                                    message,
+                                    color = Color(0xFFFF8A80),
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                )
                             }
                             EditorActions(
                                 saving = saving,
@@ -560,7 +565,7 @@ private fun AvatarEditorPreview(
     val latestPan by androidx.compose.runtime.rememberUpdatedState(pan)
     val latestOnTransform by androidx.compose.runtime.rememberUpdatedState(onTransform)
     Box(
-        modifier = modifier.background(Color.Black),
+        modifier = modifier.clip(RoundedCornerShape(0.dp)).background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
         if (viewportSize != null && baseScale != null) {
