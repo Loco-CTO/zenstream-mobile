@@ -32,7 +32,7 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun profileUsesChangeActionWhenAnAvatarVersionExists() {
+    fun profileUsesChangeAndRemoveActionsWhenAnAvatarVersionExists() {
         val session =
             AuthSession(
                 "https://server",
@@ -49,5 +49,6 @@ class MyPageScreenTest {
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.change_avatar)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.remove_avatar)).assertIsDisplayed()
     }
 }
