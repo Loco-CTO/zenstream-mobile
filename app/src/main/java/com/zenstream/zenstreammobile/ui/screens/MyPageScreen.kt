@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -97,7 +96,7 @@ fun MyPageScreen(
     PullToRefreshLayout(
         isRefreshing = settingsState.refreshing,
         onRefresh = settingsViewModel::refresh,
-        modifier = Modifier.padding(outerPadding).statusBarsPadding(),
+        modifier = Modifier.padding(outerPadding),
     ) {
         val activeSection = settingsSection
         LazyColumn(

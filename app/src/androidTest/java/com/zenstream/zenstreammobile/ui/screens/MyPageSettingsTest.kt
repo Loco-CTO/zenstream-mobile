@@ -15,7 +15,6 @@ import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.model.SubtitleStyle
-import com.zenstream.zenstreammobile.ui.SettingsUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -26,20 +25,28 @@ class MyPageSettingsTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun inlineSettingsShowAllGroupsFooterAndLogout() {
+    fun settingsTabsShowAllGroupsAndOpenRequestedPage() {
+        var selected: MyPageSettingsSection? = null
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageSettingsTabs(onOpenSection = { selected = it })
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
+        composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Player, selected) }
+    }
+
+    @Test
+    fun settingsFooterShowsVersionAndLogsOut() {
         var loggedOut = false
         composeRule.setContent {
             ZenStreamTheme {
-                MyPageSettingsContent(
-                    state = SettingsUiState(),
-                    onInterfaceLocaleChange = {},
-                    onMetadataLanguageChange = {},
-                    onPlaybackPreferenceChange = { _, _ -> },
-                    onPlayerEngineChange = {},
-                    onShowDebugIconChange = {},
-                    onSubtitleChange = {},
-                    onLogout = { loggedOut = true },
-                )
+                MyPageSettingsFooter(onLogout = { loggedOut = true })
             }
         }
 
