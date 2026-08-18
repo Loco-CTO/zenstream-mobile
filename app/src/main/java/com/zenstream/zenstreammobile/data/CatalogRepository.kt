@@ -1,5 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
+import android.content.ContentResolver
+import android.net.Uri
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.FavoriteSort
@@ -161,6 +163,29 @@ class CatalogRepository(
         }
     }
 
+    suspend fun refreshCurrentAccount(): AuthSession {
+        val current = session.first() ?: error("Authentication required")
+        return authenticatedCatalogRequest { api.refreshAccount(current) }
+            .also {
+                sessionStore.saveSession(it)
+            }
+    }
+
+    suspend fun uploadAvatar(
+        session: AuthSession,
+        resolver: ContentResolver,
+        uri: Uri,
+        crop: AvatarCrop,
+    ): AuthSession {
+        val version = authenticatedCatalogRequest { api.uploadAvatar(session, resolver, uri, crop) }
+        return session.copy(avatarVersion = version).also { sessionStore.saveSession(it) }
+    }
+
+    suspend fun removeAvatar(session: AuthSession): AuthSession {
+        authenticatedCatalogRequest { api.deleteAvatar(session) }
+        return session.copy(avatarVersion = null).also { sessionStore.saveSession(it) }
+    }
+
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
         val mode = interfaceLocaleMode.first()
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
@@ -227,6 +252,14 @@ class CatalogRepository(
         try {
             block()
         } catch (error: OrchestratorException) {
+            if (error.statusCode == 401) clearSession()
+            throw error
+        }
+
+    private suspend fun <T> authenticatedCatalogRequest(block: suspend () -> T): T =
+        try {
+            block()
+        } catch (error: CatalogException) {
             if (error.statusCode == 401) clearSession()
             throw error
         }

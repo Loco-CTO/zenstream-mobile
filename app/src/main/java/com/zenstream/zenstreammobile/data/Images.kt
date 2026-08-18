@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.MediaItem
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 fun landscapeImageType(item: MediaItem): String? =
     when {
@@ -45,3 +46,17 @@ fun imageBlurHash(item: MediaItem, type: String): String? =
         "SeriesPrimary" -> item.seriesPrimaryImageBlurHash
         else -> item.imageBlurHashes[type]
     }
+
+/** Authenticated avatar route. A version is intentionally part of the URL cache key. */
+fun userAvatarUrl(serverUrl: String, userId: String, avatarVersion: String? = null): String {
+    val builder =
+        serverUrl
+            .trimEnd('/')
+            .toHttpUrl()
+            .newBuilder()
+            .addPathSegments("api/users")
+            .addPathSegment(userId)
+            .addPathSegment("avatar")
+    avatarVersion?.takeIf(String::isNotBlank)?.let { builder.addQueryParameter("v", it) }
+    return builder.build().toString()
+}

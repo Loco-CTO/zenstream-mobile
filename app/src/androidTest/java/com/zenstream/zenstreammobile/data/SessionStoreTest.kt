@@ -25,9 +25,16 @@ class SessionStoreTest {
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.saveServerConfig("https://orchestrator.example")
         store.saveSession(
-            AuthSession("https://orchestrator.example", "secret-token", "user-1", "User")
+            AuthSession(
+                "https://orchestrator.example",
+                "secret-token",
+                "user-1",
+                "User",
+                avatarVersion = "avatar-v1",
+            )
         )
         assertEquals("secret-token", store.session.first()!!.token)
+        assertEquals("avatar-v1", store.session.first()!!.avatarVersion)
         store.clearSession()
         assertNull(store.session.first())
         assertEquals("https://orchestrator.example", store.serverUrl.first())

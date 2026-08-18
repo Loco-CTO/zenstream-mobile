@@ -53,6 +53,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
 import com.zenstream.zenstreammobile.model.SyncplayUiState
 import com.zenstream.zenstreammobile.model.mediaItemId
+import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import kotlinx.coroutines.launch
 
 private val SyncplayPlayerSheetSurface = Color(0xFF1B1B1F)
@@ -81,6 +82,7 @@ fun SyncplayGroupMenu(
         SyncplayGroupSheet(
             state = state,
             userId = session.userId,
+            session = session,
             playerContext = playerContext,
             onDismiss = { expanded = false },
             onCreate = { scope.launch { manager.create() } },
@@ -135,6 +137,7 @@ internal fun SyncplayGroupSheet(
     onControlsChanged: (Boolean) -> Unit,
     onReturnToView: (SyncplayGroup) -> Unit,
     onLeave: () -> Unit,
+    session: AuthSession? = null,
 ) {
     val surfaceColor =
         if (playerContext) SyncplayPlayerSheetSurface else MaterialTheme.colorScheme.surfaceVariant
@@ -163,6 +166,7 @@ internal fun SyncplayGroupSheet(
                         ActiveGroupContent(
                             group = group,
                             userId = userId,
+                            session = session,
                             onRemoveMember = onRemoveMember,
                             onControlsChanged = onControlsChanged,
                             onReturnToView = onReturnToView,
@@ -297,6 +301,7 @@ private fun GroupRow(group: SyncplayGroup, onJoin: (String) -> Unit) {
 private fun ActiveGroupContent(
     group: SyncplayGroup,
     userId: String,
+    session: AuthSession?,
     onRemoveMember: (String) -> Unit,
     onControlsChanged: (Boolean) -> Unit,
     onReturnToView: (SyncplayGroup) -> Unit,
@@ -336,6 +341,7 @@ private fun ActiveGroupContent(
                 group.members.forEach { member ->
                     GroupMemberRow(
                         member = member,
+                        session = session,
                         hostUserId = group.hostUserId,
                         canRemove = group.hostUserId == userId && member.userId != userId,
                         onRemove = { onRemoveMember(member.userId) },
@@ -383,6 +389,7 @@ private fun ActiveGroupContent(
 @Composable
 private fun GroupMemberRow(
     member: SyncplayMember,
+    session: AuthSession?,
     hostUserId: String,
     canRemove: Boolean,
     onRemove: () -> Unit,
@@ -392,17 +399,29 @@ private fun GroupMemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier =
-                Modifier.size(32.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = member.username.firstOrNull()?.uppercase() ?: "?",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+        if (session != null) {
+            UserAvatar(
+                session = session,
+                userId = member.userId,
+                username = member.username,
+                modifier = Modifier.size(32.dp),
             )
+        } else {
+            Box(
+                modifier =
+                    Modifier.size(32.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = .16f),
+                            CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = member.username.firstOrNull()?.uppercase() ?: "?",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(

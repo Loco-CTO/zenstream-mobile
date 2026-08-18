@@ -73,4 +73,16 @@ class ImagesTest {
         assertEquals("SeriesPrimary", seriesPosterImageType(episode))
         assertNull(seriesPosterImageType(episode.copy(seriesPrimaryImageTag = null)))
     }
+
+    @Test
+    fun avatarUrlsIncludeVersionsOnlyWhenKnown() {
+        assertEquals(
+            "https://server/api/users/user%2F1/avatar?v=version-2",
+            userAvatarUrl("https://server", "user/1", "version-2"),
+        )
+        assertEquals(
+            "https://server/api/users/user-1/avatar",
+            userAvatarUrl("https://server", "user-1"),
+        )
+    }
 }

@@ -6,6 +6,7 @@ data class AuthSession(
     val userId: String,
     val username: String,
     val resourceTicket: String? = null,
+    val avatarVersion: String? = null,
 )
 
 data class MediaChapter(

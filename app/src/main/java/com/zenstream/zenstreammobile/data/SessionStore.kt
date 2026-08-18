@@ -59,6 +59,7 @@ class SessionStore(
         val resourceTicket = stringPreferencesKey("encrypted_resource_ticket")
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
+        val avatarVersion = stringPreferencesKey("avatar_version")
         val locale = stringPreferencesKey("locale")
         val interfaceLocaleMode = stringPreferencesKey("interface_locale_mode")
         val metadataLanguage = stringPreferencesKey("metadata_language")
@@ -121,6 +122,7 @@ class SessionStore(
                     userId,
                     prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
                     prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
+                    prefs[Keys.avatarVersion],
                 )
             }
             // Android Keystore can be briefly unavailable while the device is
@@ -164,6 +166,9 @@ class SessionStore(
             } ?: it.remove(Keys.resourceTicket)
             it[Keys.userId] = session.userId
             it[Keys.username] = session.username
+            session.avatarVersion?.let { version ->
+                it[Keys.avatarVersion] = version
+            } ?: it.remove(Keys.avatarVersion)
         }
     }
 
@@ -246,6 +251,7 @@ class SessionStore(
             it.remove(Keys.resourceTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
+            it.remove(Keys.avatarVersion)
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
         }
@@ -259,6 +265,7 @@ class SessionStore(
             it.remove(Keys.resourceTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
+            it.remove(Keys.avatarVersion)
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
             it.remove(Keys.librarySorts)

@@ -394,20 +394,23 @@ class PlaybackParsingTest {
         assertEquals(
             0f,
             subtitleBottomPadding(
-                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 0f)
-            ).value,
+                    com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 0f)
+                )
+                .value,
         )
         assertEquals(
             217f,
             subtitleBottomPadding(
-                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 217f)
-            ).value,
+                    com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 217f)
+                )
+                .value,
         )
         assertEquals(
             300f,
             subtitleBottomPadding(
-                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 300f)
-            ).value,
+                    com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 300f)
+                )
+                .value,
         )
     }
 

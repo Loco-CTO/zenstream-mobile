@@ -1,5 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
+import android.content.ContentResolver
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
@@ -48,6 +50,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
@@ -115,7 +118,85 @@ class CatalogApi(
                 userId,
                 user?.optString("username").orEmpty().ifBlank { username.trim() },
                 ticket,
+                user?.optNullableString("avatarVersion"),
             )
+        }
+
+    suspend fun refreshAccount(session: AuthSession): AuthSession =
+        withContext(Dispatchers.IO) {
+            val user =
+                requestJson(session, "/api/auth/me").optJSONObject("user")
+                    ?: error("Server did not return the authenticated user")
+            val userId =
+                user.optString("id").takeIf { it.isNotBlank() }
+                    ?: error("Server did not return a user ID")
+            check(userId == session.userId) { "Server returned a different authenticated user" }
+            session.copy(
+                username = user.optString("username").ifBlank { session.username },
+                avatarVersion = user.optNullableString("avatarVersion"),
+            )
+        }
+
+    suspend fun uploadAvatar(
+        session: AuthSession,
+        resolver: ContentResolver,
+        uri: Uri,
+        crop: AvatarCrop,
+    ): String =
+        withContext(Dispatchers.IO) {
+            val source = resolver.avatarSourceInfo(uri)
+            val body =
+                AvatarUriRequestBody(
+                    resolver = resolver,
+                    uri = uri,
+                    mimeType = source.mimeType.toMediaType(),
+                    declaredSize = source.sizeBytes,
+                )
+            uploadAvatar(session, body, source.mimeType, crop)
+        }
+
+    internal suspend fun uploadAvatar(
+        session: AuthSession,
+        body: RequestBody,
+        contentType: String,
+        crop: AvatarCrop,
+    ): String =
+        withContext(Dispatchers.IO) {
+            if (contentType.lowercase() !in AVATAR_MIME_TYPES) {
+                throw AvatarUnsupportedFormatException()
+            }
+            val url =
+                session.serverUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addPathSegments("api/account/avatar")
+                    .addQueryParameter("cropX", crop.cropX.toString())
+                    .addQueryParameter("cropY", crop.cropY.toString())
+                    .addQueryParameter("cropSize", crop.cropSize.toString())
+                    .addQueryParameter("rotation", crop.rotation.toString())
+                    .build()
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .header("Accept", "application/json")
+                    .header("Authorization", authorizationHeader(session.token))
+                    .header("Content-Type", contentType)
+                    .post(body)
+                    .build()
+            val response = httpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful) {
+                    throw CatalogException(it.code, "Avatar upload failed with ${it.code}")
+                }
+                JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
+                    .optNullableString("avatarVersion")
+                    ?: error("Server did not return an avatar version")
+            }
+        }
+
+    suspend fun deleteAvatar(session: AuthSession) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/account/avatar", method = "DELETE")
         }
 
     suspend fun logout(session: AuthSession) =

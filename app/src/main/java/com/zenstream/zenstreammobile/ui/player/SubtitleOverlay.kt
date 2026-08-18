@@ -66,7 +66,7 @@ internal fun StyledSubtitleLine(text: String, style: SubtitleStyle) {
         )
     Box(
         modifier =
-                Modifier.background(
+            Modifier.background(
                     background.copy(alpha = style.backgroundOpacity / 100f),
                     RoundedCornerShape(4.dp),
                 )
@@ -85,11 +85,10 @@ internal fun StyledSubtitleLine(text: String, style: SubtitleStyle) {
                                 width =
                                     with(LocalDensity.current) {
                                         outlineWidthDp.dp.toPx()
-                                    },
-                            ),
+                                    }
+                            )
                     ),
-                modifier =
-                    Modifier.clearAndSetSemantics { hideFromAccessibility() },
+                modifier = Modifier.clearAndSetSemantics { hideFromAccessibility() },
             )
         }
         Text(text = text, color = foreground, style = textStyle)

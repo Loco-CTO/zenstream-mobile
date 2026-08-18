@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -15,7 +16,7 @@ class MainTopBarTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun showsBrandLogoAndSettingsIcon() {
+    fun showsBrandLogoWithoutSettingsAction() {
         composeRule.setContent {
             ZenStreamTheme {
                 MainTopBar()
@@ -28,7 +29,7 @@ class MainTopBarTest {
             .assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(context.getString(R.string.settings_description))
-            .assertIsDisplayed()
+            .assertDoesNotExist()
     }
 
     @Test
