@@ -68,7 +68,9 @@ class MyPageScreenTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.avatar_upload_image)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.avatar_upload_image))
+            .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.avatar_delete)).assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.avatar_upload_image)).performClick()
         composeRule.runOnIdle {
@@ -112,7 +114,8 @@ class MyPageScreenTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.avatar_delete_confirmation_title))
+        composeRule
+            .onNodeWithText(context.getString(R.string.avatar_delete_confirmation_title))
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.cancel)).performClick()
         composeRule.runOnIdle { assertTrue(dismissed) }
