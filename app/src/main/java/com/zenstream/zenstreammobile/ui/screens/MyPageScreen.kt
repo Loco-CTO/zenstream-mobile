@@ -4,7 +4,9 @@ import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
@@ -28,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,11 +44,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import kotlinx.coroutines.launch
 
@@ -54,10 +63,17 @@ fun MyPageScreen(
     repository: CatalogRepository,
     session: AuthSession,
     onLogout: () -> Unit,
+    outerPadding: PaddingValues = PaddingValues(),
     onPickAvatar: () -> Unit = {},
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
+    val settingsViewModel: SettingsViewModel =
+        viewModel(
+            key = "settings",
+            factory = SettingsViewModel.Factory(repository),
+        )
+    val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     var avatarActionsOpen by remember { mutableStateOf(false) }
     var editorOpen by remember { mutableStateOf(false) }
     var deleteConfirmationOpen by remember { mutableStateOf(false) }
@@ -72,21 +88,51 @@ fun MyPageScreen(
         }
     }
 
-    SettingsScreen(
-        repository = repository,
-        onBack = {},
-        onLogout = onLogout,
-        rootTitle = R.string.my_page,
-        showRootNavigation = false,
-        showSettingsHeading = true,
-        rootHeader = {
-            ProfileCard(
-                session = session,
-                onEditAvatar = { avatarActionsOpen = true },
-                avatarError = avatarError,
-            )
-        },
-    )
+    PullToRefreshLayout(
+        isRefreshing = settingsState.refreshing,
+        onRefresh = settingsViewModel::refresh,
+        modifier = Modifier.padding(outerPadding).statusBarsPadding(),
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding =
+                PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.my_page),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            }
+            item {
+                ProfileCard(
+                    session = session,
+                    onEditAvatar = { avatarActionsOpen = true },
+                    avatarError = avatarError,
+                )
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.settings),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
+            item {
+                MyPageSettingsContent(
+                    state = settingsState,
+                    onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
+                    onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
+                    onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                    onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                    onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                    onSubtitleChange = settingsViewModel::updateSubtitle,
+                    onLogout = onLogout,
+                )
+            }
+        }
+    }
 
     if (avatarActionsOpen) {
         AvatarActionSheet(
@@ -278,51 +324,102 @@ internal fun ProfileCard(
     onEditAvatar: () -> Unit,
     avatarError: String? = null,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = ColorProfileCard),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+    BoxWithConstraints {
+        val compact = maxWidth < 360.dp
+        Card(
+            colors =
+                CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(22.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            UserAvatar(
-                session = session,
-                userId = session.userId,
-                username = session.username,
-                modifier = Modifier.size(88.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.profile),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = session.username,
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(onClick = onEditAvatar) {
-                    Text(
-                        stringResource(
-                            if (session.avatarVersion == null) R.string.add_avatar
-                            else R.string.change_avatar
-                        )
-                    )
+            if (compact) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    ProfileIdentity(session, avatarError)
+                    AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
                 }
-                avatarError?.let { message ->
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    UserAvatar(
+                        session = session,
+                        userId = session.userId,
+                        username = session.username,
+                        modifier = Modifier.size(96.dp),
                     )
+                    Column(modifier = Modifier.weight(1f)) {
+                        ProfileDetails(session, avatarError)
+                        Spacer(Modifier.height(12.dp))
+                        AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
+                    }
                 }
             }
         }
     }
 }
 
-private val ColorProfileCard = androidx.compose.ui.graphics.Color(0xFF111111)
+@Composable
+private fun ProfileIdentity(session: AuthSession, avatarError: String?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        UserAvatar(
+            session = session,
+            userId = session.userId,
+            username = session.username,
+            modifier = Modifier.size(96.dp),
+        )
+        ProfileDetails(session, avatarError, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ProfileDetails(
+    session: AuthSession,
+    avatarError: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = stringResource(R.string.profile),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = session.username,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        avatarError?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AvatarButton(
+    onEditAvatar: () -> Unit,
+    modifier: Modifier,
+    session: AuthSession,
+) {
+    OutlinedButton(onClick = onEditAvatar, modifier = modifier) {
+        Text(
+            stringResource(
+                if (session.avatarVersion == null) R.string.add_avatar
+                else R.string.change_avatar
+            )
+        )
+    }
+}

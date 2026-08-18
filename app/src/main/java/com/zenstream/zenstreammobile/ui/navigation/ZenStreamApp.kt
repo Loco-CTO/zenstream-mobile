@@ -325,6 +325,7 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         onLogout = onLogout,
+                        outerPadding = padding,
                         onPickAvatar = onPickAvatar,
                         avatarPickerResult = avatarPickerResult,
                         onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
@@ -492,13 +493,22 @@ internal fun MainNavigationBar(
     onDestinationClick: (String) -> Unit,
 ) {
     androidx.compose.material3.NavigationBar(
-        containerColor = Color.Transparent,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
     ) {
         mainNavigationDestinations().forEach { destination ->
             NavigationBarItem(
                 selected = currentRoute == destination.route,
                 onClick = { onDestinationClick(destination.route) },
+                colors =
+                    androidx.compose.material3.NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = .18f),
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 icon = {
                     if (destination.route == MYPAGE) {
                         UserAvatar(

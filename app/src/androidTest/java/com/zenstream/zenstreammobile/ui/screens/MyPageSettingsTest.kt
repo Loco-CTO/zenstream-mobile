@@ -15,49 +15,43 @@ import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.ui.SettingsUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
-class SettingsScreenTest {
+class MyPageSettingsTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun rootShowsSettingsSectionsFooterVersionAndLogout() {
+    fun inlineSettingsShowAllGroupsFooterAndLogout() {
         var loggedOut = false
         composeRule.setContent {
             ZenStreamTheme {
-                SettingsRootContent(onOpenSection = {}, onLogout = { loggedOut = true })
+                MyPageSettingsContent(
+                    state = SettingsUiState(),
+                    onInterfaceLocaleChange = {},
+                    onMetadataLanguageChange = {},
+                    onPlaybackPreferenceChange = { _, _ -> },
+                    onPlayerEngineChange = {},
+                    onShowDebugIconChange = {},
+                    onSubtitleChange = {},
+                    onLogout = { loggedOut = true },
+                )
             }
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
         val versionFooter =
             context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
         composeRule.onNodeWithText(versionFooter).assertIsDisplayed()
-        composeRule
-            .onNodeWithText(versionFooter.substringBefore(BuildConfig.ZENSTREAM_VERSION).trim())
-            .assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
         composeRule.runOnIdle { assertTrue(loggedOut) }
-    }
-
-    @Test
-    fun sectionRowsOpenTheRequestedSubtab() {
-        var selected: SettingsSection? = null
-        composeRule.setContent {
-            ZenStreamTheme {
-                SettingsRootContent(onOpenSection = { selected = it }, onLogout = {})
-            }
-        }
-
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
-        composeRule.runOnIdle { assertEquals(SettingsSection.Player, selected) }
     }
 
     @Test
@@ -125,8 +119,6 @@ class SettingsScreenTest {
         ) {
             it(217f)
         }
-        composeRule.runOnIdle {
-            assertEquals(217f, style.bottomSpacing)
-        }
+        composeRule.runOnIdle { assertEquals(217f, style.bottomSpacing) }
     }
 }
