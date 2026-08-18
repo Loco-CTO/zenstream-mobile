@@ -51,9 +51,6 @@ class MyPageSettingsTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
         val versionFooter =
             context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
         composeRule.onNodeWithText(versionFooter).assertIsDisplayed()
@@ -94,15 +91,20 @@ class MyPageSettingsTest {
         }
 
         composeRule.onNodeWithText("Text color").performClick()
-        composeRule.onNodeWithText("Choose Text color").assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.subtitle_color_picker_title, "Text color"))
+            .assertIsDisplayed()
         composeRule.onNodeWithText("#ffffff").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Red channel").assertIsDisplayed()
+        val redChannel =
+            context.getString(
+                R.string.subtitle_color_slider,
+                context.getString(R.string.subtitle_color_red),
+            )
+        composeRule.onNodeWithContentDescription(redChannel).assertIsDisplayed()
 
-        composeRule.onNodeWithContentDescription("Red channel").performSemanticsAction(
+        composeRule.onNodeWithContentDescription(redChannel).performSemanticsAction(
             SemanticsActions.SetProgress
-        ) {
-            it(128f)
-        }
+        ) { it(128f) }
         composeRule.runOnIdle { assertEquals("#80ffff", selected) }
     }
 

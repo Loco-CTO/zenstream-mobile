@@ -1,5 +1,8 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -103,13 +106,19 @@ class MyPageScreenTest {
     fun deleteConfirmationSupportsCancelAndConfirm() {
         var dismissed = false
         var confirmed = false
+        var dialogVisible by mutableStateOf(true)
         composeRule.setContent {
             ZenStreamTheme {
-                AvatarDeleteConfirmationDialog(
-                    deleting = false,
-                    onDismiss = { dismissed = true },
-                    onConfirm = { confirmed = true },
-                )
+                if (dialogVisible) {
+                    AvatarDeleteConfirmationDialog(
+                        deleting = false,
+                        onDismiss = {
+                            dismissed = true
+                            dialogVisible = false
+                        },
+                        onConfirm = { confirmed = true },
+                    )
+                }
             }
         }
 
@@ -120,15 +129,7 @@ class MyPageScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.cancel)).performClick()
         composeRule.runOnIdle { assertTrue(dismissed) }
 
-        composeRule.setContent {
-            ZenStreamTheme {
-                AvatarDeleteConfirmationDialog(
-                    deleting = false,
-                    onDismiss = {},
-                    onConfirm = { confirmed = true },
-                )
-            }
-        }
+        composeRule.runOnIdle { dialogVisible = true }
         composeRule.onNodeWithText(context.getString(R.string.avatar_delete)).performClick()
         composeRule.runOnIdle { assertTrue(confirmed) }
     }
