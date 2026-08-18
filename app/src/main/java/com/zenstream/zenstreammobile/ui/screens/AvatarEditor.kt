@@ -300,6 +300,7 @@ fun AvatarEditorDialog(
                     } else {
                         sourceDimensions?.let { dimensions ->
                             AvatarEditorPreview(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
                                 uri = selectedUri!!,
                                 dimensions = dimensions,
                                 viewport = viewport,
@@ -450,59 +451,12 @@ fun AvatarEditorDialog(
                                 onChooseAnother = onPickImage,
                                 onCancel = onDismiss,
                                 onRemove = removeAvatar,
-                                onSave = {
-                                    if (saving) return@EditorActions
-                                    val size = viewport
-                                    val crop =
-                                        if (size != null) {
-                                            avatarCropForEditor(
-                                                dimensions,
-                                                com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                    size.width,
-                                                    size.height,
-                                                ),
-                                                zoom,
-                                                pan,
-                                                rotation,
-                                            )
-                                        } else null
-                                    if (crop == null) {
-                                        editorError = fileInvalid
-                                        return@EditorActions
-                                    }
-                                    saving = true
-                                    editorError = null
-                                    scope.launch {
-                                        runCatching {
-                                                repository.uploadAvatar(
-                                                    session,
-                                                    resolver,
-                                                    selectedUri!!,
-                                                    crop,
-                                                )
-                                            }
-                                            .onSuccess {
-                                                onSessionChanged(it)
-                                                onDismiss()
-                                            }
-                                            .onFailure { error ->
-                                                editorError =
-                                                    if (
-                                                        (error is CatalogException &&
-                                                            error.statusCode == 413) ||
-                                                            error is AvatarFileTooLargeException
-                                                    ) {
-                                                        fileTooLarge
-                                                    } else uploadFailed
-                                            }
-                                        saving = false
-                                    }
-                                },
+                                onSave = { saveAvatar() },
                             )
                         }
                             ?: if (sourceError == null) {
                                 Box(
-                                    Modifier.fillMaxWidth().aspectRatio(1f),
+                                    Modifier.fillMaxWidth().weight(1f),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     CircularProgressIndicator()
