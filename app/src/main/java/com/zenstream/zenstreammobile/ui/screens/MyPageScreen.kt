@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -217,7 +218,14 @@ internal fun AvatarDeleteConfirmationDialog(
         title = { Text(stringResource(R.string.avatar_delete_confirmation_title)) },
         text = { Text(stringResource(R.string.avatar_delete_confirmation_message)) },
         confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !deleting) {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !deleting,
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+            ) {
                 if (deleting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
