@@ -91,7 +91,9 @@
     <string name="save">保存</string>
     <string name="cancel">キャンセル</string>
     <string name="player_group">プレーヤー</string>
+    <string name="player_settings_summary">再生と音声</string>
     <string name="subtitles_group">字幕</string>
+    <string name="subtitles_settings_summary">文字のスタイルと位置</string>
     <string name="audio_language">音声言語</string>
     <string name="subtitle_language">字幕言語</string>
     <string name="language_automatic">自動</string>
@@ -227,6 +229,7 @@
     <string name="sort_runtime">再生時間</string>
     <string name="rating_description">%1$sの評価</string>
     <string name="appearance_group">&#x5916;&#x89B3;</string>
+    <string name="appearance_settings_summary">&#x8868;&#x793A;&#x8A00;&#x8A9E;&#x3068;&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;</string>
     <string name="interface_language">&#x8868;&#x793A;&#x8A00;&#x8A9E;</string>
     <string name="interface_language_automatic">&#x81EA;&#x52D5;&#xFF08;&#x30C7;&#x30D0;&#x30A4;&#x30B9;&#x306E;&#x8A00;&#x8A9E;&#xFF09;</string>
     <string name="language_english">English</string>

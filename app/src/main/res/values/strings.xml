@@ -112,7 +112,9 @@
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="player_group">Player</string>
+    <string name="player_settings_summary">Playback and audio</string>
     <string name="subtitles_group">Subtitles</string>
+    <string name="subtitles_settings_summary">Text style and position</string>
     <string name="audio_language">Audio language</string>
     <string name="subtitle_language">Subtitle language</string>
     <string name="language_automatic">Automatic</string>
@@ -229,6 +231,7 @@
     <string name="show_less">Show less</string>
     <string name="select_season">Select season</string>
     <string name="appearance_group">Appearance</string>
+    <string name="appearance_settings_summary">Language and metadata</string>
     <string name="interface_language">Interface language</string>
     <string name="interface_language_automatic">Automatic (device language)</string>
     <string name="language_english">English</string>

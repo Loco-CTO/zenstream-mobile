@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -79,8 +82,11 @@ fun MyPageScreen(
     var deleteConfirmationOpen by remember { mutableStateOf(false) }
     var removingAvatar by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
+    var settingsSection by remember { mutableStateOf<MyPageSettingsSection?>(null) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
+
+    BackHandler(enabled = settingsSection != null) { settingsSection = null }
 
     LaunchedEffect(avatarPickerResult) {
         if (avatarPickerResult != null) {
@@ -93,42 +99,62 @@ fun MyPageScreen(
         onRefresh = settingsViewModel::refresh,
         modifier = Modifier.padding(outerPadding).statusBarsPadding(),
     ) {
+        val activeSection = settingsSection
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 28.dp),
+            contentPadding =
+                PaddingValues(
+                    start = 16.dp,
+                    top = if (activeSection == null) 20.dp else 8.dp,
+                    end = 16.dp,
+                    bottom = 28.dp,
+                ),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            item {
-                Text(
-                    text = stringResource(R.string.my_page),
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-            }
-            item {
-                ProfileCard(
-                    session = session,
-                    onEditAvatar = { avatarActionsOpen = true },
-                    avatarError = avatarError,
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.settings),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.semantics { heading() },
-                )
-            }
-            item {
-                MyPageSettingsContent(
-                    state = settingsState,
-                    onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
-                    onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
-                    onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
-                    onPlayerEngineChange = settingsViewModel::setPlayerEngine,
-                    onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
-                    onSubtitleChange = settingsViewModel::updateSubtitle,
-                    onLogout = onLogout,
-                )
+            if (activeSection == null) {
+                item {
+                    Text(
+                        text = stringResource(R.string.my_page),
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                }
+                item {
+                    ProfileCard(
+                        session = session,
+                        onEditAvatar = { avatarActionsOpen = true },
+                        avatarError = avatarError,
+                    )
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.settings),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
+                item {
+                    MyPageSettingsTabs(onOpenSection = { settingsSection = it })
+                }
+                item { MyPageSettingsFooter(onLogout = onLogout) }
+            } else {
+                item {
+                    MyPageSectionHeader(
+                        section = activeSection,
+                        onBack = { settingsSection = null },
+                    )
+                }
+                item {
+                    MyPageSettingsContent(
+                        section = activeSection,
+                        state = settingsState,
+                        onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
+                        onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
+                        onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                        onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                        onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                        onSubtitleChange = settingsViewModel::updateSubtitle,
+                    )
+                }
             }
         }
     }
@@ -185,6 +211,35 @@ fun MyPageScreen(
             pickedUri = avatarPickerResult,
             onPickImage = onPickAvatar,
             onPickedImageConsumed = onAvatarPickerResultConsumed,
+        )
+    }
+}
+
+@Composable
+private fun MyPageSectionHeader(
+    section: MyPageSettingsSection,
+    onBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                contentDescription = stringResource(R.string.back),
+            )
+        }
+        Text(
+            text =
+                when (section) {
+                    MyPageSettingsSection.Appearance -> stringResource(R.string.appearance_group)
+                    MyPageSettingsSection.Player -> stringResource(R.string.player_group)
+                    MyPageSettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
+                },
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() },
         )
     }
 }

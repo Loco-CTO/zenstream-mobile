@@ -492,7 +492,7 @@ internal fun MainNavigationBar(
     onDestinationClick: (String) -> Unit,
 ) {
     androidx.compose.material3.NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 3.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
     ) {

@@ -48,8 +48,42 @@ import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.SettingsUiState
 
+internal enum class MyPageSettingsSection {
+    Appearance,
+    Player,
+    Subtitles,
+}
+
+@Composable
+internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SettingsTabRow(
+            title = stringResource(R.string.appearance_group),
+            supporting = stringResource(R.string.appearance_settings_summary),
+            icon = LucideR.drawable.lucide_ic_settings,
+            onClick = { onOpenSection(MyPageSettingsSection.Appearance) },
+        )
+        SettingsTabRow(
+            title = stringResource(R.string.player_group),
+            supporting = stringResource(R.string.player_settings_summary),
+            icon = LucideR.drawable.lucide_ic_play,
+            onClick = { onOpenSection(MyPageSettingsSection.Player) },
+        )
+        SettingsTabRow(
+            title = stringResource(R.string.subtitles_group),
+            supporting = stringResource(R.string.subtitles_settings_summary),
+            icon = LucideR.drawable.lucide_ic_captions,
+            onClick = { onOpenSection(MyPageSettingsSection.Subtitles) },
+        )
+    }
+}
+
 @Composable
 internal fun MyPageSettingsContent(
+    section: MyPageSettingsSection,
     state: SettingsUiState,
     onInterfaceLocaleChange: (InterfaceLocaleMode) -> Unit,
     onMetadataLanguageChange: (String?) -> Unit,
@@ -57,112 +91,155 @@ internal fun MyPageSettingsContent(
     onPlayerEngineChange: (PlayerEngine) -> Unit,
     onShowDebugIconChange: (Boolean) -> Unit,
     onSubtitleChange: (SubtitleStyle.() -> SubtitleStyle) -> Unit,
-    onLogout: () -> Unit,
 ) {
+    when (section) {
+        MyPageSettingsSection.Appearance ->
+            SettingsSectionCard(
+                title = stringResource(R.string.appearance_group),
+                icon = LucideR.drawable.lucide_ic_settings,
+            ) {
+                InterfaceLanguageSelector(
+                    selected = state.interfaceLocaleMode,
+                    enabled = !state.interfaceLocaleSaving,
+                    onChange = onInterfaceLocaleChange,
+                )
+                SectionDivider()
+                MetadataLanguageSelector(
+                    languages = state.metadataLanguages,
+                    selected = state.metadataLanguage,
+                    effective = state.effectiveMetadataLanguage,
+                    enabled = !state.metadataSaving,
+                    onChange = onMetadataLanguageChange,
+                )
+                if (state.interfaceLocaleSaveError) {
+                    SettingsErrorText(R.string.interface_language_save_failed)
+                }
+                if (state.metadataSaveError) {
+                    SettingsErrorText(R.string.metadata_language_save_failed)
+                }
+            }
+
+        MyPageSettingsSection.Player ->
+            SettingsSectionCard(
+                title = stringResource(R.string.player_group),
+                icon = LucideR.drawable.lucide_ic_play,
+            ) {
+                PlaybackLanguageSelector(
+                    title = stringResource(R.string.audio_language),
+                    options = state.playbackPreference.audioLanguages,
+                    selected = state.playbackPreference.audioLanguage,
+                    offAllowed = false,
+                    enabled = !state.playbackSaving,
+                    onChange = { audio ->
+                        onPlaybackPreferenceChange(
+                            audio,
+                            state.playbackPreference.subtitleLanguage,
+                        )
+                    },
+                )
+                SectionDivider()
+                PlaybackLanguageSelector(
+                    title = stringResource(R.string.subtitle_language),
+                    options = state.playbackPreference.subtitleLanguages,
+                    selected = state.playbackPreference.subtitleLanguage,
+                    offAllowed = true,
+                    enabled = !state.playbackSaving,
+                    onChange = { subtitle ->
+                        onPlaybackPreferenceChange(
+                            state.playbackPreference.audioLanguage,
+                            subtitle,
+                        )
+                    },
+                )
+                if (state.playbackSaveError) {
+                    SettingsErrorText(R.string.playback_language_save_failed)
+                }
+                SectionDivider()
+                EngineSelector(state.playerEngine, onPlayerEngineChange)
+                SectionDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.player_show_debug_icon),
+                    supporting = stringResource(R.string.player_show_debug_icon_description),
+                    checked = state.showDebugIcon,
+                    onCheckedChange = onShowDebugIconChange,
+                )
+            }
+
+        MyPageSettingsSection.Subtitles ->
+            SettingsSectionCard(
+                title = stringResource(R.string.subtitles_group),
+                icon = LucideR.drawable.lucide_ic_captions,
+            ) {
+                SubtitleSettings(style = state.subtitleStyle, onChange = onSubtitleChange)
+                if (state.subtitleSaveError) {
+                    SettingsErrorText(R.string.subtitle_save_failed)
+                }
+            }
+    }
+}
+
+@Composable
+internal fun MyPageSettingsFooter(onLogout: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SettingsSectionCard(
-            title = stringResource(R.string.appearance_group),
-            icon = LucideR.drawable.lucide_ic_settings,
-        ) {
-            InterfaceLanguageSelector(
-                selected = state.interfaceLocaleMode,
-                enabled = !state.interfaceLocaleSaving,
-                onChange = onInterfaceLocaleChange,
-            )
-            SectionDivider()
-            MetadataLanguageSelector(
-                languages = state.metadataLanguages,
-                selected = state.metadataLanguage,
-                effective = state.effectiveMetadataLanguage,
-                enabled = !state.metadataSaving,
-                onChange = onMetadataLanguageChange,
-            )
-            if (state.interfaceLocaleSaveError) {
-                SettingsErrorText(R.string.interface_language_save_failed)
-            }
-            if (state.metadataSaveError) {
-                SettingsErrorText(R.string.metadata_language_save_failed)
-            }
-        }
-
-        SettingsSectionCard(
-            title = stringResource(R.string.player_group),
-            icon = LucideR.drawable.lucide_ic_play,
-        ) {
-            PlaybackLanguageSelector(
-                title = stringResource(R.string.audio_language),
-                options = state.playbackPreference.audioLanguages,
-                selected = state.playbackPreference.audioLanguage,
-                offAllowed = false,
-                enabled = !state.playbackSaving,
-                onChange = { audio ->
-                    onPlaybackPreferenceChange(
-                        audio,
-                        state.playbackPreference.subtitleLanguage,
-                    )
-                },
-            )
-            SectionDivider()
-            PlaybackLanguageSelector(
-                title = stringResource(R.string.subtitle_language),
-                options = state.playbackPreference.subtitleLanguages,
-                selected = state.playbackPreference.subtitleLanguage,
-                offAllowed = true,
-                enabled = !state.playbackSaving,
-                onChange = { subtitle ->
-                    onPlaybackPreferenceChange(
-                        state.playbackPreference.audioLanguage,
-                        subtitle,
-                    )
-                },
-            )
-            if (state.playbackSaveError) {
-                SettingsErrorText(R.string.playback_language_save_failed)
-            }
-            SectionDivider()
-            EngineSelector(state.playerEngine, onPlayerEngineChange)
-            SectionDivider()
-            SettingSwitchRow(
-                title = stringResource(R.string.player_show_debug_icon),
-                supporting = stringResource(R.string.player_show_debug_icon_description),
-                checked = state.showDebugIcon,
-                onCheckedChange = onShowDebugIconChange,
-            )
-        }
-
-        SettingsSectionCard(
-            title = stringResource(R.string.subtitles_group),
-            icon = LucideR.drawable.lucide_ic_captions,
-        ) {
-            SubtitleSettings(style = state.subtitleStyle, onChange = onSubtitleChange)
-            if (state.subtitleSaveError) {
-                SettingsErrorText(R.string.subtitle_save_failed)
-            }
-        }
-
-        Column(
+        OutlinedButton(
+            onClick = onLogout,
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
         ) {
-            OutlinedButton(
-                onClick = onLogout,
-                modifier = Modifier.fillMaxWidth(),
-                colors =
-                    ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-            ) {
-                Text(stringResource(R.string.logout))
+            Text(stringResource(R.string.logout))
+        }
+        Text(
+            text = stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun SettingsTabRow(
+    title: String,
+    supporting: String,
+    icon: Int,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(18.dp),
+        tonalElevation = 1.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    supporting,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
-            Text(
-                text =
-                    stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.fillMaxWidth(),
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_chevron_down),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
             )
         }
     }
