@@ -150,6 +150,7 @@ data class SubtitleStyle(
     val fontFamily: String = "sans",
     val bold: Boolean = false,
     val textScale: Float = 100f,
+    val bottomSpacing: Float = 48f,
     val fontColor: String = "#ffffff",
     val borderSize: Float = 2f,
     val borderColor: String = "#000000",

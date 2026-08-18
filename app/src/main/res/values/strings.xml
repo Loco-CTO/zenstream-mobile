@@ -142,6 +142,7 @@
     <string name="subtitle_font">Font</string>
     <string name="subtitle_bold">Bold subtitles</string>
     <string name="subtitle_text_size">Text size</string>
+    <string name="subtitle_bottom_spacing">Bottom spacing</string>
     <string name="subtitle_font_color">Text color</string>
     <string name="subtitle_border_size">Border size</string>
     <string name="subtitle_border_color">Border color</string>

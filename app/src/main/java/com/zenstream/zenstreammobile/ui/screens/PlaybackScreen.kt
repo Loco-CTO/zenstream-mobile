@@ -111,6 +111,7 @@ import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
+import com.zenstream.zenstreammobile.ui.player.subtitleBottomPadding
 import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -408,7 +409,7 @@ fun PlaybackScreen(
         SubtitleOverlay(
             cues = state.activeCuesAt(subtitlePositionSeconds),
             style = state.subtitleStyle,
-            bottomPadding = if (controlsVisible && !controlsLocked) 128.dp else 48.dp,
+            bottomPadding = subtitleBottomPadding(state.subtitleStyle),
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 

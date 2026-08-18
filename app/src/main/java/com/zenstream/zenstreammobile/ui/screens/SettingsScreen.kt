@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -460,7 +461,7 @@ private fun EngineSelector(selected: PlayerEngine, onChange: (PlayerEngine) -> U
 }
 
 @Composable
-private fun SubtitleSettings(
+internal fun SubtitleSettings(
     style: com.zenstream.zenstreammobile.model.SubtitleStyle,
     onChange:
         (
@@ -501,6 +502,15 @@ private fun SubtitleSettings(
         "%d%%",
     ) {
         onChange { copy(textScale = it) }
+    }
+    SliderRow(
+        stringResource(R.string.subtitle_bottom_spacing),
+        style.bottomSpacing,
+        0f..300f,
+        "%d dp",
+        steps = 299,
+    ) {
+        onChange { copy(bottomSpacing = it) }
     }
     SubtitleColorField(stringResource(R.string.subtitle_font_color), style.fontColor) {
         onChange {
@@ -562,6 +572,7 @@ private fun SliderRow(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     format: String,
+    steps: Int = 0,
     onChange: (Float) -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -569,7 +580,13 @@ private fun SliderRow(
             Text(label)
             Text(if (format.contains("%d")) format.format(value.toInt()) else format.format(value))
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range)
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps,
+            modifier = Modifier.semantics { contentDescription = label },
+        )
     }
 }
 

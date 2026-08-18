@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 
+internal fun subtitleBottomPadding(style: SubtitleStyle) = style.bottomSpacing.dp
+
 @Composable
 internal fun SubtitleOverlay(
     cues: List<SubtitleCue>,

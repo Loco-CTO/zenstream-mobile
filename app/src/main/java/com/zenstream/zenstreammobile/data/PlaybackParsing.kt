@@ -98,6 +98,7 @@ fun normalizeSubtitleStyle(style: SubtitleStyle): SubtitleStyle =
     style.copy(
         fontFamily = style.fontFamily.takeIf { it in setOf("sans", "serif", "mono") } ?: "sans",
         textScale = style.textScale.coerceIn(50f, 200f),
+        bottomSpacing = style.bottomSpacing.coerceIn(0f, 300f),
         borderSize = style.borderSize.coerceIn(0f, 8f),
         backgroundOpacity = style.backgroundOpacity.coerceIn(0f, 100f),
     )
