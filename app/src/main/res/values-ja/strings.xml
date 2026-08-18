@@ -74,6 +74,7 @@
     <string name="avatar_preview">アバターのプレビュー</string>
     <string name="avatar_pan_hint">ドラッグして移動、ピンチまたはスライダーでズームします。</string>
     <string name="avatar_zoom">ズーム</string>
+    <string name="avatar_rotate">回転</string>
     <string name="avatar_rotate_counter_clockwise">反時計回りに回転</string>
     <string name="avatar_rotate_clockwise">時計回りに回転</string>
     <string name="avatar_processing">処理中…</string>
