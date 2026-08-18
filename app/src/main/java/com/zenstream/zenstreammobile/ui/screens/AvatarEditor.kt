@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -270,7 +272,22 @@ fun AvatarEditorDialog(
                                 zoom = zoom,
                                 pan = pan,
                                 rotation = rotation,
-                                onViewportChanged = { viewport = it },
+                                onViewportChanged = { nextViewport ->
+                                    viewport = nextViewport
+                                    if (nextViewport.width > 0 && nextViewport.height > 0) {
+                                        pan =
+                                            clampAvatarPan(
+                                                dimensions,
+                                                com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                    nextViewport.width,
+                                                    nextViewport.height,
+                                                ),
+                                                zoom,
+                                                rotation,
+                                                pan,
+                                            )
+                                    }
+                                },
                                 onTransform = { nextZoom, nextPan ->
                                     val size = viewport ?: return@AvatarEditorPreview
                                     val cropViewport =
@@ -488,7 +505,7 @@ private fun AvatarEditorPreview(
                 contentDescription = stringResource(R.string.avatar_preview),
                 contentScale = ContentScale.Fit,
                 modifier =
-                    Modifier.width(imageWidth).height(imageHeight).graphicsLayer {
+                    Modifier.requiredWidth(imageWidth).requiredHeight(imageHeight).graphicsLayer {
                         scaleX = zoom
                         scaleY = zoom
                         rotationZ = rotation.toFloat()
