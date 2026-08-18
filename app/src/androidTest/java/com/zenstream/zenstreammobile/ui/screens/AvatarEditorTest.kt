@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class AvatarEditorTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun editorDoesNotDuplicateParentActions() {
