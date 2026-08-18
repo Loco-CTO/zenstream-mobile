@@ -348,21 +348,22 @@ fun AvatarEditorDialog(
                             AvatarZoomPanel(
                                 zoom = zoom,
                                 onZoomChange = { next ->
-                                    val size = viewport ?: return@AvatarZoomPanel
-                                    val cropViewport =
-                                        com.zenstream.zenstreammobile.data.AvatarViewport(
-                                            size.width,
-                                            size.height,
-                                        )
-                                    zoom = clampAvatarZoom(next)
-                                    pan =
-                                        clampAvatarPan(
-                                            dimensions,
-                                            cropViewport,
-                                            zoom,
-                                            rotation,
-                                            pan,
-                                        )
+                                    viewport?.let { size ->
+                                        val cropViewport =
+                                            com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                size.width,
+                                                size.height,
+                                            )
+                                        zoom = clampAvatarZoom(next)
+                                        pan =
+                                            clampAvatarPan(
+                                                dimensions,
+                                                cropViewport,
+                                                zoom,
+                                                rotation,
+                                                pan,
+                                            )
+                                    }
                                 },
                             )
                             Row(
@@ -376,18 +377,19 @@ fun AvatarEditorDialog(
                                     onClick = {
                                         val nextRotation = (rotation + 270) % 360
                                         rotation = nextRotation
-                                        val size = viewport ?: return@AvatarEditorIconAction
-                                        pan =
-                                            clampAvatarPan(
-                                                dimensions,
-                                                com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                    size.width,
-                                                    size.height,
-                                                ),
-                                                zoom,
-                                                rotation,
-                                                pan,
-                                            )
+                                        viewport?.let { size ->
+                                            pan =
+                                                clampAvatarPan(
+                                                    dimensions,
+                                                    com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                        size.width,
+                                                        size.height,
+                                                    ),
+                                                    zoom,
+                                                    rotation,
+                                                    pan,
+                                                )
+                                        }
                                     },
                                 )
                                 AvatarEditorIconAction(
@@ -396,18 +398,19 @@ fun AvatarEditorDialog(
                                     onClick = {
                                         val nextRotation = (rotation + 90) % 360
                                         rotation = nextRotation
-                                        val size = viewport ?: return@AvatarEditorIconAction
-                                        pan =
-                                            clampAvatarPan(
-                                                dimensions,
-                                                com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                    size.width,
-                                                    size.height,
-                                                ),
-                                                zoom,
-                                                rotation,
-                                                pan,
-                                            )
+                                        viewport?.let { size ->
+                                            pan =
+                                                clampAvatarPan(
+                                                    dimensions,
+                                                    com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                        size.width,
+                                                        size.height,
+                                                    ),
+                                                    zoom,
+                                                    rotation,
+                                                    pan,
+                                                )
+                                        }
                                     },
                                 )
                             }
