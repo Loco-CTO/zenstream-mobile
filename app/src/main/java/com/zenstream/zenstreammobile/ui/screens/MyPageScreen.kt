@@ -11,13 +11,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +31,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
+import kotlinx.coroutines.launch
 
 @Composable
 fun MyPageScreen(
@@ -38,6 +43,21 @@ fun MyPageScreen(
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
     var editorOpen by remember { mutableStateOf(false) }
+    var removingAvatar by remember { mutableStateOf(false) }
+    var avatarError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val removeFailed = stringResource(R.string.avatar_remove_failed)
+    val removeAvatar: () -> Unit = {
+        if (!removingAvatar && session.avatarVersion != null) {
+            removingAvatar = true
+            avatarError = null
+            scope.launch {
+                runCatching { repository.removeAvatar(session) }
+                    .onFailure { avatarError = removeFailed }
+                removingAvatar = false
+            }
+        }
+    }
     SettingsScreen(
         repository = repository,
         onBack = {},
@@ -49,6 +69,9 @@ fun MyPageScreen(
             ProfileCard(
                 session = session,
                 onEditAvatar = { editorOpen = true },
+                onRemoveAvatar = removeAvatar,
+                removingAvatar = removingAvatar,
+                avatarError = avatarError,
             )
         },
     )
@@ -66,7 +89,13 @@ fun MyPageScreen(
 }
 
 @Composable
-internal fun ProfileCard(session: AuthSession, onEditAvatar: () -> Unit) {
+internal fun ProfileCard(
+    session: AuthSession,
+    onEditAvatar: () -> Unit,
+    onRemoveAvatar: () -> Unit = {},
+    removingAvatar: Boolean = false,
+    avatarError: String? = null,
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = ColorProfileCard),
         modifier = Modifier.fillMaxWidth(),
@@ -100,6 +129,33 @@ internal fun ProfileCard(session: AuthSession, onEditAvatar: () -> Unit) {
                             if (session.avatarVersion == null) R.string.add_avatar
                             else R.string.change_avatar
                         )
+                    )
+                }
+                if (session.avatarVersion != null) {
+                    TextButton(
+                        onClick = onRemoveAvatar,
+                        enabled = !removingAvatar,
+                        colors =
+                            ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                    ) {
+                        if (removingAvatar) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        } else {
+                            Text(stringResource(R.string.remove_avatar))
+                        }
+                    }
+                }
+                avatarError?.let { message ->
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }

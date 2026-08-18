@@ -1,6 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,7 +19,7 @@ class AvatarEditorTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun existingAvatarCanBeRemovedBeforeChoosingReplacement() {
+    fun editorDoesNotDuplicateParentActions() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repository = testRepository(context)
 
@@ -41,7 +41,8 @@ class AvatarEditorTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.remove_avatar)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.remove_avatar)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.cancel)).assertDoesNotExist()
     }
 
     @Test
