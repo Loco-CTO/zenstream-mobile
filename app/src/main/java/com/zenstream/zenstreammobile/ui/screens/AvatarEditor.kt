@@ -91,18 +91,6 @@ fun AvatarEditorDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val imageLoader =
-        remember(context) {
-            ImageLoader.Builder(context)
-                .components {
-                    if (Build.VERSION.SDK_INT >= 28) {
-                        add(AnimatedImageDecoder.Factory())
-                    } else {
-                        add(GifDecoder.Factory())
-                    }
-                }
-                .build()
-        }
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
@@ -513,6 +501,18 @@ private fun AvatarEditorPreview(
     onTransform: (Float, AvatarPan) -> Unit,
 ) {
     val context = LocalContext.current
+    val imageLoader =
+        remember(context) {
+            ImageLoader.Builder(context)
+                .components {
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        add(AnimatedImageDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                .build()
+        }
     val viewportSize = viewport?.takeIf { it.width > 0 && it.height > 0 }
     val fitScale = viewportSize?.let {
         minOf(it.width / dimensions.width.toFloat(), it.height / dimensions.height.toFloat())
