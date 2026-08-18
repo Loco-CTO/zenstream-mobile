@@ -102,9 +102,9 @@ class PlaybackControlsTest {
     }
 
     @Test
-    fun dragSeekUsesHalfThePlayerWidthForTheFullDuration() {
-        assertEquals(30.0, dragSeekDeltaSeconds(250f, 1_000, 240.0), 0.001)
-        assertEquals(-30.0, dragSeekDeltaSeconds(-250f, 1_000, 240.0), 0.001)
+    fun dragSeekUsesReducedSensitivityInBothDirections() {
+        assertEquals(15.0, dragSeekDeltaSeconds(250f, 1_000, 240.0), 0.001)
+        assertEquals(-15.0, dragSeekDeltaSeconds(-250f, 1_000, 240.0), 0.001)
     }
 
     @Test
