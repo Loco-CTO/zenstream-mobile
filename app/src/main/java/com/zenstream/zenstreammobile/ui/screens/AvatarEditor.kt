@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -268,8 +267,7 @@ fun AvatarEditorDialog(
                 Column(
                     modifier =
                         Modifier.fillMaxSize()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 20.dp),
+                            .navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (selectedUri == null) {
@@ -277,18 +275,20 @@ fun AvatarEditorDialog(
                             text = stringResource(R.string.avatar_editor_description),
                             color = Color.White.copy(alpha = .72f),
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                     }
                     if (selectedUri == null) {
                         AvatarPickCard(
                             enabled = !saving,
                             onPick = onPickImage,
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                         if (session.avatarVersion != null) {
                             OutlinedButton(
                                 onClick = removeAvatar,
                                 enabled = !saving,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                             ) {
                                 if (saving) {
                                     CircularProgressIndicator(
@@ -302,7 +302,11 @@ fun AvatarEditorDialog(
                                 }
                             }
                             editorError?.let { message ->
-                                Text(message, color = Color(0xFFFF8A80))
+                                Text(
+                                    message,
+                                    color = Color(0xFFFF8A80),
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                )
                             }
                         }
                     } else {
@@ -339,6 +343,7 @@ fun AvatarEditorDialog(
                                 color = Color.White.copy(alpha = .62f),
                                 style =
                                     androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 20.dp),
                             )
                             AvatarZoomPanel(
                                 zoom = zoom,
@@ -439,13 +444,21 @@ fun AvatarEditorDialog(
                                     CircularProgressIndicator()
                                 }
                             } else {
-                                Text(sourceError.orEmpty(), color = Color(0xFFFF8A80))
+                                Text(
+                                    sourceError.orEmpty(),
+                                    color = Color(0xFFFF8A80),
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                )
                             }
                     }
                     sourceError
                         ?.takeIf { selectedUri == null }
                         ?.let {
-                            Text(it, color = Color(0xFFFF8A80))
+                            Text(
+                                it,
+                                color = Color(0xFFFF8A80),
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                            )
                         }
                     if (selectedUri == null) {
                         Text(
@@ -455,6 +468,7 @@ fun AvatarEditorDialog(
                             ),
                             color = Color.White.copy(alpha = .58f),
                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 20.dp),
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -465,10 +479,14 @@ fun AvatarEditorDialog(
 }
 
 @Composable
-private fun AvatarPickCard(enabled: Boolean = true, onPick: () -> Unit) {
+private fun AvatarPickCard(
+    enabled: Boolean = true,
+    onPick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         modifier =
-            Modifier.fillMaxWidth()
+            modifier.fillMaxWidth()
                 .aspectRatio(1.2f)
                 .clickable(enabled = enabled, onClick = onPick),
         color = Color(0xFF16161A),
