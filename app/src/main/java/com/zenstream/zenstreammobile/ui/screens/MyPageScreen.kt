@@ -222,9 +222,7 @@ internal fun AvatarDeleteConfirmationDialog(
                 onClick = onConfirm,
                 enabled = !deleting,
                 colors =
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
+                    ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
             ) {
                 if (deleting) {
                     CircularProgressIndicator(
