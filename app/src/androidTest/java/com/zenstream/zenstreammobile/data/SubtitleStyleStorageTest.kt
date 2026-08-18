@@ -15,6 +15,7 @@ class SubtitleStyleStorageTest {
         assertEquals("sans", DEFAULT_SUBTITLE_STYLE.fontFamily)
         assertEquals("#ffffff", DEFAULT_SUBTITLE_STYLE.fontColor)
         assertEquals(2f, DEFAULT_SUBTITLE_STYLE.borderSize)
+        assertEquals(48f, DEFAULT_SUBTITLE_STYLE.bottomSpacing)
         assertEquals("#000000", DEFAULT_SUBTITLE_STYLE.borderColor)
         assertEquals(0f, DEFAULT_SUBTITLE_STYLE.backgroundOpacity)
     }
@@ -22,6 +23,7 @@ class SubtitleStyleStorageTest {
     @Test
     fun missingBorderSizeUsesTheNewDefaultButExplicitZeroIsPreserved() {
         assertEquals(2f, subtitleStyleFromJson("{\"fontFamily\":\"sans\"}").borderSize)
+        assertEquals(48f, subtitleStyleFromJson("{\"fontFamily\":\"sans\"}").bottomSpacing)
         assertEquals(
             0f,
             subtitleStyleFromJson(subtitleStyleToJson(SubtitleStyle(borderSize = 0f))).borderSize,
@@ -35,6 +37,7 @@ class SubtitleStyleStorageTest {
                 fontFamily = "mono",
                 bold = true,
                 textScale = 135f,
+                bottomSpacing = 217f,
                 fontColor = "#12abef",
                 borderSize = 4f,
                 borderColor = "#010203",

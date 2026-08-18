@@ -14,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -102,5 +103,30 @@ class SettingsScreenTest {
             it(128f)
         }
         composeRule.runOnIdle { assertEquals("#80ffff", selected) }
+    }
+
+    @Test
+    fun subtitleBottomSpacingSliderUsesWholeDpValues() {
+        var style by mutableStateOf(SubtitleStyle())
+        composeRule.setContent {
+            ZenStreamTheme {
+                SubtitleSettings(
+                    style = style,
+                    onChange = { style = it(style) },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val label = context.getString(R.string.subtitle_bottom_spacing)
+        composeRule.onNodeWithText(label).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(label).performSemanticsAction(
+            SemanticsActions.SetProgress
+        ) {
+            it(217f)
+        }
+        composeRule.runOnIdle {
+            assertEquals(217f, style.bottomSpacing)
+        }
     }
 }

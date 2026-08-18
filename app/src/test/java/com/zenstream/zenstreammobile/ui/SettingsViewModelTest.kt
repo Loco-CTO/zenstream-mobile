@@ -116,6 +116,26 @@ class SettingsViewModelTest {
         assertEquals("ja", viewModel.uiState.value.effectiveMetadataLanguage)
         assertFalse(viewModel.uiState.value.metadataSaving)
     }
+
+    @Test
+    fun subtitleBottomSpacingUpdatesAndUsesTheExistingSavePath() = runTest {
+        val saved = mutableListOf<SubtitleStyle>()
+        val source =
+            FakeSettingsDataSource().also {
+                it.subtitleSave = { style ->
+                    saved += style
+                    style
+                }
+            }
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        viewModel.updateSubtitle { copy(bottomSpacing = 217f) }
+        advanceUntilIdle()
+
+        assertEquals(217f, viewModel.uiState.value.subtitleStyle.bottomSpacing)
+        assertEquals(217f, saved.single().bottomSpacing)
+    }
 }
 
 private class FakeSettingsDataSource : SettingsDataSource {
@@ -131,6 +151,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
         metadataPreference = MetadataPreference(listOf("en", "ja"), language, language ?: "en")
         metadataPreference
     }
+    var subtitleSave: suspend (SubtitleStyle) -> SubtitleStyle = { it }
     var playbackPreference = PlaybackPreference(null, null, emptyList(), emptyList())
 
     override suspend fun loadMetadataPreference() = metadataPreference
@@ -149,7 +170,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
 
     override suspend fun loadSubtitleStyle() = SubtitleStyle()
 
-    override suspend fun saveSubtitleStyle(style: SubtitleStyle) = style
+    override suspend fun saveSubtitleStyle(style: SubtitleStyle) = subtitleSave(style)
 
     override suspend fun loadPlaybackPreference() = playbackPreference
 

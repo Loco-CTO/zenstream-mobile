@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
 import com.zenstream.zenstreammobile.ui.player.MpvEndFileGate
+import com.zenstream.zenstreammobile.ui.player.subtitleBottomPadding
 import com.zenstream.zenstreammobile.ui.player.subtitleOutlineOffsets
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -376,14 +377,38 @@ class PlaybackParsingTest {
                 com.zenstream.zenstreammobile.model.SubtitleStyle(
                     fontFamily = "unknown",
                     textScale = 400f,
+                    bottomSpacing = 400f,
                     borderSize = -1f,
                     backgroundOpacity = 150f,
                 )
             )
         assertEquals("sans", style.fontFamily)
         assertEquals(200f, style.textScale)
+        assertEquals(300f, style.bottomSpacing)
         assertEquals(0f, style.borderSize)
         assertEquals(100f, style.backgroundOpacity)
+    }
+
+    @Test
+    fun subtitleBottomPaddingUsesTheConfiguredValueWithoutControlClearance() {
+        assertEquals(
+            0f,
+            subtitleBottomPadding(
+                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 0f)
+            ).value,
+        )
+        assertEquals(
+            217f,
+            subtitleBottomPadding(
+                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 217f)
+            ).value,
+        )
+        assertEquals(
+            300f,
+            subtitleBottomPadding(
+                com.zenstream.zenstreammobile.model.SubtitleStyle(bottomSpacing = 300f)
+            ).value,
+        )
     }
 
     @Test
