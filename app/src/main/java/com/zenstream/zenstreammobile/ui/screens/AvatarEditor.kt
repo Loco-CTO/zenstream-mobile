@@ -74,10 +74,10 @@ import com.zenstream.zenstreammobile.data.avatarSourceInfo
 import com.zenstream.zenstreammobile.data.clampAvatarPan
 import com.zenstream.zenstreammobile.data.clampAvatarZoom
 import com.zenstream.zenstreammobile.model.AuthSession
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -265,9 +265,7 @@ fun AvatarEditorDialog(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 )
                 Column(
-                    modifier =
-                        Modifier.fillMaxSize()
-                            .navigationBarsPadding(),
+                    modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (selectedUri == null) {
@@ -372,7 +370,8 @@ fun AvatarEditorDialog(
                             ) {
                                 AvatarEditorIconAction(
                                     icon = LucideR.drawable.lucide_ic_refresh_cw,
-                                    label = stringResource(R.string.avatar_rotate_counter_clockwise),
+                                    label =
+                                        stringResource(R.string.avatar_rotate_counter_clockwise),
                                     mirrored = true,
                                     onClick = {
                                         val nextRotation = (rotation + 270) % 360
@@ -381,10 +380,11 @@ fun AvatarEditorDialog(
                                             pan =
                                                 clampAvatarPan(
                                                     dimensions,
-                                                    com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                        size.width,
-                                                        size.height,
-                                                    ),
+                                                    com.zenstream.zenstreammobile.data
+                                                        .AvatarViewport(
+                                                            size.width,
+                                                            size.height,
+                                                        ),
                                                     zoom,
                                                     rotation,
                                                     pan,
@@ -402,10 +402,11 @@ fun AvatarEditorDialog(
                                             pan =
                                                 clampAvatarPan(
                                                     dimensions,
-                                                    com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                        size.width,
-                                                        size.height,
-                                                    ),
+                                                    com.zenstream.zenstreammobile.data
+                                                        .AvatarViewport(
+                                                            size.width,
+                                                            size.height,
+                                                        ),
                                                     zoom,
                                                     rotation,
                                                     pan,
@@ -489,7 +490,8 @@ private fun AvatarPickCard(
 ) {
     Surface(
         modifier =
-            modifier.fillMaxWidth()
+            modifier
+                .fillMaxWidth()
                 .aspectRatio(1.2f)
                 .clickable(enabled = enabled, onClick = onPick),
         color = Color(0xFF16161A),
@@ -543,18 +545,17 @@ private fun AvatarEditorPreview(
                 .build()
         }
     val viewportSize = viewport?.takeIf { it.width > 0 && it.height > 0 }
-    val baseScale =
-        viewportSize?.let {
-            com.zenstream.zenstreammobile.data.avatarCoverScale(
-                dimensions,
-                com.zenstream.zenstreammobile.data.AvatarViewport(
-                    it.width,
-                    it.height,
-                ),
-                1f,
-                rotation,
-            )
-        }
+    val baseScale = viewportSize?.let {
+        com.zenstream.zenstreammobile.data.avatarCoverScale(
+            dimensions,
+            com.zenstream.zenstreammobile.data.AvatarViewport(
+                it.width,
+                it.height,
+            ),
+            1f,
+            rotation,
+        )
+    }
     val latestZoom by androidx.compose.runtime.rememberUpdatedState(zoom)
     val latestPan by androidx.compose.runtime.rememberUpdatedState(pan)
     val latestOnTransform by androidx.compose.runtime.rememberUpdatedState(onTransform)
