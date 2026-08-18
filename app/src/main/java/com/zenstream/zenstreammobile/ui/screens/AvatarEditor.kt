@@ -340,35 +340,26 @@ fun AvatarEditorDialog(
                                 style =
                                     androidx.compose.material3.MaterialTheme.typography.bodySmall,
                             )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Text(stringResource(R.string.avatar_zoom))
-                                Slider(
-                                    value = zoom,
-                                    onValueChange = { next ->
-                                        val size = viewport ?: return@Slider
-                                        val cropViewport =
-                                            com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                size.width,
-                                                size.height,
-                                            )
-                                        zoom = clampAvatarZoom(next)
-                                        pan =
-                                            clampAvatarPan(
-                                                dimensions,
-                                                cropViewport,
-                                                zoom,
-                                                rotation,
-                                                pan,
-                                            )
-                                    },
-                                    valueRange = 1f..4f,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text("%.1f×".format(zoom))
-                            }
+                            AvatarZoomPanel(
+                                zoom = zoom,
+                                onZoomChange = { next ->
+                                    val size = viewport ?: return@AvatarZoomPanel
+                                    val cropViewport =
+                                        com.zenstream.zenstreammobile.data.AvatarViewport(
+                                            size.width,
+                                            size.height,
+                                        )
+                                    zoom = clampAvatarZoom(next)
+                                    pan =
+                                        clampAvatarPan(
+                                            dimensions,
+                                            cropViewport,
+                                            zoom,
+                                            rotation,
+                                            pan,
+                                        )
+                                },
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
