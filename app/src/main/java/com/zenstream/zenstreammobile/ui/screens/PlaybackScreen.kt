@@ -806,7 +806,7 @@ internal data class SeekFeedback(
 
 internal const val PLAYBACK_TIMELINE_CONTROLS_GAP_DP = 16
 private const val QUICK_SEEK_SECONDS = 5.0
-private const val DRAG_SEEK_SENSITIVITY = 0.5
+private const val DRAG_SEEK_SENSITIVITY = 0.25
 private const val SEEK_FEEDBACK_VISIBLE_MILLIS = 800L
 private val SEEK_FEEDBACK_VERTICAL_OFFSET = (-96).dp
 private val SYSTEM_GESTURE_EDGE_GUARD = 32.dp
