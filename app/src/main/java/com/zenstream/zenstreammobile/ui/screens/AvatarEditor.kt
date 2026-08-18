@@ -362,70 +362,49 @@ fun AvatarEditorDialog(
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
                             ) {
-                                OutlinedButton(
+                                AvatarEditorIconAction(
+                                    icon = LucideR.drawable.lucide_ic_refresh_cw,
+                                    label = stringResource(R.string.avatar_rotate_counter_clockwise),
+                                    mirrored = true,
                                     onClick = {
-                                        rotation = (rotation + 270) % 360
-                                        val size = viewport ?: return@OutlinedButton
-                                        val cropViewport =
-                                            com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                size.width,
-                                                size.height,
-                                            )
+                                        val nextRotation = (rotation + 270) % 360
+                                        rotation = nextRotation
+                                        val size = viewport ?: return@AvatarEditorIconAction
                                         pan =
                                             clampAvatarPan(
                                                 dimensions,
-                                                cropViewport,
+                                                com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                    size.width,
+                                                    size.height,
+                                                ),
                                                 zoom,
                                                 rotation,
                                                 pan,
                                             )
                                     },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Icon(
-                                        painter =
-                                            painterResource(LucideR.drawable.lucide_ic_refresh_cw),
-                                        contentDescription =
-                                            stringResource(
-                                                R.string.avatar_rotate_counter_clockwise
-                                            ),
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.avatar_rotate_counter_clockwise))
-                                }
-                                OutlinedButton(
+                                )
+                                AvatarEditorIconAction(
+                                    icon = LucideR.drawable.lucide_ic_refresh_cw,
+                                    label = stringResource(R.string.avatar_rotate_clockwise),
                                     onClick = {
-                                        rotation = (rotation + 90) % 360
-                                        val size = viewport ?: return@OutlinedButton
-                                        val cropViewport =
-                                            com.zenstream.zenstreammobile.data.AvatarViewport(
-                                                size.width,
-                                                size.height,
-                                            )
+                                        val nextRotation = (rotation + 90) % 360
+                                        rotation = nextRotation
+                                        val size = viewport ?: return@AvatarEditorIconAction
                                         pan =
                                             clampAvatarPan(
                                                 dimensions,
-                                                cropViewport,
+                                                com.zenstream.zenstreammobile.data.AvatarViewport(
+                                                    size.width,
+                                                    size.height,
+                                                ),
                                                 zoom,
                                                 rotation,
                                                 pan,
                                             )
                                     },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Icon(
-                                        painter =
-                                            painterResource(LucideR.drawable.lucide_ic_refresh_cw),
-                                        contentDescription =
-                                            stringResource(R.string.avatar_rotate_clockwise),
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.avatar_rotate_clockwise))
-                                }
+                                )
                             }
                             sourceInfo?.let { info ->
                                 Text(
@@ -450,7 +429,6 @@ fun AvatarEditorDialog(
                                 onChooseAnother = onPickImage,
                                 onCancel = onDismiss,
                                 onRemove = removeAvatar,
-                                onSave = { saveAvatar() },
                             )
                         }
                             ?: if (sourceError == null) {
@@ -519,6 +497,7 @@ private fun AvatarPickCard(enabled: Boolean = true, onPick: () -> Unit) {
 
 @Composable
 private fun AvatarEditorPreview(
+    modifier: Modifier = Modifier,
     uri: Uri,
     dimensions: AvatarImageDimensions,
     viewport: IntSize?,
@@ -529,6 +508,7 @@ private fun AvatarEditorPreview(
     onTransform: (Float, AvatarPan) -> Unit,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val imageLoader =
         remember(context) {
             ImageLoader.Builder(context)
@@ -542,79 +522,154 @@ private fun AvatarEditorPreview(
                 .build()
         }
     val viewportSize = viewport?.takeIf { it.width > 0 && it.height > 0 }
-    val fitScale = viewportSize?.let {
-        minOf(it.width / dimensions.width.toFloat(), it.height / dimensions.height.toFloat())
-    }
-    val layerScale =
-        if (viewportSize != null && fitScale != null) {
+    val baseScale =
+        viewportSize?.let {
             com.zenstream.zenstreammobile.data.avatarCoverScale(
                 dimensions,
                 com.zenstream.zenstreammobile.data.AvatarViewport(
-                    viewportSize.width,
-                    viewportSize.height,
+                    it.width,
+                    it.height,
                 ),
-                zoom,
+                1f,
                 rotation,
-            ) / fitScale
-        } else 1f
-    Box(
-        modifier =
-            Modifier.fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.Black)
-                .onSizeChanged(onViewportChanged)
-                .pointerInput(dimensions, viewport, rotation, zoom, pan) {
-                    detectTransformGestures { _, gesturePan, gestureZoom, _ ->
-                        onTransform(
-                            zoom * gestureZoom,
-                            AvatarPan(pan.x + gesturePan.x, pan.y + gesturePan.y),
-                        )
-                    }
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        AsyncImage(
-            imageLoader = imageLoader,
-            model = ImageRequest.Builder(context).data(uri).build(),
-            contentDescription = stringResource(R.string.avatar_preview),
-            contentScale = ContentScale.Fit,
-            modifier =
-                Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = layerScale
-                    scaleY = layerScale
-                    rotationZ = rotation.toFloat()
-                    translationX = pan.x
-                    translationY = pan.y
-                },
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            drawRect(
-                color = Color.White.copy(alpha = .86f),
-                style = Stroke(width = 2.dp.toPx()),
-            )
-            val lineColor = Color.White.copy(alpha = .28f)
-            drawLine(
-                lineColor,
-                Offset(size.width / 3f, 0f),
-                Offset(size.width / 3f, size.height.toFloat()),
-            )
-            drawLine(
-                lineColor,
-                Offset(size.width * 2f / 3f, 0f),
-                Offset(size.width * 2f / 3f, size.height.toFloat()),
-            )
-            drawLine(
-                lineColor,
-                Offset(0f, size.height / 3f),
-                Offset(size.width.toFloat(), size.height / 3f),
-            )
-            drawLine(
-                lineColor,
-                Offset(0f, size.height * 2f / 3f),
-                Offset(size.width.toFloat(), size.height * 2f / 3f),
             )
         }
+    val latestZoom by androidx.compose.runtime.rememberUpdatedState(zoom)
+    val latestPan by androidx.compose.runtime.rememberUpdatedState(pan)
+    val latestOnTransform by androidx.compose.runtime.rememberUpdatedState(onTransform)
+    Box(
+        modifier = modifier.background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (viewportSize != null && baseScale != null) {
+            val imageWidth = with(density) { (dimensions.width * baseScale).toDp() }
+            val imageHeight = with(density) { (dimensions.height * baseScale).toDp() }
+            AsyncImage(
+                imageLoader = imageLoader,
+                model = ImageRequest.Builder(context).data(uri).build(),
+                contentDescription = stringResource(R.string.avatar_preview),
+                contentScale = ContentScale.FillBounds,
+                modifier =
+                    Modifier.width(imageWidth).height(imageHeight).graphicsLayer {
+                        scaleX = zoom
+                        scaleY = zoom
+                        rotationZ = rotation.toFloat()
+                        translationX = pan.x
+                        translationY = pan.y
+                    },
+            )
+        } else {
+            AsyncImage(
+                imageLoader = imageLoader,
+                model = ImageRequest.Builder(context).data(uri).build(),
+                contentDescription = stringResource(R.string.avatar_preview),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Box(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                    .clip(RoundedCornerShape(2.dp))
+                    .onSizeChanged(onViewportChanged)
+                    .pointerInput(dimensions, viewport, rotation) {
+                        detectTransformGestures { _, gesturePan, gestureZoom, _ ->
+                            latestOnTransform(
+                                latestZoom * gestureZoom,
+                                AvatarPan(
+                                    latestPan.x + gesturePan.x,
+                                    latestPan.y + gesturePan.y,
+                                ),
+                            )
+                        }
+                    },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(
+                    color = Color.White.copy(alpha = .86f),
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+                val lineColor = Color.White.copy(alpha = .3f)
+                drawLine(
+                    lineColor,
+                    Offset(size.width / 3f, 0f),
+                    Offset(size.width / 3f, size.height.toFloat()),
+                )
+                drawLine(
+                    lineColor,
+                    Offset(size.width * 2f / 3f, 0f),
+                    Offset(size.width * 2f / 3f, size.height.toFloat()),
+                )
+                drawLine(
+                    lineColor,
+                    Offset(0f, size.height / 3f),
+                    Offset(size.width.toFloat(), size.height / 3f),
+                )
+                drawLine(
+                    lineColor,
+                    Offset(0f, size.height * 2f / 3f),
+                    Offset(size.width.toFloat(), size.height * 2f / 3f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AvatarZoomPanel(
+    zoom: Float,
+    onZoomChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF17151B),
+        shape = RoundedCornerShape(22.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "${(zoom * 100).roundToInt()}%",
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+            )
+            Slider(
+                value = zoom,
+                onValueChange = onZoomChange,
+                valueRange = 1f..4f,
+                steps = 29,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AvatarEditorIconAction(
+    icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    mirrored: Boolean = false,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = onClick) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = label,
+                modifier =
+                    Modifier.size(28.dp).graphicsLayer {
+                        if (mirrored) scaleX = -1f
+                    },
+            )
+        }
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = .72f),
+            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
@@ -625,9 +680,11 @@ private fun EditorActions(
     onChooseAnother: () -> Unit,
     onCancel: () -> Unit,
     onRemove: () -> Unit,
-    onSave: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onChooseAnother,
@@ -647,15 +704,6 @@ private fun EditorActions(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.remove_avatar))
-            }
-        }
-        Button(onClick = onSave, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
-            if (saving) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.avatar_processing))
-            } else {
-                Text(stringResource(R.string.save))
             }
         }
     }
