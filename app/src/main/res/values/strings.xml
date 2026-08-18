@@ -85,6 +85,11 @@
     <string name="add_avatar">Add avatar</string>
     <string name="change_avatar">Change avatar</string>
     <string name="remove_avatar">Remove avatar</string>
+    <string name="avatar_actions_title">Avatar</string>
+    <string name="avatar_upload_image">Upload image</string>
+    <string name="avatar_delete">Delete avatar</string>
+    <string name="avatar_delete_confirmation_title">Delete avatar?</string>
+    <string name="avatar_delete_confirmation_message">Your current avatar will be removed. This action cannot be undone.</string>
     <string name="avatar_editor_title">Edit avatar</string>
     <string name="avatar_editor_description">Choose an image, then drag, zoom, and rotate it into the square.</string>
     <string name="avatar_choose_image">Choose an image</string>

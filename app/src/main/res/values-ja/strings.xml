@@ -64,6 +64,11 @@
     <string name="add_avatar">アバターを追加</string>
     <string name="change_avatar">アバターを変更</string>
     <string name="remove_avatar">アバターを削除</string>
+    <string name="avatar_actions_title">アバター</string>
+    <string name="avatar_upload_image">画像をアップロード</string>
+    <string name="avatar_delete">アバターを削除</string>
+    <string name="avatar_delete_confirmation_title">アバターを削除しますか？</string>
+    <string name="avatar_delete_confirmation_message">現在のアバターを削除します。この操作は取り消せません。</string>
     <string name="avatar_editor_title">アバターを編集</string>
     <string name="avatar_editor_description">画像を選び、ドラッグ、ズーム、回転で正方形に調整します。</string>
     <string name="avatar_choose_image">画像を選択</string>
