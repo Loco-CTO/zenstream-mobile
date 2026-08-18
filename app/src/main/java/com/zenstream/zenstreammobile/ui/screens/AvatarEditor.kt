@@ -20,9 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -181,6 +179,44 @@ fun AvatarEditorDialog(
         }
     }
 
+    fun saveAvatar() {
+        if (saving) return
+        val uri = selectedUri
+        val dimensions = sourceDimensions
+        val size = viewport
+        if (uri == null || dimensions == null || size == null) {
+            editorError = fileInvalid
+            return
+        }
+        val crop =
+            avatarCropForEditor(
+                dimensions,
+                com.zenstream.zenstreammobile.data.AvatarViewport(size.width, size.height),
+                zoom,
+                pan,
+                rotation,
+            )
+        saving = true
+        editorError = null
+        scope.launch {
+            runCatching { repository.uploadAvatar(session, resolver, uri, crop) }
+                .onSuccess {
+                    onSessionChanged(it)
+                    onDismiss()
+                }
+                .onFailure { error ->
+                    editorError =
+                        if (
+                            (error is CatalogException && error.statusCode == 413) ||
+                                error is AvatarFileTooLargeException
+                        ) {
+                            fileTooLarge
+                        } else uploadFailed
+                }
+            saving = false
+        }
+    }
+
     Dialog(
         onDismissRequest = { if (!saving) onDismiss() },
         properties =
@@ -204,21 +240,37 @@ fun AvatarEditorDialog(
                             )
                         }
                     },
+                    actions = {
+                        IconButton(
+                            onClick = { saveAvatar() },
+                            enabled =
+                                !saving &&
+                                    selectedUri != null &&
+                                    sourceDimensions != null &&
+                                    viewport != null,
+                        ) {
+                            Icon(
+                                painter = painterResource(LucideR.drawable.lucide_ic_check),
+                                contentDescription = stringResource(R.string.save),
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 )
                 Column(
                     modifier =
                         Modifier.fillMaxSize()
-                            .verticalScroll(rememberScrollState())
                             .navigationBarsPadding()
                             .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(
-                        text = stringResource(R.string.avatar_editor_description),
-                        color = Color.White.copy(alpha = .72f),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    )
+                    if (selectedUri == null) {
+                        Text(
+                            text = stringResource(R.string.avatar_editor_description),
+                            color = Color.White.copy(alpha = .72f),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                     if (selectedUri == null) {
                         AvatarPickCard(
                             enabled = !saving,
