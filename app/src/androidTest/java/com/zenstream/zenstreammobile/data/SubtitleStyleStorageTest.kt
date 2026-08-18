@@ -11,6 +11,24 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SubtitleStyleStorageTest {
     @Test
+    fun defaultStyleUsesTheRequestedAppearance() {
+        assertEquals("sans", DEFAULT_SUBTITLE_STYLE.fontFamily)
+        assertEquals("#ffffff", DEFAULT_SUBTITLE_STYLE.fontColor)
+        assertEquals(2f, DEFAULT_SUBTITLE_STYLE.borderSize)
+        assertEquals("#000000", DEFAULT_SUBTITLE_STYLE.borderColor)
+        assertEquals(0f, DEFAULT_SUBTITLE_STYLE.backgroundOpacity)
+    }
+
+    @Test
+    fun missingBorderSizeUsesTheNewDefaultButExplicitZeroIsPreserved() {
+        assertEquals(2f, subtitleStyleFromJson("{\"fontFamily\":\"sans\"}").borderSize)
+        assertEquals(
+            0f,
+            subtitleStyleFromJson(subtitleStyleToJson(SubtitleStyle(borderSize = 0f))).borderSize,
+        )
+    }
+
+    @Test
     fun serializesAndRestoresTheCompleteStyle() {
         val style =
             SubtitleStyle(
