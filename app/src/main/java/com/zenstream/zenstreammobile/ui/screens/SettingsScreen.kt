@@ -59,6 +59,10 @@ fun SettingsScreen(
     repository: CatalogRepository,
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    rootTitle: Int = R.string.settings,
+    showRootNavigation: Boolean = true,
+    showSettingsHeading: Boolean = false,
+    rootHeader: (@Composable () -> Unit)? = null,
 ) {
     val vm: SettingsViewModel =
         viewModel(
@@ -76,7 +80,7 @@ fun SettingsScreen(
                 title = {
                     Text(
                         when (section) {
-                            SettingsSection.Root -> stringResource(R.string.settings)
+                            SettingsSection.Root -> stringResource(rootTitle)
                             SettingsSection.Appearance -> stringResource(R.string.appearance_group)
                             SettingsSection.Player -> stringResource(R.string.player_group)
                             SettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
@@ -84,16 +88,18 @@ fun SettingsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (section == SettingsSection.Root) onBack()
-                            else section = SettingsSection.Root
+                    if (section != SettingsSection.Root || showRootNavigation) {
+                        IconButton(
+                            onClick = {
+                                if (section == SettingsSection.Root) onBack()
+                                else section = SettingsSection.Root
+                            }
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                                stringResource(R.string.back),
+                            )
                         }
-                    ) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                            stringResource(R.string.back),
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -114,10 +120,22 @@ fun SettingsScreen(
                 when (section) {
                     SettingsSection.Root ->
                         item {
-                            SettingsRootContent(
-                                onOpenSection = { section = it },
-                                onLogout = onLogout,
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                rootHeader?.invoke()
+                                if (showSettingsHeading) {
+                                    Text(
+                                        stringResource(R.string.settings),
+                                        style =
+                                            androidx.compose.material3.MaterialTheme.typography
+                                                .titleMedium,
+                                        modifier = Modifier.semantics { heading() },
+                                    )
+                                }
+                                SettingsRootContent(
+                                    onOpenSection = { section = it },
+                                    onLogout = onLogout,
+                                )
+                            }
                         }
 
                     SettingsSection.Player ->

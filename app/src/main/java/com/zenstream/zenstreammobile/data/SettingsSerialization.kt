@@ -26,11 +26,14 @@ fun subtitleStyleFromJson(body: String): SubtitleStyle {
             bold = json.optBoolean("bold", false),
             textScale = json.optDouble("textScale", 100.0).toFloat(),
             bottomSpacing =
-                json.optDouble("bottomSpacing", DEFAULT_SUBTITLE_STYLE.bottomSpacing.toDouble())
+                json
+                    .optDouble("bottomSpacing", DEFAULT_SUBTITLE_STYLE.bottomSpacing.toDouble())
                     .toFloat(),
             fontColor = json.optString("fontColor", "#ffffff"),
             borderSize =
-                json.optDouble("borderSize", DEFAULT_SUBTITLE_STYLE.borderSize.toDouble()).toFloat(),
+                json
+                    .optDouble("borderSize", DEFAULT_SUBTITLE_STYLE.borderSize.toDouble())
+                    .toFloat(),
             borderColor = json.optString("borderColor", "#000000"),
             backgroundColor = json.optString("backgroundColor", "#000000"),
             backgroundOpacity = json.optDouble("backgroundOpacity", 0.0).toFloat(),

@@ -68,9 +68,9 @@ import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
+import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
-import com.zenstream.zenstreammobile.ui.screens.SettingsScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
 import kotlinx.coroutines.launch
 
@@ -78,8 +78,8 @@ private const val HOME = "home"
 private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val FAVORITES = "favorites"
+private const val MYPAGE = "my-page"
 private const val DETAIL = "detail/{itemId}"
-private const val SETTINGS = "settings"
 
 @Composable
 fun ZenStreamApp(appState: AppUiState, repository: CatalogRepository, appViewModel: AppViewModel) {
@@ -111,7 +111,7 @@ private fun MainScaffold(
     session: AuthSession,
     onLogout: () -> Unit,
 ) {
-    val syncplay = remember(session) { repository.syncplayManager(session) }
+    val syncplay = remember(session.token) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val toast = rememberToastHostState()
     val scope = rememberCoroutineScope()
@@ -139,6 +139,11 @@ private fun MainScaffold(
                 FAVORITES,
                 com.zenstream.zenstreammobile.R.string.favorites,
                 LucideR.drawable.lucide_ic_heart,
+            ),
+            NavigationDestination(
+                MYPAGE,
+                com.zenstream.zenstreammobile.R.string.my_page,
+                LucideR.drawable.lucide_ic_user_round,
             ),
         )
     }
@@ -210,11 +215,12 @@ private fun MainScaffold(
         topBarVisible = topBarVisibility.resetForRoute()
     }
 
-    val chromeHidden = currentRoute == DETAIL.substringBefore("/") || currentRoute == SETTINGS
+    val detailRoute = currentRoute == DETAIL.substringBefore("/")
+    val topBarHidden = detailRoute || currentRoute == MYPAGE
 
     androidx.compose.material3.Scaffold(
         topBar = {
-            if (!chromeHidden) {
+            if (!topBarHidden) {
                 Box(
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
@@ -236,18 +242,13 @@ private fun MainScaffold(
                             onReturnToView = { group ->
                                 group.mediaItemId()?.let { launchPlayback(context, it, "") }
                             },
-                            onSettings = {
-                                navController.navigate(SETTINGS) {
-                                    launchSingleTop = true
-                                }
-                            },
                         )
                     }
                 }
             }
         },
         bottomBar = {
-            if (!chromeHidden) {
+            if (!detailRoute) {
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
@@ -345,6 +346,13 @@ private fun MainScaffold(
                         navigateToDetail(navController, item.id)
                     }
                 }
+                composable(MYPAGE) {
+                    MyPageScreen(
+                        repository = repository,
+                        session = session,
+                        onLogout = onLogout,
+                    )
+                }
                 composable(
                     DETAIL,
                     arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
@@ -377,13 +385,6 @@ private fun MainScaffold(
                                 }
                             }
                         },
-                    )
-                }
-                composable(SETTINGS) {
-                    SettingsScreen(
-                        repository = repository,
-                        onBack = { navController.popBackStack() },
-                        onLogout = onLogout,
                     )
                 }
             }
@@ -419,7 +420,6 @@ internal fun MainTopBar(
     syncplay: SyncplayManager? = null,
     session: AuthSession? = null,
     onReturnToView: (SyncplayGroup) -> Unit = {},
-    onSettings: () -> Unit = {},
 ) {
     TopAppBar(
         title = {
@@ -437,21 +437,6 @@ internal fun MainTopBar(
                     session = session,
                     onReturnToView = onReturnToView,
                 )
-            }
-            Box(
-                modifier = Modifier.size(48.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.IconButton(onClick = onSettings) {
-                    Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_settings),
-                        contentDescription =
-                            stringResource(
-                                com.zenstream.zenstreammobile.R.string.settings_description
-                            ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         },
         colors =
