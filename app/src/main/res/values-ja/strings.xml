@@ -114,6 +114,7 @@
     <string name="subtitle_font">フォント</string>
     <string name="subtitle_bold">字幕を太字にする</string>
     <string name="subtitle_text_size">文字サイズ</string>
+    <string name="subtitle_bottom_spacing">字幕の下部余白</string>
     <string name="subtitle_font_color">文字色</string>
     <string name="subtitle_border_size">縁取りサイズ</string>
     <string name="subtitle_border_color">縁取り色</string>
