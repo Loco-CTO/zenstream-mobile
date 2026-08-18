@@ -152,13 +152,14 @@ internal fun MyPageSettingsContent(
                 modifier = Modifier.fillMaxWidth(),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.error
                     ),
             ) {
                 Text(stringResource(R.string.logout))
             }
             Text(
-                text = stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
+                text =
+                    stringResource(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.fillMaxWidth(),
@@ -306,8 +307,9 @@ internal fun PlaybackLanguageSelector(
         when {
             selected == null -> stringResource(R.string.language_automatic)
             selected == "off" -> stringResource(R.string.subtitles_off)
-            else -> options.firstOrNull { it.value == selected }?.label
-                ?: stringResource(R.string.language_automatic)
+            else ->
+                options.firstOrNull { it.value == selected }?.label
+                    ?: stringResource(R.string.language_automatic)
         }
     SettingChoiceRow(
         title = title,
@@ -539,9 +541,7 @@ internal fun SubtitleSettings(
         fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
         fontSize = (20f * style.textScale / 100f).sp,
         modifier =
-            Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp),
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(16.dp),
     )
 }
 
