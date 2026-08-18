@@ -76,14 +76,17 @@ class CatalogApiHttpTest {
                         .toString()
                 )
         )
-        server.enqueue(MockResponse().setBody(JSONObject().put("ticket", "resource-ticket").toString()))
+        server.enqueue(
+            MockResponse().setBody(JSONObject().put("ticket", "resource-ticket").toString())
+        )
 
         val session =
-            CatalogApi(deviceId = "device-id").authenticate(
-                serverUrl = server.url("/").toString(),
-                username = "Test",
-                password = "password",
-        )
+            CatalogApi(deviceId = "device-id")
+                .authenticate(
+                    serverUrl = server.url("/").toString(),
+                    username = "Test",
+                    password = "password",
+                )
 
         assertEquals("v-login", session.avatarVersion)
         val loginRequest = server.takeRequest()
