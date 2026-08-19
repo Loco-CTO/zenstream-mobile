@@ -88,6 +88,17 @@
     <string name="avatar_file_invalid">この画像を開けませんでした。</string>
     <string name="avatar_upload_failed">アバターを保存できませんでした。現在のアバターは変更されていません。</string>
     <string name="avatar_remove_failed">アバターを削除できませんでした。現在のアバターは変更されていません。</string>
+    <string name="change_password">パスワードを変更</string>
+    <string name="current_password">現在のパスワード</string>
+    <string name="new_password">新しいパスワード</string>
+    <string name="confirm_new_password">新しいパスワード（確認）</string>
+    <string name="password_change_description">現在のパスワードを入力し、新しいパスワードを設定してください。</string>
+    <string name="password_too_short">パスワードは8文字以上で入力してください。</string>
+    <string name="passwords_do_not_match">パスワードが一致しません。</string>
+    <string name="password_change_failed">パスワードを変更できませんでした。現在のパスワードを確認して、もう一度お試しください。</string>
+    <string name="password_changed">パスワードを変更しました</string>
+    <string name="password_changed_description">パスワードを変更しました。続行するには再度サインインしてください。</string>
+    <string name="continue_to_login">再度サインイン</string>
     <string name="save">保存</string>
     <string name="cancel">キャンセル</string>
     <string name="player_group">プレーヤー</string>

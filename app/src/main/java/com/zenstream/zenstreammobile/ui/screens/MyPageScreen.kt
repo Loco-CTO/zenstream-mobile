@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -30,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +50,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardActions
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -69,6 +76,7 @@ fun MyPageScreen(
     onPickAvatar: () -> Unit = {},
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
+    onPasswordChanged: () -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
         viewModel(
@@ -82,10 +90,22 @@ fun MyPageScreen(
     var removingAvatar by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
     var settingsSection by remember { mutableStateOf<MyPageSettingsSection?>(null) }
+    var passwordEditorOpen by remember { mutableStateOf(false) }
+    var passwordChangeSucceeded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
 
-    BackHandler(enabled = settingsSection != null) { settingsSection = null }
+    BackHandler(enabled = settingsSection != null || passwordEditorOpen) {
+        if (passwordEditorOpen) {
+            if (passwordChangeSucceeded) {
+                onPasswordChanged()
+            } else {
+                passwordEditorOpen = false
+            }
+        } else {
+            settingsSection = null
+        }
+    }
 
     LaunchedEffect(avatarPickerResult) {
         if (avatarPickerResult != null) {
@@ -104,13 +124,40 @@ fun MyPageScreen(
             contentPadding =
                 PaddingValues(
                     start = 16.dp,
-                    top = if (activeSection == null) 20.dp else 8.dp,
+                    top = if (activeSection == null && !passwordEditorOpen) 20.dp else 8.dp,
                     end = 16.dp,
                     bottom = 28.dp,
                 ),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            if (activeSection == null) {
+            if (passwordEditorOpen) {
+                item {
+                    ChangePasswordSectionHeader(
+                        onBack = {
+                            if (passwordChangeSucceeded) {
+                                onPasswordChanged()
+                            } else {
+                                passwordEditorOpen = false
+                            }
+                        },
+                    )
+                }
+                item {
+                    ChangePasswordForm(
+                        onSubmitPasswordChange = { currentPassword, newPassword, confirmNewPassword ->
+                            repository.changePassword(
+                                session,
+                                currentPassword,
+                                newPassword,
+                                confirmNewPassword,
+                            )
+                        },
+                        onClose = { passwordEditorOpen = false },
+                        onContinueToLogin = onPasswordChanged,
+                        onSuccessStateChanged = { passwordChangeSucceeded = it },
+                    )
+                }
+            } else if (activeSection == null) {
                 item {
                     Text(
                         text = stringResource(R.string.my_page),
@@ -121,6 +168,10 @@ fun MyPageScreen(
                     ProfileCard(
                         session = session,
                         onEditAvatar = { avatarActionsOpen = true },
+                        onChangePassword = {
+                            passwordChangeSucceeded = false
+                            passwordEditorOpen = true
+                        },
                         avatarError = avatarError,
                     )
                 }
@@ -241,6 +292,195 @@ private fun MyPageSectionHeader(
             modifier = Modifier.semantics { heading() },
         )
     }
+}
+
+@Composable
+private fun ChangePasswordSectionHeader(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                contentDescription = stringResource(R.string.back),
+            )
+        }
+        Text(
+            text = stringResource(R.string.change_password),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+    }
+}
+
+@Composable
+internal fun ChangePasswordForm(
+    onSubmitPasswordChange: suspend (String, String, String) -> Unit,
+    onClose: () -> Unit,
+    onContinueToLogin: () -> Unit,
+    onSuccessStateChanged: (Boolean) -> Unit = {},
+) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmNewPassword by remember { mutableStateOf("") }
+    var submitting by remember { mutableStateOf(false) }
+    var success by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val passwordTooShortMessage = stringResource(R.string.password_too_short)
+    val passwordsDoNotMatchMessage = stringResource(R.string.passwords_do_not_match)
+    val passwordChangeFailedMessage = stringResource(R.string.password_change_failed)
+
+    if (success) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.password_changed),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                text = stringResource(R.string.password_changed_description),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Button(onClick = onContinueToLogin, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.continue_to_login))
+            }
+        }
+        return
+    }
+
+    fun submit() {
+        if (submitting) return
+        error = when {
+            newPassword.length < 8 -> passwordTooShortMessage
+            newPassword != confirmNewPassword ->
+                passwordsDoNotMatchMessage
+            else -> null
+        }
+        if (error != null) return
+
+        submitting = true
+        scope.launch {
+            runCatching {
+                    onSubmitPasswordChange(currentPassword, newPassword, confirmNewPassword)
+                }
+                .onSuccess {
+                    success = true
+                    onSuccessStateChanged(true)
+                }
+                .onFailure { error = passwordChangeFailedMessage }
+            submitting = false
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.password_change_description),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        PasswordField(
+            label = stringResource(R.string.current_password),
+            value = currentPassword,
+            onValueChange = {
+                currentPassword = it
+                error = null
+            },
+            imeAction = ImeAction.Next,
+            enabled = !submitting,
+        )
+        PasswordField(
+            label = stringResource(R.string.new_password),
+            value = newPassword,
+            onValueChange = {
+                newPassword = it
+                error = null
+            },
+            imeAction = ImeAction.Next,
+            enabled = !submitting,
+        )
+        PasswordField(
+            label = stringResource(R.string.confirm_new_password),
+            value = confirmNewPassword,
+            onValueChange = {
+                confirmNewPassword = it
+                error = null
+            },
+            imeAction = ImeAction.Done,
+            onDone = ::submit,
+            enabled = !submitting,
+        )
+        error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TextButton(onClick = onClose, enabled = !submitting) {
+                Text(stringResource(R.string.cancel))
+            }
+            Button(
+                onClick = ::submit,
+                enabled =
+                    !submitting &&
+                        currentPassword.isNotBlank() &&
+                        newPassword.isNotBlank() &&
+                        confirmNewPassword.isNotBlank(),
+                modifier = Modifier.weight(1f),
+            ) {
+                if (submitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text(stringResource(R.string.save))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PasswordField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    imeAction: ImeAction,
+    enabled: Boolean,
+    onDone: (() -> Unit)? = null,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        enabled = enabled,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions =
+            KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = imeAction,
+            ),
+        keyboardActions =
+            KeyboardActions(
+                onDone = { onDone?.invoke() },
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -375,6 +615,7 @@ private fun AvatarActionRow(
 internal fun ProfileCard(
     session: AuthSession,
     onEditAvatar: () -> Unit,
+    onChangePassword: () -> Unit,
     avatarError: String? = null,
 ) {
     BoxWithConstraints {
@@ -392,6 +633,7 @@ internal fun ProfileCard(
                 ) {
                     ProfileIdentity(session, avatarError)
                     AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
+                    ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
                 }
             } else {
                 Row(
@@ -409,6 +651,7 @@ internal fun ProfileCard(
                         ProfileDetails(session, avatarError)
                         Spacer(Modifier.height(12.dp))
                         AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
+                        ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -473,5 +716,15 @@ private fun AvatarButton(
                 if (session.avatarVersion == null) R.string.add_avatar else R.string.change_avatar
             )
         )
+    }
+}
+
+@Composable
+private fun ChangePasswordButton(
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    OutlinedButton(onClick = onClick, modifier = modifier) {
+        Text(stringResource(R.string.change_password))
     }
 }

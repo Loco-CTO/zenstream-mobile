@@ -108,6 +108,11 @@ class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
         repository.clearSession()
     }
 
+    fun passwordChanged() = viewModelScope.launch {
+        SyncplaySession.clear()
+        repository.clearSession()
+    }
+
     fun changeServer() = viewModelScope.launch {
         val active = repository.session.first()
         if (active != null) runCatching { repository.revokeSession(active) }

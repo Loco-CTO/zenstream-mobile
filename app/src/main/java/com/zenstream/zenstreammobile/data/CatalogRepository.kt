@@ -186,6 +186,17 @@ class CatalogRepository(
         return session.copy(avatarVersion = null).also { sessionStore.saveSession(it) }
     }
 
+    suspend fun changePassword(
+        session: AuthSession,
+        currentPassword: String,
+        newPassword: String,
+        confirmNewPassword: String,
+    ) {
+        authenticatedCatalogRequest {
+            api.changePassword(session, currentPassword, newPassword, confirmNewPassword)
+        }
+    }
+
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
         val mode = interfaceLocaleMode.first()
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)

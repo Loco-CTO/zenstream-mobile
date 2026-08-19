@@ -199,6 +199,26 @@ class CatalogApi(
             requestJson(session, "/api/account/avatar", method = "DELETE")
         }
 
+    suspend fun changePassword(
+        session: AuthSession,
+        currentPassword: String,
+        newPassword: String,
+        confirmNewPassword: String,
+    ) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/account/password",
+                method = "POST",
+                body =
+                    JSONObject()
+                        .put("currentPassword", currentPassword)
+                        .put("newPassword", newPassword)
+                        .put("confirmNewPassword", confirmNewPassword)
+                        .toString(),
+            )
+        }
+
     suspend fun logout(session: AuthSession) =
         withContext(Dispatchers.IO) {
             requestJson(session, "/api/auth/logout", method = "POST")

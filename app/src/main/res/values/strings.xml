@@ -109,6 +109,17 @@
     <string name="avatar_file_invalid">This image could not be opened.</string>
     <string name="avatar_upload_failed">The avatar could not be saved. Your current avatar is unchanged.</string>
     <string name="avatar_remove_failed">The avatar could not be removed. Your current avatar is unchanged.</string>
+    <string name="change_password">Change password</string>
+    <string name="current_password">Current password</string>
+    <string name="new_password">New password</string>
+    <string name="confirm_new_password">Confirm new password</string>
+    <string name="password_change_description">Enter your current password and choose a new password.</string>
+    <string name="password_too_short">Password must be at least 8 characters.</string>
+    <string name="passwords_do_not_match">Passwords do not match.</string>
+    <string name="password_change_failed">Could not change your password. Check your current password and try again.</string>
+    <string name="password_changed">Password changed</string>
+    <string name="password_changed_description">Your password was changed. Sign in again to continue.</string>
+    <string name="continue_to_login">Continue to sign in</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="player_group">Player</string>
