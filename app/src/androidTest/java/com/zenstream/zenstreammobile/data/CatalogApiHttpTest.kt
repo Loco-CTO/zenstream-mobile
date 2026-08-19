@@ -207,6 +207,29 @@ class CatalogApiHttpTest {
     }
 
     @Test
+    fun changesPasswordWithAuthenticatedJsonAndAcceptsNoContent() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        CatalogApi(deviceId = "device-id").changePassword(
+            session,
+            "current-password",
+            "new-password",
+            "new-password",
+        )
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/account/password", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        val payload = JSONObject(request.body.readUtf8())
+        assertEquals("current-password", payload.getString("currentPassword"))
+        assertEquals("new-password", payload.getString("newPassword"))
+        assertEquals("new-password", payload.getString("confirmNewPassword"))
+    }
+
+    @Test
     fun playbackDoesNotRequestTheRemovedMarkerEndpoint() = runBlocking {
         server.enqueue(
             MockResponse()

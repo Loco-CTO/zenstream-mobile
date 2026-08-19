@@ -5,10 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
@@ -136,5 +138,43 @@ class MyPageSettingsTest {
             it(217f)
         }
         composeRule.runOnIdle { assertEquals(217f, style.bottomSpacing) }
+    }
+
+    @Test
+    fun changePasswordFormValidatesAndCompletes() {
+        var submitted = false
+        var continueToLogin = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                ChangePasswordForm(
+                    onSubmitPasswordChange = { _, _, _ -> submitted = true },
+                    onClose = {},
+                    onContinueToLogin = { continueToLogin = true },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fields = composeRule.onAllNodes(hasSetTextAction(), useUnmergedTree = true)
+        fields[0].performTextInput("current-password")
+        fields[1].performTextInput("short")
+        fields[2].performTextInput("short")
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.password_too_short))
+            .assertIsDisplayed()
+
+        fields[1].performTextInput("new-password")
+        fields[2].performTextInput("new-password")
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertTrue(submitted) }
+        composeRule
+            .onNodeWithText(context.getString(R.string.password_changed))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.continue_to_login))
+            .performClick()
+        composeRule.runOnIdle { assertTrue(continueToLogin) }
     }
 }

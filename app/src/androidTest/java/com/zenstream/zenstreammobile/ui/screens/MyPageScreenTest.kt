@@ -56,6 +56,25 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun profileOffersChangePasswordAction() {
+        var clicked = false
+        val session = AuthSession("https://server", "token", "user-1", "Miyu")
+        composeRule.setContent {
+            ZenStreamTheme {
+                ProfileCard(
+                    session = session,
+                    onEditAvatar = {},
+                    onChangePassword = { clicked = true },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.change_password)).performClick()
+        composeRule.runOnIdle { assertTrue(clicked) }
+    }
+
+    @Test
     fun avatarActionSheetOnlyOffersUploadWithoutAnAvatar() {
         var uploaded = false
         var deleted = false

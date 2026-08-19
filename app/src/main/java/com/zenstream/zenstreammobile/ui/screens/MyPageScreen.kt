@@ -615,7 +615,7 @@ private fun AvatarActionRow(
 internal fun ProfileCard(
     session: AuthSession,
     onEditAvatar: () -> Unit,
-    onChangePassword: () -> Unit,
+    onChangePassword: () -> Unit = {},
     avatarError: String? = null,
 ) {
     BoxWithConstraints {
