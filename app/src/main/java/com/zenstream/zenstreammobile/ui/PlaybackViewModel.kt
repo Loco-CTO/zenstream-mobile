@@ -117,12 +117,20 @@ internal fun shouldHandlePlaybackCompletion(
     playbackGeneration: Long,
 ): Boolean = ended && !transitionInProgress && handledCompletionGeneration != playbackGeneration
 
-internal fun shouldWaitForEpisodeNeighbors(episodeNeighborsLoaded: Boolean): Boolean =
-    !episodeNeighborsLoaded
+internal enum class EpisodeCompletionAction {
+    WAIT_FOR_NEIGHBORS,
+    PLAY_NEXT,
+    CLOSE,
+}
 
-internal fun nextUpFallbackItem(items: List<MediaItem>, currentItemId: String): MediaItem? =
-    items.firstOrNull {
-        it.id != currentItemId
+internal fun episodeCompletionAction(
+    episodeNeighborsLoaded: Boolean,
+    nextEpisode: MediaItem?,
+): EpisodeCompletionAction =
+    when {
+        !episodeNeighborsLoaded -> EpisodeCompletionAction.WAIT_FOR_NEIGHBORS
+        nextEpisode != null -> EpisodeCompletionAction.PLAY_NEXT
+        else -> EpisodeCompletionAction.CLOSE
     }
 
 private data class PlaybackProgressSnapshot(
@@ -163,7 +171,6 @@ class PlaybackViewModel(
     private var trickplayJob: Job? = null
     private var subtitleJob: Job? = null
     private var episodeNeighborsJob: Job? = null
-    private var nextUpFallbackJob: Job? = null
     private var playbackGeneration = 0L
     private var subtitleGeneration = 0L
     private var mediaOriginSeconds = 0.0
@@ -173,12 +180,13 @@ class PlaybackViewModel(
     private var currentItemId = initialItemId
     private var handledCompletionGeneration = -1L
     private var pendingCompletionGeneration: Long? = null
-    private var nextUpFallbackGeneration: Long? = null
     private var transitionInProgress = false
     private var syncplayTimelineKey: String? = null
     private var playbackPreference: PlaybackPreference? = null
     private val handledViewerCommands = mutableSetOf<String>()
     private val viewerCommandAcks = mutableListOf<ViewerCommandAck>()
+    private val closeCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var closeCleanupJob: Job? = null
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
@@ -336,7 +344,10 @@ class PlaybackViewModel(
             itemId,
         )
 
-    private fun loadPlayback(options: PlaybackOptions = PlaybackOptions()) {
+    private fun loadPlayback(
+        options: PlaybackOptions = PlaybackOptions(),
+        playWhenReadyOverride: Boolean? = null,
+    ) {
         val loadGeneration = ++playbackGeneration
         progressFlushJob?.cancel()
         viewerHeartbeatJob?.cancel()
@@ -471,7 +482,7 @@ class PlaybackViewModel(
                 streamUrl,
                 localStartSeconds,
                 playbackMimeType(playbackData.source, bitrate),
-                syncplayShouldAutoplayFor(currentItemId),
+                playWhenReadyOverride ?: syncplayShouldAutoplayFor(currentItemId),
             )
             handledCompletionGeneration = -1L
             transitionInProgress = false
@@ -634,9 +645,12 @@ class PlaybackViewModel(
         reportProgress(playbackProgressSnapshot())
     }
 
-    private suspend fun reportProgress(snapshot: PlaybackProgressSnapshot?) {
+    private suspend fun reportProgress(
+        snapshot: PlaybackProgressSnapshot?,
+        requireCurrentGeneration: Boolean = true,
+    ) {
         if (snapshot == null) return
-        if (snapshot.playbackGeneration != playbackGeneration) return
+        if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
         runCatching {
             repository.reportPlayback(
                 session,
@@ -802,39 +816,31 @@ class PlaybackViewModel(
     }
 
     private fun advanceAfterEpisodeEnd() {
-        if (shouldWaitForEpisodeNeighbors(_uiState.value.episodeNeighborsLoaded)) {
-            pendingCompletionGeneration = playbackGeneration
-            return
+        val nextEpisode = _uiState.value.nextEpisode
+        when (
+            episodeCompletionAction(
+                episodeNeighborsLoaded = _uiState.value.episodeNeighborsLoaded,
+                nextEpisode = nextEpisode,
+            )
+        ) {
+            EpisodeCompletionAction.WAIT_FOR_NEIGHBORS -> {
+                pendingCompletionGeneration = playbackGeneration
+                return
+            }
+            EpisodeCompletionAction.CLOSE -> {
+                pendingCompletionGeneration = null
+                requestClose()
+                return
+            }
+            EpisodeCompletionAction.PLAY_NEXT -> Unit
         }
         pendingCompletionGeneration = null
         val manager = syncplay
         if (manager?.state?.value?.active != null) {
             if (manager.state.value.active?.hostUserId != session.userId) return
-            _uiState.value.nextEpisode?.let { target ->
-                viewModelScope.launch { manager.command("media", 0.0, true, target.id) }
-            } ?: playHomeNextUpAfterEpisodeEnd()
+            viewModelScope.launch { manager.command("media", 0.0, true, nextEpisode!!.id) }
         } else {
-            _uiState.value.nextEpisode?.let(::transitionTo) ?: playHomeNextUpAfterEpisodeEnd()
-        }
-    }
-
-    private fun playHomeNextUpAfterEpisodeEnd() {
-        val generation = playbackGeneration
-        if (_uiState.value.playback?.item?.type != "Episode") {
-            requestClose()
-            return
-        }
-        if (nextUpFallbackGeneration == generation) return
-        nextUpFallbackGeneration = generation
-        nextUpFallbackJob?.cancel()
-        nextUpFallbackJob = viewModelScope.launch {
-            val target =
-                runCatching { repository.homeNextUp(session) }
-                    .getOrNull()
-                    ?.let { nextUpFallbackItem(it, currentItemId) }
-            if (generation != playbackGeneration || transitionInProgress) return@launch
-            nextUpFallbackGeneration = null
-            target?.let(::transitionTo) ?: requestClose()
+            transitionTo(nextEpisode)
         }
     }
 
@@ -842,7 +848,6 @@ class PlaybackViewModel(
         if (target == null || transitionInProgress || target.id == currentItemId) return
         transitionInProgress = true
         pendingCompletionGeneration = null
-        nextUpFallbackGeneration = null
         viewModelScope.launch {
             syncplay?.setWatchingTogether(false)
             val outgoing = _uiState.value.playback
@@ -873,7 +878,7 @@ class PlaybackViewModel(
                     nextEpisode = null,
                     episodeNeighborsLoaded = false,
                 )
-            loadPlayback()
+            loadPlayback(playWhenReadyOverride = true)
         }
     }
 
@@ -881,27 +886,25 @@ class PlaybackViewModel(
         if (transitionInProgress || _uiState.value.closeRequested) return
         transitionInProgress = true
         pendingCompletionGeneration = null
-        nextUpFallbackGeneration = null
-        viewModelScope.launch {
-            val outgoing = _uiState.value.playback
-            reportProgress(playbackProgressSnapshot())
-            invalidateActivePlaybackLoad()
+        val outgoing = _uiState.value.playback
+        val progressSnapshot = playbackProgressSnapshot()
+        invalidateActivePlaybackLoad()
+        closeCleanupJob = closeCleanupScope.launch {
+            reportProgress(progressSnapshot, requireCurrentGeneration = false)
             cancelPlaybackSession(outgoing)
-            _uiState.value = _uiState.value.copy(closeRequested = true)
         }
+        _uiState.value = _uiState.value.copy(closeRequested = true)
     }
 
     private fun invalidateActivePlaybackLoad() {
         playbackGeneration++
         pendingCompletionGeneration = null
-        nextUpFallbackGeneration = null
         progressFlushJob?.cancel()
         viewerHeartbeatJob?.cancel()
         playbackLoadJob?.cancel()
         trickplayJob?.cancel()
         subtitleJob?.cancel()
         episodeNeighborsJob?.cancel()
-        nextUpFallbackJob?.cancel()
     }
 
     private suspend fun cancelPlaybackSession(playback: PlaybackData?) {
@@ -1030,6 +1033,9 @@ class PlaybackViewModel(
         engineJob?.cancel()
         playbackEngine?.release()
         playbackEngine = null
+        closeCleanupJob?.let { job ->
+            job.invokeOnCompletion { closeCleanupScope.cancel() }
+        } ?: closeCleanupScope.cancel()
     }
 
     private var lastProgressFlushAt = 0L

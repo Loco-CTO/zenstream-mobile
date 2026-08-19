@@ -62,23 +62,30 @@ class PlaybackViewModelTest {
     }
 
     @Test
-    fun endedEpisodeWaitsForItsNextUpLookupBeforeClosingOrAdvancing() {
-        assertTrue(shouldWaitForEpisodeNeighbors(false))
-        assertFalse(shouldWaitForEpisodeNeighbors(true))
+    fun completionWaitsForNeighborsBeforeChoosingAnAction() {
+        assertEquals(
+            EpisodeCompletionAction.WAIT_FOR_NEIGHBORS,
+            episodeCompletionAction(episodeNeighborsLoaded = false, nextEpisode = null),
+        )
     }
 
     @Test
-    fun nextUpFallbackSkipsTheEpisodeThatJustFinished() {
-        val fallback =
-            nextUpFallbackItem(
-                listOf(
-                    MediaItem("episode-2", "Episode 2", type = "Episode"),
-                    MediaItem("episode-3", "Episode 3", type = "Episode"),
-                ),
-                "episode-2",
-            )
+    fun completionPlaysTheResolvedAdjacentEpisode() {
+        assertEquals(
+            EpisodeCompletionAction.PLAY_NEXT,
+            episodeCompletionAction(
+                episodeNeighborsLoaded = true,
+                nextEpisode = MediaItem("episode-3", "Episode 3", type = "Episode"),
+            ),
+        )
+    }
 
-        assertEquals("episode-3", fallback?.id)
+    @Test
+    fun completionClosesWhenThereIsNoAdjacentEpisode() {
+        assertEquals(
+            EpisodeCompletionAction.CLOSE,
+            episodeCompletionAction(episodeNeighborsLoaded = true, nextEpisode = null),
+        )
     }
 
     @Test

@@ -25,17 +25,17 @@ class EpisodeNeighborsTest {
     @Test
     fun crossesSeasonBoundariesInBothDirections() {
         val seasons = listOf(season("s1", 1), season("s2", 2), season("s3", 3))
-        val current = episode("s2e1", 2, 1)
+        val current = episode("s2e2", 2, 2)
         val episodes =
             mapOf(
                 "s1" to listOf(episode("s1e1", 1, 1), episode("s1e2", 1, 2)),
-                "s2" to listOf(current),
+                "s2" to listOf(episode("s2e1", 2, 1), current),
                 "s3" to listOf(episode("s3e1", 3, 1)),
             )
 
         val result = resolveEpisodeNeighbors(current, seasons) { episodes.getValue(it.id) }
 
-        assertEquals("s1e2", result.previous?.id)
+        assertEquals("s2e1", result.previous?.id)
         assertEquals("s3e1", result.next?.id)
     }
 

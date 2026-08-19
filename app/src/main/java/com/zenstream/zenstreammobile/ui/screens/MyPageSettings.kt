@@ -230,9 +230,7 @@ private fun SettingsTabRow(
 }
 
 @Composable
-private fun SettingsSectionContent(
-    content: @Composable ColumnScope.() -> Unit,
-) {
+private fun SettingsSectionContent(content: @Composable ColumnScope.() -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), content = content)
 }
 
