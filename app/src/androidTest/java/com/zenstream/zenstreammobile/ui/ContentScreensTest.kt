@@ -31,7 +31,7 @@ import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
-import com.zenstream.zenstreammobile.ui.screens.SearchScreen
+import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -47,7 +47,12 @@ class ContentScreensTest {
     fun searchShowsSearchFieldBeforeAQueryIsEntered() {
         composeRule.setContent {
             ZenStreamTheme {
-                SearchScreen(EmptySearchSource(), session, PaddingValues()) {}
+                SearchOverlayScreen(
+                    repository = EmptySearchSource(),
+                    session = session,
+                    onDismiss = {},
+                    onItemClick = {},
+                )
             }
         }
 

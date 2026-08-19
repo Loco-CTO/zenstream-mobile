@@ -9,9 +9,11 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -102,7 +104,17 @@ class MainNavigationTest {
                 Column {
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") { Text("Home content") }
-                        composable("search") { Text("Search content") }
+                        dialog(
+                            "search",
+                            dialogProperties =
+                                DialogProperties(
+                                    usePlatformDefaultWidth = false,
+                                    decorFitsSystemWindows = false,
+                                    dismissOnClickOutside = false,
+                                ),
+                        ) {
+                            Text("Search content")
+                        }
                     }
                     MainNavigationBar(
                         currentRoute = currentRoute,

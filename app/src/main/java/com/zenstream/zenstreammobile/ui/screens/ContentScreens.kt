@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -19,8 +20,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -45,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -69,6 +73,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -82,6 +87,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.adamglin.phosphoricons.BoldGroup
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.X
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -100,6 +108,7 @@ import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
+import com.zenstream.zenstreammobile.ui.SearchUiState
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
@@ -337,6 +346,126 @@ fun SearchScreen(
             factory = SearchViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    SearchResultsContent(
+        state = state,
+        session = session,
+        padding = padding,
+        onQueryChange = vm::updateQuery,
+        onRetry = vm::retry,
+        onRefresh = vm::refresh,
+        onItemClick = onItemClick,
+    )
+}
+
+@Composable
+fun SearchOverlayScreen(
+    repository: SearchDataSource,
+    session: AuthSession,
+    onDismiss: () -> Unit,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+    val vm: SearchViewModel =
+        viewModel(
+            key = "search-overlay-${session.userId}-${session.token}",
+            factory = SearchViewModel.Factory(repository, session),
+        )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    var submitted by remember { mutableStateOf(false) }
+    var draftQuery by remember { mutableStateOf("") }
+    val effectiveQuery = if (submitted) state.query else draftQuery
+    val activeSearch = isSearchQueryActive(effectiveQuery)
+    val scrimColor =
+        if (activeSearch) MaterialTheme.colorScheme.background else Color.Black.copy(alpha = .52f)
+
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(scrimColor)
+                .clickable(onClick = onDismiss)
+                .testTag(if (activeSearch) "search-overlay-solid" else "search-overlay-transparent")
+    ) {
+        if (submitted) {
+            Surface(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .padding(16.dp)
+                        .systemBarsPadding()
+                        .imePadding()
+                        .clickable(onClick = {})
+                        .testTag("search-dialog"),
+                color = MaterialTheme.colorScheme.background,
+                shape = MaterialTheme.shapes.large,
+            ) {
+                SearchResultsContent(
+                    state = state,
+                    session = session,
+                    padding = PaddingValues(),
+                    onQueryChange = { value ->
+                        if (isSearchQueryActive(value)) {
+                            vm.updateQuery(value)
+                        } else {
+                            draftQuery = value
+                            submitted = false
+                            vm.updateQuery("")
+                        }
+                    },
+                    onRetry = vm::retry,
+                    onRefresh = vm::refresh,
+                    onItemClick = { item ->
+                        onDismiss()
+                        onItemClick(item)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        } else {
+            Surface(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .systemBarsPadding()
+                        .imePadding()
+                        .clickable(onClick = {})
+                        .testTag("search-dialog"),
+                color = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.large,
+            ) {
+                SearchField(
+                    value = draftQuery,
+                    onValueChange = { draftQuery = it },
+                    onSubmit = {
+                        val normalized = draftQuery.trim()
+                        if (isSearchQueryActive(normalized)) {
+                            draftQuery = normalized
+                            submitted = true
+                            vm.updateQuery(normalized)
+                        }
+                    },
+                    onClear = { draftQuery = "" },
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+internal const val MIN_SEARCH_QUERY_LENGTH = 2
+
+internal fun isSearchQueryActive(query: String): Boolean =
+    query.trim().length >= MIN_SEARCH_QUERY_LENGTH
+
+@Composable
+private fun SearchResultsContent(
+    state: SearchUiState,
+    session: AuthSession,
+    padding: PaddingValues,
+    onQueryChange: (String) -> Unit,
+    onRetry: () -> Unit,
+    onRefresh: () -> Unit,
+    onItemClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val density = LocalDensity.current
     val topBarVisibility =
         remember(density) {
@@ -365,7 +494,7 @@ fun SearchScreen(
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
-    Column(Modifier.fillMaxSize().padding(padding)) {
+    Column(modifier.fillMaxSize().padding(padding)) {
         AnimatedVisibility(
             visible = topBarVisible,
             enter =
@@ -378,32 +507,11 @@ fun SearchScreen(
                     fadeOut(),
         ) {
             Column {
-                OutlinedTextField(
+                SearchField(
                     value = state.query,
-                    onValueChange = vm::updateQuery,
-                    leadingIcon = {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_search),
-                            contentDescription = null,
-                        )
-                    },
-                    trailingIcon = {
-                        if (state.query.isNotEmpty())
-                            IconButton(
-                                onClick = {
-                                    vm.updateQuery("")
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(LucideR.drawable.lucide_ic_x),
-                                    contentDescription = stringResource(R.string.close),
-                                )
-                            }
-                    },
-                    placeholder = { Text(stringResource(R.string.search_placeholder)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { vm.retry() }),
+                    onValueChange = onQueryChange,
+                    onSubmit = onRetry,
+                    onClear = { onQueryChange("") },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
                 if (state.query.trim().length >= 2 && !state.loading && !state.error) {
@@ -418,12 +526,12 @@ fun SearchScreen(
         }
         PullToRefreshLayout(
             isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
-            onRefresh = vm::refresh,
+            onRefresh = onRefresh,
             modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
         ) {
             when {
                 state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
-                state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, vm::retry)
+                state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, onRetry)
                 state.query.trim().length < 2 -> Unit
 
                 state.results.isEmpty() ->
@@ -452,6 +560,40 @@ fun SearchScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        leadingIcon = {
+            Icon(
+                imageVector = BoldGroup.MagnifyingGlass,
+                contentDescription = null,
+            )
+        },
+        trailingIcon = {
+            if (value.isNotEmpty())
+                IconButton(onClick = onClear) {
+                    Icon(
+                        imageVector = BoldGroup.X,
+                        contentDescription = stringResource(R.string.close),
+                    )
+                }
+        },
+        placeholder = { Text(stringResource(R.string.search_placeholder)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+        modifier = Modifier.fillMaxWidth().then(modifier),
+    )
 }
 
 @Composable

@@ -46,13 +46,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.adamglin.phosphoricons.BoldGroup
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -74,7 +78,7 @@ import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
-import com.zenstream.zenstreammobile.ui.screens.SearchScreen
+import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
 import kotlinx.coroutines.launch
@@ -145,7 +149,14 @@ private fun MainScaffold(
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route?.substringBefore("/") ?: HOME
+    val currentRoute = routeName(backStackEntry?.destination?.route) ?: HOME
+    val mainRoute =
+        if (currentRoute == SEARCH) {
+            routeName(navController.previousBackStackEntry?.destination?.route) ?: HOME
+        } else {
+            currentRoute
+        }
+    val searchOverlayOpen = currentRoute == SEARCH
     val density = LocalDensity.current
     val context = LocalContext.current
     var followedGeneration by remember { mutableStateOf<String?>(null) }
@@ -209,13 +220,13 @@ private fun MainScaffold(
         }
     }
 
-    LaunchedEffect(currentRoute) {
+    LaunchedEffect(mainRoute) {
         bottomBarVisible = bottomBarVisibility.resetForRoute()
         topBarVisible = topBarVisibility.resetForRoute()
     }
 
-    val detailRoute = currentRoute == DETAIL.substringBefore("/")
-    val topBarHidden = detailRoute || currentRoute == MYPAGE
+    val detailRoute = mainRoute == DETAIL.substringBefore("/")
+    val topBarHidden = detailRoute || mainRoute == MYPAGE
 
     androidx.compose.material3.Scaffold(
         topBar = {
@@ -238,7 +249,8 @@ private fun MainScaffold(
                         MainTopBar(
                             syncplay = syncplay,
                             session = session,
-                            showSearchAction = shouldShowMainSearchAction(currentRoute),
+                            showSearchAction =
+                                !searchOverlayOpen && shouldShowMainSearchAction(mainRoute),
                             onSearch = { navigateToSearch(navController) },
                             onReturnToView = { group ->
                                 group.mediaItemId()?.let { launchPlayback(context, it, "") }
@@ -271,7 +283,7 @@ private fun MainScaffold(
                                 fadeOut(),
                     ) {
                         MainNavigationBar(
-                            currentRoute = currentRoute,
+                            currentRoute = mainRoute,
                             session = session,
                             onDestinationClick = { route ->
                                 navigateToMainDestination(navController, route)
@@ -297,14 +309,24 @@ private fun MainScaffold(
                         onItemClick = { item -> navigateToDetail(navController, item.id) },
                     )
                 }
-                composable(SEARCH) {
-                    SearchScreen(
-                        repository,
-                        session,
-                        padding,
-                    ) { item ->
-                        navigateToDetail(navController, item.id)
-                    }
+                dialog(
+                    SEARCH,
+                    dialogProperties =
+                        DialogProperties(
+                            usePlatformDefaultWidth = false,
+                            decorFitsSystemWindows = false,
+                            dismissOnBackPress = true,
+                            dismissOnClickOutside = false,
+                        ),
+                ) {
+                    SearchOverlayScreen(
+                        repository = repository,
+                        session = session,
+                        onDismiss = { navController.popBackStack() },
+                        onItemClick = { item ->
+                            navigateToDetail(navController, item.id)
+                        },
+                    )
                 }
                 composable(LIBRARY) {
                     LibraryScreen(
@@ -394,7 +416,9 @@ internal fun navigateToMainDestination(
 ) {
     // Search is a transient route pushed above the main destinations. Remove it before restoring
     // the selected tab so a saved Search entry cannot remain visible over the requested page.
-    navController.popBackStack(SEARCH, inclusive = true)
+    if (routeName(navController.currentDestination?.route) == SEARCH) {
+        navController.popBackStack()
+    }
     if (navController.currentDestination?.route == route) return
 
     navController.navigate(route) {
@@ -410,6 +434,8 @@ private fun navigateToSearch(navController: androidx.navigation.NavHostControlle
         restoreState = true
     }
 }
+
+private fun routeName(route: String?): String? = route?.substringBefore("/")?.substringBefore("?")
 
 private fun navigateToPlayback(
     context: Context,
@@ -442,7 +468,7 @@ internal fun MainTopBar(
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
                     Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        imageVector = BoldGroup.MagnifyingGlass,
                         contentDescription = stringResource(R.string.search),
                     )
                 }

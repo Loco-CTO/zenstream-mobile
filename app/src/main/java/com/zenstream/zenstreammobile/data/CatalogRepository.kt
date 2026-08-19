@@ -171,10 +171,9 @@ class CatalogRepository(
 
     suspend fun refreshCurrentAccount(): AuthSession {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedCatalogRequest(current) { api.refreshAccount(current) }
-            .also {
-                sessionStore.saveSession(it)
-            }
+        val refreshed = authenticatedCatalogRequest(current) { api.refreshAccount(current) }
+        saveSessionIfCurrent(current, refreshed)
+        return refreshed
     }
 
     suspend fun uploadAvatar(
@@ -185,12 +184,16 @@ class CatalogRepository(
     ): AuthSession {
         val version =
             authenticatedCatalogRequest(session) { api.uploadAvatar(session, resolver, uri, crop) }
-        return session.copy(avatarVersion = version).also { sessionStore.saveSession(it) }
+        val updated = session.copy(avatarVersion = version)
+        saveSessionIfCurrent(session, updated)
+        return updated
     }
 
     suspend fun removeAvatar(session: AuthSession): AuthSession {
         authenticatedCatalogRequest(session) { api.deleteAvatar(session) }
-        return session.copy(avatarVersion = null).also { sessionStore.saveSession(it) }
+        val updated = session.copy(avatarVersion = null)
+        saveSessionIfCurrent(session, updated)
+        return updated
     }
 
     suspend fun changePassword(
@@ -291,6 +294,12 @@ class CatalogRepository(
             }
             throw error
         }
+
+    private suspend fun saveSessionIfCurrent(expected: AuthSession, updated: AuthSession) {
+        if (session.first()?.token == expected.token) {
+            sessionStore.saveSession(updated)
+        }
+    }
 
     override suspend fun loadMetadataPreference(): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
