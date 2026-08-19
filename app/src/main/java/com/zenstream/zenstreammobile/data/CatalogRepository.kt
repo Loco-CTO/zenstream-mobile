@@ -30,6 +30,12 @@ import kotlinx.coroutines.sync.withLock
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
         get() = kotlinx.coroutines.flow.emptyFlow()
+
+    suspend fun clearSession()
+
+    suspend fun clearSessionIfCurrent(session: AuthSession) {
+        clearSession()
+    }
 }
 
 interface HomeDataSource : CatalogRefreshSource {
@@ -165,7 +171,7 @@ class CatalogRepository(
 
     suspend fun refreshCurrentAccount(): AuthSession {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedCatalogRequest { api.refreshAccount(current) }
+        return authenticatedCatalogRequest(current) { api.refreshAccount(current) }
             .also {
                 sessionStore.saveSession(it)
             }
@@ -177,12 +183,13 @@ class CatalogRepository(
         uri: Uri,
         crop: AvatarCrop,
     ): AuthSession {
-        val version = authenticatedCatalogRequest { api.uploadAvatar(session, resolver, uri, crop) }
+        val version =
+            authenticatedCatalogRequest(session) { api.uploadAvatar(session, resolver, uri, crop) }
         return session.copy(avatarVersion = version).also { sessionStore.saveSession(it) }
     }
 
     suspend fun removeAvatar(session: AuthSession): AuthSession {
-        authenticatedCatalogRequest { api.deleteAvatar(session) }
+        authenticatedCatalogRequest(session) { api.deleteAvatar(session) }
         return session.copy(avatarVersion = null).also { sessionStore.saveSession(it) }
     }
 
@@ -192,7 +199,7 @@ class CatalogRepository(
         newPassword: String,
         confirmNewPassword: String,
     ) {
-        authenticatedCatalogRequest {
+        authenticatedCatalogRequest(session) {
             api.changePassword(session, currentPassword, newPassword, confirmNewPassword)
         }
     }
@@ -200,12 +207,12 @@ class CatalogRepository(
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
         val mode = interfaceLocaleMode.first()
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-        val remoteLocale = authenticatedOrchestratorRequest {
+        val remoteLocale = authenticatedOrchestratorRequest(current) {
             orchestratorApi.fetchLocale(current.serverUrl, current.token)
         }
         var localeChanged = false
         if (remoteLocale != resolvedLocale) {
-            val savedLocale = authenticatedOrchestratorRequest {
+            val savedLocale = authenticatedOrchestratorRequest(current) {
                 orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
             }
             check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
@@ -231,7 +238,7 @@ class CatalogRepository(
     ): InterfaceLocalePreference = interfaceLocaleMutex.withLock {
         val current = session.first() ?: error("Authentication required")
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-        val savedLocale = authenticatedOrchestratorRequest {
+        val savedLocale = authenticatedOrchestratorRequest(current) {
             orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
         }
         check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
@@ -247,7 +254,7 @@ class CatalogRepository(
 
     private suspend fun loadMetadataPreferenceOrNull(current: AuthSession): MetadataPreference? =
         try {
-            authenticatedOrchestratorRequest {
+            authenticatedOrchestratorRequest(current) {
                 orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token)
             }
         } catch (error: OrchestratorException) {
@@ -277,7 +284,7 @@ class CatalogRepository(
 
     override suspend fun loadMetadataPreference(): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest {
+        return authenticatedOrchestratorRequest(current) {
                 orchestratorApi.fetchMetadataPreference(current.serverUrl, current.token)
             }
             .also { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
@@ -285,7 +292,7 @@ class CatalogRepository(
 
     override suspend fun saveMetadataPreference(language: String?): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest {
+        return authenticatedOrchestratorRequest(current) {
                 orchestratorApi.setMetadataPreference(current.serverUrl, current.token, language)
             }
             .also {
@@ -470,7 +477,7 @@ class CatalogRepository(
             if (cached != null && cached.first > System.currentTimeMillis() - 30_000) {
                 return@withLock cached.second
             }
-            authenticatedOrchestratorRequest {
+            authenticatedOrchestratorRequest(current) {
                     orchestratorApi.fetchPlaybackPreference(current.serverUrl, current.token)
                 }
                 .also { playbackPreferenceCache = System.currentTimeMillis() to it }
@@ -481,7 +488,7 @@ class CatalogRepository(
         subtitleLanguage: String?,
     ): PlaybackPreference = playbackPreferenceMutex.withLock {
         val current = session.first() ?: error("Authentication required")
-        authenticatedOrchestratorRequest {
+        authenticatedOrchestratorRequest(current) {
                 orchestratorApi.setPlaybackPreference(
                     current.serverUrl,
                     current.token,
