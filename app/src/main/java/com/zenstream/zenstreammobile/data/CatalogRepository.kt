@@ -266,19 +266,29 @@ class CatalogRepository(
             null
         }
 
-    private suspend fun <T> authenticatedOrchestratorRequest(block: suspend () -> T): T =
+    private suspend fun <T> authenticatedOrchestratorRequest(
+        current: AuthSession? = null,
+        block: suspend () -> T,
+    ): T =
         try {
             block()
         } catch (error: OrchestratorException) {
-            if (error.statusCode == 401) clearSession()
+            if (error.statusCode == 401) {
+                if (current != null) clearSessionIfCurrent(current) else clearSession()
+            }
             throw error
         }
 
-    private suspend fun <T> authenticatedCatalogRequest(block: suspend () -> T): T =
+    private suspend fun <T> authenticatedCatalogRequest(
+        current: AuthSession? = null,
+        block: suspend () -> T,
+    ): T =
         try {
             block()
         } catch (error: CatalogException) {
-            if (error.statusCode == 401) clearSession()
+            if (error.statusCode == 401) {
+                if (current != null) clearSessionIfCurrent(current) else clearSession()
+            }
             throw error
         }
 
