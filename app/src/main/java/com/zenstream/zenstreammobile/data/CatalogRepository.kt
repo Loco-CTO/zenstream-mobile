@@ -39,7 +39,7 @@ interface CatalogRefreshSource {
 }
 
 interface HomeDataSource : CatalogRefreshSource {
-    suspend fun clearSession()
+    override suspend fun clearSession()
 
     suspend fun homeFeatured(session: AuthSession): List<MediaItem>
 
@@ -55,7 +55,7 @@ interface HomeDataSource : CatalogRefreshSource {
 }
 
 interface LibraryDataSource : CatalogRefreshSource {
-    suspend fun clearSession()
+    override suspend fun clearSession()
 
     suspend fun libraries(session: AuthSession): List<Library>
 
@@ -73,13 +73,13 @@ interface LibraryDataSource : CatalogRefreshSource {
 }
 
 interface SearchDataSource : CatalogRefreshSource {
-    suspend fun clearSession()
+    override suspend fun clearSession()
 
     suspend fun search(session: AuthSession, query: String): List<MediaItem>
 }
 
 interface FavoritesDataSource : CatalogRefreshSource {
-    suspend fun clearSession()
+    override suspend fun clearSession()
 
     suspend fun favoritesPage(
         session: AuthSession,
