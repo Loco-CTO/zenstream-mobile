@@ -142,6 +142,7 @@ fun HomeScreen(
 
         else -> {
             val data = state.data
+            val homeRows = data?.rows.orEmpty().distinctBy { it.key }
             PullToRefreshLayout(
                 isRefreshing = state.loading,
                 onRefresh = vm::refresh,
@@ -163,7 +164,7 @@ fun HomeScreen(
                         )
                     }
                     items(
-                        data?.rows.orEmpty(),
+                        homeRows,
                         key = { it.key },
                     ) { row ->
                         MediaRowView(
@@ -548,7 +549,7 @@ private fun SearchResultsContent(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        items(state.results, key = { it.id }) { item ->
+                        items(state.results.distinctBy { it.id }, key = { it.id }) { item ->
                             Box(
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
@@ -777,6 +778,7 @@ private fun FavoriteSection(
     wide: Boolean,
     onItemClick: (MediaItem) -> Unit,
 ) {
+    val uniqueItems = items.distinctBy { it.id }
     Column(Modifier.fillMaxWidth()) {
         Text(
             stringResource(title),
@@ -789,7 +791,7 @@ private fun FavoriteSection(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(items, key = { it.id }) { item ->
+            items(uniqueItems, key = { it.id }) { item ->
                 com.zenstream.zenstreammobile.ui.components.MediaCard(
                     item = item,
                     session = session,
@@ -948,7 +950,7 @@ fun LibraryScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        items(state.items, key = { it.id }) { item ->
+                        items(state.items.distinctBy { it.id }, key = { it.id }) { item ->
                             Box(
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,

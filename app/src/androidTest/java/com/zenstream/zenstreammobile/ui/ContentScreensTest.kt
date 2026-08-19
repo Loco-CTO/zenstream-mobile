@@ -26,8 +26,11 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.MediaCard
+import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
@@ -107,6 +110,29 @@ class ContentScreensTest {
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
         }
+    }
+
+    @Test
+    fun homeRowWithDuplicateMediaIdsDoesNotCrashLazyRowMeasurement() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                MediaRowView(
+                    row =
+                        MediaRow(
+                            title = RowTitle.NewlyAdded,
+                            items =
+                                listOf(
+                                    MediaItem("duplicate", "Duplicate"),
+                                    MediaItem("duplicate", "Duplicate"),
+                                ),
+                        ),
+                    session = session,
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
     }
 
     private fun renderPosterGrid(
