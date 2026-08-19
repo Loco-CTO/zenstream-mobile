@@ -318,6 +318,11 @@ class CatalogRepository(
         sessionStore.clearSession()
     }
 
+    override suspend fun clearSessionIfCurrent(session: AuthSession) {
+        if (this.session.first()?.token != session.token) return
+        clearSession()
+    }
+
     suspend fun clearAll() {
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }

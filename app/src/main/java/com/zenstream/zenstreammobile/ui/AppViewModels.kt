@@ -279,7 +279,9 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     }
 
     private suspend fun handleFailure(error: Throwable) {
-        if ((error as? CatalogException)?.statusCode == 401) repository.clearSession()
+        if ((error as? CatalogException)?.statusCode == 401) {
+            repository.clearSessionIfCurrent(session)
+        }
     }
 
     private fun addPendingSections(count: Int) {
@@ -410,7 +412,9 @@ class LibraryViewModel(
                     }
                 }
                 .onFailure {
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.value = _uiState.value.copy(loading = false, error = true)
                 }
         }
@@ -496,7 +500,9 @@ class LibraryViewModel(
                 }
                 .onFailure {
                     if (generation != requestGeneration) return@onFailure
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.update { current ->
                         current.copy(loadingMore = false, loadMoreError = true)
                     }
@@ -532,7 +538,9 @@ class LibraryViewModel(
             }
             .onFailure {
                 if (generation != requestGeneration) return@onFailure
-                if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                if ((it as? CatalogException)?.statusCode == 401) {
+                    repository.clearSessionIfCurrent(session)
+                }
                 _uiState.update { current -> current.copy(loading = false, error = true) }
             }
     }
@@ -623,7 +631,9 @@ class SearchViewModel(
             }
             .onFailure {
                 if (generation != requestGeneration) return@onFailure
-                if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                if ((it as? CatalogException)?.statusCode == 401) {
+                    repository.clearSessionIfCurrent(session)
+                }
                 _uiState.value = _uiState.value.copy(loading = false, error = true)
             }
     }
@@ -734,7 +744,9 @@ class FavoritesViewModel(
             }
         } catch (error: Throwable) {
             if (error is CancellationException || generation != requestGeneration) throw error
-            if ((error as? CatalogException)?.statusCode == 401) repository.clearSession()
+            if ((error as? CatalogException)?.statusCode == 401) {
+                repository.clearSessionIfCurrent(session)
+            }
             _uiState.update {
                 it.copy(
                     loading = false,
@@ -856,7 +868,9 @@ class DetailViewModel(
                 }
                 .onFailure {
                     if (generation != loadGeneration) return@onFailure
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.value =
                         _uiState.value.copy(
                             loading = false,
@@ -893,7 +907,9 @@ class DetailViewModel(
                 }
                 .onFailure {
                     if (generation != loadGeneration) return@onFailure
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.value =
                         DetailUiState(
                             loading = false,
@@ -1003,7 +1019,9 @@ class DetailViewModel(
                 )
             runCatching { action(previous, targetValue) }
                 .onFailure {
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.value =
                         _uiState.value.copy(
                             data = current,
@@ -1046,7 +1064,9 @@ class DetailViewModel(
                 )
             runCatching { action(previous, targetValue) }
                 .onFailure {
-                    if ((it as? CatalogException)?.statusCode == 401) repository.clearSession()
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
                     _uiState.value =
                         _uiState.value.copy(
                             data = current,
