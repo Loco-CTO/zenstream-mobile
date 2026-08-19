@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -97,7 +97,7 @@ internal fun MyPageSettingsContent(
                     enabled = !state.interfaceLocaleSaving,
                     onChange = onInterfaceLocaleChange,
                 )
-                SectionDivider()
+                Spacer(Modifier.height(16.dp))
                 MetadataLanguageSelector(
                     languages = state.metadataLanguages,
                     selected = state.metadataLanguage,
@@ -128,7 +128,7 @@ internal fun MyPageSettingsContent(
                         )
                     },
                 )
-                SectionDivider()
+                Spacer(Modifier.height(16.dp))
                 PlaybackLanguageSelector(
                     title = stringResource(R.string.subtitle_language),
                     options = state.playbackPreference.subtitleLanguages,
@@ -145,9 +145,9 @@ internal fun MyPageSettingsContent(
                 if (state.playbackSaveError) {
                     SettingsErrorText(R.string.playback_language_save_failed)
                 }
-                SectionDivider()
+                Spacer(Modifier.height(16.dp))
                 EngineSelector(state.playerEngine, onPlayerEngineChange)
-                SectionDivider()
+                Spacer(Modifier.height(16.dp))
                 SettingSwitchRow(
                     title = stringResource(R.string.player_show_debug_icon),
                     supporting = stringResource(R.string.player_show_debug_icon_description),
@@ -233,14 +233,6 @@ private fun SettingsSectionContent(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth(), content = content)
-}
-
-@Composable
-private fun SectionDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        color = MaterialTheme.colorScheme.outline.copy(alpha = .55f),
-    )
 }
 
 @Composable
