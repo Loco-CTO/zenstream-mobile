@@ -58,7 +58,7 @@ class MainNavigationTest {
             }
         }
 
-        composeRule.onNodeWithText("T").assertIsDisplayed()
+        composeRule.onNodeWithText("T", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
