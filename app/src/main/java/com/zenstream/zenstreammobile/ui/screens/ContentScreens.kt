@@ -117,7 +117,7 @@ fun HomeScreen(
 ) {
     val vm: HomeViewModel =
         viewModel(
-            key = "home-${session.userId}",
+            key = "home-${session.userId}-${session.token}",
             factory = HomeViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -333,7 +333,7 @@ fun SearchScreen(
 ) {
     val vm: SearchViewModel =
         viewModel(
-            key = "search-${session.userId}",
+            key = "search-${session.userId}-${session.token}",
             factory = SearchViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -463,7 +463,7 @@ fun FavoritesScreen(
 ) {
     val vm: FavoritesViewModel =
         viewModel(
-            key = "favorites-${session.userId}",
+            key = "favorites-${session.userId}-${session.token}",
             factory = FavoritesViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -685,7 +685,7 @@ fun LibraryScreen(
 ) {
     val vm: LibraryViewModel =
         viewModel(
-            key = "library-${session.userId}",
+            key = "library-${session.userId}-${session.token}",
             factory = LibraryViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
