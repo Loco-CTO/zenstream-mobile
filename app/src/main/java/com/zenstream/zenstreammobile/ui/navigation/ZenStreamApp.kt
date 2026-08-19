@@ -11,12 +11,14 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -504,19 +507,30 @@ internal fun MainNavigationBar(
                     androidx.compose.material3.NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = .18f),
+                        indicatorColor = Color.Transparent,
                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 icon = {
                     if (destination.route == MYPAGE) {
-                        UserAvatar(
-                            session = session,
-                            userId = session.userId,
-                            username = session.username,
-                            modifier = Modifier.size(24.dp),
-                            contentDescription = stringResource(R.string.my_page),
-                        )
+                        Box(Modifier.size(24.dp)) {
+                            UserAvatar(
+                                session = session,
+                                userId = session.userId,
+                                username = session.username,
+                                modifier = Modifier.size(24.dp),
+                                contentDescription = stringResource(R.string.my_page),
+                            )
+                            if (currentRoute == destination.route) {
+                                Box(
+                                    Modifier.fillMaxSize().border(
+                                        width = 1.5.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape,
+                                    )
+                                )
+                            }
+                        }
                     } else {
                         destination.icon?.let { icon ->
                             Icon(
