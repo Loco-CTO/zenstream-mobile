@@ -834,13 +834,14 @@ class PlaybackViewModel(
             }
             EpisodeCompletionAction.PLAY_NEXT -> Unit
         }
+        val target = nextEpisode ?: return
         pendingCompletionGeneration = null
         val manager = syncplay
         if (manager?.state?.value?.active != null) {
             if (manager.state.value.active?.hostUserId != session.userId) return
-            viewModelScope.launch { manager.command("media", 0.0, true, nextEpisode!!.id) }
+            viewModelScope.launch { manager.command("media", 0.0, true, target.id) }
         } else {
-            transitionTo(nextEpisode)
+            transitionTo(target)
         }
     }
 
