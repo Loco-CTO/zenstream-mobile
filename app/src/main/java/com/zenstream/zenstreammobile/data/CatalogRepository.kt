@@ -210,14 +210,16 @@ class CatalogRepository(
     suspend fun syncInterfaceLocale(current: AuthSession) = interfaceLocaleMutex.withLock {
         val mode = interfaceLocaleMode.first()
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-        val remoteLocale = authenticatedOrchestratorRequest(current) {
-            orchestratorApi.fetchLocale(current.serverUrl, current.token)
-        }
+        val remoteLocale =
+            authenticatedOrchestratorRequest(current) {
+                orchestratorApi.fetchLocale(current.serverUrl, current.token)
+            }
         var localeChanged = false
         if (remoteLocale != resolvedLocale) {
-            val savedLocale = authenticatedOrchestratorRequest(current) {
-                orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
-            }
+            val savedLocale =
+                authenticatedOrchestratorRequest(current) {
+                    orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
+                }
             check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
             localeChanged = true
         }
@@ -241,9 +243,10 @@ class CatalogRepository(
     ): InterfaceLocalePreference = interfaceLocaleMutex.withLock {
         val current = session.first() ?: error("Authentication required")
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
-        val savedLocale = authenticatedOrchestratorRequest(current) {
-            orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
-        }
+        val savedLocale =
+            authenticatedOrchestratorRequest(current) {
+                orchestratorApi.setLocale(current.serverUrl, current.token, resolvedLocale)
+            }
         check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
         sessionStore.saveInterfaceLocaleMode(mode)
 

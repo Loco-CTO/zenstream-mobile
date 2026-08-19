@@ -21,8 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,8 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -139,12 +139,13 @@ fun MyPageScreen(
                             } else {
                                 passwordEditorOpen = false
                             }
-                        },
+                        }
                     )
                 }
                 item {
                     ChangePasswordForm(
-                        onSubmitPasswordChange = { currentPassword, newPassword, confirmNewPassword ->
+                        onSubmitPasswordChange = { currentPassword, newPassword, confirmNewPassword
+                            ->
                             repository.changePassword(
                                 session,
                                 currentPassword,
@@ -356,12 +357,12 @@ internal fun ChangePasswordForm(
 
     fun submit() {
         if (submitting) return
-        error = when {
-            newPassword.length < 8 -> passwordTooShortMessage
-            newPassword != confirmNewPassword ->
-                passwordsDoNotMatchMessage
-            else -> null
-        }
+        error =
+            when {
+                newPassword.length < 8 -> passwordTooShortMessage
+                newPassword != confirmNewPassword -> passwordsDoNotMatchMessage
+                else -> null
+            }
         if (error != null) return
 
         submitting = true
@@ -475,10 +476,7 @@ private fun PasswordField(
                 keyboardType = KeyboardType.Password,
                 imeAction = imeAction,
             ),
-        keyboardActions =
-            KeyboardActions(
-                onDone = { onDone?.invoke() },
-            ),
+        keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
         modifier = Modifier.fillMaxWidth(),
     )
 }

@@ -212,12 +212,13 @@ class CatalogApiHttpTest {
         val session =
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
-        CatalogApi(deviceId = "device-id").changePassword(
-            session,
-            "current-password",
-            "new-password",
-            "new-password",
-        )
+        CatalogApi(deviceId = "device-id")
+            .changePassword(
+                session,
+                "current-password",
+                "new-password",
+                "new-password",
+            )
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)

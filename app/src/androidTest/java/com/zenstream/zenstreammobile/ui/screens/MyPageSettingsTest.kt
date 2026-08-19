@@ -10,8 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -169,12 +169,8 @@ class MyPageSettingsTest {
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
         composeRule.waitForIdle()
         composeRule.runOnIdle { assertTrue(submitted) }
-        composeRule
-            .onNodeWithText(context.getString(R.string.password_changed))
-            .assertIsDisplayed()
-        composeRule
-            .onNodeWithText(context.getString(R.string.continue_to_login))
-            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.password_changed)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.continue_to_login)).performClick()
         composeRule.runOnIdle { assertTrue(continueToLogin) }
     }
 }

@@ -981,8 +981,7 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
     listOf("cast" to R.string.cast, "crew" to R.string.crew).forEach { (creditType, label) ->
         val credits = people.filter { it.creditType == creditType }
         if (credits.isEmpty()) return@forEach
-        val uniqueCredits =
-            credits.distinctBy { it.id ?: "${it.name}-${it.role}-${it.creditType}" }
+        val uniqueCredits = credits.distinctBy { it.id ?: "${it.name}-${it.role}-${it.creditType}" }
         Text(
             stringResource(label),
             style = MaterialTheme.typography.titleSmall,
@@ -992,7 +991,8 @@ private fun PeopleSection(people: List<MediaPerson>, session: AuthSession) {
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(uniqueCredits, key = { it.id ?: "${it.name}-${it.role}-${it.creditType}" }) { person ->
+            items(uniqueCredits, key = { it.id ?: "${it.name}-${it.role}-${it.creditType}" }) {
+                person ->
                 val url = person.primaryImageTag
                 Column(Modifier.width(96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     AuthenticatedImage(
