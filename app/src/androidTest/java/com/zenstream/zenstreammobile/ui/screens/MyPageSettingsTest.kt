@@ -90,6 +90,7 @@ class MyPageSettingsTest {
             }
         }
 
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText("Text color").performClick()
         composeRule
             .onNodeWithText(context.getString(R.string.subtitle_color_picker_title, "Text color"))
@@ -104,7 +105,9 @@ class MyPageSettingsTest {
 
         composeRule.onNodeWithContentDescription(redChannel).performSemanticsAction(
             SemanticsActions.SetProgress
-        ) { it(128f) }
+        ) {
+            it(128f)
+        }
         composeRule.runOnIdle { assertEquals("#80ffff", selected) }
     }
 
