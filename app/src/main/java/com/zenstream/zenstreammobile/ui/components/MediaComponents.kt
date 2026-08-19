@@ -63,7 +63,8 @@ fun MediaRowView(
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (row.items.isEmpty()) return
+    val uniqueItems = row.items.distinctBy { it.id }
+    if (uniqueItems.isEmpty()) return
     val title =
         when (row.title) {
             RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
@@ -102,7 +103,7 @@ fun MediaRowView(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (row.stackEpisodes) {
-                items(stackNewlyAdded(row.items), key = { it.items.first().id }) { stack ->
+                items(stackNewlyAdded(uniqueItems), key = { it.items.first().id }) { stack ->
                     if (stack.items.size > 1) {
                         StackedEpisodeCard(stack, session, onItemClick)
                     } else {
@@ -116,7 +117,7 @@ fun MediaRowView(
                     }
                 }
             } else {
-                items(row.items, key = { it.id }) { item ->
+                items(uniqueItems, key = { it.id }) { item ->
                     MediaCard(item, session, row.wide, onItemClick)
                 }
             }

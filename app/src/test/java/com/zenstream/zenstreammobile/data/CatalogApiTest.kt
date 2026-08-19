@@ -426,6 +426,18 @@ class CatalogApiTest {
     }
 
     @Test
+    fun removesDuplicateCatalogItemsBeforeComposeListsRenderThem() {
+        val item =
+            JSONObject()
+                .put("id", "duplicate")
+                .put("type", "movie")
+                .put("metadata", JSONObject().put("title", "Duplicate"))
+        val root = JSONObject().put("items", JSONArray().put(item).put(item))
+
+        assertEquals(listOf("duplicate"), catalogItems(root).map { it.id })
+    }
+
+    @Test
     fun groupsSequentialEpisodesAddedWithinOneHour() {
         val stacks =
             stackNewlyAdded(

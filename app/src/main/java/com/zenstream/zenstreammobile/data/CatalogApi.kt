@@ -1193,7 +1193,7 @@ private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
         .orEmpty()
 
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
-    jsonArray(root, key).map(::catalogMediaItem)
+    jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
 
 internal fun parseHomeData(payload: JSONObject): HomeData {
     val globalRows =
