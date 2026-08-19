@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -19,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,10 +92,7 @@ internal fun MyPageSettingsContent(
 ) {
     when (section) {
         MyPageSettingsSection.Appearance ->
-            SettingsSectionCard(
-                title = stringResource(R.string.appearance_group),
-                icon = LucideR.drawable.lucide_ic_settings,
-            ) {
+            SettingsSectionContent {
                 InterfaceLanguageSelector(
                     selected = state.interfaceLocaleMode,
                     enabled = !state.interfaceLocaleSaving,
@@ -120,10 +115,7 @@ internal fun MyPageSettingsContent(
             }
 
         MyPageSettingsSection.Player ->
-            SettingsSectionCard(
-                title = stringResource(R.string.player_group),
-                icon = LucideR.drawable.lucide_ic_play,
-            ) {
+            SettingsSectionContent {
                 PlaybackLanguageSelector(
                     title = stringResource(R.string.audio_language),
                     options = state.playbackPreference.audioLanguages,
@@ -166,10 +158,7 @@ internal fun MyPageSettingsContent(
             }
 
         MyPageSettingsSection.Subtitles ->
-            SettingsSectionCard(
-                title = stringResource(R.string.subtitles_group),
-                icon = LucideR.drawable.lucide_ic_captions,
-            ) {
+            SettingsSectionContent {
                 SubtitleSettings(style = state.subtitleStyle, onChange = onSubtitleChange)
                 if (state.subtitleSaveError) {
                     SettingsErrorText(R.string.subtitle_save_failed)
@@ -208,67 +197,43 @@ private fun SettingsTabRow(
     icon: Int,
     onClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(18.dp),
-        tonalElevation = 1.dp,
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    supporting,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            Icon(
-                painter = painterResource(LucideR.drawable.lucide_ic_chevron_down),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                supporting,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
 @Composable
-private fun SettingsSectionCard(
-    title: String,
-    icon: Int,
+private fun SettingsSectionContent(
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.semantics { heading() },
-            )
-        }
-        Column(modifier = Modifier.fillMaxWidth(), content = content)
-    }
+    Column(modifier = Modifier.fillMaxWidth(), content = content)
 }
 
 @Composable
