@@ -95,7 +95,11 @@ class MyPageSettingsTest {
         composeRule
             .onNodeWithText(context.getString(R.string.subtitle_color_picker_title, "Text color"))
             .assertIsDisplayed()
-        composeRule.onNodeWithText("#ffffff").assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.subtitle_color_value, "#ffffff")
+            )
+            .assertIsDisplayed()
         val redChannel =
             context.getString(
                 R.string.subtitle_color_slider,
