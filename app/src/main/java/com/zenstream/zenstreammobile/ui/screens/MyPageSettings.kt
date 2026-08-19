@@ -484,14 +484,14 @@ internal fun SubtitleSettings(
                 )
             }
     }
-    SectionDivider()
+    Spacer(Modifier.height(16.dp))
     SettingSwitchRow(
         title = stringResource(R.string.subtitle_bold),
         supporting = stringResource(R.string.subtitle_bold_description),
         checked = style.bold,
         onCheckedChange = { onChange { copy(bold = it) } },
     )
-    SectionDivider()
+    Spacer(Modifier.height(24.dp))
     Text(
         text = stringResource(R.string.subtitle_typography_group),
         color = MaterialTheme.colorScheme.primary,
@@ -501,7 +501,7 @@ internal fun SubtitleSettings(
     SliderRow(stringResource(R.string.subtitle_text_size), style.textScale, 50f..200f, "%d%%") {
         onChange { copy(textScale = it) }
     }
-    SectionDivider()
+    Spacer(Modifier.height(24.dp))
     Text(
         text = stringResource(R.string.subtitle_position_group),
         color = MaterialTheme.colorScheme.primary,
@@ -517,7 +517,7 @@ internal fun SubtitleSettings(
     ) {
         onChange { copy(bottomSpacing = it) }
     }
-    SectionDivider()
+    Spacer(Modifier.height(24.dp))
     Text(
         text = stringResource(R.string.subtitle_colors_group),
         color = MaterialTheme.colorScheme.primary,
@@ -544,7 +544,7 @@ internal fun SubtitleSettings(
     ) {
         onChange { copy(backgroundOpacity = it) }
     }
-    SectionDivider()
+    Spacer(Modifier.height(24.dp))
     Text(
         text = stringResource(R.string.subtitle_preview),
         color = MaterialTheme.colorScheme.primary,
