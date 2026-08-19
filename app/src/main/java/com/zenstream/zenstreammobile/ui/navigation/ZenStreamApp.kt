@@ -523,11 +523,12 @@ internal fun MainNavigationBar(
                             )
                             if (currentRoute == destination.route) {
                                 Box(
-                                    Modifier.fillMaxSize().border(
-                                        width = 1.5.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape,
-                                    )
+                                    Modifier.fillMaxSize()
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = CircleShape,
+                                        )
                                 )
                             }
                         }
