@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -136,19 +137,20 @@ fun ZenStreamApp(
             onDismiss = appViewModel::dismissAvailableUpdate,
             onDownload = {
                 appViewModel.dismissAvailableUpdate()
-                runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl))
-                        )
-                    }
-                    .onFailure {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl))
-                        )
-                    }
+                openUpdateLink(context, update.downloadUrl) ||
+                    openUpdateLink(context, update.releaseUrl)
             },
         )
     }
+}
+
+internal fun openUpdateLink(context: Context, url: String): Boolean {
+    val intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    if (intent.resolveActivity(context.packageManager) == null) return false
+    return runCatching { context.startActivity(intent) }.isSuccess
 }
 
 @Composable
