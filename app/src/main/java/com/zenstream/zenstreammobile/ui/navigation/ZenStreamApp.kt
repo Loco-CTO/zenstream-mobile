@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -72,6 +73,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.ui.NotificationsViewModel
 import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
@@ -82,6 +84,7 @@ import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
+import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
@@ -92,6 +95,7 @@ private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val FAVORITES = "favorites"
 private const val MYPAGE = "my-page"
+private const val NOTIFICATIONS = "notifications"
 private const val DETAIL = "detail/{itemId}"
 
 internal fun shouldShowMainSearchAction(route: String): Boolean =
@@ -192,6 +196,12 @@ private fun MainScaffold(
 ) {
     val syncplay = remember(session.token) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val notificationsViewModel: NotificationsViewModel =
+        viewModel(
+            key = "notifications-${session.userId}-${session.token}",
+            factory = NotificationsViewModel.Factory(repository, session),
+        )
+    val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
     val toast = rememberToastHostState()
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
@@ -270,10 +280,12 @@ private fun MainScaffold(
     LaunchedEffect(mainRoute) {
         bottomBarVisible = bottomBarVisibility.resetForRoute()
         topBarVisible = topBarVisibility.resetForRoute()
+        if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
     }
+    LaunchedEffect(session.token) { notificationsViewModel.refresh() }
 
     val detailRoute = mainRoute == DETAIL.substringBefore("/")
-    val topBarHidden = detailRoute || mainRoute == MYPAGE
+    val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
 
     androidx.compose.material3.Scaffold(
         topBar = {
@@ -299,6 +311,10 @@ private fun MainScaffold(
                             showSearchAction =
                                 !searchOverlayOpen && shouldShowMainSearchAction(mainRoute),
                             onSearch = { navigateToSearch(navController) },
+                            unreadCount = notificationsState.unreadCount,
+                            onNotifications = {
+                                navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                            },
                             onReturnToView = { group ->
                                 group.mediaItemId()?.let { launchPlayback(context, it, "") }
                             },
@@ -308,7 +324,7 @@ private fun MainScaffold(
             }
         },
         bottomBar = {
-            if (!detailRoute) {
+            if (!detailRoute && mainRoute != NOTIFICATIONS) {
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
