@@ -1,0 +1,186 @@
+package com.zenstream.zenstreammobile.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.NotificationItem
+import com.zenstream.zenstreammobile.ui.NotificationsViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotificationsScreen(
+    repository: CatalogRepository,
+    session: AuthSession,
+    onBack: () -> Unit,
+    onOpenItem: (String) -> Unit,
+) {
+    val vm: NotificationsViewModel =
+        viewModel(
+            key = "notifications-${session.userId}-${session.token}",
+            factory = NotificationsViewModel.Factory(repository, session),
+        )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refresh() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.notifications)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                            contentDescription = stringResource(R.string.back),
+                        )
+                    }
+                },
+                actions = {
+                    if (state.unreadCount > 0) {
+                        TextButton(onClick = vm::markAllRead) {
+                            Text(stringResource(R.string.notifications_mark_all_read))
+                        }
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    ),
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { padding ->
+        when {
+            state.loading && state.items.isEmpty() -> CenterLoading(padding)
+            state.error && state.items.isEmpty() ->
+                ErrorState(padding, R.string.notifications_load_failed, vm::refresh)
+            state.items.isEmpty() ->
+                EmptyState(
+                    stringResource(R.string.notifications_empty),
+                    stringResource(R.string.notifications_empty_hint),
+                )
+            else ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.items, key = { it.id }) { item ->
+                        NotificationRow(
+                            item = item,
+                            onClick = {
+                                vm.setRead(item, true)
+                                (item.seriesId ?: item.itemId)?.let(onOpenItem)
+                            },
+                        )
+                    }
+                    if (state.nextCursor != null) {
+                        item(key = "notifications-load-more") {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                TextButton(onClick = vm::loadMore, enabled = !state.loadingMore) {
+                                    Text(
+                                        stringResource(
+                                            if (state.loadingMore) R.string.loading
+                                            else R.string.notifications_load_more
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+private fun NotificationRow(item: NotificationItem, onClick: () -> Unit) {
+    val background =
+        if (item.readAt == null) MaterialTheme.colorScheme.primary.copy(alpha = .10f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .35f)
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .background(background, MaterialTheme.shapes.medium)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_bell),
+            contentDescription = null,
+            tint =
+                if (item.readAt == null) MaterialTheme.colorScheme.primary
+                else Color.White.copy(alpha = .55f),
+            modifier = Modifier.size(21.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            item.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Text(
+                item.createdAt,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f),
+                modifier = Modifier.padding(top = 5.dp),
+            )
+        }
+        if (item.readAt == null) {
+            Box(
+                Modifier.padding(start = 10.dp, top = 5.dp)
+                    .size(8.dp)
+                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+            )
+        }
+    }
+}
