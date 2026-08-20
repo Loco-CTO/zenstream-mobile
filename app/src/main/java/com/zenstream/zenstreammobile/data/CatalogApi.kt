@@ -20,6 +20,8 @@ import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.NotificationItem
+import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PlaybackData
@@ -1010,6 +1012,53 @@ class CatalogApi(
             )
         }
 
+    suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/catalog/items/$itemId/state",
+                method = "PATCH",
+                body = JSONObject().put("following", following).toString(),
+            )
+        }
+
+    suspend fun notifications(
+        session: AuthSession,
+        limit: Int = 50,
+        cursor: String? = null,
+    ): NotificationPage =
+        withContext(Dispatchers.IO) {
+            val query = buildMap {
+                put("limit", limit.coerceIn(1, 100).toString())
+                cursor?.takeIf(String::isNotBlank)?.let { put("cursor", it) }
+            }
+            parseNotificationPage(requestJson(session, "/api/notifications", query = query))
+        }
+
+    suspend fun notificationSummary(session: AuthSession): Int =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/summary").optInt("unreadCount", 0)
+        }
+
+    suspend fun setNotificationRead(
+        session: AuthSession,
+        notificationId: String,
+        read: Boolean,
+    ) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/notifications/$notificationId",
+                method = "PATCH",
+                body = JSONObject().put("read", read).toString(),
+            )
+        }
+
+    suspend fun markAllNotificationsRead(session: AuthSession) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/read-all", method = "POST")
+        }
+
     private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
         catalogMediaItem(requestJson(session, "/api/catalog/items/$itemId"))
 
@@ -1191,6 +1240,31 @@ private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
             List(array.length()) { array.optJSONObject(it) ?: JSONObject() }
         }
         .orEmpty()
+
+internal fun parseNotificationPage(root: JSONObject): NotificationPage {
+    val items =
+        jsonArray(root, "items").mapNotNull { item ->
+            val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+            NotificationItem(
+                id = id,
+                kind = item.optString("kind"),
+                title = item.optString("title").ifBlank { "ZenStream" },
+                subtitle = item.optNullableString("subtitle"),
+                itemId = item.optNullableString("itemId"),
+                seriesId = item.optNullableString("seriesId"),
+                seasonNumber = item.optIntOrNull("seasonNumber"),
+                episodeNumber = item.optIntOrNull("episodeNumber"),
+                createdAt = item.optString("createdAt"),
+                readAt = item.optNullableString("readAt"),
+                navigationTarget = item.optNullableString("navigationTarget"),
+            )
+        }
+    return NotificationPage(
+        items = items,
+        unreadCount = root.optInt("unreadCount", 0).coerceAtLeast(0),
+        nextCursor = root.optNullableString("nextCursor"),
+    )
+}
 
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
@@ -1431,6 +1505,10 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
             },
         played = state.optBoolean("played", false),
         favorite = state.optBoolean("favorite", false),
+        following =
+            if (type == "Movie" || type == "Series") {
+                state.optBoolean("following", false)
+            } else null,
         unplayedItemCount = state.optIntOrNull("unplayedItemCount"),
         playedPercentage = state.optDoubleOrNull("playedPercentage"),
         playbackPositionTicks =
@@ -1673,6 +1751,12 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> =
             seriesPrimaryImageTag = item.optString("SeriesPrimaryImageTag").ifBlank { null },
             played = userData?.optBoolean("Played") ?: false,
             favorite = userData?.optBoolean("IsFavorite") ?: false,
+            following =
+                if (item.optString("Type").equals("Movie", ignoreCase = true) ||
+                    item.optString("Type").equals("Series", ignoreCase = true)
+                ) {
+                    userData?.optBoolean("IsFollowing") ?: false
+                } else null,
             unplayedItemCount = userData?.optIntOrNull("UnplayedItemCount"),
             playedPercentage = userData?.optDoubleOrNull("PlayedPercentage"),
             playbackPositionTicks = userData?.optLongOrNull("PlaybackPositionTicks"),

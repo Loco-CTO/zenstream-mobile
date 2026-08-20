@@ -24,6 +24,7 @@ import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
+import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.orderedHomeRows
@@ -147,6 +148,124 @@ class AppViewModel(
     class Factory(private val repository: CatalogRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = AppViewModel(repository) as T
+    }
+}
+
+data class NotificationsUiState(
+    val loading: Boolean = true,
+    val items: List<NotificationItem> = emptyList(),
+    val unreadCount: Int = 0,
+    val nextCursor: String? = null,
+    val error: Boolean = false,
+    val loadingMore: Boolean = false,
+)
+
+class NotificationsViewModel(
+    private val repository: CatalogRepository,
+    private val session: AuthSession,
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(NotificationsUiState())
+    val uiState = _uiState.asStateFlow()
+    private var loadJob: Job? = null
+
+    init {
+        refresh()
+    }
+
+    fun refresh() {
+        loadJob?.cancel()
+        _uiState.value = _uiState.value.copy(loading = true, error = false)
+        loadJob = viewModelScope.launch {
+            runCatching { repository.notifications(session) }
+                .onSuccess { page ->
+                    _uiState.value =
+                        NotificationsUiState(
+                            loading = false,
+                            items = page.items,
+                            unreadCount = page.unreadCount,
+                            nextCursor = page.nextCursor,
+                        )
+                }
+                .onFailure {
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                    _uiState.value = _uiState.value.copy(loading = false, error = true)
+                }
+        }
+    }
+
+    fun loadMore() {
+        val cursor = _uiState.value.nextCursor ?: return
+        if (_uiState.value.loading || _uiState.value.loadingMore) return
+        _uiState.value = _uiState.value.copy(loadingMore = true)
+        loadJob = viewModelScope.launch {
+            runCatching { repository.notifications(session, cursor = cursor) }
+                .onSuccess { page ->
+                    _uiState.update { state ->
+                        state.copy(
+                            loadingMore = false,
+                            items = (state.items + page.items).distinctBy { it.id },
+                            unreadCount = page.unreadCount,
+                            nextCursor = page.nextCursor,
+                        )
+                    }
+                }
+                .onFailure {
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                    _uiState.update { state -> state.copy(loadingMore = false, error = true) }
+                }
+        }
+    }
+
+    fun setRead(item: NotificationItem, read: Boolean) {
+        val current = _uiState.value
+        if ((item.readAt != null) == read) return
+        val marker = if (read) "local" else null
+        _uiState.value =
+            current.copy(
+                items = current.items.map { if (it.id == item.id) it.copy(readAt = marker) else it },
+                unreadCount = (current.unreadCount + if (read) -1 else 1).coerceAtLeast(0),
+            )
+        viewModelScope.launch {
+            runCatching { repository.setNotificationRead(session, item.id, read) }
+                .onFailure {
+                    _uiState.value = current
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                }
+        }
+    }
+
+    fun markAllRead() {
+        val current = _uiState.value
+        if (current.unreadCount == 0) return
+        _uiState.value =
+            current.copy(
+                items = current.items.map { if (it.readAt == null) it.copy(readAt = "local") else it },
+                unreadCount = 0,
+            )
+        viewModelScope.launch {
+            runCatching { repository.markAllNotificationsRead(session) }
+                .onFailure {
+                    _uiState.value = current
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                }
+        }
+    }
+
+    class Factory(
+        private val repository: CatalogRepository,
+        private val session: AuthSession,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            NotificationsViewModel(repository, session) as T
     }
 }
 
@@ -953,6 +1072,34 @@ class DetailViewModel(
         toggleItemState(playedAction = false) { item, value ->
             repository.setFavorite(session, item.id, value)
         }
+
+    fun toggleFollowing() {
+        val current = _uiState.value.data ?: return
+        val previous = current.item
+        if (previous.type !in setOf("Movie", "Series")) return
+        viewModelScope.launch {
+            val targetValue = !(previous.following ?: false)
+            _uiState.value =
+                _uiState.value.copy(
+                    data = current.copy(item = previous.copy(following = targetValue)),
+                    actionBusy = true,
+                    actionError = false,
+                )
+            runCatching { repository.setFollowing(session, previous.id, targetValue) }
+                .onFailure {
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            data = current,
+                            actionBusy = false,
+                            actionError = true,
+                        )
+                }
+                .onSuccess { _uiState.value = _uiState.value.copy(actionBusy = false) }
+        }
+    }
 
     fun selectAudioTrack(streamIndex: Int) {
         val current = _uiState.value

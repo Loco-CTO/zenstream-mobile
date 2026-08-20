@@ -60,8 +60,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.AppUpdate
@@ -517,7 +515,7 @@ internal fun MainTopBar(
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
                     Icon(
-                        imageVector = BoldGroup.MagnifyingGlass,
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
                         contentDescription = stringResource(R.string.search),
                     )
                 }

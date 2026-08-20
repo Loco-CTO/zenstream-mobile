@@ -36,6 +36,8 @@ interface CatalogRefreshSource {
     suspend fun clearSessionIfCurrent(session: AuthSession) {
         clearSession()
     }
+
+    suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {}
 }
 
 interface HomeDataSource : CatalogRefreshSource {
@@ -409,6 +411,28 @@ class CatalogRepository(
         api.setPlayed(session, itemId, played)
         invalidateHomeCache()
     }
+
+    suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
+        api.setFollowing(session, itemId, following)
+        invalidateCatalogState()
+    }
+
+    suspend fun notifications(
+        session: AuthSession,
+        limit: Int = 50,
+        cursor: String? = null,
+    ) = api.notifications(session, limit, cursor)
+
+    suspend fun notificationSummary(session: AuthSession) = api.notificationSummary(session)
+
+    suspend fun setNotificationRead(
+        session: AuthSession,
+        notificationId: String,
+        read: Boolean,
+    ) = api.setNotificationRead(session, notificationId, read)
+
+    suspend fun markAllNotificationsRead(session: AuthSession) =
+        api.markAllNotificationsRead(session)
 
     suspend fun playback(
         session: AuthSession,

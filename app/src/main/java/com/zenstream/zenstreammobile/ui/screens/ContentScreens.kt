@@ -87,9 +87,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.MagnifyingGlass
-import com.adamglin.phosphoricons.bold.X
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -171,6 +168,9 @@ fun HomeScreen(
                             row,
                             session,
                             onItemClick,
+                            onToggleFollowing = { item, following ->
+                                repository.setFollowing(session, item.id, following)
+                            },
                         )
                     }
                 }
@@ -355,6 +355,9 @@ fun SearchScreen(
         onRetry = vm::retry,
         onRefresh = vm::refresh,
         onItemClick = onItemClick,
+        onToggleFollowing = { item, following ->
+            repository.setFollowing(session, item.id, following)
+        },
     )
 }
 
@@ -417,6 +420,9 @@ fun SearchOverlayScreen(
                         onDismiss()
                         onItemClick(item)
                     },
+                    onToggleFollowing = { item, following ->
+                        repository.setFollowing(session, item.id, following)
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -465,6 +471,7 @@ private fun SearchResultsContent(
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
+    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -554,7 +561,12 @@ private fun SearchResultsContent(
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
                             ) {
-                                MediaCardForSearch(item, session, onItemClick)
+                                MediaCardForSearch(
+                                    item,
+                                    session,
+                                    onItemClick = onItemClick,
+                                    onToggleFollowing,
+                                )
                             }
                         }
                     }
@@ -576,7 +588,7 @@ private fun SearchField(
         onValueChange = onValueChange,
         leadingIcon = {
             Icon(
-                imageVector = BoldGroup.MagnifyingGlass,
+                painter = painterResource(LucideR.drawable.lucide_ic_search),
                 contentDescription = null,
             )
         },
@@ -584,7 +596,7 @@ private fun SearchField(
             if (value.isNotEmpty())
                 IconButton(onClick = onClear) {
                     Icon(
-                        imageVector = BoldGroup.X,
+                        painter = painterResource(LucideR.drawable.lucide_ic_x),
                         contentDescription = stringResource(R.string.close),
                     )
                 }
@@ -638,7 +650,10 @@ fun FavoritesScreen(
                                     episodes,
                                     session,
                                     wide = true,
-                                    onItemClick,
+                                    onItemClick = onItemClick,
+                                    onToggleFollowing = { item, following ->
+                                        repository.setFollowing(session, item.id, following)
+                                    },
                                 )
                             }
                         }
@@ -649,7 +664,10 @@ fun FavoritesScreen(
                                     movies,
                                     session,
                                     wide = false,
-                                    onItemClick,
+                                    onItemClick = onItemClick,
+                                    onToggleFollowing = { item, following ->
+                                        repository.setFollowing(session, item.id, following)
+                                    },
                                 )
                             }
                         }
@@ -661,6 +679,9 @@ fun FavoritesScreen(
                                     session,
                                     wide = false,
                                     onItemClick,
+                                    onToggleFollowing = { item, following ->
+                                        repository.setFollowing(session, item.id, following)
+                                    },
                                 )
                             }
                         }
@@ -777,6 +798,7 @@ private fun FavoriteSection(
     session: AuthSession,
     wide: Boolean,
     onItemClick: (MediaItem) -> Unit,
+    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
     val uniqueItems = items.distinctBy { it.id }
     Column(Modifier.fillMaxWidth()) {
@@ -798,6 +820,7 @@ private fun FavoriteSection(
                     wide = wide,
                     onClick = onItemClick,
                     gridCard = false,
+                    onToggleFollowing = onToggleFollowing,
                 )
             }
         }
@@ -810,6 +833,7 @@ private fun MediaCardForSearch(
     item: MediaItem,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
+    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
     com.zenstream.zenstreammobile.ui.components.MediaCard(
         item,
@@ -817,6 +841,7 @@ private fun MediaCardForSearch(
         wide = false,
         onClick = onItemClick,
         gridCard = true,
+        onToggleFollowing = onToggleFollowing,
     )
 }
 
@@ -955,7 +980,14 @@ fun LibraryScreen(
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
                             ) {
-                                LibraryPosterCard(item, session, onItemClick)
+                                LibraryPosterCard(
+                                    item,
+                                    session,
+                                    onItemClick,
+                                    onToggleFollowing = { media, following ->
+                                        repository.setFollowing(session, media.id, following)
+                                    },
+                                )
                             }
                         }
                         if (state.loadingMore) {
@@ -1134,6 +1166,7 @@ private fun LibraryPosterCard(
     item: MediaItem,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
+    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
     com.zenstream.zenstreammobile.ui.components.MediaCard(
         item = item,
@@ -1142,6 +1175,7 @@ private fun LibraryPosterCard(
         onClick = onItemClick,
         showRating = true,
         gridCard = true,
+        onToggleFollowing = onToggleFollowing,
     )
 }
 

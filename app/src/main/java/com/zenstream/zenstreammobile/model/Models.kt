@@ -43,6 +43,8 @@ data class MediaItem(
     val seriesPrimaryImageBlurHash: String? = null,
     val played: Boolean = false,
     val favorite: Boolean = false,
+    /** Follow is only populated for movie and series catalog entities. */
+    val following: Boolean? = null,
     val unplayedItemCount: Int? = null,
     val playedPercentage: Double? = null,
     val playbackPositionTicks: Long? = null,
@@ -165,4 +167,24 @@ data class DetailData(
     val episodes: List<MediaItem> = emptyList(),
     val similar: List<MediaItem> = emptyList(),
     val selectedSeasonId: String? = null,
+)
+
+data class NotificationItem(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val subtitle: String? = null,
+    val itemId: String? = null,
+    val seriesId: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val createdAt: String,
+    val readAt: String? = null,
+    val navigationTarget: String? = null,
+)
+
+data class NotificationPage(
+    val items: List<NotificationItem> = emptyList(),
+    val unreadCount: Int = 0,
+    val nextCursor: String? = null,
 )

@@ -37,8 +37,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.ArrowsClockwise
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -105,7 +103,7 @@ internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) 
             supporting = stringResource(R.string.updates_settings_summary),
             icon = {
                 Icon(
-                    imageVector = BoldGroup.ArrowsClockwise,
+                    painter = painterResource(LucideR.drawable.lucide_ic_refresh_cw),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp),
