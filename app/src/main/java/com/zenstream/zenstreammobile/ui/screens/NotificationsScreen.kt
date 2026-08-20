@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -86,11 +88,11 @@ fun NotificationsScreen(
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         when {
-            state.loading && state.items.isEmpty() -> CenterLoading(padding)
+            state.loading && state.items.isEmpty() -> NotificationCenterLoading(padding)
             state.error && state.items.isEmpty() ->
-                ErrorState(padding, R.string.notifications_load_failed, vm::refresh)
+                NotificationErrorState(padding, R.string.notifications_load_failed, vm::refresh)
             state.items.isEmpty() ->
-                EmptyState(
+                NotificationEmptyState(
                     stringResource(R.string.notifications_empty),
                     stringResource(R.string.notifications_empty_hint),
                 )
@@ -125,6 +127,45 @@ fun NotificationsScreen(
                     }
                 }
         }
+    }
+}
+
+@Composable
+private fun NotificationCenterLoading(padding: PaddingValues) {
+    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun NotificationErrorState(
+    padding: PaddingValues,
+    message: Int,
+    onRetry: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxSize().padding(padding).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(stringResource(message), color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+    }
+}
+
+@Composable
+private fun NotificationEmptyState(title: String, detail: String) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(
+            detail,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 

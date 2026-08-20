@@ -412,7 +412,7 @@ class CatalogRepository(
         invalidateHomeCache()
     }
 
-    suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
+    override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
         api.setFollowing(session, itemId, following)
         invalidateCatalogState()
     }

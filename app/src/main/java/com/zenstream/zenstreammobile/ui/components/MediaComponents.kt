@@ -292,6 +292,8 @@ fun MediaCard(
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
             if (item.type == "Movie" || item.type == "Series") {
+                val followingLabel =
+                    stringResource(if (following) R.string.unfollow else R.string.follow)
                 IconButton(
                     onClick = {
                         val previous = following
@@ -309,12 +311,7 @@ fun MediaCard(
                         Modifier.align(Alignment.TopEnd)
                             .padding(4.dp)
                             .semantics {
-                                contentDescription =
-                                    if (following) {
-                                        stringResource(R.string.unfollow)
-                                    } else {
-                                        stringResource(R.string.follow)
-                                    }
+                                contentDescription = followingLabel
                             },
                 ) {
                     Icon(
