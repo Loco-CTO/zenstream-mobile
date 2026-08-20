@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -182,13 +184,18 @@ internal fun DetailContent(
     onSelectSubtitleTrack: (Int?) -> Unit = {},
 ) {
     val mediaItem = data.item
+    val listState = rememberLazyListState()
+    LaunchedEffect(mediaItem.id) {
+        listState.scrollToItem(0)
+    }
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         modifier = Modifier.padding(padding),
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag("detail_content_list"),
+            state = listState,
             contentPadding = PaddingValues(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
