@@ -67,7 +67,7 @@ class MainNavigationTest {
                 override fun startActivity(intent: Intent) {
                     launchedIntent = intent
                 }
-        }
+            }
 
         assertTrue(openUpdateLink(context, "https://github.com/example/download.apk"))
         val intent = requireNotNull(launchedIntent)
