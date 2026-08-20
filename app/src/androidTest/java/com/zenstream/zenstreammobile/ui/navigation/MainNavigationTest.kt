@@ -20,6 +20,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -46,6 +47,13 @@ class MainNavigationTest {
         assertTrue(!shouldShowMainSearchAction("search"))
         assertTrue(!shouldShowMainSearchAction("my-page"))
         assertTrue(!shouldShowMainSearchAction("detail"))
+    }
+
+    @Test
+    fun updateLinkWithoutAnExternalHandlerDoesNotCrash() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        assertFalse(openUpdateLink(context, "zenstream-update-test://download"))
     }
 
     @Test
