@@ -52,14 +52,14 @@ class MainNavigationTest {
     }
 
     @Test
-    fun updateLinkWithoutAnExternalHandlerDoesNotCrash() {
+    fun releasePageWithoutAnExternalHandlerDoesNotCrash() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-        assertFalse(openUpdateLink(context, "zenstream-update-test://download"))
+        assertFalse(openReleasePage(context, "zenstream-release-test://page"))
     }
 
     @Test
-    fun updateLinkAddsNewTaskFlagForNonActivityContexts() {
+    fun releasePageAddsNewTaskFlagForNonActivityContexts() {
         val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
         var launchedIntent: Intent? = null
         val context =
@@ -69,7 +69,7 @@ class MainNavigationTest {
                 }
             }
 
-        assertTrue(openUpdateLink(context, "https://github.com/example/download.apk"))
+        assertTrue(openReleasePage(context, "https://github.com/example/zenstream-mobile/releases/tag/v1.2.0"))
         val intent = requireNotNull(launchedIntent)
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
     }

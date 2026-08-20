@@ -137,14 +137,13 @@ fun ZenStreamApp(
             onDismiss = appViewModel::dismissAvailableUpdate,
             onDownload = {
                 appViewModel.dismissAvailableUpdate()
-                openUpdateLink(context, update.downloadUrl) ||
-                    openUpdateLink(context, update.releaseUrl)
+                openReleasePage(context, update.releaseUrl)
             },
         )
     }
 }
 
-internal fun openUpdateLink(context: Context, url: String): Boolean {
+internal fun openReleasePage(context: Context, url: String): Boolean {
     val intent =
         Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -164,7 +163,7 @@ internal fun UpdateAvailableDialog(
         text = { Text(stringResource(R.string.update_available_message, update.version)) },
         confirmButton = {
             TextButton(onClick = onDownload) {
-                Text(stringResource(R.string.update_download))
+                Text(stringResource(R.string.update_open_release))
             }
         },
         dismissButton = {
