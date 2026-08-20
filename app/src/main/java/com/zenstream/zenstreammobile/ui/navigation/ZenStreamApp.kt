@@ -135,7 +135,7 @@ fun ZenStreamApp(
         UpdateAvailableDialog(
             update = update,
             onDismiss = appViewModel::dismissAvailableUpdate,
-            onDownload = {
+            onOpenRelease = {
                 appViewModel.dismissAvailableUpdate()
                 openReleasePage(context, update.releaseUrl)
             },
@@ -155,14 +155,14 @@ internal fun openReleasePage(context: Context, url: String): Boolean {
 internal fun UpdateAvailableDialog(
     update: AppUpdate,
     onDismiss: () -> Unit,
-    onDownload: () -> Unit,
+    onOpenRelease: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.update_available_title)) },
         text = { Text(stringResource(R.string.update_available_message, update.version)) },
         confirmButton = {
-            TextButton(onClick = onDownload) {
+            TextButton(onClick = onOpenRelease) {
                 Text(stringResource(R.string.update_open_release))
             }
         },
