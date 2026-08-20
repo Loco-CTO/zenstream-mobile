@@ -70,7 +70,10 @@ class MainNavigationTest {
             }
 
         assertTrue(
-            openReleasePage(context, "https://github.com/example/zenstream-mobile/releases/tag/v1.2.0")
+            openReleasePage(
+                context,
+                "https://github.com/example/zenstream-mobile/releases/tag/v1.2.0",
+            )
         )
         val intent = requireNotNull(launchedIntent)
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
