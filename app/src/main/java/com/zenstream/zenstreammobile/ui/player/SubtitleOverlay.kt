@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -85,7 +86,8 @@ internal fun StyledSubtitleLine(text: String, style: SubtitleStyle) {
                                 width =
                                     with(LocalDensity.current) {
                                         outlineWidthDp.dp.toPx()
-                                    }
+                                    },
+                                join = StrokeJoin.Round,
                             )
                     ),
                 modifier = Modifier.clearAndSetSemantics { hideFromAccessibility() },
