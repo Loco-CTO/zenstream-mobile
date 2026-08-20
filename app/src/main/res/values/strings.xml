@@ -251,6 +251,8 @@
     <string name="preferred_metadata_language">Preferred metadata language</string>
     <string name="metadata_language_automatic">Automatic (%1$s)</string>
     <string name="metadata_language_save_failed">Metadata language could not be saved.</string>
+    <string name="updates_group">Updates</string>
+    <string name="updates_settings_summary">App updates and startup checks</string>
     <string name="check_for_updates_on_startup">Check for updates on startup</string>
     <string name="check_for_updates_on_startup_description">Check GitHub for a newer app release whenever ZenStream starts.</string>
     <string name="update_available_title">Update available</string>

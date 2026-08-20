@@ -290,6 +290,7 @@ private fun MyPageSectionHeader(
                     MyPageSettingsSection.Appearance -> stringResource(R.string.appearance_group)
                     MyPageSettingsSection.Player -> stringResource(R.string.player_group)
                     MyPageSettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
+                    MyPageSettingsSection.Updates -> stringResource(R.string.updates_group)
                 },
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.semantics { heading() },

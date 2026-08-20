@@ -105,7 +105,7 @@ class SessionStore(
         dataStore.data.map { it[Keys.showDebugIcon] ?: false }.distinctUntilChanged()
 
     val checkForUpdatesOnStartup: Flow<Boolean> =
-        dataStore.data.map { it[Keys.checkForUpdatesOnStartup] ?: false }.distinctUntilChanged()
+        dataStore.data.map { it[Keys.checkForUpdatesOnStartup] ?: true }.distinctUntilChanged()
 
     val session: Flow<AuthSession?> =
         dataStore.data

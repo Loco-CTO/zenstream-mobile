@@ -123,11 +123,12 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(source)
         advanceUntilIdle()
 
-        viewModel.setCheckForUpdatesOnStartup(true)
+        assertTrue(viewModel.uiState.value.checkForUpdatesOnStartup)
+        viewModel.setCheckForUpdatesOnStartup(false)
         advanceUntilIdle()
 
-        assertTrue(source.checkForUpdatesOnStartup.value)
-        assertTrue(viewModel.uiState.value.checkForUpdatesOnStartup)
+        assertFalse(source.checkForUpdatesOnStartup.value)
+        assertFalse(viewModel.uiState.value.checkForUpdatesOnStartup)
     }
 
     @Test
@@ -155,7 +156,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override val interfaceLocaleMode = MutableStateFlow(InterfaceLocaleMode.Automatic)
     override val playerEngine = MutableStateFlow(PlayerEngine.MEDIA3)
     override val showDebugIcon = MutableStateFlow(false)
-    override val checkForUpdatesOnStartup = MutableStateFlow(false)
+    override val checkForUpdatesOnStartup = MutableStateFlow(true)
     var metadataPreference = MetadataPreference(listOf("en", "ja"), null, "en")
     var localeSave: suspend (InterfaceLocaleMode) -> InterfaceLocalePreference = { mode ->
         interfaceLocaleMode.value = mode

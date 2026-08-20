@@ -37,6 +37,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.phosphoricons.BoldGroup
+import com.adamglin.phosphoricons.bold.ArrowsClockwise
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -50,6 +52,7 @@ internal enum class MyPageSettingsSection {
     Appearance,
     Player,
     Subtitles,
+    Updates,
 }
 
 @Composable
@@ -61,20 +64,54 @@ internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) 
         SettingsTabRow(
             title = stringResource(R.string.appearance_group),
             supporting = stringResource(R.string.appearance_settings_summary),
-            icon = LucideR.drawable.lucide_ic_settings,
+            icon = {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_settings),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
             onClick = { onOpenSection(MyPageSettingsSection.Appearance) },
         )
         SettingsTabRow(
             title = stringResource(R.string.player_group),
             supporting = stringResource(R.string.player_settings_summary),
-            icon = LucideR.drawable.lucide_ic_play,
+            icon = {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_play),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
             onClick = { onOpenSection(MyPageSettingsSection.Player) },
         )
         SettingsTabRow(
             title = stringResource(R.string.subtitles_group),
             supporting = stringResource(R.string.subtitles_settings_summary),
-            icon = LucideR.drawable.lucide_ic_captions,
+            icon = {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_captions),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
             onClick = { onOpenSection(MyPageSettingsSection.Subtitles) },
+        )
+        SettingsTabRow(
+            title = stringResource(R.string.updates_group),
+            supporting = stringResource(R.string.updates_settings_summary),
+            icon = {
+                Icon(
+                    imageVector = BoldGroup.ArrowsClockwise,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+            onClick = { onOpenSection(MyPageSettingsSection.Updates) },
         )
     }
 }
@@ -113,13 +150,6 @@ internal fun MyPageSettingsContent(
                 if (state.metadataSaveError) {
                     SettingsErrorText(R.string.metadata_language_save_failed)
                 }
-                Spacer(Modifier.height(16.dp))
-                SettingSwitchRow(
-                    title = stringResource(R.string.check_for_updates_on_startup),
-                    supporting = stringResource(R.string.check_for_updates_on_startup_description),
-                    checked = state.checkForUpdatesOnStartup,
-                    onCheckedChange = onCheckForUpdatesOnStartupChange,
-                )
             }
 
         MyPageSettingsSection.Player ->
@@ -172,6 +202,16 @@ internal fun MyPageSettingsContent(
                     SettingsErrorText(R.string.subtitle_save_failed)
                 }
             }
+
+        MyPageSettingsSection.Updates ->
+            SettingsSectionContent {
+                SettingSwitchRow(
+                    title = stringResource(R.string.check_for_updates_on_startup),
+                    supporting = stringResource(R.string.check_for_updates_on_startup_description),
+                    checked = state.checkForUpdatesOnStartup,
+                    onCheckedChange = onCheckForUpdatesOnStartupChange,
+                )
+            }
     }
 }
 
@@ -202,7 +242,7 @@ internal fun MyPageSettingsFooter(onLogout: () -> Unit) {
 private fun SettingsTabRow(
     title: String,
     supporting: String,
-    icon: Int,
+    icon: @Composable () -> Unit,
     onClick: () -> Unit,
 ) {
     Row(
@@ -214,12 +254,7 @@ private fun SettingsTabRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
+        icon()
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(

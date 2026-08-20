@@ -249,6 +249,8 @@
     <string name="preferred_metadata_language">&#x512A;&#x5148;&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;&#x8A00;&#x8A9E;</string>
     <string name="metadata_language_automatic">&#x81EA;&#x52D5; (%1$s)</string>
     <string name="metadata_language_save_failed">&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;&#x8A00;&#x8A9E;&#x3092;&#x4FDD;&#x5B58;&#x3067;&#x304D;&#x307E;&#x305B;&#x3093;&#x3067;&#x3057;&#x305F;&#x3002;</string>
+    <string name="updates_group">更新</string>
+    <string name="updates_settings_summary">アプリの更新と起動時の確認</string>
     <string name="check_for_updates_on_startup">起動時に更新を確認</string>
     <string name="check_for_updates_on_startup_description">ZenStreamの起動時にGitHubで新しいリリースを確認します。</string>
     <string name="update_available_title">更新があります</string>

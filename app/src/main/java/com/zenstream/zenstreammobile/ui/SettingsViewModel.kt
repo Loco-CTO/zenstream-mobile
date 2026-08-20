@@ -23,7 +23,7 @@ data class SettingsUiState(
     val interfaceLocaleSaveError: Boolean = false,
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
     val showDebugIcon: Boolean = false,
-    val checkForUpdatesOnStartup: Boolean = false,
+    val checkForUpdatesOnStartup: Boolean = true,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleSaveError: Boolean = false,
     val refreshing: Boolean = false,

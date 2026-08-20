@@ -39,6 +39,7 @@ class MyPageSettingsTest {
         composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.updates_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
         composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Player, selected) }
     }
