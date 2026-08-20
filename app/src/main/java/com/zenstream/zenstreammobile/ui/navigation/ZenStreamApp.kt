@@ -149,7 +149,6 @@ internal fun openUpdateLink(context: Context, url: String): Boolean {
         Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-    if (intent.resolveActivity(context.packageManager) == null) return false
     return runCatching { context.startActivity(intent) }.isSuccess
 }
 
