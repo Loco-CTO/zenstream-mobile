@@ -88,6 +88,7 @@ internal fun MyPageSettingsContent(
     onPlaybackPreferenceChange: (String?, String?) -> Unit,
     onPlayerEngineChange: (PlayerEngine) -> Unit,
     onShowDebugIconChange: (Boolean) -> Unit,
+    onCheckForUpdatesOnStartupChange: (Boolean) -> Unit,
     onSubtitleChange: (SubtitleStyle.() -> SubtitleStyle) -> Unit,
 ) {
     when (section) {
@@ -112,6 +113,13 @@ internal fun MyPageSettingsContent(
                 if (state.metadataSaveError) {
                     SettingsErrorText(R.string.metadata_language_save_failed)
                 }
+                Spacer(Modifier.height(16.dp))
+                SettingSwitchRow(
+                    title = stringResource(R.string.check_for_updates_on_startup),
+                    supporting = stringResource(R.string.check_for_updates_on_startup_description),
+                    checked = state.checkForUpdatesOnStartup,
+                    onCheckedChange = onCheckForUpdatesOnStartupChange,
+                )
             }
 
         MyPageSettingsSection.Player ->

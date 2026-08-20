@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -19,12 +20,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -59,6 +63,7 @@ import com.adamglin.phosphoricons.BoldGroup
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.launchPlayback
@@ -102,6 +107,7 @@ fun ZenStreamApp(
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     when {
         appState.loading -> LoadingScreen()
         appState.showSetup ->
@@ -123,6 +129,49 @@ fun ZenStreamApp(
             )
         else -> LoadingScreen()
     }
+
+    appState.availableUpdate?.let { update ->
+        UpdateAvailableDialog(
+            update = update,
+            onDismiss = appViewModel::dismissAvailableUpdate,
+            onDownload = {
+                appViewModel.dismissAvailableUpdate()
+                runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl))
+                        )
+                    }
+                    .onFailure {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl))
+                        )
+                    }
+            },
+        )
+    }
+}
+
+@Composable
+internal fun UpdateAvailableDialog(
+    update: AppUpdate,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.update_available_title)) },
+        text = { Text(stringResource(R.string.update_available_message, update.version)) },
+        confirmButton = {
+            TextButton(onClick = onDownload) {
+                Text(stringResource(R.string.update_download))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.update_not_now))
+            }
+        },
+    )
 }
 
 @Composable

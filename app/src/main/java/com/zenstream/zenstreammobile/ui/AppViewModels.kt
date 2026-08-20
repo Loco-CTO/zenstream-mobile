@@ -3,14 +3,17 @@ package com.zenstream.zenstreammobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.FavoritesDataSource
+import com.zenstream.zenstreammobile.data.GitHubUpdateChecker
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.SyncplaySession
+import com.zenstream.zenstreammobile.data.UpdateSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
@@ -49,6 +52,7 @@ data class AppUiState(
     val serverUrl: String? = null,
     val session: AuthSession? = null,
     val locale: String = com.zenstream.zenstreammobile.data.ENGLISH_LOCALE,
+    val availableUpdate: AppUpdate? = null,
 ) {
     val showSetup
         get() = !loading && (orchestratorUrl.isNullOrBlank() || serverUrl.isNullOrBlank())
@@ -60,8 +64,12 @@ data class AppUiState(
         get() = !loading && !showSetup && session != null
 }
 
-class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
+class AppViewModel(
+    private val repository: CatalogRepository,
+    private val updateSource: UpdateSource = GitHubUpdateChecker(),
+) : ViewModel() {
     private var accountRefreshToken: String? = null
+    private val _availableUpdate = MutableStateFlow<AppUpdate?>(null)
 
     val uiState: StateFlow<AppUiState> =
         combine(
@@ -69,13 +77,15 @@ class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
                 repository.serverUrl,
                 repository.session,
                 repository.locale,
-            ) { orchestrator, server, session, locale ->
+                _availableUpdate,
+            ) { orchestrator, server, session, locale, availableUpdate ->
                 AppUiState(
                     loading = false,
                     orchestratorUrl = orchestrator,
                     serverUrl = server,
                     session = session,
                     locale = locale,
+                    availableUpdate = availableUpdate,
                 )
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
@@ -97,6 +107,20 @@ class AppViewModel(private val repository: CatalogRepository) : ViewModel() {
                 runCatching { repository.syncInterfaceLocale(session) }
             }
         }
+        viewModelScope.launch {
+            if (!repository.checkForUpdatesOnStartup.first()) return@launch
+            try {
+                _availableUpdate.value = updateSource.checkForUpdate()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Update checks are best effort and must never prevent startup.
+            }
+        }
+    }
+
+    fun dismissAvailableUpdate() {
+        _availableUpdate.value = null
     }
 
     suspend fun configureServer(value: String) = repository.configureOrchestrator(value)

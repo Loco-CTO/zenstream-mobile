@@ -203,6 +203,8 @@ fun MyPageScreen(
                         onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
                         onPlayerEngineChange = settingsViewModel::setPlayerEngine,
                         onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                        onCheckForUpdatesOnStartupChange =
+                            settingsViewModel::setCheckForUpdatesOnStartup,
                         onSubtitleChange = settingsViewModel::updateSubtitle,
                     )
                 }

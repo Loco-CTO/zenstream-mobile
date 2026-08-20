@@ -23,6 +23,7 @@ data class SettingsUiState(
     val interfaceLocaleSaveError: Boolean = false,
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
     val showDebugIcon: Boolean = false,
+    val checkForUpdatesOnStartup: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleSaveError: Boolean = false,
     val refreshing: Boolean = false,
@@ -69,6 +70,11 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
                 _uiState.value = _uiState.value.copy(showDebugIcon = enabled)
             }
         }
+        viewModelScope.launch {
+            repository.checkForUpdatesOnStartup.collectLatest { enabled ->
+                _uiState.value = _uiState.value.copy(checkForUpdatesOnStartup = enabled)
+            }
+        }
         viewModelScope.launch { refreshSettings() }
     }
 
@@ -113,6 +119,10 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
 
     fun setShowDebugIcon(enabled: Boolean) {
         viewModelScope.launch { repository.saveShowDebugIcon(enabled) }
+    }
+
+    fun setCheckForUpdatesOnStartup(enabled: Boolean) {
+        viewModelScope.launch { repository.saveCheckForUpdatesOnStartup(enabled) }
     }
 
     fun updateSubtitle(change: SubtitleStyle.() -> SubtitleStyle) {

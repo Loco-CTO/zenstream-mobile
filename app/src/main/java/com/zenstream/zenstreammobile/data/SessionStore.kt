@@ -65,6 +65,7 @@ class SessionStore(
         val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
+        val checkForUpdatesOnStartup = booleanPreferencesKey("check_for_updates_on_startup")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
@@ -102,6 +103,9 @@ class SessionStore(
 
     val showDebugIcon: Flow<Boolean> =
         dataStore.data.map { it[Keys.showDebugIcon] ?: false }.distinctUntilChanged()
+
+    val checkForUpdatesOnStartup: Flow<Boolean> =
+        dataStore.data.map { it[Keys.checkForUpdatesOnStartup] ?: false }.distinctUntilChanged()
 
     val session: Flow<AuthSession?> =
         dataStore.data
@@ -189,6 +193,10 @@ class SessionStore(
 
     suspend fun saveShowDebugIcon(enabled: Boolean) {
         dataStore.edit { it[Keys.showDebugIcon] = enabled }
+    }
+
+    suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {
+        dataStore.edit { it[Keys.checkForUpdatesOnStartup] = enabled }
     }
 
     suspend fun cacheSubtitleStyle(style: SubtitleStyle) {

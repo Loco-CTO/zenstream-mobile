@@ -97,6 +97,7 @@ interface SettingsDataSource {
     val interfaceLocaleMode: Flow<InterfaceLocaleMode>
     val playerEngine: Flow<PlayerEngine>
     val showDebugIcon: Flow<Boolean>
+    val checkForUpdatesOnStartup: Flow<Boolean>
 
     suspend fun loadMetadataPreference(): MetadataPreference
 
@@ -107,6 +108,8 @@ interface SettingsDataSource {
     suspend fun savePlayerEngine(engine: PlayerEngine)
 
     suspend fun saveShowDebugIcon(enabled: Boolean)
+
+    suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean)
 
     suspend fun loadSubtitleStyle(): SubtitleStyle
 
@@ -149,6 +152,7 @@ class CatalogRepository(
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     override val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
+    override val checkForUpdatesOnStartup: Flow<Boolean> = sessionStore.checkForUpdatesOnStartup
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -484,6 +488,9 @@ class CatalogRepository(
 
     override suspend fun saveShowDebugIcon(enabled: Boolean) =
         sessionStore.saveShowDebugIcon(enabled)
+
+    override suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) =
+        sessionStore.saveCheckForUpdatesOnStartup(enabled)
 
     fun syncplayManager(session: AuthSession): SyncplayManager =
         SyncplaySession.manager(session, sessionStore)

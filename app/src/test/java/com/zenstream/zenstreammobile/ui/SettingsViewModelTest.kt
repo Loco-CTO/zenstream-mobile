@@ -118,6 +118,19 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun startupUpdatePreferenceIsPersistedAndReflectedInState() = runTest {
+        val source = FakeSettingsDataSource()
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        viewModel.setCheckForUpdatesOnStartup(true)
+        advanceUntilIdle()
+
+        assertTrue(source.checkForUpdatesOnStartup.value)
+        assertTrue(viewModel.uiState.value.checkForUpdatesOnStartup)
+    }
+
+    @Test
     fun subtitleBottomSpacingUpdatesAndUsesTheExistingSavePath() = runTest {
         val saved = mutableListOf<SubtitleStyle>()
         val source =
@@ -142,6 +155,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override val interfaceLocaleMode = MutableStateFlow(InterfaceLocaleMode.Automatic)
     override val playerEngine = MutableStateFlow(PlayerEngine.MEDIA3)
     override val showDebugIcon = MutableStateFlow(false)
+    override val checkForUpdatesOnStartup = MutableStateFlow(false)
     var metadataPreference = MetadataPreference(listOf("en", "ja"), null, "en")
     var localeSave: suspend (InterfaceLocaleMode) -> InterfaceLocalePreference = { mode ->
         interfaceLocaleMode.value = mode
@@ -166,6 +180,10 @@ private class FakeSettingsDataSource : SettingsDataSource {
 
     override suspend fun saveShowDebugIcon(enabled: Boolean) {
         showDebugIcon.value = enabled
+    }
+
+    override suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {
+        checkForUpdatesOnStartup.value = enabled
     }
 
     override suspend fun loadSubtitleStyle() = SubtitleStyle()

@@ -251,6 +251,12 @@
     <string name="preferred_metadata_language">Preferred metadata language</string>
     <string name="metadata_language_automatic">Automatic (%1$s)</string>
     <string name="metadata_language_save_failed">Metadata language could not be saved.</string>
+    <string name="check_for_updates_on_startup">Check for updates on startup</string>
+    <string name="check_for_updates_on_startup_description">Check GitHub for a newer app release whenever ZenStream starts.</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">ZenStream %1$s is available. Would you like to download it?</string>
+    <string name="update_download">Download</string>
+    <string name="update_not_now">Not now</string>
     <string name="syncplay_groups">Groups</string>
     <plurals name="syncplay_group_count">
         <item quantity="one">%1$d group</item>
