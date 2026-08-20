@@ -19,6 +19,14 @@
     <string name="search">検索</string>
     <string name="library">ライブラリ</string>
     <string name="favorites">お気に入り</string>
+    <string name="follow">フォロー</string>
+    <string name="unfollow">フォローを解除</string>
+    <string name="notifications">通知</string>
+    <string name="notifications_empty">通知はありません</string>
+    <string name="notifications_empty_hint">映画またはシリーズをフォローすると、新しい追加のお知らせが届きます。</string>
+    <string name="notifications_load_failed">通知を読み込めませんでした。</string>
+    <string name="notifications_load_more">さらに読み込む</string>
+    <string name="notifications_mark_all_read">すべて既読にする</string>
     <string name="continue_watching">視聴を続ける</string>
     <string name="next_up">次に見る</string>
     <string name="my_list">マイリスト</string>

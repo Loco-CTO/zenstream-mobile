@@ -298,8 +298,11 @@ fun MediaCard(
                         val next = !previous
                         following = next
                         scope.launch {
-                            runCatching { onToggleFollowing(item, next) }
-                                .onFailure { following = previous }
+                            try {
+                                onToggleFollowing(item, next)
+                            } catch (_: Throwable) {
+                                following = previous
+                            }
                         }
                     },
                     modifier =

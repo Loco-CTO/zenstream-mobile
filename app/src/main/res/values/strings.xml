@@ -19,6 +19,14 @@
     <string name="search">Search</string>
     <string name="library">Library</string>
     <string name="favorites">Favorites</string>
+    <string name="follow">Follow</string>
+    <string name="unfollow">Unfollow</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_empty">No notifications</string>
+    <string name="notifications_empty_hint">Follow a movie or series to hear about new additions.</string>
+    <string name="notifications_load_failed">Could not load notifications.</string>
+    <string name="notifications_load_more">Load more</string>
+    <string name="notifications_mark_all_read">Mark all read</string>
     <string name="continue_watching">Continue Watching</string>
     <string name="next_up">Next Up</string>
     <string name="my_list">My List</string>
