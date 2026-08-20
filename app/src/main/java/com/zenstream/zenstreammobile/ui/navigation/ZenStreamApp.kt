@@ -421,6 +421,14 @@ private fun MainScaffold(
                         onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
                     )
                 }
+                composable(NOTIFICATIONS) {
+                    NotificationsScreen(
+                        repository = repository,
+                        session = session,
+                        onBack = { navController.popBackStack() },
+                        onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
+                    )
+                }
                 composable(
                     DETAIL,
                     arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
@@ -517,6 +525,8 @@ internal fun MainTopBar(
     onReturnToView: (SyncplayGroup) -> Unit = {},
     showSearchAction: Boolean = false,
     onSearch: () -> Unit = {},
+    unreadCount: Int = 0,
+    onNotifications: () -> Unit = {},
 ) {
     TopAppBar(
         title = {
@@ -528,6 +538,30 @@ internal fun MainTopBar(
             )
         },
         actions = {
+            Box {
+                IconButton(onClick = onNotifications) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_bell),
+                        contentDescription = stringResource(R.string.notifications),
+                    )
+                }
+                if (unreadCount > 0) {
+                    Box(
+                        modifier =
+                            Modifier.align(Alignment.TopEnd)
+                                .padding(top = 4.dp, end = 4.dp)
+                                .size(16.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+            }
             if (showSearchAction) {
                 IconButton(onClick = onSearch) {
                     Icon(
