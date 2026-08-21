@@ -92,24 +92,26 @@ class CalendarViewModel(
         val target = !event.following
         _uiState.update {
             it.copy(
-                events = it.events.map { value ->
-                    if (value.id == event.id) value.copy(following = target) else value
-                },
+                events =
+                    it.events.map { value ->
+                        if (value.id == event.id) value.copy(following = target) else value
+                    },
                 followingEventId = event.id,
                 followError = false,
             )
         }
         viewModelScope.launch {
             runCatching {
-                repository.setCalendarFollowing(session, event.id, target)
-            }
+                    repository.setCalendarFollowing(session, event.id, target)
+                }
                 .onSuccess { following ->
                     _uiState.update {
                         it.copy(
-                            events = it.events.map { value ->
-                                if (value.id == event.id) value.copy(following = following)
-                                else value
-                            },
+                            events =
+                                it.events.map { value ->
+                                    if (value.id == event.id) value.copy(following = following)
+                                    else value
+                                },
                             followingEventId = null,
                         )
                     }
@@ -120,10 +122,12 @@ class CalendarViewModel(
                     }
                     _uiState.update {
                         it.copy(
-                            events = it.events.map { value ->
-                                if (value.id == event.id) value.copy(following = event.following)
-                                else value
-                            },
+                            events =
+                                it.events.map { value ->
+                                    if (value.id == event.id)
+                                        value.copy(following = event.following)
+                                    else value
+                                },
                             followingEventId = null,
                             followError = true,
                         )
@@ -158,33 +162,32 @@ class CalendarViewModel(
         val generation = ++requestGeneration
         val weekStart = _uiState.value.weekStart
         _uiState.update { it.copy(loading = true, error = false) }
-        requestJob =
-            viewModelScope.launch {
-                runCatching {
+        requestJob = viewModelScope.launch {
+            runCatching {
                     repository.calendar(
                         session,
                         calendarWeekStartInstant(weekStart, zone),
                         calendarWeekEndInstant(weekStart, zone),
                     )
                 }
-                    .onSuccess { response ->
-                        if (generation != requestGeneration) return@onSuccess
-                        _uiState.update {
-                            it.copy(
-                                events = response.events.distinctBy(CalendarEvent::id),
-                                loading = false,
-                                error = false,
-                            )
-                        }
+                .onSuccess { response ->
+                    if (generation != requestGeneration) return@onSuccess
+                    _uiState.update {
+                        it.copy(
+                            events = response.events.distinctBy(CalendarEvent::id),
+                            loading = false,
+                            error = false,
+                        )
                     }
-                    .onFailure { error ->
-                        if (generation != requestGeneration) return@onFailure
-                        if (error is CatalogException && error.statusCode == 401) {
-                            repository.clearSessionIfCurrent(session)
-                        }
-                        _uiState.update { it.copy(loading = false, error = true) }
+                }
+                .onFailure { error ->
+                    if (generation != requestGeneration) return@onFailure
+                    if (error is CatalogException && error.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
                     }
-            }
+                    _uiState.update { it.copy(loading = false, error = true) }
+                }
+        }
     }
 
     class Factory(

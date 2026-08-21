@@ -77,9 +77,7 @@ class MyPageSettingsTest {
         composeRule
             .onNodeWithText(context.getString(R.string.notification_center))
             .assertIsDisplayed()
-        composeRule
-            .onNodeWithText(context.getString(R.string.notification_center))
-            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.notification_center)).performClick()
         composeRule.runOnIdle {
             assertTrue(!calendarOpened)
             assertTrue(notificationsOpened)

@@ -137,131 +137,134 @@ fun MyPageScreen(
             onRefresh = settingsViewModel::refresh,
             modifier = Modifier.padding(outerPadding),
         ) {
-        val activeSection = settingsSection
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding =
-                PaddingValues(
-                    start = 16.dp,
-                    top =
-                        if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
-                        else 8.dp,
-                    end = 16.dp,
-                    bottom = 28.dp,
-                ),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            if (passwordEditorOpen) {
-                item {
-                    ChangePasswordSectionHeader(
-                        onBack = {
-                            if (passwordChangeSucceeded) {
-                                onPasswordChanged()
-                            } else {
-                                passwordEditorOpen = false
+            val activeSection = settingsSection
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding =
+                    PaddingValues(
+                        start = 16.dp,
+                        top =
+                            if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
+                            else 8.dp,
+                        end = 16.dp,
+                        bottom = 28.dp,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                if (passwordEditorOpen) {
+                    item {
+                        ChangePasswordSectionHeader(
+                            onBack = {
+                                if (passwordChangeSucceeded) {
+                                    onPasswordChanged()
+                                } else {
+                                    passwordEditorOpen = false
+                                }
                             }
-                        }
-                    )
-                }
-                item {
-                    ChangePasswordForm(
-                        onSubmitPasswordChange = { currentPassword, newPassword, confirmNewPassword
-                            ->
-                            repository.changePassword(
-                                session,
+                        )
+                    }
+                    item {
+                        ChangePasswordForm(
+                            onSubmitPasswordChange = {
                                 currentPassword,
                                 newPassword,
-                                confirmNewPassword,
-                            )
-                        },
-                        onClose = { passwordEditorOpen = false },
-                        onContinueToLogin = onPasswordChanged,
-                        onSuccessStateChanged = { passwordChangeSucceeded = it },
-                    )
-            }
-            } else if (profileOpen) {
-                item {
-                    ProfileSettingsPage(
-                        session = session,
-                        avatarError = avatarError,
-                        onBack = { profileOpen = false },
-                        onEditAvatar = { avatarActionsOpen = true },
-                        onChangePassword = {
-                            passwordChangeSucceeded = false
-                            passwordEditorOpen = true
-                        },
-                    )
-                }
-            } else if (activeSection == null) {
-                item {
-                    Text(
-                        text = stringResource(R.string.my_page),
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                }
-                item {
-                    ProfileCard(
-                        session = session,
-                        onOpenProfile = { profileOpen = true },
-                        avatarError = avatarError,
-                    )
-                }
-                item {
-                    Text(
-                        text = stringResource(R.string.services),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                }
-                item {
-                    MyPageServiceEntries(
-                        onOpenCalendar = { calendarOpen = true },
-                        onOpenNotifications = onOpenNotifications,
-                    )
-                }
-                item {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                }
-                item {
-                    MyPageSettingsTabs(onOpenSection = { settingsSection = it })
-                }
-                item { MyPageSettingsFooter(onLogout = onLogout) }
-            } else {
-                item {
-                    MyPageSectionHeader(
-                        title =
-                            stringResource(
-                                when (activeSection) {
-                                    MyPageSettingsSection.Appearance -> R.string.appearance_group
-                                    MyPageSettingsSection.Player -> R.string.player_group
-                                    MyPageSettingsSection.Subtitles -> R.string.subtitles_group
-                                    MyPageSettingsSection.Updates -> R.string.updates_group
-                                }
-                            ),
-                        onBack = { settingsSection = null },
-                    )
-                }
-                item {
-                    MyPageSettingsContent(
-                        section = activeSection,
-                        state = settingsState,
-                        onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
-                        onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
-                        onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
-                        onPlayerEngineChange = settingsViewModel::setPlayerEngine,
-                        onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
-                        onCheckForUpdatesOnStartupChange =
-                            settingsViewModel::setCheckForUpdatesOnStartup,
-                        onSubtitleChange = settingsViewModel::updateSubtitle,
-                    )
+                                confirmNewPassword ->
+                                repository.changePassword(
+                                    session,
+                                    currentPassword,
+                                    newPassword,
+                                    confirmNewPassword,
+                                )
+                            },
+                            onClose = { passwordEditorOpen = false },
+                            onContinueToLogin = onPasswordChanged,
+                            onSuccessStateChanged = { passwordChangeSucceeded = it },
+                        )
+                    }
+                } else if (profileOpen) {
+                    item {
+                        ProfileSettingsPage(
+                            session = session,
+                            avatarError = avatarError,
+                            onBack = { profileOpen = false },
+                            onEditAvatar = { avatarActionsOpen = true },
+                            onChangePassword = {
+                                passwordChangeSucceeded = false
+                                passwordEditorOpen = true
+                            },
+                        )
+                    }
+                } else if (activeSection == null) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.my_page),
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                    }
+                    item {
+                        ProfileCard(
+                            session = session,
+                            onOpenProfile = { profileOpen = true },
+                            avatarError = avatarError,
+                        )
+                    }
+                    item {
+                        Text(
+                            text = stringResource(R.string.services),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    }
+                    item {
+                        MyPageServiceEntries(
+                            onOpenCalendar = { calendarOpen = true },
+                            onOpenNotifications = onOpenNotifications,
+                        )
+                    }
+                    item {
+                        Text(
+                            text = stringResource(R.string.settings),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    }
+                    item {
+                        MyPageSettingsTabs(onOpenSection = { settingsSection = it })
+                    }
+                    item { MyPageSettingsFooter(onLogout = onLogout) }
+                } else {
+                    item {
+                        MyPageSectionHeader(
+                            title =
+                                stringResource(
+                                    when (activeSection) {
+                                        MyPageSettingsSection.Appearance ->
+                                            R.string.appearance_group
+                                        MyPageSettingsSection.Player -> R.string.player_group
+                                        MyPageSettingsSection.Subtitles -> R.string.subtitles_group
+                                        MyPageSettingsSection.Updates -> R.string.updates_group
+                                    }
+                                ),
+                            onBack = { settingsSection = null },
+                        )
+                    }
+                    item {
+                        MyPageSettingsContent(
+                            section = activeSection,
+                            state = settingsState,
+                            onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
+                            onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
+                            onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                            onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                            onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                            onCheckForUpdatesOnStartupChange =
+                                settingsViewModel::setCheckForUpdatesOnStartup,
+                            onSubtitleChange = settingsViewModel::updateSubtitle,
+                        )
+                    }
                 }
             }
         }
-    }
     }
 
     if (avatarActionsOpen) {
@@ -777,8 +780,7 @@ internal fun ProfileCard(
     avatarError: String? = null,
 ) {
     Card(
-        colors =
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(22.dp),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenProfile),
     ) {

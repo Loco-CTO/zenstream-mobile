@@ -264,11 +264,12 @@ class CatalogApiHttpTest {
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         val response =
-            CatalogApi(deviceId = "device-id").calendar(
-                session,
-                Instant.parse("2026-08-16T00:00:00Z"),
-                Instant.parse("2026-08-23T00:00:00Z"),
-            )
+            CatalogApi(deviceId = "device-id")
+                .calendar(
+                    session,
+                    Instant.parse("2026-08-16T00:00:00Z"),
+                    Instant.parse("2026-08-23T00:00:00Z"),
+                )
 
         val request = server.takeRequest()
         assertEquals(0, response.events.size)
@@ -287,8 +288,7 @@ class CatalogApiHttpTest {
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         assertTrue(
-            CatalogApi(deviceId = "device-id")
-                .setCalendarFollowing(session, "event-1", true)
+            CatalogApi(deviceId = "device-id").setCalendarFollowing(session, "event-1", true)
         )
 
         val request = server.takeRequest()

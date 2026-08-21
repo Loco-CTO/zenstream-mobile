@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.calendarBounds
 import com.zenstream.zenstreammobile.data.calendarEpisodePosition
 import com.zenstream.zenstreammobile.data.calendarEventDate
@@ -64,7 +65,6 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.CalendarEvent
 import com.zenstream.zenstreammobile.ui.CalendarUiState
 import com.zenstream.zenstreammobile.ui.CalendarViewModel
-import com.zenstream.zenstreammobile.data.CatalogRepository
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -143,9 +143,10 @@ internal fun CalendarContent(
             .filter { calendarEventDate(it, zone) == state.selectedDate }
             .sortedWith(compareBy<CalendarEvent> { calendarEventSortKey(it) }.thenBy { it.id })
     val bounds = calendarBounds()
-    val weekDays = remember(state.weekStart) {
-        List(7) { index -> state.weekStart.plusDays(index.toLong()) }
-    }
+    val weekDays =
+        remember(state.weekStart) {
+            List(7) { index -> state.weekStart.plusDays(index.toLong()) }
+        }
 
     PullToRefreshLayout(
         isRefreshing = state.loading && state.events.isNotEmpty(),
@@ -206,12 +207,13 @@ internal fun CalendarContent(
             followError = state.followError,
             onDismiss = { selectedEventId = null },
             onToggleFollowing = { onToggleFollowing(event) },
-            onOpenItem = event.catalogItemId?.let { itemId ->
-                {
-                    selectedEventId = null
-                    onOpenItem(itemId)
-                }
-            },
+            onOpenItem =
+                event.catalogItemId?.let { itemId ->
+                    {
+                        selectedEventId = null
+                        onOpenItem(itemId)
+                    }
+                },
         )
     }
 }
@@ -286,12 +288,11 @@ private fun CalendarWeekStrip(
             val selected = date == selectedDate
             val isToday = date == today
             val hasEvents = events.any { calendarEventDate(it, zone) == date }
-            val dayDescription =
-                buildString {
-                    append(fullDateFormatter.format(date))
-                    if (selected) append(", ${stringResource(R.string.calendar_selected)}")
-                    if (hasEvents) append(", ${stringResource(R.string.calendar_has_events)}")
-                }
+            val dayDescription = buildString {
+                append(fullDateFormatter.format(date))
+                if (selected) append(", ${stringResource(R.string.calendar_selected)}")
+                if (hasEvents) append(", ${stringResource(R.string.calendar_has_events)}")
+            }
             Surface(
                 modifier =
                     Modifier.weight(1f)
@@ -384,30 +385,26 @@ private fun CalendarEventRow(
         when {
             event.seriesTitle != null && event.title != null -> event.title
             event.seriesTitle != null -> position
-            event.kind == "movie" -> event.releaseType.ifBlank { stringResource(R.string.calendar_movie) }
+            event.kind == "movie" ->
+                event.releaseType.ifBlank { stringResource(R.string.calendar_movie) }
             else -> position ?: stringResource(R.string.calendar_episode)
         }
     val accent = calendarEventColor(event)
     Surface(
         modifier =
-            Modifier.fillMaxWidth()
-                .clickable(onClick = onClick)
-                .semantics {
-                    role = Role.Button
-                    contentDescription = title
-                },
+            Modifier.fillMaxWidth().clickable(onClick = onClick).semantics {
+                role = Role.Button
+                contentDescription = title
+            },
         color = if (event.hasFile) accent.copy(alpha = .125f) else Color.Transparent,
         shape = MaterialTheme.shapes.medium,
-        border =
-            if (event.hasFile) null else BorderStroke(1.dp, accent.copy(alpha = .2f)),
+        border = if (event.hasFile) null else BorderStroke(1.dp, accent.copy(alpha = .2f)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.seriesTitle ?: title,
                     style = MaterialTheme.typography.titleSmall,
@@ -528,7 +525,7 @@ private fun CalendarEventSheet(
                             ButtonDefaults.outlinedButtonColors(
                                 contentColor =
                                     if (following) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface,
+                                    else MaterialTheme.colorScheme.onSurface
                             ),
                     ) {
                         Icon(
@@ -622,9 +619,10 @@ private fun calendarEventTitle(
 
 private fun calendarEventColor(event: CalendarEvent): Color {
     var hash = 0
-    "${event.libraryId}:${event.seriesTitle ?: event.title ?: event.id}".forEach { character ->
-        hash = hash * 31 + character.code
-    }
+    "${event.libraryId}:${event.seriesTitle ?: event.title ?: event.id}"
+        .forEach { character ->
+            hash = hash * 31 + character.code
+        }
     return calendarEventColors[abs(hash) % calendarEventColors.size]
 }
 

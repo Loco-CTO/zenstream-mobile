@@ -62,8 +62,9 @@ internal fun calendarEventDate(event: CalendarEvent, zone: ZoneId): LocalDate? {
 internal fun parseCalendarInstant(value: String): Instant? =
     runCatching { Instant.parse(value) }.getOrNull()
         ?: runCatching {
-            ZonedDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME).toInstant()
-        }.getOrNull()
+                ZonedDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME).toInstant()
+            }
+            .getOrNull()
 
 internal fun calendarEventSortKey(event: CalendarEvent): Long =
     if (event.allDay) {

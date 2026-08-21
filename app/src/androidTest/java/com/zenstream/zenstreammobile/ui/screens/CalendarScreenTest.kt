@@ -101,9 +101,7 @@ class CalendarScreenTest {
             }
         }
 
-        composeRule
-            .onNodeWithContentDescription("Saturday, August 22, 2026")
-            .performClick()
+        composeRule.onNodeWithContentDescription("Saturday, August 22, 2026").performClick()
         val emptyDate =
             DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
                 .withLocale(Locale.US)
