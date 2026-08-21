@@ -17,13 +17,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -48,8 +49,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -115,6 +116,9 @@ import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
+import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
+import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
+import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
 @Composable
@@ -369,6 +373,8 @@ fun SearchScreen(
 fun SearchOverlayScreen(
     repository: SearchDataSource,
     session: AuthSession,
+    currentRoute: String,
+    onDestinationClick: (String) -> Unit,
     onDismiss: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
 ) {
@@ -382,81 +388,110 @@ fun SearchOverlayScreen(
     var submitted by remember { mutableStateOf(false) }
     var draftQuery by remember { mutableStateOf("") }
     val searchFocusRequester = remember { FocusRequester() }
+    val density = LocalDensity.current
+    val bottomBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+                revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
+            )
+        }
+    var bottomBarVisible by remember { mutableStateOf(true) }
     val effectiveQuery = if (submitted) state.query else draftQuery
-    val activeSearch = isSearchQueryActive(effectiveQuery)
-    val scrimColor =
-        if (activeSearch) MaterialTheme.colorScheme.background else Color.Black.copy(alpha = .52f)
 
-    LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        searchFocusRequester.requestFocus()
+        bottomBarVisible = bottomBarVisibility.resetForRoute()
+    }
 
     Box(
         modifier =
             Modifier.fillMaxSize()
-                .background(scrimColor)
-                .clickable(onClick = onDismiss)
-                .testTag(if (activeSearch) "search-overlay-solid" else "search-overlay-transparent")
+                .background(MaterialTheme.colorScheme.background)
+                .testTag("search-overlay-solid")
     ) {
-        if (submitted) {
-            Surface(
-                modifier =
-                    Modifier.fillMaxSize()
-                        .padding(16.dp)
-                        .systemBarsPadding()
-                        .imePadding()
-                        .clickable(onClick = {})
-                        .testTag("search-dialog"),
-                color = MaterialTheme.colorScheme.background,
-                shape = MaterialTheme.shapes.large,
-            ) {
-                SearchResultsContent(
-                    state = state,
-                    session = session,
-                    padding = PaddingValues(),
-                    onQueryChange = { value ->
-                        if (isSearchQueryActive(value)) {
-                            vm.updateQuery(value)
-                        } else {
-                            draftQuery = value
-                            submitted = false
-                            vm.updateQuery("")
-                        }
-                    },
-                    onRetry = vm::retry,
-                    onRefresh = vm::refresh,
-                    onItemClick = { item ->
-                        onDismiss()
-                        onItemClick(item)
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+        Scaffold(
+            modifier = Modifier.fillMaxSize().testTag("search-dialog"),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                Box(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .navigationBarsPadding()
+                ) {
+                    AnimatedVisibility(
+                        visible = bottomBarVisible,
+                        enter =
+                            expandVertically(expandFrom = Alignment.Bottom) +
+                                slideInVertically(initialOffsetY = { it }) +
+                                fadeIn(),
+                        exit =
+                            shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                                slideOutVertically(targetOffsetY = { it }) +
+                                fadeOut(),
+                    ) {
+                        MainNavigationBar(
+                            currentRoute = currentRoute,
+                            session = session,
+                            onDestinationClick = onDestinationClick,
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            val submitSearch = {
+                val normalized = effectiveQuery.trim()
+                if (submitted) {
+                    vm.retry()
+                } else if (isSearchQueryActive(normalized)) {
+                    draftQuery = normalized
+                    submitted = true
+                    vm.updateQuery(normalized)
+                }
             }
-        } else {
-            Surface(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                        .systemBarsPadding()
-                        .imePadding()
-                        .clickable(onClick = {})
-                        .testTag("search-dialog"),
-                color = MaterialTheme.colorScheme.surface,
-                shape = MaterialTheme.shapes.large,
-            ) {
-                SearchField(
-                    value = draftQuery,
-                    onValueChange = { draftQuery = it },
-                    onSubmit = {
-                        val normalized = draftQuery.trim()
-                        if (isSearchQueryActive(normalized)) {
-                            draftQuery = normalized
-                            submitted = true
-                            vm.updateQuery(normalized)
-                        }
-                    },
-                    onClear = { draftQuery = "" },
-                    modifier = Modifier.padding(16.dp).focusRequester(searchFocusRequester),
-                )
-            }
+            SearchResultsContent(
+                state = state,
+                query = effectiveQuery,
+                resultQuery = if (submitted) state.query else "",
+                session = session,
+                padding = padding,
+                onQueryChange = { value ->
+                    if (submitted && isSearchQueryActive(value)) {
+                        vm.updateQuery(value)
+                    } else if (submitted) {
+                        draftQuery = value
+                        submitted = false
+                        vm.updateQuery("")
+                    } else {
+                        draftQuery = value
+                    }
+                },
+                onRetry = submitSearch,
+                onRefresh = vm::refresh,
+                onItemClick = { item ->
+                    onDismiss()
+                    onItemClick(item)
+                },
+                onNestedScroll = { consumedY, availableY, isScrollable ->
+                    bottomBarVisible =
+                        bottomBarVisibility.onNestedScroll(
+                            consumedY = consumedY,
+                            availableY = availableY,
+                            isScrollable = isScrollable,
+                        )
+                },
+                onScrollabilityChanged = { isScrollable ->
+                    if (!isScrollable) {
+                        bottomBarVisible = bottomBarVisibility.resetForRoute()
+                    }
+                },
+                searchFieldModifier = Modifier.focusRequester(searchFocusRequester),
+                showBackButton = true,
+                onBack = onDismiss,
+                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 16.dp),
+            )
         }
     }
 }
@@ -469,12 +504,20 @@ internal fun isSearchQueryActive(query: String): Boolean =
 @Composable
 private fun SearchResultsContent(
     state: SearchUiState,
+    query: String = state.query,
+    resultQuery: String = query,
     session: AuthSession,
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
+    onNestedScroll: (consumedY: Float, availableY: Float, isScrollable: Boolean) -> Unit =
+        { _, _, _ -> },
+    onScrollabilityChanged: (Boolean) -> Unit = {},
+    searchFieldModifier: Modifier = Modifier,
+    showBackButton: Boolean = false,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -495,13 +538,15 @@ private fun SearchResultsContent(
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
+                    val isScrollable =
+                        gridState.canScrollForward || gridState.canScrollBackward
                     topBarVisible =
                         topBarVisibility.onNestedScroll(
                             consumedY = consumed.y,
                             availableY = available.y,
-                            isScrollable =
-                                gridState.canScrollForward || gridState.canScrollBackward,
+                            isScrollable = isScrollable,
                         )
+                    onNestedScroll(consumed.y, available.y, isScrollable)
                     return Offset.Zero
                 }
             }
@@ -512,6 +557,7 @@ private fun SearchResultsContent(
     ObserveScrollability(
         canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
         onScrollabilityChanged = { isScrollable ->
+            onScrollabilityChanged(isScrollable)
             if (!isScrollable) {
                 topBarVisible = topBarVisibility.resetForRoute()
             }
@@ -530,14 +576,44 @@ private fun SearchResultsContent(
                     fadeOut(),
         ) {
             Column {
-                SearchField(
-                    value = state.query,
-                    onValueChange = onQueryChange,
-                    onSubmit = onRetry,
-                    onClear = { onQueryChange("") },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                if (state.query.trim().length >= 2 && !state.loading && !state.error) {
+                if (showBackButton) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                painter =
+                                    painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                                contentDescription = stringResource(R.string.back),
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
+                        SearchField(
+                            value = query,
+                            onValueChange = onQueryChange,
+                            onSubmit = onRetry,
+                            onClear = { onQueryChange("") },
+                            compact = true,
+                            modifier =
+                                Modifier.weight(1f)
+                                    .height(56.dp)
+                                    .then(searchFieldModifier),
+                        )
+                    }
+                } else {
+                    SearchField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        onSubmit = onRetry,
+                        onClear = { onQueryChange("") },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .then(searchFieldModifier),
+                    )
+                }
+                if (resultQuery.trim().length >= 2 && !state.loading && !state.error) {
                     Text(
                         stringResource(R.string.search_result_count, state.results.size),
                         style = MaterialTheme.typography.labelSmall,
@@ -555,7 +631,7 @@ private fun SearchResultsContent(
             when {
                 state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
                 state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, onRetry)
-                state.query.trim().length < 2 -> Unit
+                resultQuery.trim().length < 2 -> Unit
 
                 state.results.isEmpty() ->
                     Text(
@@ -596,19 +672,25 @@ private fun SearchField(
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onClear: () -> Unit,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        leadingIcon = {
-            Icon(
-                painter = painterResource(LucideR.drawable.lucide_ic_search),
-                contentDescription = null,
-            )
-        },
+        leadingIcon =
+            if (compact) {
+                null
+            } else {
+                {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        contentDescription = null,
+                    )
+                }
+            },
         trailingIcon = {
-            if (value.isNotEmpty())
+            if (compact || value.isNotEmpty())
                 IconButton(onClick = onClear) {
                     Icon(
                         painter = painterResource(LucideR.drawable.lucide_ic_x),
@@ -616,10 +698,37 @@ private fun SearchField(
                     )
                 }
         },
-        placeholder = { Text(stringResource(R.string.search_placeholder)) },
+        placeholder =
+            if (compact) {
+                null
+            } else {
+                { Text(stringResource(R.string.search_placeholder)) }
+            },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+        colors =
+            if (compact) {
+                OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF252525),
+                    unfocusedContainerColor = Color(0xFF252525),
+                    disabledContainerColor = Color(0xFF252525),
+                    errorContainerColor = Color(0xFF252525),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    errorBorderColor = Color.Transparent,
+                )
+            } else {
+                OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    errorContainerColor = Color.Transparent,
+                )
+            },
+        shape =
+            if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth().then(modifier),
     )
 }

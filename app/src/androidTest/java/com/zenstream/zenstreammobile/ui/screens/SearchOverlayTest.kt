@@ -4,10 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -17,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.SearchDataSource
@@ -42,6 +39,8 @@ class SearchOverlayTest {
                 SearchOverlayScreen(
                     repository = FakeSearchDataSource { emptyList() },
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -52,7 +51,7 @@ class SearchOverlayTest {
     }
 
     @Test
-    fun overlayKeepsUnderlyingContentAndDismissesOutsideTheDialog() {
+    fun overlayUsesOpaqueLayoutAndBackButtonDismisses() {
         var dismissed = false
         composeRule.setContent {
             ZenStreamTheme {
@@ -61,6 +60,8 @@ class SearchOverlayTest {
                     SearchOverlayScreen(
                         repository = FakeSearchDataSource { emptyList() },
                         session = session,
+                        currentRoute = "home",
+                        onDestinationClick = {},
                         onDismiss = { dismissed = true },
                         onItemClick = {},
                     )
@@ -68,24 +69,26 @@ class SearchOverlayTest {
             }
         }
 
-        composeRule.onNodeWithText("Home content").assertIsDisplayed()
-        composeRule.onNodeWithTag("search-overlay-transparent").assertIsDisplayed()
-        composeRule.onNodeWithTag("search-dialog").performClick()
-        assertFalse(dismissed)
-
-        composeRule.onNodeWithTag("search-overlay-transparent").performTouchInput {
-            click(Offset(1f, 1f))
-        }
+        composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(
+                InstrumentationRegistry.getInstrumentation()
+                    .targetContext
+                    .getString(R.string.back)
+            )
+            .performClick()
         assertTrue(dismissed)
     }
 
     @Test
-    fun twoCharactersUseSolidScrimAndClearingRestoresTransparentScrim() {
+    fun clearingTheQueryKeepsTheOpaqueSearchLayout() {
         composeRule.setContent {
             ZenStreamTheme {
                 SearchOverlayScreen(
                     repository = FakeSearchDataSource { emptyList() },
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -93,14 +96,15 @@ class SearchOverlayTest {
         }
 
         val field = composeRule.onNode(hasSetTextAction())
+        composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
         field.performTextInput("d")
-        composeRule.onNodeWithTag("search-overlay-transparent").assertIsDisplayed()
+        composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
         field.performTextInput("u")
         composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithContentDescription(context.getString(R.string.close)).performClick()
-        composeRule.onNodeWithTag("search-overlay-transparent").assertIsDisplayed()
+        composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
     }
 
     @Test
@@ -111,6 +115,8 @@ class SearchOverlayTest {
                 SearchOverlayScreen(
                     repository = source,
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -133,7 +139,7 @@ class SearchOverlayTest {
         composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription(context.getString(R.string.close)).performClick()
-        composeRule.onNodeWithTag("search-overlay-transparent").assertIsDisplayed()
+        composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
     }
 
     @Test
@@ -144,6 +150,8 @@ class SearchOverlayTest {
                 SearchOverlayScreen(
                     repository = source,
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -177,6 +185,8 @@ class SearchOverlayTest {
                 SearchOverlayScreen(
                     repository = source,
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -210,6 +220,8 @@ class SearchOverlayTest {
                 SearchOverlayScreen(
                     repository = source,
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = { events += "dismiss" },
                     onItemClick = { events += "select:${it.id}" },
                 )
@@ -235,6 +247,31 @@ class SearchOverlayTest {
         assertFalse(isSearchQueryActive(""))
         assertFalse(isSearchQueryActive(" d "))
         assertTrue(isSearchQueryActive(" du "))
+    }
+
+    @Test
+    fun bottomNavigationRemainsAvailableAndReportsTheSelectedTab() {
+        val selectedRoutes = mutableListOf<String>()
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = FakeSearchDataSource { emptyList() },
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = { selectedRoutes += it },
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.home)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.favorites)).performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(listOf("home", "favorites"), selectedRoutes)
+        }
     }
 }
 

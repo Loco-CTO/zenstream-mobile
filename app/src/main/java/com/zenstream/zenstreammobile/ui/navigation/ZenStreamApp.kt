@@ -355,7 +355,7 @@ private fun MainScaffold(
             }
         },
         bottomBar = {
-            if (!detailRoute && mainRoute != NOTIFICATIONS) {
+            if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
@@ -420,6 +420,13 @@ private fun MainScaffold(
                     SearchOverlayScreen(
                         repository = repository,
                         session = session,
+                        currentRoute = mainRoute,
+                        onDestinationClick = { route ->
+                            if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                myPageNavigationResetKey += 1
+                            }
+                            navigateToMainDestination(navController, route)
+                        },
                         onDismiss = { navController.popBackStack() },
                         onItemClick = { item ->
                             navigateToDetail(navController, item.id)
@@ -789,5 +796,5 @@ internal class ScrollVisibilityController(
     }
 }
 
-private const val HIDE_DISTANCE_DP = 56f
-private const val REVEAL_DISTANCE_DP = 64f
+internal const val HIDE_DISTANCE_DP = 56f
+internal const val REVEAL_DISTANCE_DP = 64f

@@ -53,6 +53,8 @@ class ContentScreensTest {
                 SearchOverlayScreen(
                     repository = EmptySearchSource(),
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
