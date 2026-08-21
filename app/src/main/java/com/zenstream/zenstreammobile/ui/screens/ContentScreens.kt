@@ -722,6 +722,12 @@ private fun SearchField(
                     errorContainerColor = Color.Transparent,
                 )
             },
+        contentPadding =
+            if (compact) {
+                PaddingValues(start = 20.dp, top = 0.dp, end = 16.dp, bottom = 0.dp)
+            } else {
+                OutlinedTextFieldDefaults.contentPadding()
+            },
         shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth().then(modifier),
     )
