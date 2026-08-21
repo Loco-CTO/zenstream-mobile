@@ -141,7 +141,7 @@ class SearchOverlayTest {
     }
 
     @Test
-    fun searchDoesNotRequestUntilSubmittedAndNoResultsRemainOnSolidScrim() {
+    fun searchRequestsEachTypedQueryWithoutSubmission() {
         val source = FakeSearchDataSource { emptyList() }
         composeRule.setContent {
             ZenStreamTheme {
@@ -157,11 +157,12 @@ class SearchOverlayTest {
         }
 
         val field = composeRule.onNode(hasSetTextAction())
-        field.performTextInput("du")
-        assertTrue(source.queries.isEmpty())
+        field.performTextInput("d")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d") }
+        field.performTextInput("u")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d", "du") }
         field.performImeAction()
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, false))
-        composeRule.waitUntil(5_000) { source.queries == listOf("du") }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.waitUntil(5_000) {
@@ -193,13 +194,15 @@ class SearchOverlayTest {
         }
 
         val field = composeRule.onNode(hasSetTextAction())
-        field.performTextInput("du")
-        field.performImeAction()
-        composeRule.waitUntil(5_000) { source.queries == listOf("du") }
+        field.performTextInput("d")
+        field.performTextInput("u")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d", "du") }
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().isNotEmpty()
         }
 
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.search_result_count, 1)).assertIsDisplayed()
         composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
         composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().also { nodes ->
             assertTrue(nodes.isNotEmpty())
@@ -207,7 +210,7 @@ class SearchOverlayTest {
     }
 
     @Test
-    fun retryReissuesTheSubmittedQueryAfterAnError() {
+    fun retryReissuesTheTypedQueryAfterAnError() {
         var attempts = 0
         val source = FakeSearchDataSource {
             attempts += 1
@@ -229,8 +232,7 @@ class SearchOverlayTest {
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val field = composeRule.onNode(hasSetTextAction())
-        field.performTextInput("du")
-        field.performImeAction()
+        field.performTextInput("d")
         composeRule.waitUntil(5_000) {
             composeRule
                 .onAllNodesWithText(context.getString(R.string.search_load_failed))
@@ -239,7 +241,7 @@ class SearchOverlayTest {
         }
 
         composeRule.onNodeWithText(context.getString(R.string.retry)).performClick()
-        composeRule.waitUntil(5_000) { source.queries == listOf("du", "du") }
+        composeRule.waitUntil(5_000) { source.queries == listOf("d", "d") }
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().isNotEmpty()
         }
@@ -263,9 +265,9 @@ class SearchOverlayTest {
         }
 
         val field = composeRule.onNode(hasSetTextAction())
-        field.performTextInput("du")
-        field.performImeAction()
-        composeRule.waitUntil(5_000) { source.queries == listOf("du") }
+        field.performTextInput("d")
+        field.performTextInput("u")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d", "du") }
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().isNotEmpty()
         }
@@ -277,13 +279,6 @@ class SearchOverlayTest {
         composeRule.runOnIdle {
             assertEquals(listOf("dismiss", "select:dune"), events)
         }
-    }
-
-    @Test
-    fun activeQueryThresholdMatchesTheSearchContract() {
-        assertFalse(isSearchQueryActive(""))
-        assertFalse(isSearchQueryActive(" d "))
-        assertTrue(isSearchQueryActive(" du "))
     }
 
     @Test
