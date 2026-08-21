@@ -10,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -58,6 +59,41 @@ class CatalogApiHttpTest {
         assertEquals(100.0, payload.getDouble("durationSeconds"), 0.001)
         assertTrue(!payload.has("isPaused"))
         assertTrue(!payload.has("playSessionId"))
+    }
+
+    @Test
+    fun searchAllowsOneCharacterQueriesAndSkipsBlankQueries() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put(
+                            "items",
+                            JSONArray().put(
+                                JSONObject()
+                                    .put("id", "movie-1")
+                                    .put("type", "movie")
+                                    .put(
+                                        "metadata",
+                                        JSONObject().put("title", "Dune"),
+                                    ),
+                            ),
+                        )
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val api = CatalogApi(deviceId = "device-id")
+
+        assertTrue(api.search(session, "   ").isEmpty())
+        assertEquals(listOf("movie-1"), api.search(session, " d ").map { it.id })
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/api/catalog/search?query=d&pageSize=40", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
     }
 
     @Test
