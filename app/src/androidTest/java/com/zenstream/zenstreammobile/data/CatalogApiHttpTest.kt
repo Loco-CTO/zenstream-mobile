@@ -9,8 +9,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import org.json.JSONObject
 import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -69,15 +69,16 @@ class CatalogApiHttpTest {
                     JSONObject()
                         .put(
                             "items",
-                            JSONArray().put(
-                                JSONObject()
-                                    .put("id", "movie-1")
-                                    .put("type", "movie")
-                                    .put(
-                                        "metadata",
-                                        JSONObject().put("title", "Dune"),
-                                    ),
-                            ),
+                            JSONArray()
+                                .put(
+                                    JSONObject()
+                                        .put("id", "movie-1")
+                                        .put("type", "movie")
+                                        .put(
+                                            "metadata",
+                                            JSONObject().put("title", "Dune"),
+                                        )
+                                ),
                         )
                         .toString()
                 )

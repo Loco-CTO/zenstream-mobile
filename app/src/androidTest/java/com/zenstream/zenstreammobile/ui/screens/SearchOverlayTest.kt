@@ -202,7 +202,9 @@ class SearchOverlayTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.search_result_count, 1)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.search_result_count, 1))
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
         composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().also { nodes ->
             assertTrue(nodes.isNotEmpty())

@@ -361,7 +361,7 @@ fun SearchOverlayScreen(
         viewModel(
             key = "search-overlay-${session.userId}-${session.token}",
             factory = SearchViewModel.Factory(repository, session),
-    )
+        )
     val state by vm.uiState.collectAsStateWithLifecycle()
     val searchFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -372,7 +372,7 @@ fun SearchOverlayScreen(
                 hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
                 revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
             )
-    }
+        }
     var bottomBarVisible by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -426,7 +426,6 @@ fun SearchOverlayScreen(
                     focusManager.clearFocus()
                     vm.retry()
                 },
-                onRefresh = vm::refresh,
                 onItemClick = { item ->
                     onDismiss()
                     onItemClick(item)
@@ -460,7 +459,6 @@ private fun SearchResultsContent(
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit,
-    onRefresh: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
     onNestedScroll: (consumedY: Float, availableY: Float, isScrollable: Boolean) -> Unit =
         { _, _, _ ->
@@ -569,11 +567,7 @@ private fun SearchResultsContent(
                 }
             }
         }
-        PullToRefreshLayout(
-            isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
-            onRefresh = onRefresh,
-            modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
-        ) {
+        Box(Modifier.weight(1f).nestedScroll(topBarScrollConnection)) {
             when {
                 state.error && state.results.isNotEmpty() ->
                     Column(Modifier.fillMaxSize()) {
@@ -603,6 +597,7 @@ private fun SearchResultsContent(
                         gridState = gridState,
                         session = session,
                         onItemClick = onItemClick,
+                        modifier = Modifier.fillMaxSize(),
                     )
             }
         }
