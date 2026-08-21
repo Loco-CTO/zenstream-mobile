@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.click
@@ -50,6 +53,12 @@ class SearchOverlayTest {
             }
         }
 
+        composeRule.waitUntil(5_000) {
+            composeRule.onNode(hasSetTextAction()).fetchSemanticsNode().config.let { semantics ->
+                semantics.contains(SemanticsProperties.Focused) &&
+                    semantics[SemanticsProperties.Focused]
+            }
+        }
         composeRule.onNode(hasSetTextAction()).assertIsFocused()
     }
 
@@ -151,7 +160,7 @@ class SearchOverlayTest {
         field.performTextInput("du")
         assertTrue(source.queries.isEmpty())
         field.performImeAction()
-        field.assertIsNotFocused()
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, false))
         composeRule.waitUntil(5_000) { source.queries == listOf("du") }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -260,7 +269,10 @@ class SearchOverlayTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithContentDescription("Play Dune").performClick()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.play_description, "Dune"))
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf("dismiss", "select:dune"), events)
