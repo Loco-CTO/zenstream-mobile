@@ -1752,8 +1752,9 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> =
             played = userData?.optBoolean("Played") ?: false,
             favorite = userData?.optBoolean("IsFavorite") ?: false,
             following =
-                if (item.optString("Type").equals("Movie", ignoreCase = true) ||
-                    item.optString("Type").equals("Series", ignoreCase = true)
+                if (
+                    item.optString("Type").equals("Movie", ignoreCase = true) ||
+                        item.optString("Type").equals("Series", ignoreCase = true)
                 ) {
                     userData?.optBoolean("IsFollowing") ?: false
                 } else null,

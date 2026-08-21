@@ -226,7 +226,8 @@ class NotificationsViewModel(
         val marker = if (read) "local" else null
         _uiState.value =
             current.copy(
-                items = current.items.map { if (it.id == item.id) it.copy(readAt = marker) else it },
+                items =
+                    current.items.map { if (it.id == item.id) it.copy(readAt = marker) else it },
                 unreadCount = (current.unreadCount + if (read) -1 else 1).coerceAtLeast(0),
             )
         viewModelScope.launch {
@@ -245,7 +246,8 @@ class NotificationsViewModel(
         if (current.unreadCount == 0) return
         _uiState.value =
             current.copy(
-                items = current.items.map { if (it.readAt == null) it.copy(readAt = "local") else it },
+                items =
+                    current.items.map { if (it.readAt == null) it.copy(readAt = "local") else it },
                 unreadCount = 0,
             )
         viewModelScope.launch {

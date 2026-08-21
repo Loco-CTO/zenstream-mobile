@@ -262,9 +262,10 @@ fun MediaCard(
     onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
-    var following by remember(item.id, item.following) {
-        mutableStateOf(item.following ?: false)
-    }
+    var following by
+        remember(item.id, item.following) {
+            mutableStateOf(item.following ?: false)
+        }
     val locale = LocalLocale.current.platformLocale
     val cardWidthModifier =
         if (gridCard && !wide) {
@@ -308,11 +309,9 @@ fun MediaCard(
                         }
                     },
                     modifier =
-                        Modifier.align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .semantics {
-                                contentDescription = followingLabel
-                            },
+                        Modifier.align(Alignment.TopEnd).padding(4.dp).semantics {
+                            contentDescription = followingLabel
+                        },
                 ) {
                     Icon(
                         painter = painterResource(LucideR.drawable.lucide_ic_bookmark),
