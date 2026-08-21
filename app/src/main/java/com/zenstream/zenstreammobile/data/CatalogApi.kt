@@ -1245,6 +1245,7 @@ internal fun parseNotificationPage(root: JSONObject): NotificationPage {
     val items =
         jsonArray(root, "items").mapNotNull { item ->
             val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val thumbnail = item.optJSONObject("thumbnail")
             NotificationItem(
                 id = id,
                 kind = item.optString("kind"),
@@ -1257,6 +1258,8 @@ internal fun parseNotificationPage(root: JSONObject): NotificationPage {
                 createdAt = item.optString("createdAt"),
                 readAt = item.optNullableString("readAt"),
                 navigationTarget = item.optNullableString("navigationTarget"),
+                thumbnailUrl = thumbnail?.optNullableString("url"),
+                thumbnailBlurHash = thumbnail?.optNullableString("blurHash"),
             )
         }
     return NotificationPage(

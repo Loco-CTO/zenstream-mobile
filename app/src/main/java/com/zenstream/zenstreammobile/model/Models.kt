@@ -181,6 +181,8 @@ data class NotificationItem(
     val createdAt: String,
     val readAt: String? = null,
     val navigationTarget: String? = null,
+    val thumbnailUrl: String? = null,
+    val thumbnailBlurHash: String? = null,
 )
 
 data class NotificationPage(

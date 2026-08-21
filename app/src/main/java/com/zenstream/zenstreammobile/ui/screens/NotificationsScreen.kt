@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +46,13 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.ui.NotificationsViewModel
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +115,7 @@ fun NotificationsScreen(
                     items(state.items, key = { it.id }) { item ->
                         NotificationRow(
                             item = item,
+                            session = session,
                             onClick = {
                                 vm.setRead(item, true)
                                 (item.seriesId ?: item.itemId)?.let(onOpenItem)
@@ -170,7 +181,14 @@ private fun NotificationEmptyState(title: String, detail: String) {
 }
 
 @Composable
-private fun NotificationRow(item: NotificationItem, onClick: () -> Unit) {
+private fun NotificationRow(
+    item: NotificationItem,
+    session: AuthSession,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val thumbnailRequest =
+        item.thumbnailUrl?.let { authenticatedImageRequest(context, it, session) }
     val background =
         if (item.readAt == null) MaterialTheme.colorScheme.primary.copy(alpha = .10f)
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .35f)
@@ -182,14 +200,19 @@ private fun NotificationRow(item: NotificationItem, onClick: () -> Unit) {
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_bell),
-            contentDescription = null,
-            tint =
-                if (item.readAt == null) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = .55f),
-            modifier = Modifier.size(21.dp),
-        )
+        Box(
+            Modifier.size(width = 104.dp, height = 60.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
+        ) {
+            BlurHashAsyncImage(
+                model = thumbnailRequest,
+                imageKey = item.thumbnailUrl,
+                blurHash = item.thumbnailBlurHash,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+            )
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -212,7 +235,7 @@ private fun NotificationRow(item: NotificationItem, onClick: () -> Unit) {
                     )
                 }
             Text(
-                item.createdAt,
+                formatNotificationDateTime(item.createdAt),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f),
                 modifier = Modifier.padding(top = 5.dp),
@@ -229,4 +252,12 @@ private fun NotificationRow(item: NotificationItem, onClick: () -> Unit) {
             )
         }
     }
+}
+
+internal fun formatNotificationDateTime(value: String): String {
+    val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return value
+    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+        .withLocale(Locale.getDefault())
+        .withZone(ZoneId.systemDefault())
+        .format(instant)
 }
