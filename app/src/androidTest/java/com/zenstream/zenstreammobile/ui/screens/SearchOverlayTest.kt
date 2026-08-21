@@ -27,6 +27,7 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -209,6 +210,48 @@ class SearchOverlayTest {
         composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().also { nodes ->
             assertTrue(nodes.isNotEmpty())
         }
+    }
+
+    @Test
+    fun resultCountRemainsVisibleWhileTheNextQueryIsPending() {
+        val secondResponse = CompletableDeferred<Unit>()
+        val source = FakeSearchDataSource { query ->
+            if (query == "du") secondResponse.await()
+            listOf(MediaItem("dune", "Dune"))
+        }
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = source,
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val count = context.getString(R.string.search_result_count, 1)
+        val field = composeRule.onNode(hasSetTextAction())
+        field.performTextInput("d")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d") }
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(count).assertIsDisplayed()
+
+        field.performTextInput("u")
+        composeRule.waitUntil(5_000) { source.queries == listOf("d", "du") }
+        composeRule.onNodeWithText(count).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().also { nodes ->
+            assertTrue(nodes.isNotEmpty())
+        }
+
+        secondResponse.complete(Unit)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(count).assertIsDisplayed()
     }
 
     @Test

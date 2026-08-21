@@ -557,7 +557,7 @@ private fun SearchResultsContent(
                                 .then(searchFieldModifier),
                     )
                 }
-                if (state.resultQuery.isNotEmpty() && !state.loading && !state.error) {
+                if (state.resultQuery.isNotEmpty()) {
                     Text(
                         stringResource(R.string.search_result_count, state.results.size),
                         style = MaterialTheme.typography.labelSmall,

@@ -782,6 +782,7 @@ class SearchViewModel(
         if (query.trim().isEmpty()) return
         searchJob?.cancel()
         val generation = ++requestGeneration
+        _uiState.value = _uiState.value.copy(loading = true, error = false)
         searchJob = viewModelScope.launch { search(generation, query) }
     }
 
