@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zenstream.zenstreammobile.model.AuthSession
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -245,6 +246,56 @@ class CatalogApiHttpTest {
         assertEquals("current-password", payload.getString("currentPassword"))
         assertEquals("new-password", payload.getString("newPassword"))
         assertEquals("new-password", payload.getString("confirmNewPassword"))
+    }
+
+    @Test
+    fun fetchesCalendarWithTheVisibleInstantRange() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("start", "2026-08-16T00:00:00Z")
+                        .put("end", "2026-08-23T00:00:00Z")
+                        .put("events", org.json.JSONArray())
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val response =
+            CatalogApi(deviceId = "device-id").calendar(
+                session,
+                Instant.parse("2026-08-16T00:00:00Z"),
+                Instant.parse("2026-08-23T00:00:00Z"),
+            )
+
+        val request = server.takeRequest()
+        assertEquals(0, response.events.size)
+        assertEquals("GET", request.method)
+        assertEquals(
+            "/api/calendar?start=2026-08-16T00%3A00%3A00Z&end=2026-08-23T00%3A00%3A00Z",
+            request.path,
+        )
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun updatesCalendarFollowingThroughTheCalendarEndpoint() = runBlocking {
+        server.enqueue(MockResponse().setBody(JSONObject().put("following", true).toString()))
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        assertTrue(
+            CatalogApi(deviceId = "device-id")
+                .setCalendarFollowing(session, "event-1", true)
+        )
+
+        val request = server.takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/api/calendar/events/event-1/follow", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertTrue(JSONObject(request.body.readUtf8()).getBoolean("following"))
     }
 
     @Test
