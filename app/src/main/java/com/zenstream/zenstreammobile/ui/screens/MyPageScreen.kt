@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -89,13 +91,16 @@ fun MyPageScreen(
     var removingAvatar by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
     var settingsSection by remember { mutableStateOf<MyPageSettingsSection?>(null) }
+    var profileOpen by remember { mutableStateOf(false) }
     var calendarOpen by remember { mutableStateOf(false) }
     var passwordEditorOpen by remember { mutableStateOf(false) }
     var passwordChangeSucceeded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
 
-    BackHandler(enabled = calendarOpen || settingsSection != null || passwordEditorOpen) {
+    BackHandler(
+        enabled = calendarOpen || settingsSection != null || profileOpen || passwordEditorOpen
+    ) {
         if (passwordEditorOpen) {
             if (passwordChangeSucceeded) {
                 onPasswordChanged()
@@ -104,6 +109,8 @@ fun MyPageScreen(
             }
         } else if (calendarOpen) {
             calendarOpen = false
+        } else if (profileOpen) {
+            profileOpen = false
         } else {
             settingsSection = null
         }
@@ -135,7 +142,9 @@ fun MyPageScreen(
             contentPadding =
                 PaddingValues(
                     start = 16.dp,
-                    top = if (activeSection == null && !passwordEditorOpen) 20.dp else 8.dp,
+                    top =
+                        if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
+                        else 8.dp,
                     end = 16.dp,
                     bottom = 28.dp,
                 ),
@@ -169,6 +178,19 @@ fun MyPageScreen(
                         onSuccessStateChanged = { passwordChangeSucceeded = it },
                     )
             }
+            } else if (profileOpen) {
+                item {
+                    ProfileSettingsPage(
+                        session = session,
+                        avatarError = avatarError,
+                        onBack = { profileOpen = false },
+                        onEditAvatar = { avatarActionsOpen = true },
+                        onChangePassword = {
+                            passwordChangeSucceeded = false
+                            passwordEditorOpen = true
+                        },
+                    )
+                }
             } else if (activeSection == null) {
                 item {
                     Text(
@@ -179,11 +201,7 @@ fun MyPageScreen(
                 item {
                     ProfileCard(
                         session = session,
-                        onEditAvatar = { avatarActionsOpen = true },
-                        onChangePassword = {
-                            passwordChangeSucceeded = false
-                            passwordEditorOpen = true
-                        },
+                        onOpenProfile = { profileOpen = true },
                         avatarError = avatarError,
                     )
                 }
