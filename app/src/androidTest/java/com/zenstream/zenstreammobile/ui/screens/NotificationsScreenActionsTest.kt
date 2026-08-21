@@ -34,6 +34,7 @@ class NotificationsScreenActionsTest {
                 )
             )
         val session = AuthSession("https://example.test", "token", "user", "Test")
+        var removed = false
 
         composeRule.setContent {
             ZenStreamTheme {
@@ -44,7 +45,7 @@ class NotificationsScreenActionsTest {
                     onToggleRead = {
                         item = item.copy(readAt = if (item.readAt == null) "local" else null)
                     },
-                    onRemove = {},
+                    onRemove = { removed = true },
                 )
             }
         }
@@ -65,18 +66,6 @@ class NotificationsScreenActionsTest {
             .performClick()
         composeRule.runOnIdle { assertNull(item.readAt) }
 
-        var removed = false
-        composeRule.setContent {
-            ZenStreamTheme {
-                NotificationRow(
-                    item = item,
-                    session = session,
-                    onClick = {},
-                    onToggleRead = {},
-                    onRemove = { removed = true },
-                )
-            }
-        }
         composeRule.onNodeWithContentDescription(actionsLabel).performClick()
         composeRule
             .onNodeWithText(context.getString(R.string.notifications_remove))
