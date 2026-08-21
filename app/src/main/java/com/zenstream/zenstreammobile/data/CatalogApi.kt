@@ -26,6 +26,7 @@ import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -855,14 +856,30 @@ class CatalogApi(
             )
         }
 
-    suspend fun search(session: AuthSession, query: String): List<MediaItem> =
+    suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch =
         withContext(Dispatchers.IO) {
-            if (query.trim().isEmpty()) return@withContext emptyList()
-            catalogItems(
+            if (query.trim().isEmpty()) return@withContext PagedSearch(emptyList(), 0)
+            val pageSize = 20
+            val json =
                 requestJson(
                     session,
-                    "/api/catalog/search?query=${android.net.Uri.encode(query.trim())}&pageSize=40",
+                    "/api/catalog/search",
+                    query =
+                        mapOf(
+                            "query" to query.trim(),
+                            "page" to page.coerceAtLeast(1).toString(),
+                            "pageSize" to pageSize.toString(),
+                            "view" to "card",
+                        ),
                 )
+            val parsed = catalogItems(json)
+            PagedSearch(
+                items = parsed,
+                totalRecordCount =
+                    json.optInt(
+                        "total",
+                        ((page.coerceAtLeast(1) - 1) * pageSize) + parsed.size,
+                    ),
             )
         }
 

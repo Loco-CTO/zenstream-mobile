@@ -735,7 +735,11 @@ data class SearchUiState(
     val resultQuery: String = "",
     val loading: Boolean = false,
     val results: List<MediaItem> = emptyList(),
+    val totalRecordCount: Int = 0,
+    val nextPage: Int = 1,
+    val loadingMore: Boolean = false,
     val error: Boolean = false,
+    val loadMoreError: Boolean = false,
 )
 
 class SearchViewModel(
@@ -764,6 +768,9 @@ class SearchViewModel(
                 query = value,
                 loading = normalized.isNotEmpty(),
                 error = false,
+                loadingMore = false,
+                loadMoreError = false,
+                nextPage = 1,
             )
         if (normalized.isEmpty()) {
             _uiState.value =
@@ -771,10 +778,12 @@ class SearchViewModel(
                     loading = false,
                     resultQuery = "",
                     results = emptyList(),
+                    totalRecordCount = 0,
+                    nextPage = 1,
                 )
             return
         }
-        searchJob = viewModelScope.launch { search(generation, value) }
+        searchJob = viewModelScope.launch { search(generation, value, page = 1) }
     }
 
     fun retry() {
@@ -782,22 +791,75 @@ class SearchViewModel(
         if (query.trim().isEmpty()) return
         searchJob?.cancel()
         val generation = ++requestGeneration
-        _uiState.value = _uiState.value.copy(loading = true, error = false)
-        searchJob = viewModelScope.launch { search(generation, query) }
+        _uiState.value =
+            _uiState.value.copy(
+                loading = true,
+                error = false,
+                loadingMore = false,
+                loadMoreError = false,
+                nextPage = 1,
+            )
+        searchJob = viewModelScope.launch { search(generation, query, page = 1) }
     }
 
-    private suspend fun search(generation: Long, query: String) {
+    fun loadMore() {
+        val state = _uiState.value
+        val query = state.resultQuery.ifBlank { state.query }.trim()
+        if (
+                query.isEmpty() ||
+                state.loading ||
+                state.loadingMore ||
+                state.results.size >= state.totalRecordCount
+        )
+            return
+        val generation = requestGeneration
+        val page = state.nextPage
+        _uiState.value = state.copy(loadingMore = true, loadMoreError = false)
+        searchJob =
+            viewModelScope.launch {
+                runCatching { repository.search(session, query, page) }
+                    .onSuccess { result ->
+                        if (generation != requestGeneration) return@onSuccess
+                        _uiState.update { current ->
+                            current.copy(
+                                results =
+                                    uniqueSearchItems(
+                                        current.results + rankSearchResults(result.items, query)
+                                    ),
+                                totalRecordCount = result.totalRecordCount,
+                                nextPage = page + 1,
+                                loadingMore = false,
+                                loadMoreError = false,
+                            )
+                        }
+                    }
+                    .onFailure {
+                        if (generation != requestGeneration) return@onFailure
+                        if ((it as? CatalogException)?.statusCode == 401) {
+                            repository.clearSessionIfCurrent(session)
+                        }
+                        _uiState.update { current ->
+                            current.copy(loadingMore = false, loadMoreError = true)
+                        }
+                    }
+            }
+    }
+
+    private suspend fun search(generation: Long, query: String, page: Int) {
         if (generation != requestGeneration) return
-        _uiState.value = _uiState.value.copy(loading = true)
-        runCatching { repository.search(session, query) }
-            .onSuccess {
+        _uiState.value = _uiState.value.copy(loading = page == 1)
+        runCatching { repository.search(session, query, page) }
+            .onSuccess { result ->
                 if (generation != requestGeneration) return@onSuccess
                 _uiState.value =
                     _uiState.value.copy(
                         loading = false,
                         resultQuery = query.trim(),
-                        results = rankSearchResults(it, query),
+                        results = uniqueSearchItems(rankSearchResults(result.items, query)),
+                        totalRecordCount = result.totalRecordCount,
+                        nextPage = page + 1,
                         error = false,
+                        loadMoreError = false,
                     )
             }
             .onFailure {
@@ -965,6 +1027,11 @@ internal fun rankSearchResults(items: List<MediaItem>, query: String): List<Medi
             compareByDescending<Triple<Int, Int, MediaItem>> { it.second }.thenBy { it.first }
         )
         .map { it.third }
+}
+
+private fun uniqueSearchItems(items: List<MediaItem>): List<MediaItem> {
+    val seen = HashSet<String>()
+    return items.filter { seen.add(it.id) }
 }
 
 private const val LIBRARY_PAGE_SIZE = 40

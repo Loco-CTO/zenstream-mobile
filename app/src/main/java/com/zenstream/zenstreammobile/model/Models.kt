@@ -160,6 +160,11 @@ data class PagedLibrary(
     val totalRecordCount: Int,
 )
 
+data class PagedSearch(
+    val items: List<MediaItem>,
+    val totalRecordCount: Int,
+)
+
 data class DetailData(
     val item: MediaItem,
     val parentSeries: MediaItem? = null,

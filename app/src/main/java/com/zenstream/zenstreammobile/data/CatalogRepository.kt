@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
@@ -79,7 +80,7 @@ interface LibraryDataSource : CatalogRefreshSource {
 interface SearchDataSource : CatalogRefreshSource {
     override suspend fun clearSession()
 
-    suspend fun search(session: AuthSession, query: String): List<MediaItem>
+    suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch
 }
 
 interface FavoritesDataSource : CatalogRefreshSource {
@@ -414,7 +415,8 @@ class CatalogRepository(
         sort: LibrarySort,
     ): PagedLibrary = api.fetchLibraryPage(session, library, startIndex, limit, sort)
 
-    override suspend fun search(session: AuthSession, query: String) = api.search(session, query)
+    override suspend fun search(session: AuthSession, query: String, page: Int) =
+        api.search(session, query, page)
 
     override suspend fun favoritesPage(
         session: AuthSession,

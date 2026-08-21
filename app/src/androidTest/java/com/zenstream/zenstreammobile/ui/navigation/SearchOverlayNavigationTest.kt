@@ -19,6 +19,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertTrue
@@ -138,5 +139,6 @@ class SearchOverlayNavigationTest {
 private object EmptySearchDataSource : SearchDataSource {
     override suspend fun clearSession() = Unit
 
-    override suspend fun search(session: AuthSession, query: String) = emptyList<MediaItem>()
+    override suspend fun search(session: AuthSession, query: String, page: Int) =
+        PagedSearch(emptyList(), 0)
 }

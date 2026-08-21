@@ -80,6 +80,7 @@ class CatalogApiHttpTest {
                                         )
                                 ),
                         )
+                        .put("total", 1)
                         .toString()
                 )
         )
@@ -87,12 +88,12 @@ class CatalogApiHttpTest {
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
         val api = CatalogApi(deviceId = "device-id")
 
-        assertTrue(api.search(session, "   ").isEmpty())
-        assertEquals(listOf("movie-1"), api.search(session, " d ").map { it.id })
+        assertTrue(api.search(session, "   ", 1).items.isEmpty())
+        assertEquals(listOf("movie-1"), api.search(session, " d ", 1).items.map { it.id })
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)
-        assertEquals("/api/catalog/search?query=d&pageSize=40", request.path)
+        assertEquals("/api/catalog/search?query=d&page=1&pageSize=20&view=card", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
     }

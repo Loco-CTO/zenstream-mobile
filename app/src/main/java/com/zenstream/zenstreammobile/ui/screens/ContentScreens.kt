@@ -426,6 +426,7 @@ fun SearchOverlayScreen(
                     focusManager.clearFocus()
                     vm.retry()
                 },
+                onLoadMore = vm::loadMore,
                 onItemClick = { item ->
                     onDismiss()
                     onItemClick(item)
@@ -459,6 +460,7 @@ private fun SearchResultsContent(
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
     onNestedScroll: (consumedY: Float, availableY: Float, isScrollable: Boolean) -> Unit =
         { _, _, _ ->
@@ -501,6 +503,30 @@ private fun SearchResultsContent(
         }
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
+    }
+    LaunchedEffect(
+        gridState,
+        state.results.size,
+        state.totalRecordCount,
+        state.loading,
+        state.loadingMore,
+        state.loadMoreError,
+        state.error,
+        onLoadMore,
+    ) {
+        snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
+            if (
+                lastVisible >= 0 &&
+                    lastVisible >= state.results.size - 4 &&
+                    state.results.size < state.totalRecordCount &&
+                    !state.loading &&
+                    !state.loadingMore &&
+                    !state.loadMoreError &&
+                    !state.error
+            ) {
+                onLoadMore()
+            }
+        }
     }
     ObserveScrollability(
         canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
@@ -559,7 +585,7 @@ private fun SearchResultsContent(
                 }
                 if (state.resultQuery.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.search_result_count, state.results.size),
+                        stringResource(R.string.search_result_count, state.totalRecordCount),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
@@ -576,6 +602,9 @@ private fun SearchResultsContent(
                             items = state.results,
                             gridState = gridState,
                             session = session,
+                            loadingMore = state.loadingMore,
+                            loadMoreError = state.loadMoreError,
+                            onLoadMore = onLoadMore,
                             onItemClick = onItemClick,
                             modifier = Modifier.weight(1f),
                         )
@@ -596,6 +625,9 @@ private fun SearchResultsContent(
                         items = state.results,
                         gridState = gridState,
                         session = session,
+                        loadingMore = state.loadingMore,
+                        loadMoreError = state.loadMoreError,
+                        onLoadMore = onLoadMore,
                         onItemClick = onItemClick,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -609,6 +641,9 @@ private fun SearchResultsGrid(
     items: List<MediaItem>,
     gridState: LazyGridState,
     session: AuthSession,
+    loadingMore: Boolean,
+    loadMoreError: Boolean,
+    onLoadMore: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -630,6 +665,34 @@ private fun SearchResultsGrid(
                     session,
                     onItemClick = onItemClick,
                 )
+            }
+        }
+        if (loadingMore) {
+            item(
+                key = "search-loading-more",
+                span = {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                },
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+        }
+        if (loadMoreError) {
+            item(
+                key = "search-load-more-error",
+                span = {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                },
+            ) {
+                InlineLoadMoreError(onRetry = onLoadMore)
             }
         }
     }

@@ -26,6 +26,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
@@ -213,6 +214,50 @@ class SearchOverlayTest {
     }
 
     @Test
+    fun gridLoadsOneMorePageNearTheEndAndShowsRetryFooterAfterFailure() {
+        var pageTwoAttempts = 0
+        val source =
+            PagedSearchDataSource { _, page ->
+                when (page) {
+                    1 -> PagedSearch(listOf(MediaItem("one", "Dune")), 2)
+                    2 -> {
+                        if (pageTwoAttempts++ == 0) error("temporary failure")
+                        PagedSearch(listOf(MediaItem("two", "Dune 2")), 2)
+                    }
+                    else -> error("unexpected page $page")
+                }
+            }
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = source,
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.onNode(hasSetTextAction()).performTextInput("d")
+        composeRule.waitUntil(5_000) { source.pages == listOf(1, 2) }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.waitUntil(5_000) {
+            composeRule
+                .onAllNodesWithText(context.getString(R.string.library_load_more_failed))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        assertEquals(1, source.pages.count { it == 2 })
+
+        composeRule.onNodeWithText(context.getString(R.string.retry)).performClick()
+        composeRule.waitUntil(5_000) { source.pages.count { it == 2 } == 2 }
+        composeRule.onNodeWithText("Dune 2").assertIsDisplayed()
+    }
+
+    @Test
     fun resultCountRemainsVisibleWhileTheNextQueryIsPending() {
         val secondResponse = CompletableDeferred<Unit>()
         val source = FakeSearchDataSource { query ->
@@ -358,8 +403,22 @@ private class FakeSearchDataSource(private val response: suspend (String) -> Lis
 
     override suspend fun clearSession() = Unit
 
-    override suspend fun search(session: AuthSession, query: String): List<MediaItem> {
+    override suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch {
         queries += query
-        return response(query)
+        val items = response(query)
+        return PagedSearch(items, items.size)
+    }
+}
+
+private class PagedSearchDataSource(
+    private val response: suspend (String, Int) -> PagedSearch,
+) : SearchDataSource {
+    val pages = mutableListOf<Int>()
+
+    override suspend fun clearSession() = Unit
+
+    override suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch {
+        pages += page
+        return response(query, page)
     }
 }
