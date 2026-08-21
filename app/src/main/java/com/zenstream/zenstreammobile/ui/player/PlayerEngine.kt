@@ -69,6 +69,17 @@ data class EngineState(
     val error: String? = null,
 )
 
+internal fun media3PlaybackState(state: EngineState, playbackState: Int): EngineState {
+    val activePlayback =
+        playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY
+    return state.copy(
+        ready = playbackState == Player.STATE_READY,
+        isBuffering = playbackState == Player.STATE_BUFFERING,
+        ended = playbackState == Player.STATE_ENDED,
+        error = if (activePlayback) null else state.error,
+    )
+}
+
 internal class InitialSeekController {
     private var pendingPositionSeconds: Double? = null
 
@@ -190,12 +201,7 @@ class Media3PlaybackEngine : PlaybackEngine {
                             }
 
                             override fun onPlaybackStateChanged(playbackState: Int) {
-                                _state.value =
-                                    _state.value.copy(
-                                        ready = playbackState == Player.STATE_READY,
-                                        isBuffering = playbackState == Player.STATE_BUFFERING,
-                                        ended = playbackState == Player.STATE_ENDED,
-                                    )
+                                _state.value = media3PlaybackState(_state.value, playbackState)
                                 Log.i(
                                     tag,
                                     "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
@@ -250,6 +256,7 @@ class Media3PlaybackEngine : PlaybackEngine {
             return
         }
         pending = null
+        _state.value = EngineState()
         initialSeek.schedule(startPositionSeconds)
         current.playWhenReady = playWhenReady
         val mediaItem =
@@ -261,7 +268,6 @@ class Media3PlaybackEngine : PlaybackEngine {
                 .build()
         current.setMediaItem(mediaItem)
         current.prepare()
-        _state.value = EngineState()
     }
 
     private fun applyInitialSeek() {
