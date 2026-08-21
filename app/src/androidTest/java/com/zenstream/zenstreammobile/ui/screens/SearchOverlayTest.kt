@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.SearchDataSource
@@ -81,6 +84,29 @@ class SearchOverlayTest {
     }
 
     @Test
+    fun tappingTheOpaqueBackgroundDoesNotDismissSearch() {
+        var dismissed = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = FakeSearchDataSource { emptyList() },
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = { dismissed = true },
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("search-overlay-solid").performTouchInput {
+            click(Offset(1f, 1f))
+        }
+
+        assertFalse(dismissed)
+    }
+
+    @Test
     fun clearingTheQueryKeepsTheOpaqueSearchLayout() {
         composeRule.setContent {
             ZenStreamTheme {
@@ -127,6 +153,7 @@ class SearchOverlayTest {
         field.performTextInput("du")
         assertTrue(source.queries.isEmpty())
         field.performImeAction()
+        field.assertIsNotFocused()
         composeRule.waitUntil(5_000) { source.queries == listOf("du") }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -243,7 +270,7 @@ class SearchOverlayTest {
     }
 
     @Test
-    fun activeQueryThresholdMatchesTheOverlayScrimContract() {
+    fun activeQueryThresholdMatchesTheSearchContract() {
         assertFalse(isSearchQueryActive(""))
         assertFalse(isSearchQueryActive(" d "))
         assertTrue(isSearchQueryActive(" du "))

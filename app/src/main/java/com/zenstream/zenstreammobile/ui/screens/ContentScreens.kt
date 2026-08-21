@@ -66,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.LocalFocusManager
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -388,6 +389,7 @@ fun SearchOverlayScreen(
     var submitted by remember { mutableStateOf(false) }
     var draftQuery by remember { mutableStateOf("") }
     val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
     val bottomBarVisibility =
         remember(density) {
@@ -444,8 +446,10 @@ fun SearchOverlayScreen(
             val submitSearch = {
                 val normalized = effectiveQuery.trim()
                 if (submitted) {
+                    focusManager.clearFocus()
                     vm.retry()
                 } else if (isSearchQueryActive(normalized)) {
+                    focusManager.clearFocus()
                     draftQuery = normalized
                     submitted = true
                     vm.updateQuery(normalized)
@@ -698,12 +702,7 @@ private fun SearchField(
                     )
                 }
         },
-        placeholder =
-            if (compact) {
-                null
-            } else {
-                { Text(stringResource(R.string.search_placeholder)) }
-            },
+        placeholder = { Text(stringResource(R.string.search_placeholder)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
