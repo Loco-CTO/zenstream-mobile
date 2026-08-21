@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -110,6 +111,25 @@ class ContentScreensTest {
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
         }
+    }
+
+    @Test
+    fun mediaCardsDoNotShowFollowAction() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                MediaCard(
+                    item = MediaItem("movie", "Movie", type = "Movie", following = true),
+                    session = session,
+                    wide = false,
+                    onClick = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.unfollow))
+            .assertDoesNotExist()
     }
 
     @Test

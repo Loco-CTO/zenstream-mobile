@@ -151,9 +151,6 @@ fun DetailScreen(
                     onTogglePlayed = vm::togglePlayed,
                     onToggleFavorite = vm::toggleFavorite,
                     onToggleFollowing = vm::toggleFollowing,
-                    onToggleFollowingForItem = { item, following ->
-                        repository.setFollowing(session, item.id, following)
-                    },
                     onToggleSeasonPlayed = vm::toggleSeasonPlayed,
                     onToggleSeasonFavorite = vm::toggleSeasonFavorite,
                     trackSource = state.trackSource,
@@ -181,7 +178,6 @@ internal fun DetailContent(
     onTogglePlayed: () -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleFollowing: () -> Unit = {},
-    onToggleFollowingForItem: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
     onToggleSeasonPlayed: (String) -> Unit = {},
     onToggleSeasonFavorite: (String) -> Unit = {},
     trackSource: MediaSource? = null,
@@ -278,7 +274,6 @@ internal fun DetailContent(
                                 session,
                                 wide = false,
                                 onClick = onOpenItem,
-                                onToggleFollowing = onToggleFollowingForItem,
                             )
                         }
                     }
