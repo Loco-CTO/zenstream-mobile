@@ -104,9 +104,14 @@ class CalendarScreenTest {
         composeRule
             .onNodeWithContentDescription("Saturday, August 22, 2026")
             .performClick()
-        val emptyDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.US).format(LocalDate.of(2026, 8, 22))
+        val emptyDate =
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+                .withLocale(Locale.US)
+                .format(LocalDate.of(2026, 8, 22))
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.calendar_empty, emptyDate)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.calendar_empty, emptyDate))
+            .assertIsDisplayed()
     }
 
     @Test
