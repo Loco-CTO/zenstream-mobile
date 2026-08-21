@@ -99,7 +99,7 @@ class SessionStore(
         dataStore.data
             .map { value ->
                 runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }
-                    .getOrDefault(PlayerEngine.MEDIA3)
+                    .getOrDefault(PlayerEngine.MPV)
             }
             .distinctUntilChanged()
 

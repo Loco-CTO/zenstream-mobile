@@ -21,7 +21,7 @@ data class SettingsUiState(
     val interfaceLocaleMode: InterfaceLocaleMode = InterfaceLocaleMode.Automatic,
     val interfaceLocaleSaving: Boolean = false,
     val interfaceLocaleSaveError: Boolean = false,
-    val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
+    val playerEngine: PlayerEngine = PlayerEngine.MPV,
     val showDebugIcon: Boolean = false,
     val autoplayNextEpisode: Boolean = true,
     val checkForUpdatesOnStartup: Boolean = true,

@@ -130,7 +130,7 @@ data class PlaybackSessionStatus(
 )
 
 data class PlaybackOptions(
-    val engine: PlayerEngine = PlayerEngine.MEDIA3,
+    val engine: PlayerEngine = PlayerEngine.MPV,
     val maxStreamingBitrate: Int? = null,
     val startPositionSeconds: Double = 0.0,
     val sourceId: String? = null,

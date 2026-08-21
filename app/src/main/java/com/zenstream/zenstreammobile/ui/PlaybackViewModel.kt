@@ -49,7 +49,7 @@ data class PlaybackUiState(
     val itemName: String = "",
     val itemId: String = "",
     val playback: PlaybackData? = null,
-    val engineType: PlayerEngine = PlayerEngine.MEDIA3,
+    val engineType: PlayerEngine = PlayerEngine.MPV,
     val showDebugIcon: Boolean = false,
     val autoplayNextEpisode: Boolean = true,
     val watchHistoryEnabled: Boolean = true,
