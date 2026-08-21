@@ -83,6 +83,27 @@ class MyPageScreenTest {
     }
 
     @Test
+    fun profileSettingsProvidesBackNavigation() {
+        var clicked = false
+        val session = AuthSession("https://server", "token", "user-1", "Miyu")
+        composeRule.setContent {
+            ZenStreamTheme {
+                ProfileSettingsPage(
+                    session = session,
+                    avatarError = null,
+                    onBack = { clicked = true },
+                    onEditAvatar = {},
+                    onChangePassword = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
+        composeRule.runOnIdle { assertTrue(clicked) }
+    }
+
+    @Test
     fun avatarActionSheetOnlyOffersUploadWithoutAnAvatar() {
         var uploaded = false
         var deleted = false
