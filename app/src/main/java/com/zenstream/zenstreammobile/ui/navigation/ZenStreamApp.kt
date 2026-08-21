@@ -581,6 +581,13 @@ internal fun MainTopBar(
             )
         },
         actions = {
+            if (syncplay != null && session != null) {
+                SyncplayGroupMenu(
+                    manager = syncplay,
+                    session = session,
+                    onReturnToView = onReturnToView,
+                )
+            }
             Box {
                 IconButton(onClick = onNotifications) {
                     Icon(
@@ -612,13 +619,6 @@ internal fun MainTopBar(
                         contentDescription = stringResource(R.string.search),
                     )
                 }
-            }
-            if (syncplay != null && session != null) {
-                SyncplayGroupMenu(
-                    manager = syncplay,
-                    session = session,
-                    onReturnToView = onReturnToView,
-                )
             }
         },
         colors =
