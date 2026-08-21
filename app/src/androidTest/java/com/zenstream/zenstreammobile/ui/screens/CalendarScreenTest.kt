@@ -15,6 +15,8 @@ import com.zenstream.zenstreammobile.ui.CalendarUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -102,7 +104,9 @@ class CalendarScreenTest {
         composeRule
             .onNodeWithContentDescription("Saturday, August 22, 2026")
             .performClick()
-        composeRule.onNodeWithText("No releases for Aug 22, 2026").assertIsDisplayed()
+        val emptyDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.US).format(LocalDate.of(2026, 8, 22))
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.calendar_empty, emptyDate)).assertIsDisplayed()
     }
 
     @Test
