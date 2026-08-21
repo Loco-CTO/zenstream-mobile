@@ -80,6 +80,7 @@ fun MyPageScreen(
     onPasswordChanged: () -> Unit = {},
     onOpenItem: (String) -> Unit = {},
     onOpenNotifications: () -> Unit = {},
+    navigationResetKey: Int = 0,
     onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
@@ -107,6 +108,21 @@ fun MyPageScreen(
         },
         onScrollabilityChanged = onScrollabilityChanged,
     )
+
+    LaunchedEffect(navigationResetKey) {
+        if (navigationResetKey == 0) return@LaunchedEffect
+        avatarActionsOpen = false
+        editorOpen = false
+        deleteConfirmationOpen = false
+        removingAvatar = false
+        avatarError = null
+        settingsSection = null
+        profileOpen = false
+        calendarOpen = false
+        passwordEditorOpen = false
+        passwordChangeSucceeded = false
+        listState.scrollToItem(0)
+    }
 
     BackHandler(
         enabled = calendarOpen || settingsSection != null || profileOpen || passwordEditorOpen

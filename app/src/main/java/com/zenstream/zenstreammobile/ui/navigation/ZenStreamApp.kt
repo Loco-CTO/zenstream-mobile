@@ -257,6 +257,8 @@ private fun MainScaffold(
     var bottomBarVisible by remember { mutableStateOf(true) }
     var topBarVisible by remember { mutableStateOf(true) }
     var contentScrollable by remember { mutableStateOf(false) }
+    var myPageNavigationResetKey by remember { mutableStateOf(0) }
+    var lastMainRoute by remember { mutableStateOf(mainRoute) }
     val onContentScrollabilityChanged: (Boolean) -> Unit =
         remember(bottomBarVisibility, topBarVisibility) {
             { isScrollable ->
@@ -292,6 +294,10 @@ private fun MainScaffold(
     }
 
     LaunchedEffect(mainRoute) {
+        if (lastMainRoute == MYPAGE && mainRoute != MYPAGE) {
+            myPageNavigationResetKey += 1
+        }
+        lastMainRoute = mainRoute
         contentScrollable = false
         bottomBarVisible = bottomBarVisibility.resetForRoute()
         topBarVisible = topBarVisibility.resetForRoute()
@@ -350,7 +356,7 @@ private fun MainScaffold(
                             .navigationBarsPadding()
                 ) {
                     AnimatedVisibility(
-                        visible = bottomBarVisible,
+                        visible = mainRoute == MYPAGE || bottomBarVisible,
                         enter =
                             expandVertically(expandFrom = Alignment.Bottom) +
                                 slideInVertically(initialOffsetY = { it }) +
@@ -364,6 +370,9 @@ private fun MainScaffold(
                             currentRoute = mainRoute,
                             session = session,
                             onDestinationClick = { route ->
+                                if (mainRoute == MYPAGE && route == MYPAGE) {
+                                    myPageNavigationResetKey += 1
+                                }
                                 navigateToMainDestination(navController, route)
                             },
                         )
@@ -439,6 +448,7 @@ private fun MainScaffold(
                         onOpenNotifications = {
                             navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
                         },
+                        navigationResetKey = myPageNavigationResetKey,
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
