@@ -45,6 +45,21 @@ class MyPageSettingsTest {
     }
 
     @Test
+    fun calendarEntryUsesTheMyPageRowPatternAndOpensTheCalendar() {
+        var opened = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageCalendarEntry(onOpen = { opened = true })
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.calendar)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.calendar)).performClick()
+        composeRule.runOnIdle { assertTrue(opened) }
+    }
+
+    @Test
     fun settingsFooterShowsVersionAndLogsOut() {
         var loggedOut = false
         composeRule.setContent {
