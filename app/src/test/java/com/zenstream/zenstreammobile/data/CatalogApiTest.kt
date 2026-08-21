@@ -23,20 +23,21 @@ class CatalogApiTest {
                 JSONObject()
                     .put(
                         "items",
-                        JSONArray().put(
-                            JSONObject()
-                                .put("id", "notification-1")
-                                .put("createdAt", "2026-08-21T00:00:00Z")
-                                .put(
-                                    "thumbnail",
-                                    JSONObject()
-                                        .put(
-                                            "url",
-                                            "/api/catalog/items/episode-1/images/Primary?language=en",
-                                        )
-                                        .put("blurHash", "LEHV6nWB2yk8pyo0adR*.7kCMdnj"),
-                                ),
-                        ),
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "notification-1")
+                                    .put("createdAt", "2026-08-21T00:00:00Z")
+                                    .put(
+                                        "thumbnail",
+                                        JSONObject()
+                                            .put(
+                                                "url",
+                                                "/api/catalog/items/episode-1/images/Primary?language=en",
+                                            )
+                                            .put("blurHash", "LEHV6nWB2yk8pyo0adR*.7kCMdnj"),
+                                    )
+                            ),
                     )
             )
 
