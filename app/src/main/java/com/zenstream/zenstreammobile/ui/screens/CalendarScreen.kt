@@ -97,6 +97,7 @@ internal fun CalendarScreen(
         )
         CalendarContent(
             state = state,
+            modifier = Modifier.weight(1f),
             locale = locale,
             zone = zone,
             onRefresh = viewModel::refresh,
@@ -114,6 +115,7 @@ internal fun CalendarScreen(
 @Composable
 internal fun CalendarContent(
     state: CalendarUiState,
+    modifier: Modifier = Modifier,
     locale: Locale = LocalLocale.current.platformLocale,
     zone: ZoneId = ZoneId.systemDefault(),
     onRefresh: () -> Unit = {},
@@ -138,7 +140,7 @@ internal fun CalendarContent(
     PullToRefreshLayout(
         isRefreshing = state.loading && state.events.isNotEmpty(),
         onRefresh = onRefresh,
-        modifier = Modifier.weight(1f),
+        modifier = modifier,
     ) {
         Column(Modifier.fillMaxSize()) {
             CalendarToolbar(
