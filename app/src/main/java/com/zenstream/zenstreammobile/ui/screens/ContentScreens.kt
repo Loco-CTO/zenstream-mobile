@@ -65,6 +65,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -379,10 +381,13 @@ fun SearchOverlayScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     var submitted by remember { mutableStateOf(false) }
     var draftQuery by remember { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
     val effectiveQuery = if (submitted) state.query else draftQuery
     val activeSearch = isSearchQueryActive(effectiveQuery)
     val scrimColor =
         if (activeSearch) MaterialTheme.colorScheme.background else Color.Black.copy(alpha = .52f)
+
+    LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
 
     Box(
         modifier =
@@ -449,7 +454,7 @@ fun SearchOverlayScreen(
                         }
                     },
                     onClear = { draftQuery = "" },
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(16.dp).focusRequester(searchFocusRequester),
                 )
             }
         }

@@ -342,7 +342,7 @@ private fun MainScaffold(
                             syncplay = syncplay,
                             session = session,
                             showSearchAction =
-                                !searchOverlayOpen && shouldShowMainSearchAction(mainRoute),
+                                shouldShowMainSearchAction(mainRoute),
                             onSearch = { navigateToSearch(navController) },
                             unreadCount = notificationsState.unreadCount,
                             onNotifications = {

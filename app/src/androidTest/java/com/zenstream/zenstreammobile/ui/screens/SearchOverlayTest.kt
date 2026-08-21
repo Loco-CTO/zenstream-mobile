@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -33,6 +34,22 @@ class SearchOverlayTest {
     @get:Rule val composeRule = createComposeRule()
 
     private val session = AuthSession("https://example.test", "token", "user", "Test")
+
+    @Test
+    fun openingOverlayFocusesTheSearchField() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = FakeSearchDataSource { emptyList() },
+                    session = session,
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.onNode(hasSetTextAction()).assertIsFocused()
+    }
 
     @Test
     fun overlayKeepsUnderlyingContentAndDismissesOutsideTheDialog() {
