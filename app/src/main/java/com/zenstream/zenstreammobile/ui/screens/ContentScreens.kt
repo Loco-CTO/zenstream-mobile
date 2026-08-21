@@ -689,6 +689,12 @@ private fun SearchField(
                     )
                 }
             },
+        prefix =
+            if (compact) {
+                { Spacer(Modifier.width(4.dp)) }
+            } else {
+                null
+            },
         trailingIcon = {
             if (value.isNotEmpty())
                 IconButton(onClick = onClear) {
@@ -721,12 +727,6 @@ private fun SearchField(
                     disabledContainerColor = Color.Transparent,
                     errorContainerColor = Color.Transparent,
                 )
-            },
-        contentPadding =
-            if (compact) {
-                PaddingValues(start = 20.dp, top = 0.dp, end = 16.dp, bottom = 0.dp)
-            } else {
-                OutlinedTextFieldDefaults.contentPadding()
             },
         shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth().then(modifier),
