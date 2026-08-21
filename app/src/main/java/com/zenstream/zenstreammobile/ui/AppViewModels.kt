@@ -106,6 +106,7 @@ class AppViewModel(
                     runCatching { repository.refreshCurrentAccount() }
                 }
                 runCatching { repository.syncInterfaceLocale(session) }
+                runCatching { repository.loadWatchHistoryPreference() }
             }
         }
         viewModelScope.launch {

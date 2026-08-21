@@ -117,7 +117,9 @@ interface SettingsDataSource {
     val interfaceLocaleMode: Flow<InterfaceLocaleMode>
     val playerEngine: Flow<PlayerEngine>
     val showDebugIcon: Flow<Boolean>
+    val autoplayNextEpisode: Flow<Boolean>
     val checkForUpdatesOnStartup: Flow<Boolean>
+    val watchHistoryEnabled: Flow<Boolean>
 
     suspend fun loadMetadataPreference(): MetadataPreference
 
@@ -129,7 +131,15 @@ interface SettingsDataSource {
 
     suspend fun saveShowDebugIcon(enabled: Boolean)
 
+    suspend fun saveAutoplayNextEpisode(enabled: Boolean)
+
     suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean)
+
+    suspend fun loadWatchHistoryPreference(): Boolean
+
+    suspend fun saveWatchHistoryPreference(enabled: Boolean): Boolean
+
+    suspend fun clearWatchHistory()
 
     suspend fun loadSubtitleStyle(): SubtitleStyle
 
@@ -178,7 +188,9 @@ class CatalogRepository(
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     override val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
     override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
+    override val autoplayNextEpisode: Flow<Boolean> = sessionStore.autoplayNextEpisode
     override val checkForUpdatesOnStartup: Flow<Boolean> = sessionStore.checkForUpdatesOnStartup
+    override val watchHistoryEnabled: Flow<Boolean> = sessionStore.watchHistoryEnabled
 
     suspend fun saveServerUrl(value: String) = sessionStore.saveServerUrl(normalizeServerUrl(value))
 
@@ -556,19 +568,77 @@ class CatalogRepository(
     override suspend fun saveShowDebugIcon(enabled: Boolean) =
         sessionStore.saveShowDebugIcon(enabled)
 
+    override suspend fun saveAutoplayNextEpisode(enabled: Boolean) =
+        sessionStore.saveAutoplayNextEpisode(enabled)
+
     override suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) =
         sessionStore.saveCheckForUpdatesOnStartup(enabled)
 
     fun syncplayManager(session: AuthSession): SyncplayManager =
         SyncplaySession.manager(session, sessionStore)
 
-    override suspend fun loadSubtitleStyle(): SubtitleStyle =
-        sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
+    override suspend fun loadSubtitleStyle(): SubtitleStyle {
+        val local = sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
+        val current = session.first() ?: return local
+        return runCatching {
+                authenticatedOrchestratorRequest(current) {
+                    orchestratorApi.fetchSubtitlePreference(current.serverUrl, current.token)
+                }
+            }
+            .getOrNull()
+            ?.let { remote ->
+                remote.copy(bottomSpacing = local.bottomSpacing).also {
+                    sessionStore.cacheSubtitleStyle(it)
+                }
+            } ?: local
+    }
 
     override suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle {
         val normalized = normalizeSubtitleStyle(style)
-        sessionStore.cacheSubtitleStyle(normalized)
-        return normalized
+        val current = session.first()
+        val saved = current?.let {
+            runCatching {
+                    authenticatedOrchestratorRequest(it) {
+                        orchestratorApi.setSubtitlePreference(
+                            it.serverUrl,
+                            it.token,
+                            normalized,
+                        )
+                    }
+                }
+                .getOrNull()
+        }
+        val result = saved?.copy(bottomSpacing = normalized.bottomSpacing) ?: normalized
+        sessionStore.cacheSubtitleStyle(result)
+        return result
+    }
+
+    override suspend fun loadWatchHistoryPreference(): Boolean {
+        val current = session.first() ?: error("Authentication required")
+        return authenticatedOrchestratorRequest(current) {
+                orchestratorApi.fetchWatchHistoryPreference(current.serverUrl, current.token)
+            }
+            .also { sessionStore.saveWatchHistoryEnabled(it) }
+    }
+
+    override suspend fun saveWatchHistoryPreference(enabled: Boolean): Boolean {
+        val current = session.first() ?: error("Authentication required")
+        return authenticatedOrchestratorRequest(current) {
+                orchestratorApi.setWatchHistoryPreference(
+                    current.serverUrl,
+                    current.token,
+                    enabled,
+                )
+            }
+            .also { sessionStore.saveWatchHistoryEnabled(it) }
+    }
+
+    override suspend fun clearWatchHistory() {
+        val current = session.first() ?: error("Authentication required")
+        authenticatedOrchestratorRequest(current) {
+            orchestratorApi.clearWatchHistory(current.serverUrl, current.token)
+        }
+        invalidateCatalogState()
     }
 
     override suspend fun loadPlaybackPreference(): PlaybackPreference =

@@ -149,6 +149,8 @@
     <string name="player_engine_mpv">MPV</string>
     <string name="player_show_debug_icon">&#x30D7;&#x30EC;&#x30FC;&#x30E4;&#x30FC;&#x306B;&#x30C7;&#x30D0;&#x30C3;&#x30B0;&#x30A2;&#x30A4;&#x30B3;&#x30F3;&#x3092;&#x8868;&#x793A;</string>
     <string name="player_show_debug_icon_description">&#x30D7;&#x30EC;&#x30FC;&#x30E4;&#x30FC;&#x64CD;&#x4F5C;&#x306B;&#x518D;&#x751F;&#x8A3A;&#x65AD;&#x3092;&#x8868;&#x793A;&#x3057;&#x307E;&#x3059;&#x3002;</string>
+    <string name="autoplay_next_episode">次のエピソードを自動再生</string>
+    <string name="autoplay_next_episode_description">エピソード終了時に次のエピソードを自動で開始します。</string>
     <string name="player_debug">&#x518D;&#x751F;&#x8A3A;&#x65AD;</string>
     <string name="player_debug_mode">&#x30E2;&#x30FC;&#x30C9;</string>
     <string name="player_debug_session">&#x30BB;&#x30C3;&#x30B7;&#x30E7;&#x30F3;</string>
@@ -220,6 +222,17 @@
     <string name="subtitle_color_saturation_value">彩度と明るさ</string>
     <string name="done">完了</string>
     <string name="subtitle_save_failed">字幕設定を保存できませんでした。</string>
+    <string name="privacy_group">プライバシーとデータ</string>
+    <string name="privacy_settings_summary">視聴履歴とアカウントデータ</string>
+    <string name="watch_history">視聴履歴</string>
+    <string name="watch_history_description">再生位置、視聴済み状態、再生回数をアカウントに保存します。</string>
+    <string name="watch_history_save_failed">視聴履歴の設定を保存できませんでした。</string>
+    <string name="clear">消去</string>
+    <string name="clear_watch_history">視聴履歴を消去</string>
+    <string name="clear_watch_history_description">再生位置、視聴済み状態、再生回数、視聴日時を完全に削除します。この操作は元に戻せません。</string>
+    <string name="clear_watch_history_title">視聴履歴を消去しますか？</string>
+    <string name="clear_watch_history_confirm">視聴履歴を消去</string>
+    <string name="clear_watch_history_failed">視聴履歴を消去できませんでした。もう一度お試しください。</string>
     <string name="detail_title">詳細</string>
     <string name="detail_load_failed">このタイトルを読み込めませんでした。</string>
     <string name="detail_action_failed">このタイトルを更新できませんでした。</string>

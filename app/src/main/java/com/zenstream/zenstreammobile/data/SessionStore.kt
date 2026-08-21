@@ -65,7 +65,9 @@ class SessionStore(
         val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
+        val autoplayNextEpisode = booleanPreferencesKey("autoplay_next_episode")
         val checkForUpdatesOnStartup = booleanPreferencesKey("check_for_updates_on_startup")
+        val watchHistoryEnabled = booleanPreferencesKey("watch_history_enabled")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
@@ -104,8 +106,14 @@ class SessionStore(
     val showDebugIcon: Flow<Boolean> =
         dataStore.data.map { it[Keys.showDebugIcon] ?: false }.distinctUntilChanged()
 
+    val autoplayNextEpisode: Flow<Boolean> =
+        dataStore.data.map { it[Keys.autoplayNextEpisode] ?: true }.distinctUntilChanged()
+
     val checkForUpdatesOnStartup: Flow<Boolean> =
         dataStore.data.map { it[Keys.checkForUpdatesOnStartup] ?: true }.distinctUntilChanged()
+
+    val watchHistoryEnabled: Flow<Boolean> =
+        dataStore.data.map { it[Keys.watchHistoryEnabled] ?: true }.distinctUntilChanged()
 
     val session: Flow<AuthSession?> =
         dataStore.data
@@ -195,8 +203,16 @@ class SessionStore(
         dataStore.edit { it[Keys.showDebugIcon] = enabled }
     }
 
+    suspend fun saveAutoplayNextEpisode(enabled: Boolean) {
+        dataStore.edit { it[Keys.autoplayNextEpisode] = enabled }
+    }
+
     suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {
         dataStore.edit { it[Keys.checkForUpdatesOnStartup] = enabled }
+    }
+
+    suspend fun saveWatchHistoryEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.watchHistoryEnabled] = enabled }
     }
 
     suspend fun cacheSubtitleStyle(style: SubtitleStyle) {
@@ -262,6 +278,7 @@ class SessionStore(
             it.remove(Keys.avatarVersion)
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
+            it.remove(Keys.watchHistoryEnabled)
         }
     }
 
@@ -276,6 +293,7 @@ class SessionStore(
             it.remove(Keys.avatarVersion)
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
+            it.remove(Keys.watchHistoryEnabled)
             it.remove(Keys.librarySorts)
         }
     }

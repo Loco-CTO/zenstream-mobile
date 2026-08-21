@@ -51,6 +51,8 @@ data class PlaybackUiState(
     val playback: PlaybackData? = null,
     val engineType: PlayerEngine = PlayerEngine.MEDIA3,
     val showDebugIcon: Boolean = false,
+    val autoplayNextEpisode: Boolean = true,
+    val watchHistoryEnabled: Boolean = true,
     val engine: EngineState = EngineState(),
     val selectedAudio: Int? = null,
     val selectedSubtitle: Int? = null,
@@ -192,11 +194,17 @@ class PlaybackViewModel(
         subtitleSelectionInitialized = hasInitialSubtitleSelection
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
+            val autoplayNextEpisode = repository.autoplayNextEpisode.first()
+            val watchHistoryEnabled =
+                runCatching { repository.loadWatchHistoryPreference() }
+                    .getOrElse { repository.watchHistoryEnabled.first() }
             val subtitleStyle = repository.loadSubtitleStyle()
             playbackPreference = runCatching { repository.loadPlaybackPreference() }.getOrNull()
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
+                    autoplayNextEpisode = autoplayNextEpisode,
+                    watchHistoryEnabled = watchHistoryEnabled,
                     subtitleStyle = subtitleStyle,
                     selectedSubtitle = initialSubtitleStreamIndex,
                 )
@@ -218,6 +226,16 @@ class PlaybackViewModel(
         viewModelScope.launch {
             repository.showDebugIcon.collectLatest { enabled ->
                 _uiState.value = _uiState.value.copy(showDebugIcon = enabled)
+            }
+        }
+        viewModelScope.launch {
+            repository.autoplayNextEpisode.collectLatest { enabled ->
+                _uiState.value = _uiState.value.copy(autoplayNextEpisode = enabled)
+            }
+        }
+        viewModelScope.launch {
+            repository.watchHistoryEnabled.collectLatest { enabled ->
+                _uiState.value = _uiState.value.copy(watchHistoryEnabled = enabled)
             }
         }
     }
@@ -275,6 +293,7 @@ class PlaybackViewModel(
     }
 
     private fun clearPlayedOnPlaybackStart(state: EngineState) {
+        if (!_uiState.value.watchHistoryEnabled) return
         val playback = _uiState.value.playback ?: return
         if (
             !shouldClearPlayedOnPlaybackStart(
@@ -649,6 +668,7 @@ class PlaybackViewModel(
         snapshot: PlaybackProgressSnapshot?,
         requireCurrentGeneration: Boolean = true,
     ) {
+        if (!_uiState.value.watchHistoryEnabled) return
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
         runCatching {
@@ -817,6 +837,10 @@ class PlaybackViewModel(
 
     private fun advanceAfterEpisodeEnd() {
         val nextEpisode = _uiState.value.nextEpisode
+        if (nextEpisode != null && !_uiState.value.autoplayNextEpisode) {
+            pendingCompletionGeneration = null
+            return
+        }
         when (
             episodeCompletionAction(
                 episodeNeighborsLoaded = _uiState.value.episodeNeighborsLoaded,
@@ -958,7 +982,9 @@ class PlaybackViewModel(
         subtitleSelectionInitialized = true
         _uiState.value =
             _uiState.value.copy(selectedSubtitle = streamIndex, subtitleCues = emptyList())
-        if (streamIndex != null) loadSubtitle(playbackGeneration, requestGeneration)
+        if (streamIndex != null) {
+            loadSubtitle(playbackGeneration, requestGeneration)
+        }
     }
 
     private fun loadSubtitle(loadGeneration: Long, requestGeneration: Long) {
@@ -1002,7 +1028,8 @@ class PlaybackViewModel(
     }
 
     fun updateSubtitleStyle(change: SubtitleStyle.() -> SubtitleStyle) {
-        val next = change(_uiState.value.subtitleStyle)
+        val previous = _uiState.value.subtitleStyle
+        val next = change(previous)
         _uiState.value = _uiState.value.copy(subtitleStyle = next)
         viewModelScope.launch { repository.saveSubtitleStyle(next) }
     }

@@ -132,6 +132,21 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun autoplayAndWatchHistoryPreferencesAreReflectedInState() = runTest {
+        val source = FakeSettingsDataSource()
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        viewModel.setAutoplayNextEpisode(false)
+        viewModel.setWatchHistoryEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.autoplayNextEpisode)
+        assertFalse(viewModel.uiState.value.watchHistoryEnabled)
+        assertFalse(viewModel.uiState.value.watchHistorySaving)
+    }
+
+    @Test
     fun subtitleBottomSpacingUpdatesAndUsesTheExistingSavePath() = runTest {
         val saved = mutableListOf<SubtitleStyle>()
         val source =
@@ -156,7 +171,9 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override val interfaceLocaleMode = MutableStateFlow(InterfaceLocaleMode.Automatic)
     override val playerEngine = MutableStateFlow(PlayerEngine.MEDIA3)
     override val showDebugIcon = MutableStateFlow(false)
+    override val autoplayNextEpisode = MutableStateFlow(true)
     override val checkForUpdatesOnStartup = MutableStateFlow(true)
+    override val watchHistoryEnabled = MutableStateFlow(true)
     var metadataPreference = MetadataPreference(listOf("en", "ja"), null, "en")
     var localeSave: suspend (InterfaceLocaleMode) -> InterfaceLocalePreference = { mode ->
         interfaceLocaleMode.value = mode
@@ -183,9 +200,22 @@ private class FakeSettingsDataSource : SettingsDataSource {
         showDebugIcon.value = enabled
     }
 
+    override suspend fun saveAutoplayNextEpisode(enabled: Boolean) {
+        autoplayNextEpisode.value = enabled
+    }
+
     override suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {
         checkForUpdatesOnStartup.value = enabled
     }
+
+    override suspend fun loadWatchHistoryPreference() = watchHistoryEnabled.value
+
+    override suspend fun saveWatchHistoryPreference(enabled: Boolean): Boolean {
+        watchHistoryEnabled.value = enabled
+        return enabled
+    }
+
+    override suspend fun clearWatchHistory() = Unit
 
     override suspend fun loadSubtitleStyle() = SubtitleStyle()
 

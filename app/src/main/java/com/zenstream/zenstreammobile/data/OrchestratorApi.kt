@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.data
 
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -144,6 +145,72 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                 )
             )
         }
+
+    suspend fun fetchSubtitlePreference(
+        orchestratorUrl: String,
+        token: String,
+    ): SubtitleStyle =
+        withContext(Dispatchers.IO) {
+            subtitleStyleFromJson(
+                authenticatedJson(orchestratorUrl, token, "/api/preferences/subtitles").toString()
+            )
+        }
+
+    suspend fun setSubtitlePreference(
+        orchestratorUrl: String,
+        token: String,
+        style: SubtitleStyle,
+    ): SubtitleStyle =
+        withContext(Dispatchers.IO) {
+            subtitleStyleFromJson(
+                authenticatedJson(
+                        orchestratorUrl,
+                        token,
+                        "/api/preferences/subtitles",
+                        "PATCH",
+                        subtitleStyleToJson(style),
+                    )
+                    .toString()
+            )
+        }
+
+    suspend fun fetchWatchHistoryPreference(
+        orchestratorUrl: String,
+        token: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            val value = authenticatedJson(orchestratorUrl, token, "/api/preferences/watch-history")
+            check(value.has("enabled") && !value.isNull("enabled")) {
+                "Orchestrator returned an invalid watch history preference"
+            }
+            value.optBoolean("enabled")
+        }
+
+    suspend fun setWatchHistoryPreference(
+        orchestratorUrl: String,
+        token: String,
+        enabled: Boolean,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            val value =
+                authenticatedJson(
+                    orchestratorUrl,
+                    token,
+                    "/api/preferences/watch-history",
+                    "PATCH",
+                    JSONObject().put("enabled", enabled).toString(),
+                )
+            check(value.has("enabled") && !value.isNull("enabled")) {
+                "Orchestrator returned an invalid watch history preference"
+            }
+            value.optBoolean("enabled")
+        }
+
+    suspend fun clearWatchHistory(orchestratorUrl: String, token: String) {
+        withContext(Dispatchers.IO) {
+            authenticatedJson(orchestratorUrl, token, "/api/account/watch-history", "DELETE")
+        }
+    }
 
     private fun authenticatedJson(
         serverUrl: String,

@@ -23,7 +23,11 @@ data class SettingsUiState(
     val interfaceLocaleSaveError: Boolean = false,
     val playerEngine: PlayerEngine = PlayerEngine.MEDIA3,
     val showDebugIcon: Boolean = false,
+    val autoplayNextEpisode: Boolean = true,
     val checkForUpdatesOnStartup: Boolean = true,
+    val watchHistoryEnabled: Boolean = true,
+    val watchHistorySaving: Boolean = false,
+    val watchHistorySaveError: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitleSaveError: Boolean = false,
     val refreshing: Boolean = false,
@@ -45,11 +49,14 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
     private val interfaceLocaleSaveMutex = Mutex()
     private val metadataSaveMutex = Mutex()
     private val playbackSaveMutex = Mutex()
+    private val watchHistorySaveMutex = Mutex()
     private var interfaceLocaleSaveGeneration = 0L
     private var metadataSaveGeneration = 0L
     private var confirmedInterfaceLocaleMode = InterfaceLocaleMode.Automatic
     private var confirmedMetadataLanguage: String? = null
     private var confirmedPlaybackPreference = _uiState.value.playbackPreference
+    private var confirmedWatchHistoryEnabled = true
+    private var watchHistorySaveGeneration = 0L
 
     init {
         viewModelScope.launch {
@@ -71,8 +78,21 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
             }
         }
         viewModelScope.launch {
+            repository.autoplayNextEpisode.collectLatest { enabled ->
+                _uiState.value = _uiState.value.copy(autoplayNextEpisode = enabled)
+            }
+        }
+        viewModelScope.launch {
             repository.checkForUpdatesOnStartup.collectLatest { enabled ->
                 _uiState.value = _uiState.value.copy(checkForUpdatesOnStartup = enabled)
+            }
+        }
+        viewModelScope.launch {
+            repository.watchHistoryEnabled.collectLatest { enabled ->
+                confirmedWatchHistoryEnabled = enabled
+                if (!_uiState.value.watchHistorySaving) {
+                    _uiState.value = _uiState.value.copy(watchHistoryEnabled = enabled)
+                }
             }
         }
         viewModelScope.launch { refreshSettings() }
@@ -89,6 +109,11 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
             .onSuccess {
                 confirmedPlaybackPreference = it
                 _uiState.value = _uiState.value.copy(playbackPreference = it)
+            }
+        runCatching { repository.loadWatchHistoryPreference() }
+            .onSuccess { enabled ->
+                confirmedWatchHistoryEnabled = enabled
+                _uiState.value = _uiState.value.copy(watchHistoryEnabled = enabled)
             }
         val generation = metadataSaveGeneration
         metadataSaveMutex.withLock {
@@ -121,8 +146,51 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
         viewModelScope.launch { repository.saveShowDebugIcon(enabled) }
     }
 
+    fun setAutoplayNextEpisode(enabled: Boolean) {
+        viewModelScope.launch { repository.saveAutoplayNextEpisode(enabled) }
+    }
+
     fun setCheckForUpdatesOnStartup(enabled: Boolean) {
         viewModelScope.launch { repository.saveCheckForUpdatesOnStartup(enabled) }
+    }
+
+    fun setWatchHistoryEnabled(enabled: Boolean) {
+        val generation = ++watchHistorySaveGeneration
+        _uiState.value =
+            _uiState.value.copy(
+                watchHistoryEnabled = enabled,
+                watchHistorySaving = true,
+                watchHistorySaveError = false,
+            )
+        viewModelScope.launch {
+            watchHistorySaveMutex.withLock {
+                if (generation != watchHistorySaveGeneration) return@withLock
+                runCatching { repository.saveWatchHistoryPreference(enabled) }
+                    .onSuccess { saved ->
+                        confirmedWatchHistoryEnabled = saved
+                        if (generation != watchHistorySaveGeneration) return@onSuccess
+                        _uiState.value =
+                            _uiState.value.copy(
+                                watchHistoryEnabled = saved,
+                                watchHistorySaving = false,
+                                watchHistorySaveError = false,
+                            )
+                    }
+                    .onFailure {
+                        if (generation != watchHistorySaveGeneration) return@onFailure
+                        _uiState.value =
+                            _uiState.value.copy(
+                                watchHistoryEnabled = confirmedWatchHistoryEnabled,
+                                watchHistorySaving = false,
+                                watchHistorySaveError = true,
+                            )
+                    }
+            }
+        }
+    }
+
+    suspend fun clearWatchHistory() {
+        repository.clearWatchHistory()
     }
 
     fun updateSubtitle(change: SubtitleStyle.() -> SubtitleStyle) {

@@ -170,6 +170,8 @@
     <string name="player_engine_mpv">MPV</string>
     <string name="player_show_debug_icon">Show debug icon in player</string>
     <string name="player_show_debug_icon_description">Show playback diagnostics in the player controls.</string>
+    <string name="autoplay_next_episode">Autoplay next episode</string>
+    <string name="autoplay_next_episode_description">Start the next episode automatically when this one ends.</string>
     <string name="player_debug">Playback diagnostics</string>
     <string name="player_debug_mode">Mode</string>
     <string name="player_debug_session">Session</string>
@@ -248,6 +250,17 @@
     <string name="subtitle_color_saturation_value">Saturation and brightness</string>
     <string name="done">Done</string>
     <string name="subtitle_save_failed">Subtitle preferences could not be saved.</string>
+    <string name="privacy_group">Privacy &amp; Data</string>
+    <string name="privacy_settings_summary">Watch history and account data</string>
+    <string name="watch_history">Watch history</string>
+    <string name="watch_history_description">Save playback progress, watched status, and play counts to your account.</string>
+    <string name="watch_history_save_failed">Watch history setting could not be saved.</string>
+    <string name="clear">Clear</string>
+    <string name="clear_watch_history">Clear watch history</string>
+    <string name="clear_watch_history_description">This permanently removes your playback progress, watched status, play counts, and watched timestamps. This action is irreversible.</string>
+    <string name="clear_watch_history_title">Clear watch history?</string>
+    <string name="clear_watch_history_confirm">Clear watch history</string>
+    <string name="clear_watch_history_failed">Could not clear watch history. Please try again.</string>
     <string name="detail_title">Details</string>
     <string name="detail_load_failed">Could not load this title.</string>
     <string name="detail_action_failed">Could not update this title.</string>

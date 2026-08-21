@@ -240,7 +240,13 @@ class Media3PlaybackEngine : PlaybackEngine {
         )
         val current = player
         if (current == null) {
-            pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
+            pending =
+                PendingPlayback(
+                    url,
+                    startPositionSeconds,
+                    mimeType,
+                    playWhenReady,
+                )
             return
         }
         pending = null

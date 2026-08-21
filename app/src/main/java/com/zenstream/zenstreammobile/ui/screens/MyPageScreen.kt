@@ -99,6 +99,9 @@ fun MyPageScreen(
     var calendarOpen by remember { mutableStateOf(false) }
     var passwordEditorOpen by remember { mutableStateOf(false) }
     var passwordChangeSucceeded by remember { mutableStateOf(false) }
+    var clearWatchHistoryOpen by remember { mutableStateOf(false) }
+    var clearingWatchHistory by remember { mutableStateOf(false) }
+    var clearWatchHistoryError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
     val listState = rememberLazyListState()
@@ -121,6 +124,9 @@ fun MyPageScreen(
         calendarOpen = false
         passwordEditorOpen = false
         passwordChangeSucceeded = false
+        clearWatchHistoryOpen = false
+        clearingWatchHistory = false
+        clearWatchHistoryError = false
         listState.scrollToItem(0)
     }
 
@@ -269,6 +275,7 @@ fun MyPageScreen(
                                             R.string.appearance_group
                                         MyPageSettingsSection.Player -> R.string.player_group
                                         MyPageSettingsSection.Subtitles -> R.string.subtitles_group
+                                        MyPageSettingsSection.Privacy -> R.string.privacy_group
                                         MyPageSettingsSection.Updates -> R.string.updates_group
                                     }
                                 ),
@@ -284,8 +291,14 @@ fun MyPageScreen(
                             onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
                             onPlayerEngineChange = settingsViewModel::setPlayerEngine,
                             onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                            onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
                             onCheckForUpdatesOnStartupChange =
                                 settingsViewModel::setCheckForUpdatesOnStartup,
+                            onWatchHistoryChange = settingsViewModel::setWatchHistoryEnabled,
+                            onClearWatchHistory = {
+                                clearWatchHistoryError = false
+                                clearWatchHistoryOpen = true
+                            },
                             onSubtitleChange = settingsViewModel::updateSubtitle,
                         )
                     }
@@ -346,6 +359,24 @@ fun MyPageScreen(
             pickedUri = avatarPickerResult,
             onPickImage = onPickAvatar,
             onPickedImageConsumed = onAvatarPickerResultConsumed,
+        )
+    }
+
+    if (clearWatchHistoryOpen) {
+        ClearWatchHistoryDialog(
+            clearing = clearingWatchHistory,
+            error = clearWatchHistoryError,
+            onDismiss = { clearWatchHistoryOpen = false },
+            onConfirm = {
+                clearingWatchHistory = true
+                clearWatchHistoryError = false
+                scope.launch {
+                    runCatching { settingsViewModel.clearWatchHistory() }
+                        .onSuccess { clearWatchHistoryOpen = false }
+                        .onFailure { clearWatchHistoryError = true }
+                    clearingWatchHistory = false
+                }
+            },
         )
     }
 }
