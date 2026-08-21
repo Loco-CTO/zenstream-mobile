@@ -253,9 +253,20 @@ private fun MainScaffold(
                 hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
                 revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
             )
-        }
+    }
     var bottomBarVisible by remember { mutableStateOf(true) }
     var topBarVisible by remember { mutableStateOf(true) }
+    var contentScrollable by remember { mutableStateOf(false) }
+    val onContentScrollabilityChanged: (Boolean) -> Unit =
+        remember(bottomBarVisibility, topBarVisibility) {
+            { isScrollable ->
+                contentScrollable = isScrollable
+                if (!isScrollable) {
+                    bottomBarVisible = bottomBarVisibility.resetForRoute()
+                    topBarVisible = topBarVisibility.resetForRoute()
+                }
+            }
+        }
     val scrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(
@@ -267,11 +278,13 @@ private fun MainScaffold(
                     bottomBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable = contentScrollable,
                     )
                 topBarVisible =
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable = contentScrollable,
                     )
                 return Offset.Zero
             }
@@ -279,6 +292,7 @@ private fun MainScaffold(
     }
 
     LaunchedEffect(mainRoute) {
+        contentScrollable = false
         bottomBarVisible = bottomBarVisibility.resetForRoute()
         topBarVisible = topBarVisibility.resetForRoute()
         if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
@@ -371,6 +385,7 @@ private fun MainScaffold(
                         session,
                         padding,
                         onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
                 dialog(
@@ -394,21 +409,21 @@ private fun MainScaffold(
                 }
                 composable(LIBRARY) {
                     LibraryScreen(
-                        repository,
-                        session,
-                        padding,
-                    ) { item ->
-                        navigateToDetail(navController, item.id)
-                    }
+                        repository = repository,
+                        session = session,
+                        padding = padding,
+                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
                 }
                 composable(FAVORITES) {
                     FavoritesScreen(
-                        repository,
-                        session,
-                        padding,
-                    ) { item ->
-                        navigateToDetail(navController, item.id)
-                    }
+                        repository = repository,
+                        session = session,
+                        padding = padding,
+                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
                 }
                 composable(MYPAGE) {
                     MyPageScreen(
@@ -424,6 +439,7 @@ private fun MainScaffold(
                         onOpenNotifications = {
                             navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
                         },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
                 composable(NOTIFICATIONS) {
@@ -697,11 +713,19 @@ internal class ScrollVisibilityController(
      * Applies only movement consumed by a scrollable child. Unconsumed upward drags are common on
      * empty/short screens and must not hide the chrome.
      */
-    fun onNestedScroll(consumedY: Float, availableY: Float): Boolean =
-        onScroll(
+    fun onNestedScroll(
+        consumedY: Float,
+        availableY: Float,
+        isScrollable: Boolean = true,
+    ): Boolean {
+        if (!isScrollable) {
+            return resetForRoute()
+        }
+        return onScroll(
             deltaY = consumedY,
             atTop = availableY > 0f && consumedY == 0f,
         )
+    }
 
     fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
         if (atTop) {
