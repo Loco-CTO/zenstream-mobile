@@ -769,65 +769,27 @@ internal fun ProfileCard(
         colors =
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(22.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenProfile),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                UserAvatar(
-                    session = session,
-                    userId = session.userId,
-                    username = session.username,
-                    modifier = Modifier.size(104.dp),
-                )
-                ProfileDetails(session, avatarError, Modifier.weight(1f))
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
-            ProfileNavigationRow(onClick = onOpenProfile)
-        }
-    }
-}
-
-@Composable
-private fun ProfileNavigationRow(onClick: () -> Unit) {
-    Row(
-        modifier =
-            Modifier.fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_settings),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.account_settings),
-                style = MaterialTheme.typography.bodyLarge,
+            UserAvatar(
+                session = session,
+                userId = session.userId,
+                username = session.username,
+                modifier = Modifier.size(72.dp),
             )
-            Text(
-                text = stringResource(R.string.account_settings_summary),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+            ProfileDetails(session, avatarError, Modifier.weight(1f))
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
             )
         }
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
     }
 }
 

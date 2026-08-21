@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -30,7 +31,7 @@ class MyPageScreenTest {
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText("M").assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.account_settings)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile)).performClick()
         composeRule.runOnIdle { assertTrue(clicked) }
     }
 

@@ -90,7 +90,6 @@
     <string name="calendar_follow_failed">フォローを更新できませんでした。</string>
     <string name="profile">プロフィール</string>
     <string name="account_settings">アカウント設定</string>
-    <string name="account_settings_summary">アバターとパスワード</string>
     <string name="avatar_description">%1$sのアバター</string>
     <string name="add_avatar">アバターを追加</string>
     <string name="change_avatar">アバターを変更</string>
