@@ -43,7 +43,10 @@ class PlayerEngineTest {
         val failed = EngineState(error = "active playback failed")
 
         assertEquals("active playback failed", media3PlaybackState(failed, Player.STATE_IDLE).error)
-        assertEquals("active playback failed", media3PlaybackState(failed, Player.STATE_ENDED).error)
+        assertEquals(
+            "active playback failed",
+            media3PlaybackState(failed, Player.STATE_ENDED).error,
+        )
     }
 
     @Test
