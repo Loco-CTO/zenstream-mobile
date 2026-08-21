@@ -19,23 +19,23 @@ class MyPageScreenTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun profileFallsBackToInitialAndOffersAddAvatar() {
+    fun profileFallsBackToInitialAndOpensAccountSettings() {
         var clicked = false
         val session = AuthSession("https://server", "token", "user-1", "Miyu")
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(session = session, onEditAvatar = { clicked = true })
+                ProfileCard(session = session, onOpenProfile = { clicked = true })
             }
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText("M").assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.add_avatar)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.account_settings)).performClick()
         composeRule.runOnIdle { assertTrue(clicked) }
     }
 
     @Test
-    fun profileUsesChangeActionWithoutDuplicateDeleteActionWhenAvatarExists() {
+    fun profileSettingsUsesChangeActionWithoutDuplicateDeleteActionWhenAvatarExists() {
         val session =
             AuthSession(
                 "https://server",
@@ -46,7 +46,13 @@ class MyPageScreenTest {
             )
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(session = session, onEditAvatar = {})
+                ProfileSettingsPage(
+                    session = session,
+                    avatarError = null,
+                    onBack = {},
+                    onEditAvatar = {},
+                    onChangePassword = {},
+                )
             }
         }
 
@@ -56,13 +62,15 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun profileOffersChangePasswordAction() {
+    fun profileSettingsOffersChangePasswordAction() {
         var clicked = false
         val session = AuthSession("https://server", "token", "user-1", "Miyu")
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(
+                ProfileSettingsPage(
                     session = session,
+                    avatarError = null,
+                    onBack = {},
                     onEditAvatar = {},
                     onChangePassword = { clicked = true },
                 )
