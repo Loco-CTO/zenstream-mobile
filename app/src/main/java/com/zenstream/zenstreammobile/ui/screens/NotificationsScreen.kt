@@ -48,8 +48,8 @@ import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.ui.NotificationsViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
-import java.time.Instant
 import java.time.ZoneId
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -255,7 +255,11 @@ private fun NotificationRow(
 }
 
 internal fun formatNotificationDateTime(value: String): String {
-    val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return value
+    val instant =
+        runCatching {
+                OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant()
+            }
+            .getOrNull() ?: return value
     return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
         .withLocale(Locale.getDefault())
         .withZone(ZoneId.systemDefault())
