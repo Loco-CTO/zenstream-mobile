@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -638,61 +636,52 @@ internal fun ProfileCard(
     onChangePassword: () -> Unit = {},
     avatarError: String? = null,
 ) {
-    BoxWithConstraints {
-        val compact = maxWidth < 360.dp
-        Card(
-            colors =
-                CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(22.dp),
-            modifier = Modifier.fillMaxWidth(),
+    Card(
+        colors =
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            if (compact) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    ProfileIdentity(session, avatarError)
-                    AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
-                    ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    UserAvatar(
-                        session = session,
-                        userId = session.userId,
-                        username = session.username,
-                        modifier = Modifier.size(96.dp),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        ProfileDetails(session, avatarError)
-                        Spacer(Modifier.height(12.dp))
-                        AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
-                        ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
-                    }
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                UserAvatar(
+                    session = session,
+                    userId = session.userId,
+                    username = session.username,
+                    modifier = Modifier.size(104.dp),
+                )
+                ProfileDetails(session, avatarError, Modifier.weight(1f))
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProfileActionTile(
+                    icon = LucideR.drawable.lucide_ic_image,
+                    label =
+                        stringResource(
+                            if (session.avatarVersion == null) R.string.add_avatar
+                            else R.string.change_avatar
+                        ),
+                    onClick = onEditAvatar,
+                    modifier = Modifier.weight(1f),
+                )
+                ProfileActionTile(
+                    icon = LucideR.drawable.lucide_ic_lock,
+                    label = stringResource(R.string.change_password),
+                    onClick = onChangePassword,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun ProfileIdentity(session: AuthSession, avatarError: String?) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        UserAvatar(
-            session = session,
-            userId = session.userId,
-            username = session.username,
-            modifier = Modifier.size(96.dp),
-        )
-        ProfileDetails(session, avatarError, Modifier.weight(1f))
     }
 }
 
@@ -725,26 +714,45 @@ private fun ProfileDetails(
 }
 
 @Composable
-private fun AvatarButton(
-    onEditAvatar: () -> Unit,
-    modifier: Modifier,
-    session: AuthSession,
-) {
-    OutlinedButton(onClick = onEditAvatar, modifier = modifier) {
-        Text(
-            stringResource(
-                if (session.avatarVersion == null) R.string.add_avatar else R.string.change_avatar
-            )
-        )
-    }
-}
-
-@Composable
-private fun ChangePasswordButton(
+private fun ProfileActionTile(
+    icon: Int,
+    label: String,
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier) {
-        Text(stringResource(R.string.change_password))
+    Surface(
+        modifier = modifier.heightIn(min = 92.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+            )
+        }
     }
 }
