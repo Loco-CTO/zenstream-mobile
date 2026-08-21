@@ -54,9 +54,36 @@ class MyPageSettingsTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.calendar)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.calendar)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).performClick()
         composeRule.runOnIdle { assertTrue(opened) }
+    }
+
+    @Test
+    fun serviceEntriesShowCalendarAndNotificationCenter() {
+        var calendarOpened = false
+        var notificationsOpened = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageServiceEntries(
+                    onOpenCalendar = { calendarOpened = true },
+                    onOpenNotifications = { notificationsOpened = true },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.notification_center))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.notification_center))
+            .performClick()
+        composeRule.runOnIdle {
+            assertTrue(!calendarOpened)
+            assertTrue(notificationsOpened)
+        }
     }
 
     @Test

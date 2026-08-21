@@ -78,6 +78,7 @@ fun MyPageScreen(
     onAvatarPickerResultConsumed: () -> Unit = {},
     onPasswordChanged: () -> Unit = {},
     onOpenItem: (String) -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
         viewModel(
@@ -206,7 +207,17 @@ fun MyPageScreen(
                     )
                 }
                 item {
-                    MyPageCalendarEntry(onOpen = { calendarOpen = true })
+                    Text(
+                        text = stringResource(R.string.services),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
+                item {
+                    MyPageServiceEntries(
+                        onOpenCalendar = { calendarOpen = true },
+                        onOpenNotifications = onOpenNotifications,
+                    )
                 }
                 item {
                     Text(

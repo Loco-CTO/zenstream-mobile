@@ -421,6 +421,9 @@ private fun MainScaffold(
                         avatarPickerResult = avatarPickerResult,
                         onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
                         onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
+                        onOpenNotifications = {
+                            navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                        },
                     )
                 }
                 composable(NOTIFICATIONS) {

@@ -91,9 +91,13 @@
     <string name="profile_description">Profile</string>
     <string name="settings_description">Settings</string>
     <string name="settings">Settings</string>
+    <string name="services">Services</string>
     <string name="my_page">My Page</string>
     <string name="calendar">Calendar</string>
+    <string name="calendar_open">Open calendar</string>
     <string name="calendar_settings_summary">Upcoming releases and air dates</string>
+    <string name="notification_center">Notification center</string>
+    <string name="notification_center_summary">Follow and library updates</string>
     <string name="calendar_previous">Previous week</string>
     <string name="calendar_next">Next week</string>
     <string name="calendar_today">Today</string>
