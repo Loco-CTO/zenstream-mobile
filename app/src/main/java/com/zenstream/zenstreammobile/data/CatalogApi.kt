@@ -6,6 +6,8 @@ import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.CalendarEvent
+import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
@@ -38,6 +40,7 @@ import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
+import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -1022,6 +1025,40 @@ class CatalogApi(
             )
         }
 
+    suspend fun calendar(
+        session: AuthSession,
+        start: Instant,
+        end: Instant,
+    ): CalendarResponse =
+        withContext(Dispatchers.IO) {
+            parseCalendarResponse(
+                requestJson(
+                    session,
+                    "/api/calendar",
+                    query =
+                        mapOf(
+                            "start" to start.toString(),
+                            "end" to end.toString(),
+                        ),
+                )
+            )
+        }
+
+    suspend fun setCalendarFollowing(
+        session: AuthSession,
+        eventId: String,
+        following: Boolean,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                    session,
+                    "/api/calendar/events/${android.net.Uri.encode(eventId)}/follow",
+                    method = "PATCH",
+                    body = JSONObject().put("following", following).toString(),
+                )
+                .optBoolean("following", following)
+        }
+
     suspend fun notifications(
         session: AuthSession,
         limit: Int = 50,
@@ -1271,6 +1308,43 @@ internal fun parseNotificationPage(root: JSONObject): NotificationPage {
         items = items,
         unreadCount = root.optInt("unreadCount", 0).coerceAtLeast(0),
         nextCursor = root.optNullableString("nextCursor"),
+    )
+}
+
+internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
+    val events =
+        jsonArray(root, "events")
+            .mapNotNull { event ->
+                val id = event.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+                CalendarEvent(
+                    id = id,
+                    provider = event.optString("provider"),
+                    libraryId = event.optString("libraryId"),
+                    libraryName = event.optString("libraryName"),
+                    kind = event.optString("kind"),
+                    releaseType = event.optString("releaseType"),
+                    eventAt = event.optString("eventAt"),
+                    eventDate = event.optString("eventDate"),
+                    allDay = event.optBoolean("allDay", false),
+                    seasonNumber = event.optIntOrNull("seasonNumber"),
+                    episodeNumber = event.optIntOrNull("episodeNumber"),
+                    hasFile = event.optBoolean("hasFile", false),
+                    monitored = event.optBoolean("monitored", false),
+                    state = event.optString("state").ifBlank { "future" },
+                    title = event.optNullableString("title"),
+                    seriesTitle = event.optNullableString("seriesTitle"),
+                    catalogItemId = event.optNullableString("catalogItemId"),
+                    catalogSeriesId = event.optNullableString("catalogSeriesId"),
+                    metadataStatus = event.optString("metadataStatus").ifBlank { "future" },
+                    following = event.optBoolean("following", false),
+                    followAvailable = event.optBoolean("followAvailable", false),
+                )
+            }
+            .distinctBy { it.id }
+    return CalendarResponse(
+        start = root.optString("start"),
+        end = root.optString("end"),
+        events = events,
     )
 }
 

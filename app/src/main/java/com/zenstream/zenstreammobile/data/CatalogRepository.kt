@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import android.content.ContentResolver
 import android.net.Uri
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
@@ -19,6 +20,7 @@ import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
+import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +97,22 @@ interface FavoritesDataSource : CatalogRefreshSource {
     suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort)
 }
 
+interface CalendarDataSource : CatalogRefreshSource {
+    override suspend fun clearSession()
+
+    suspend fun calendar(
+        session: AuthSession,
+        start: Instant,
+        end: Instant,
+    ): CalendarResponse
+
+    suspend fun setCalendarFollowing(
+        session: AuthSession,
+        eventId: String,
+        following: Boolean,
+    ): Boolean
+}
+
 interface SettingsDataSource {
     val interfaceLocaleMode: Flow<InterfaceLocaleMode>
     val playerEngine: Flow<PlayerEngine>
@@ -135,7 +153,13 @@ class CatalogRepository(
     private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
-) : HomeDataSource, LibraryDataSource, SearchDataSource, FavoritesDataSource, SettingsDataSource {
+) :
+    HomeDataSource,
+    LibraryDataSource,
+    SearchDataSource,
+    FavoritesDataSource,
+    CalendarDataSource,
+    SettingsDataSource {
 
     suspend fun revokeSession(session: AuthSession) = api.logout(session)
 
@@ -415,6 +439,22 @@ class CatalogRepository(
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
         api.setFollowing(session, itemId, following)
         invalidateCatalogState()
+    }
+
+    override suspend fun calendar(
+        session: AuthSession,
+        start: Instant,
+        end: Instant,
+    ): CalendarResponse = api.calendar(session, start, end)
+
+    override suspend fun setCalendarFollowing(
+        session: AuthSession,
+        eventId: String,
+        following: Boolean,
+    ): Boolean {
+        val result = api.setCalendarFollowing(session, eventId, following)
+        invalidateCatalogState()
+        return result
     }
 
     suspend fun notifications(
