@@ -226,7 +226,6 @@ private fun MainScaffold(
         } else {
             currentRoute
         }
-    val searchOverlayOpen = currentRoute == SEARCH
     val density = LocalDensity.current
     val context = LocalContext.current
     var followedGeneration by remember { mutableStateOf<String?>(null) }
@@ -341,8 +340,7 @@ private fun MainScaffold(
                         MainTopBar(
                             syncplay = syncplay,
                             session = session,
-                            showSearchAction =
-                                shouldShowMainSearchAction(mainRoute),
+                            showSearchAction = shouldShowMainSearchAction(mainRoute),
                             onSearch = { navigateToSearch(navController) },
                             unreadCount = notificationsState.unreadCount,
                             onNotifications = {
