@@ -102,6 +102,18 @@ private const val DETAIL = "detail/{itemId}"
 internal fun shouldShowMainSearchAction(route: String): Boolean =
     route == HOME || route == FAVORITES || route == LIBRARY
 
+internal fun shouldKeepMainBottomBarVisible(route: String): Boolean = route == MYPAGE
+
+internal fun shouldResetMyPageNavigationOnRouteChange(
+    previousRoute: String,
+    currentRoute: String,
+): Boolean = previousRoute == MYPAGE && currentRoute != MYPAGE
+
+internal fun shouldResetMyPageNavigationOnReselection(
+    currentRoute: String,
+    selectedRoute: String,
+): Boolean = currentRoute == MYPAGE && selectedRoute == MYPAGE
+
 @Composable
 fun ZenStreamApp(
     appState: AppUiState,
@@ -294,7 +306,7 @@ private fun MainScaffold(
     }
 
     LaunchedEffect(mainRoute) {
-        if (lastMainRoute == MYPAGE && mainRoute != MYPAGE) {
+        if (shouldResetMyPageNavigationOnRouteChange(lastMainRoute, mainRoute)) {
             myPageNavigationResetKey += 1
         }
         lastMainRoute = mainRoute
@@ -356,7 +368,7 @@ private fun MainScaffold(
                             .navigationBarsPadding()
                 ) {
                     AnimatedVisibility(
-                        visible = mainRoute == MYPAGE || bottomBarVisible,
+                        visible = shouldKeepMainBottomBarVisible(mainRoute) || bottomBarVisible,
                         enter =
                             expandVertically(expandFrom = Alignment.Bottom) +
                                 slideInVertically(initialOffsetY = { it }) +
@@ -370,7 +382,7 @@ private fun MainScaffold(
                             currentRoute = mainRoute,
                             session = session,
                             onDestinationClick = { route ->
-                                if (mainRoute == MYPAGE && route == MYPAGE) {
+                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
                                     myPageNavigationResetKey += 1
                                 }
                                 navigateToMainDestination(navController, route)
