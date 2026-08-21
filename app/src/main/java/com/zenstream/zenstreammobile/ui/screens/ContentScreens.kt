@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -120,6 +121,7 @@ fun HomeScreen(
     session: AuthSession,
     padding: PaddingValues,
     onItemClick: (MediaItem) -> Unit,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val vm: HomeViewModel =
         viewModel(
@@ -127,6 +129,11 @@ fun HomeScreen(
             factory = HomeViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
     when {
         state.error ->
             ErrorState(
@@ -146,6 +153,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(padding),
             ) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 20.dp),
                 ) {
@@ -475,6 +483,7 @@ private fun SearchResultsContent(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val topBarVisibility =
         remember(density) {
             ScrollVisibilityController(
@@ -483,7 +492,7 @@ private fun SearchResultsContent(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember {
+    val topBarScrollConnection = remember(gridState) {
         object : NestedScrollConnection {
             override fun onPostScroll(
                 consumed: Offset,
@@ -494,6 +503,8 @@ private fun SearchResultsContent(
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable =
+                            gridState.canScrollForward || gridState.canScrollBackward,
                     )
                 return Offset.Zero
             }
@@ -502,6 +513,14 @@ private fun SearchResultsContent(
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
+    ObserveScrollability(
+        canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
+        onScrollabilityChanged = { isScrollable ->
+            if (!isScrollable) {
+                topBarVisible = topBarVisibility.resetForRoute()
+            }
+        },
+    )
     Column(modifier.fillMaxSize().padding(padding)) {
         AnimatedVisibility(
             visible = topBarVisible,
@@ -551,6 +570,7 @@ private fun SearchResultsContent(
 
                 else ->
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         contentPadding = PaddingValues(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -615,6 +635,7 @@ fun FavoritesScreen(
     session: AuthSession,
     padding: PaddingValues,
     onItemClick: (MediaItem) -> Unit,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val vm: FavoritesViewModel =
         viewModel(
@@ -625,6 +646,11 @@ fun FavoritesScreen(
     val episodes = state.items.filter { it.type.equals("Episode", ignoreCase = true) }
     val movies = state.items.filter { it.type.equals("Movie", ignoreCase = true) }
     val series = state.items.filter { it.type.equals("Series", ignoreCase = true) }
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
     Column(Modifier.fillMaxSize().padding(padding)) {
         FavoritesHeader(state.sort, state.totalRecordCount, vm::setSort)
         PullToRefreshLayout(
@@ -642,7 +668,10 @@ fun FavoritesScreen(
                         stringResource(R.string.no_favorites_hint),
                     )
                 else ->
-                    LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 20.dp),
+                    ) {
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
                                 FavoriteSection(
@@ -851,6 +880,7 @@ fun LibraryScreen(
     session: AuthSession,
     padding: PaddingValues,
     onItemClick: (MediaItem) -> Unit,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val vm: LibraryViewModel =
         viewModel(
@@ -868,7 +898,7 @@ fun LibraryScreen(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember {
+    val topBarScrollConnection = remember(gridState) {
         object : NestedScrollConnection {
             override fun onPostScroll(
                 consumed: Offset,
@@ -879,6 +909,8 @@ fun LibraryScreen(
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable =
+                            gridState.canScrollForward || gridState.canScrollBackward,
                     )
                 return Offset.Zero
             }
@@ -887,6 +919,15 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
+    ObserveScrollability(
+        canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
+        onScrollabilityChanged = { isScrollable ->
+            if (!isScrollable) {
+                topBarVisible = topBarVisibility.resetForRoute()
+            }
+            onScrollabilityChanged(isScrollable)
+        },
+    )
     LaunchedEffect(
         gridState,
         state.items.size,

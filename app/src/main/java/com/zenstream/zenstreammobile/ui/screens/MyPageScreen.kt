@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -79,6 +80,7 @@ fun MyPageScreen(
     onPasswordChanged: () -> Unit = {},
     onOpenItem: (String) -> Unit = {},
     onOpenNotifications: () -> Unit = {},
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
         viewModel(
@@ -98,6 +100,13 @@ fun MyPageScreen(
     var passwordChangeSucceeded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = {
+            !calendarOpen && (listState.canScrollForward || listState.canScrollBackward)
+        },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
 
     BackHandler(
         enabled = calendarOpen || settingsSection != null || profileOpen || passwordEditorOpen
@@ -130,6 +139,7 @@ fun MyPageScreen(
             modifier = Modifier.padding(outerPadding),
             onBack = { calendarOpen = false },
             onOpenItem = onOpenItem,
+            onScrollabilityChanged = onScrollabilityChanged,
         )
     } else {
         PullToRefreshLayout(
@@ -139,6 +149,7 @@ fun MyPageScreen(
         ) {
             val activeSection = settingsSection
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding =
                     PaddingValues(

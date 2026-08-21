@@ -90,6 +90,7 @@ internal fun CalendarScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onOpenItem: (String) -> Unit,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val viewModel: CalendarViewModel =
         viewModel(
@@ -117,6 +118,7 @@ internal fun CalendarScreen(
             onSelectDate = viewModel::selectDate,
             onToggleFollowing = viewModel::toggleFollowing,
             onOpenItem = onOpenItem,
+            onScrollabilityChanged = onScrollabilityChanged,
         )
     }
 }
@@ -135,6 +137,7 @@ internal fun CalendarContent(
     onSelectDate: (LocalDate) -> Unit = {},
     onToggleFollowing: (CalendarEvent) -> Unit = {},
     onOpenItem: (String) -> Unit = {},
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     var selectedEventId by remember { mutableStateOf<String?>(null) }
     val selectedEvent = state.events.firstOrNull { it.id == selectedEventId }
@@ -147,6 +150,11 @@ internal fun CalendarContent(
         remember(state.weekStart) {
             List(7) { index -> state.weekStart.plusDays(index.toLong()) }
         }
+    val agendaState = androidx.compose.foundation.lazy.rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { agendaState.canScrollForward || agendaState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
 
     PullToRefreshLayout(
         isRefreshing = state.loading && state.events.isNotEmpty(),
@@ -190,6 +198,7 @@ internal fun CalendarContent(
                         events = selectedEvents,
                         locale = locale,
                         zone = zone,
+                        state = agendaState,
                         onSelectEvent = { selectedEventId = it.id },
                     )
                 }
@@ -341,10 +350,12 @@ private fun CalendarAgenda(
     events: List<CalendarEvent>,
     locale: Locale,
     zone: ZoneId,
+    state: androidx.compose.foundation.lazy.LazyListState,
     onSelectEvent: (CalendarEvent) -> Unit,
 ) {
     val dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale)
     LazyColumn(
+        state = state,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
