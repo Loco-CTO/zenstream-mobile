@@ -420,6 +420,7 @@ private fun MainScaffold(
                         onPickAvatar = onPickAvatar,
                         avatarPickerResult = avatarPickerResult,
                         onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
+                        onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
                     )
                 }
                 composable(NOTIFICATIONS) {

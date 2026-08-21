@@ -54,6 +54,23 @@ internal enum class MyPageSettingsSection {
 }
 
 @Composable
+internal fun MyPageCalendarEntry(onOpen: () -> Unit) {
+    SettingsTabRow(
+        title = stringResource(R.string.calendar),
+        supporting = stringResource(R.string.calendar_settings_summary),
+        icon = {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_calendar_days),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        onClick = onOpen,
+    )
+}
+
+@Composable
 internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),

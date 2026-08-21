@@ -77,6 +77,7 @@ fun MyPageScreen(
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
     onPasswordChanged: () -> Unit = {},
+    onOpenItem: (String) -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
         viewModel(
@@ -90,18 +91,21 @@ fun MyPageScreen(
     var removingAvatar by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
     var settingsSection by remember { mutableStateOf<MyPageSettingsSection?>(null) }
+    var calendarOpen by remember { mutableStateOf(false) }
     var passwordEditorOpen by remember { mutableStateOf(false) }
     var passwordChangeSucceeded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
 
-    BackHandler(enabled = settingsSection != null || passwordEditorOpen) {
+    BackHandler(enabled = calendarOpen || settingsSection != null || passwordEditorOpen) {
         if (passwordEditorOpen) {
             if (passwordChangeSucceeded) {
                 onPasswordChanged()
             } else {
                 passwordEditorOpen = false
             }
+        } else if (calendarOpen) {
+            calendarOpen = false
         } else {
             settingsSection = null
         }
@@ -113,11 +117,20 @@ fun MyPageScreen(
         }
     }
 
-    PullToRefreshLayout(
-        isRefreshing = settingsState.refreshing,
-        onRefresh = settingsViewModel::refresh,
-        modifier = Modifier.padding(outerPadding),
-    ) {
+    if (calendarOpen) {
+        CalendarScreen(
+            repository = repository,
+            session = session,
+            modifier = Modifier.padding(outerPadding),
+            onBack = { calendarOpen = false },
+            onOpenItem = onOpenItem,
+        )
+    } else {
+        PullToRefreshLayout(
+            isRefreshing = settingsState.refreshing,
+            onRefresh = settingsViewModel::refresh,
+            modifier = Modifier.padding(outerPadding),
+        ) {
         val activeSection = settingsSection
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
@@ -157,7 +170,7 @@ fun MyPageScreen(
                         onContinueToLogin = onPasswordChanged,
                         onSuccessStateChanged = { passwordChangeSucceeded = it },
                     )
-                }
+            }
             } else if (activeSection == null) {
                 item {
                     Text(
@@ -177,6 +190,9 @@ fun MyPageScreen(
                     )
                 }
                 item {
+                    MyPageCalendarEntry(onOpen = { calendarOpen = true })
+                }
+                item {
                     Text(
                         text = stringResource(R.string.settings),
                         style = MaterialTheme.typography.titleLarge,
@@ -190,7 +206,15 @@ fun MyPageScreen(
             } else {
                 item {
                     MyPageSectionHeader(
-                        section = activeSection,
+                        title =
+                            stringResource(
+                                when (activeSection) {
+                                    MyPageSettingsSection.Appearance -> R.string.appearance_group
+                                    MyPageSettingsSection.Player -> R.string.player_group
+                                    MyPageSettingsSection.Subtitles -> R.string.subtitles_group
+                                    MyPageSettingsSection.Updates -> R.string.updates_group
+                                }
+                            ),
                         onBack = { settingsSection = null },
                     )
                 }
@@ -210,6 +234,7 @@ fun MyPageScreen(
                 }
             }
         }
+    }
     }
 
     if (avatarActionsOpen) {
@@ -269,8 +294,8 @@ fun MyPageScreen(
 }
 
 @Composable
-private fun MyPageSectionHeader(
-    section: MyPageSettingsSection,
+internal fun MyPageSectionHeader(
+    title: String,
     onBack: () -> Unit,
 ) {
     Row(
@@ -285,13 +310,7 @@ private fun MyPageSectionHeader(
             )
         }
         Text(
-            text =
-                when (section) {
-                    MyPageSettingsSection.Appearance -> stringResource(R.string.appearance_group)
-                    MyPageSettingsSection.Player -> stringResource(R.string.player_group)
-                    MyPageSettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
-                    MyPageSettingsSection.Updates -> stringResource(R.string.updates_group)
-                },
+            text = title,
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.semantics { heading() },
         )
