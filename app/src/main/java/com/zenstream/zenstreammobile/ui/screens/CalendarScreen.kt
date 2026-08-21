@@ -189,7 +189,8 @@ internal fun CalendarContent(
             event = event,
             locale = locale,
             zone = zone,
-            following = state.followingEventId == event.id,
+            following = event.following,
+            followingBusy = state.followingEventId == event.id,
             followError = state.followError,
             onDismiss = { selectedEventId = null },
             onToggleFollowing = { onToggleFollowing(event) },
@@ -215,6 +216,8 @@ private fun CalendarToolbar(
 ) {
     val weekEnd = weekStart.plusDays(6)
     val monthDayFormatter = DateTimeFormatter.ofPattern("MMM d", locale)
+    val previousDescription = stringResource(R.string.calendar_previous)
+    val nextDescription = stringResource(R.string.calendar_next)
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -222,9 +225,7 @@ private fun CalendarToolbar(
         IconButton(
             onClick = onPreviousWeek,
             enabled = canGoPrevious,
-            modifier = Modifier.semantics {
-                contentDescription = "${stringResource(R.string.calendar_previous)} $weekStart"
-            },
+            modifier = Modifier.semantics { contentDescription = previousDescription },
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_chevron_left),
@@ -234,9 +235,7 @@ private fun CalendarToolbar(
         IconButton(
             onClick = onNextWeek,
             enabled = canGoNext,
-            modifier = Modifier.semantics {
-                contentDescription = "${stringResource(R.string.calendar_next)} $weekEnd"
-            },
+            modifier = Modifier.semantics { contentDescription = nextDescription },
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
@@ -275,6 +274,12 @@ private fun CalendarWeekStrip(
             val selected = date == selectedDate
             val isToday = date == today
             val hasEvents = events.any { calendarEventDate(it, zone) == date }
+            val dayDescription =
+                buildString {
+                    append(fullDateFormatter.format(date))
+                    if (selected) append(", ${stringResource(R.string.calendar_selected)}")
+                    if (hasEvents) append(", ${stringResource(R.string.calendar_has_events)}")
+                }
             Surface(
                 modifier =
                     Modifier.weight(1f)
@@ -282,12 +287,7 @@ private fun CalendarWeekStrip(
                         .clickable { onSelectDate(date) }
                         .semantics {
                             role = Role.Button
-                            contentDescription =
-                                buildString {
-                                    append(fullDateFormatter.format(date))
-                                    if (selected) append(", ${stringResource(R.string.selected)}")
-                                    if (hasEvents) append(", ${stringResource(R.string.calendar_has_events)}")
-                                }
+                            contentDescription = dayDescription
                         },
                 color =
                     when {
@@ -370,7 +370,12 @@ private fun CalendarEventRow(
     zone: ZoneId,
     onClick: () -> Unit,
 ) {
-    val title = calendarEventTitle(event)
+    val title =
+        calendarEventTitle(
+            event,
+            movieFallback = stringResource(R.string.calendar_movie),
+            episodeFallback = stringResource(R.string.calendar_episode),
+        )
     val position = calendarEpisodePosition(event)
     val secondary =
         when {
@@ -426,7 +431,7 @@ private fun CalendarEventRow(
                 }
                 Text(
                     text =
-                        "${calendarEventTime(event, locale, zone)} · ${event.libraryName}",
+                        "${calendarEventTime(event, locale, zone, stringResource(R.string.calendar_all_day))} · ${event.libraryName}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .78f),
                     modifier = Modifier.padding(top = 4.dp),
@@ -449,12 +454,18 @@ private fun CalendarEventSheet(
     locale: Locale,
     zone: ZoneId,
     following: Boolean,
+    followingBusy: Boolean,
     followError: Boolean,
     onDismiss: () -> Unit,
     onToggleFollowing: () -> Unit,
     onOpenItem: (() -> Unit)?,
 ) {
-    val title = calendarEventTitle(event)
+    val title =
+        calendarEventTitle(
+            event,
+            movieFallback = stringResource(R.string.calendar_movie),
+            episodeFallback = stringResource(R.string.calendar_episode),
+        )
     val position = calendarEpisodePosition(event)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -476,7 +487,12 @@ private fun CalendarEventSheet(
                 text =
                     listOfNotNull(
                             position,
-                            calendarEventTime(event, locale, zone),
+                            calendarEventTime(
+                                event,
+                                locale,
+                                zone,
+                                stringResource(R.string.calendar_all_day),
+                            ),
                             event.libraryName.takeIf(String::isNotBlank),
                         )
                         .joinToString(" · "),
@@ -509,7 +525,7 @@ private fun CalendarEventSheet(
                 if (event.followAvailable) {
                     OutlinedButton(
                         onClick = onToggleFollowing,
-                        enabled = !following || following,
+                        enabled = !followingBusy,
                         modifier = Modifier.weight(1f),
                         colors =
                             ButtonDefaults.outlinedButtonColors(
@@ -598,13 +614,22 @@ private fun CalendarEmptyState(date: LocalDate, locale: Locale) {
     }
 }
 
-private fun calendarEventTitle(event: CalendarEvent): String =
+private fun calendarEventTitle(
+    event: CalendarEvent,
+    movieFallback: String,
+    episodeFallback: String,
+): String =
     event.title?.takeIf(String::isNotBlank)
-        ?: event.seriesTitle?.takeIf(String::isNotBlank)
-        ?: if (event.kind == "movie") "Movie" else calendarEpisodePosition(event) ?: "Episode"
+        ?: if (event.kind == "movie") movieFallback
+        else calendarEpisodePosition(event) ?: episodeFallback
 
-private fun calendarEventTime(event: CalendarEvent, locale: Locale, zone: ZoneId): String {
-    if (event.allDay) return "All day"
+private fun calendarEventTime(
+    event: CalendarEvent,
+    locale: Locale,
+    zone: ZoneId,
+    allDayLabel: String,
+): String {
+    if (event.allDay) return allDayLabel
     val instant = parseCalendarInstant(event.eventAt) ?: return event.eventAt
     return DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
         .withLocale(locale)
