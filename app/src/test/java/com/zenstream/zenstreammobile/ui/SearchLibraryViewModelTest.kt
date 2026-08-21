@@ -11,8 +11,9 @@ import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.SortOrder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -56,24 +57,93 @@ class SearchLibraryViewModelTest {
     }
 
     @Test
-    fun searchDebouncesShortQueriesAndPublishesResults() = runTest {
+    fun searchStartsImmediatelyForEveryNonBlankQuery() = runTest {
+        val source = FakeSearchDataSource { listOf(MediaItem("dune", "Dune")) }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        runCurrent()
+        assertEquals(listOf("d"), source.queries)
+
+        viewModel.updateQuery("du")
+        runCurrent()
+        assertEquals(listOf("d", "du"), source.queries)
+
+        assertEquals(listOf("dune"), viewModel.uiState.value.results.map { it.id })
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun searchRetainsCompletedResultsAndIgnoresOutOfOrderResponses() = runTest {
+        val firstResponse = CompletableDeferred<List<MediaItem>>()
+        val secondResponse = CompletableDeferred<List<MediaItem>>()
+        var request = 0
+        val source =
+            FakeSearchDataSource { _ ->
+                val response = if (request++ == 0) firstResponse else secondResponse
+                withContext(NonCancellable) { response.await() }
+            }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        runCurrent()
+        viewModel.updateQuery("du")
+        runCurrent()
+
+        assertEquals(listOf("d", "du"), source.queries)
+        assertTrue(viewModel.uiState.value.loading)
+
+        secondResponse.complete(listOf(MediaItem("new", "New result")))
+        runCurrent()
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
+        assertFalse(viewModel.uiState.value.loading)
+
+        firstResponse.complete(listOf(MediaItem("old", "Old result")))
+        advanceUntilIdle()
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
+    }
+
+    @Test
+    fun blankQueryClearsResultsWithoutIssuingAnotherRequest() = runTest {
         val source = FakeSearchDataSource { listOf(MediaItem("dune", "Dune")) }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("d")
         advanceUntilIdle()
-        assertTrue(source.queries.isEmpty())
+        viewModel.updateQuery("   ")
+        runCurrent()
 
+        assertEquals(listOf("d"), source.queries)
+        assertTrue(viewModel.uiState.value.results.isEmpty())
+        assertEquals("", viewModel.uiState.value.resultQuery)
+        assertFalse(viewModel.uiState.value.loading)
+        assertFalse(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun failedQueryRetainsLastSuccessfulResultsAndSetsRetryState() = runTest {
+        var request = 0
+        val source =
+            FakeSearchDataSource {
+                if (request++ == 0) {
+                    listOf(MediaItem("dune", "Dune"))
+                } else {
+                    error("search failed")
+                }
+            }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        advanceUntilIdle()
         viewModel.updateQuery("du")
-        runCurrent()
-        assertTrue(source.queries.isEmpty())
-        advanceTimeBy(299)
-        runCurrent()
-        assertTrue(source.queries.isEmpty())
-        advanceTimeBy(1)
         advanceUntilIdle()
 
-        assertEquals(listOf("du"), source.queries)
+        assertEquals(listOf("d", "du"), source.queries)
+        assertTrue(viewModel.uiState.value.error)
+        assertEquals("d", viewModel.uiState.value.resultQuery)
         assertEquals(listOf("dune"), viewModel.uiState.value.results.map { it.id })
         assertFalse(viewModel.uiState.value.loading)
     }
