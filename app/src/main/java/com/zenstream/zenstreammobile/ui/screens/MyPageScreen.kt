@@ -648,10 +648,121 @@ private fun AvatarActionRow(
 }
 
 @Composable
+internal fun ProfileSettingsPage(
+    session: AuthSession,
+    avatarError: String?,
+    onBack: () -> Unit,
+    onEditAvatar: () -> Unit,
+    onChangePassword: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        MyPageSectionHeader(
+            title = stringResource(R.string.account_settings),
+            onBack = onBack,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            UserAvatar(
+                session = session,
+                userId = session.userId,
+                username = session.username,
+                modifier = Modifier.size(112.dp),
+            )
+            ProfileDetails(session, avatarError, Modifier.weight(1f))
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ProfileSettingsActionButton(
+                icon = LucideR.drawable.lucide_ic_image,
+                label =
+                    stringResource(
+                        if (session.avatarVersion == null) R.string.add_avatar
+                        else R.string.change_avatar
+                    ),
+                onClick = onEditAvatar,
+                primary = true,
+            )
+            ProfileSettingsActionButton(
+                icon = LucideR.drawable.lucide_ic_lock,
+                label = stringResource(R.string.change_password),
+                onClick = onChangePassword,
+                primary = false,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileSettingsActionButton(
+    icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    primary: Boolean,
+) {
+    val buttonModifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
+    if (primary) {
+        Button(
+            onClick = onClick,
+            modifier = buttonModifier,
+            shape = RoundedCornerShape(18.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            ProfileSettingsActionContent(icon = icon, label = label)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = buttonModifier,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .82f)),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            ProfileSettingsActionContent(icon = icon, label = label)
+        }
+    }
+}
+
+@Composable
+private fun ProfileSettingsActionContent(icon: Int, label: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
 internal fun ProfileCard(
     session: AuthSession,
-    onEditAvatar: () -> Unit,
-    onChangePassword: () -> Unit = {},
+    onOpenProfile: () -> Unit,
     avatarError: String? = null,
 ) {
     Card(
@@ -678,28 +789,45 @@ internal fun ProfileCard(
                 ProfileDetails(session, avatarError, Modifier.weight(1f))
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ProfileActionTile(
-                    icon = LucideR.drawable.lucide_ic_image,
-                    label =
-                        stringResource(
-                            if (session.avatarVersion == null) R.string.add_avatar
-                            else R.string.change_avatar
-                        ),
-                    onClick = onEditAvatar,
-                    modifier = Modifier.weight(1f),
-                )
-                ProfileActionTile(
-                    icon = LucideR.drawable.lucide_ic_lock,
-                    label = stringResource(R.string.change_password),
-                    onClick = onChangePassword,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            ProfileNavigationRow(onClick = onOpenProfile)
         }
+    }
+}
+
+@Composable
+private fun ProfileNavigationRow(onClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 4.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_settings),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.account_settings),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = stringResource(R.string.account_settings_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -726,50 +854,6 @@ private fun ProfileDetails(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileActionTile(
-    icon: Int,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    Surface(
-        modifier = modifier.heightIn(min = 92.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    painter = painterResource(icon),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
             )
         }
     }
