@@ -102,6 +102,7 @@ class CalendarScreenTest {
         composeRule
             .onNodeWithContentDescription("Saturday, August 22, 2026")
             .performClick()
+        composeRule.onRoot().printToLog("CALENDAR_TEST")
         composeRule.onNodeWithText("No releases for Aug 22, 2026").assertIsDisplayed()
     }
 
