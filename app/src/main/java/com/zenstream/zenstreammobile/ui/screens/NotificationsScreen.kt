@@ -126,6 +126,7 @@ fun NotificationsScreen(
                                 (item.seriesId ?: item.itemId)?.let(onOpenItem)
                             },
                             onToggleRead = { vm.setRead(item, item.readAt == null) },
+                            onRemove = { vm.remove(item) },
                         )
                     }
                     if (state.nextCursor != null) {
@@ -192,6 +193,7 @@ internal fun NotificationRow(
     session: AuthSession,
     onClick: () -> Unit,
     onToggleRead: () -> Unit,
+    onRemove: () -> Unit,
 ) {
     var actionsExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -285,6 +287,19 @@ internal fun NotificationRow(
                     },
                     leadingIcon = {
                         Icon(painter = painterResource(readActionIcon), contentDescription = null)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.notifications_remove)) },
+                    onClick = {
+                        actionsExpanded = false
+                        onRemove()
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
+                            contentDescription = null,
+                        )
                     },
                 )
             }

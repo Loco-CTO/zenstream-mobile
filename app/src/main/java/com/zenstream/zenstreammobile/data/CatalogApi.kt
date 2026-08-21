@@ -1054,6 +1054,11 @@ class CatalogApi(
             )
         }
 
+    suspend fun deleteNotification(session: AuthSession, notificationId: String) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/$notificationId", method = "DELETE")
+        }
+
     suspend fun markAllNotificationsRead(session: AuthSession) =
         withContext(Dispatchers.IO) {
             requestJson(session, "/api/notifications/read-all", method = "POST")

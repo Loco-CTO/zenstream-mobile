@@ -261,6 +261,26 @@ class NotificationsViewModel(
         }
     }
 
+    fun remove(item: NotificationItem) {
+        val current = _uiState.value
+        if (current.items.none { it.id == item.id }) return
+        _uiState.value =
+            current.copy(
+                items = current.items.filterNot { it.id == item.id },
+                unreadCount =
+                    (current.unreadCount - if (item.readAt == null) 1 else 0).coerceAtLeast(0),
+            )
+        viewModelScope.launch {
+            runCatching { repository.deleteNotification(session, item.id) }
+                .onFailure {
+                    _uiState.value = current
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                }
+        }
+    }
+
     class Factory(
         private val repository: CatalogRepository,
         private val session: AuthSession,

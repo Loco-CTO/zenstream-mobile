@@ -431,6 +431,9 @@ class CatalogRepository(
         read: Boolean,
     ) = api.setNotificationRead(session, notificationId, read)
 
+    suspend fun deleteNotification(session: AuthSession, notificationId: String) =
+        api.deleteNotification(session, notificationId)
+
     suspend fun markAllNotificationsRead(session: AuthSession) =
         api.markAllNotificationsRead(session)
 
