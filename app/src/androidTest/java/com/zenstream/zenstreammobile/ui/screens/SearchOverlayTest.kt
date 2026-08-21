@@ -75,9 +75,7 @@ class SearchOverlayTest {
         composeRule.onNodeWithTag("search-overlay-solid").assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(
-                InstrumentationRegistry.getInstrumentation()
-                    .targetContext
-                    .getString(R.string.back)
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.back)
             )
             .performClick()
         assertTrue(dismissed)

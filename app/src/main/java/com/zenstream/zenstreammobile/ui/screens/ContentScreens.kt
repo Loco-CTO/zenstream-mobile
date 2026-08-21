@@ -517,7 +517,8 @@ private fun SearchResultsContent(
     onRefresh: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
     onNestedScroll: (consumedY: Float, availableY: Float, isScrollable: Boolean) -> Unit =
-        { _, _, _ -> },
+        { _, _, _ ->
+        },
     onScrollabilityChanged: (Boolean) -> Unit = {},
     searchFieldModifier: Modifier = Modifier,
     showBackButton: Boolean = false,
@@ -542,8 +543,7 @@ private fun SearchResultsContent(
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
-                    val isScrollable =
-                        gridState.canScrollForward || gridState.canScrollBackward
+                    val isScrollable = gridState.canScrollForward || gridState.canScrollBackward
                     topBarVisible =
                         topBarVisibility.onNestedScroll(
                             consumedY = consumed.y,
@@ -587,8 +587,7 @@ private fun SearchResultsContent(
                     ) {
                         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                             Icon(
-                                painter =
-                                    painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                                painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
                                 contentDescription = stringResource(R.string.back),
                                 modifier = Modifier.size(32.dp),
                             )
@@ -599,10 +598,7 @@ private fun SearchResultsContent(
                             onSubmit = onRetry,
                             onClear = { onQueryChange("") },
                             compact = true,
-                            modifier =
-                                Modifier.weight(1f)
-                                    .height(56.dp)
-                                    .then(searchFieldModifier),
+                            modifier = Modifier.weight(1f).height(56.dp).then(searchFieldModifier),
                         )
                     }
                 } else {
@@ -726,8 +722,7 @@ private fun SearchField(
                     errorContainerColor = Color.Transparent,
                 )
             },
-        shape =
-            if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
+        shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth().then(modifier),
     )
 }
