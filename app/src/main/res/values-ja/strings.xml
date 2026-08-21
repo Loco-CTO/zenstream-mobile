@@ -30,6 +30,7 @@
     <string name="notifications_actions">通知の操作</string>
     <string name="notifications_mark_read">既読にする</string>
     <string name="notifications_mark_unread">未読にする</string>
+    <string name="notifications_remove">通知を削除</string>
     <string name="continue_watching">視聴を続ける</string>
     <string name="next_up">次に見る</string>
     <string name="my_list">マイリスト</string>
