@@ -120,8 +120,8 @@ fun HomeScreen(
     repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: HomeViewModel =
         viewModel(
@@ -635,8 +635,8 @@ fun FavoritesScreen(
     repository: FavoritesDataSource,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: FavoritesViewModel =
         viewModel(
@@ -880,8 +880,8 @@ fun LibraryScreen(
     repository: LibraryDataSource,
     session: AuthSession,
     padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: LibraryViewModel =
         viewModel(
