@@ -579,6 +579,7 @@ private fun SearchResultsContent(
                     Column(Modifier.fillMaxSize()) {
                         SearchErrorBanner(onRetry)
                         SearchResultsGrid(
+                            items = state.results,
                             gridState = gridState,
                             session = session,
                             onItemClick = onItemClick,
@@ -598,6 +599,7 @@ private fun SearchResultsContent(
 
                 else ->
                     SearchResultsGrid(
+                        items = state.results,
                         gridState = gridState,
                         session = session,
                         onItemClick = onItemClick,
@@ -609,6 +611,7 @@ private fun SearchResultsContent(
 
 @Composable
 private fun SearchResultsGrid(
+    items: List<MediaItem>,
     gridState: LazyGridState,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
@@ -622,7 +625,18 @@ private fun SearchResultsGrid(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = modifier,
     ) {
-        items(itemList = emptyList(), key = { it.id }) { }
+        items(items.distinctBy { it.id }, key = { it.id }) { item ->
+            Box(
+                Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                MediaCardForSearch(
+                    item,
+                    session,
+                    onItemClick = onItemClick,
+                )
+            }
+        }
     }
 }
 
