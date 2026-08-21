@@ -19,17 +19,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,7 +52,6 @@ import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import java.time.Instant
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
 internal val POSTER_CARD_MIN_WIDTH = 140.dp
 internal val POSTER_CARD_MAX_WIDTH = 180.dp
@@ -69,7 +62,6 @@ fun MediaRowView(
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
-    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
     val uniqueItems = row.items.distinctBy { it.id }
     if (uniqueItems.isEmpty()) return
@@ -121,7 +113,6 @@ fun MediaRowView(
                             row.wide,
                             onItemClick,
                             useSeriesPoster = true,
-                            onToggleFollowing = onToggleFollowing,
                         )
                     }
                 }
@@ -132,7 +123,6 @@ fun MediaRowView(
                         session,
                         row.wide,
                         onItemClick,
-                        onToggleFollowing = onToggleFollowing,
                     )
                 }
             }
@@ -259,13 +249,7 @@ fun MediaCard(
     showRating: Boolean = false,
     gridCard: Boolean = false,
     useSeriesPoster: Boolean = !wide,
-    onToggleFollowing: suspend (MediaItem, Boolean) -> Unit = { _, _ -> },
 ) {
-    val scope = rememberCoroutineScope()
-    var following by
-        remember(item.id, item.following) {
-            mutableStateOf(item.following ?: false)
-        }
     val locale = LocalLocale.current.platformLocale
     val cardWidthModifier =
         if (gridCard && !wide) {
@@ -292,36 +276,6 @@ fun MediaCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
-            if (item.type == "Movie" || item.type == "Series") {
-                val followingLabel =
-                    stringResource(if (following) R.string.unfollow else R.string.follow)
-                IconButton(
-                    onClick = {
-                        val previous = following
-                        val next = !previous
-                        following = next
-                        scope.launch {
-                            try {
-                                onToggleFollowing(item, next)
-                            } catch (_: Throwable) {
-                                following = previous
-                            }
-                        }
-                    },
-                    modifier =
-                        Modifier.align(Alignment.TopEnd).padding(4.dp).semantics {
-                            contentDescription = followingLabel
-                        },
-                ) {
-                    Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_bookmark),
-                        contentDescription = null,
-                        tint =
-                            if (following) MaterialTheme.colorScheme.primary
-                            else Color.White.copy(alpha = .82f),
-                    )
-                }
-            }
             if (item.played || item.unplayedItemCount != null) {
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
