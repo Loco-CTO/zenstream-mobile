@@ -15,6 +15,7 @@ import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -43,6 +44,7 @@ class NotificationsScreenActionsTest {
                     onToggleRead = {
                         item = item.copy(readAt = if (item.readAt == null) "local" else null)
                     },
+                    onRemove = {},
                 )
             }
         }
@@ -62,5 +64,24 @@ class NotificationsScreenActionsTest {
             .assertIsDisplayed()
             .performClick()
         composeRule.runOnIdle { assertNull(item.readAt) }
+
+        var removed = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                NotificationRow(
+                    item = item,
+                    session = session,
+                    onClick = {},
+                    onToggleRead = {},
+                    onRemove = { removed = true },
+                )
+            }
+        }
+        composeRule.onNodeWithContentDescription(actionsLabel).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.notifications_remove))
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertTrue(removed) }
     }
 }

@@ -134,6 +134,23 @@ class CatalogApiHttpTest {
     }
 
     @Test
+    fun deletesNotificationWithTheAuthenticatedDeleteEndpoint() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(JSONObject().put("id", "notification-1").put("removed", true).toString())
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        CatalogApi(deviceId = "device-id").deleteNotification(session, "notification-1")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/api/notifications/notification-1", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+    }
+
+    @Test
     fun uploadsRawAvatarBytesWithPixelCropParameters() = runBlocking {
         server.enqueue(MockResponse().setBody(JSONObject().put("avatarVersion", "v-2").toString()))
         val session =
