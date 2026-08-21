@@ -71,6 +71,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import kotlin.math.abs
+
+private val calendarEventColors =
+    listOf(
+        Color(0xFF6D5DFC),
+        Color(0xFF1AA7A1),
+        Color(0xFFD17B35),
+        Color(0xFFB14E9B),
+        Color(0xFF3B82B6),
+        Color(0xFF8E7D36),
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -318,15 +329,6 @@ private fun CalendarWeekStrip(
                             if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onSurface,
                     )
-                    Box(
-                        modifier =
-                            Modifier.size(5.dp)
-                                .background(
-                                    if (hasEvents) MaterialTheme.colorScheme.primary
-                                    else Color.Transparent,
-                                    RoundedCornerShape(50),
-                                )
-                    )
                 }
             }
         }
@@ -386,6 +388,7 @@ private fun CalendarEventRow(
             event.kind == "movie" -> event.releaseType.ifBlank { stringResource(R.string.calendar_movie) }
             else -> position ?: stringResource(R.string.calendar_episode)
         }
+    val accent = calendarEventColor(event)
     Surface(
         modifier =
             Modifier.fillMaxWidth()
@@ -394,30 +397,23 @@ private fun CalendarEventRow(
                     role = Role.Button
                     contentDescription = title
                 },
-        color =
-            if (event.hasFile) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .48f),
+        color = if (event.hasFile) accent.copy(alpha = .125f) else Color.Transparent,
         shape = MaterialTheme.shapes.medium,
         border =
-            if (event.hasFile) null
-            else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .65f)),
+            if (event.hasFile) null else BorderStroke(1.dp, accent.copy(alpha = .2f)),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.width(4.dp)
-                    .height(76.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
-            )
             Column(
-                modifier = Modifier.weight(1f).padding(start = 12.dp, top = 11.dp, bottom = 11.dp),
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = event.seriesTitle ?: title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -435,7 +431,7 @@ private fun CalendarEventRow(
                     text =
                         "${calendarEventTime(event, locale, zone, stringResource(R.string.calendar_all_day))} · ${event.libraryName}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .78f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .28f),
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
@@ -624,6 +620,14 @@ private fun calendarEventTitle(
     event.title?.takeIf(String::isNotBlank)
         ?: if (event.kind == "movie") movieFallback
         else calendarEpisodePosition(event) ?: episodeFallback
+
+private fun calendarEventColor(event: CalendarEvent): Color {
+    var hash = 0
+    "${event.libraryId}:${event.seriesTitle ?: event.title ?: event.id}".forEach { character ->
+        hash = hash * 31 + character.code
+    }
+    return calendarEventColors[abs(hash) % calendarEventColors.size]
+}
 
 private fun calendarEventTime(
     event: CalendarEvent,
