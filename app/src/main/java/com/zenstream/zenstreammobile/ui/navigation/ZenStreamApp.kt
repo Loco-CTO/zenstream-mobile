@@ -253,7 +253,7 @@ private fun MainScaffold(
                 hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
                 revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
             )
-    }
+        }
     var bottomBarVisible by remember { mutableStateOf(true) }
     var topBarVisible by remember { mutableStateOf(true) }
     var contentScrollable by remember { mutableStateOf(false) }

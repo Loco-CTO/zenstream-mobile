@@ -27,12 +27,12 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -492,24 +492,25 @@ private fun SearchResultsContent(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember(gridState) {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                topBarVisible =
-                    topBarVisibility.onNestedScroll(
-                        consumedY = consumed.y,
-                        availableY = available.y,
-                        isScrollable =
-                            gridState.canScrollForward || gridState.canScrollBackward,
-                    )
-                return Offset.Zero
+    val topBarScrollConnection =
+        remember(gridState) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    topBarVisible =
+                        topBarVisibility.onNestedScroll(
+                            consumedY = consumed.y,
+                            availableY = available.y,
+                            isScrollable =
+                                gridState.canScrollForward || gridState.canScrollBackward,
+                        )
+                    return Offset.Zero
+                }
             }
         }
-    }
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
@@ -898,24 +899,25 @@ fun LibraryScreen(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember(gridState) {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                topBarVisible =
-                    topBarVisibility.onNestedScroll(
-                        consumedY = consumed.y,
-                        availableY = available.y,
-                        isScrollable =
-                            gridState.canScrollForward || gridState.canScrollBackward,
-                    )
-                return Offset.Zero
+    val topBarScrollConnection =
+        remember(gridState) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    topBarVisible =
+                        topBarVisibility.onNestedScroll(
+                            consumedY = consumed.y,
+                            availableY = available.y,
+                            isScrollable =
+                                gridState.canScrollForward || gridState.canScrollBackward,
+                        )
+                    return Offset.Zero
+                }
             }
         }
-    }
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
