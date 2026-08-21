@@ -31,7 +31,6 @@ import com.zenstream.zenstreammobile.model.orderedHomeRows
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -733,6 +732,7 @@ private fun normalizeLibrarySort(library: Library, sort: LibrarySort): LibrarySo
 
 data class SearchUiState(
     val query: String = "",
+    val resultQuery: String = "",
     val loading: Boolean = false,
     val results: List<MediaItem> = emptyList(),
     val error: Boolean = false,
@@ -757,26 +757,29 @@ class SearchViewModel(
 
     fun updateQuery(value: String) {
         val generation = ++requestGeneration
+        val normalized = value.trim()
+        searchJob?.cancel()
         _uiState.value =
             _uiState.value.copy(
                 query = value,
-                loading = value.trim().length >= 2,
+                loading = normalized.isNotEmpty(),
                 error = false,
             )
-        searchJob?.cancel()
-        if (value.trim().length < 2) {
-            _uiState.value = _uiState.value.copy(loading = false, results = emptyList())
+        if (normalized.isEmpty()) {
+            _uiState.value =
+                _uiState.value.copy(
+                    loading = false,
+                    resultQuery = "",
+                    results = emptyList(),
+                )
             return
         }
-        searchJob = viewModelScope.launch {
-            delay(300)
-            search(generation, value)
-        }
+        searchJob = viewModelScope.launch { search(generation, value) }
     }
 
     fun retry() {
         val query = _uiState.value.query
-        if (query.trim().length < 2) return
+        if (query.trim().isEmpty()) return
         searchJob?.cancel()
         val generation = ++requestGeneration
         searchJob = viewModelScope.launch { search(generation, query) }
@@ -791,6 +794,7 @@ class SearchViewModel(
                 _uiState.value =
                     _uiState.value.copy(
                         loading = false,
+                        resultQuery = query.trim(),
                         results = rankSearchResults(it, query),
                         error = false,
                     )

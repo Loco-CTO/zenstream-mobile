@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -347,30 +348,6 @@ internal fun calculateFeatureBarHeight(maxWidth: Dp, screenHeightDp: Int) =
     minOf(maxWidth / FEATURE_BAR_ASPECT_RATIO, featureBarMaxHeight(screenHeightDp))
 
 @Composable
-fun SearchScreen(
-    repository: SearchDataSource,
-    session: AuthSession,
-    padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit,
-) {
-    val vm: SearchViewModel =
-        viewModel(
-            key = "search-${session.userId}-${session.token}",
-            factory = SearchViewModel.Factory(repository, session),
-        )
-    val state by vm.uiState.collectAsStateWithLifecycle()
-    SearchResultsContent(
-        state = state,
-        session = session,
-        padding = padding,
-        onQueryChange = vm::updateQuery,
-        onRetry = vm::retry,
-        onRefresh = vm::refresh,
-        onItemClick = onItemClick,
-    )
-}
-
-@Composable
 fun SearchOverlayScreen(
     repository: SearchDataSource,
     session: AuthSession,
@@ -384,10 +361,8 @@ fun SearchOverlayScreen(
         viewModel(
             key = "search-overlay-${session.userId}-${session.token}",
             factory = SearchViewModel.Factory(repository, session),
-        )
+    )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var submitted by remember { mutableStateOf(false) }
-    var draftQuery by remember { mutableStateOf("") }
     val searchFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
@@ -397,9 +372,8 @@ fun SearchOverlayScreen(
                 hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
                 revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
             )
-        }
+    }
     var bottomBarVisible by remember { mutableStateOf(true) }
-    val effectiveQuery = if (submitted) state.query else draftQuery
 
     LaunchedEffect(Unit) {
         searchFocusRequester.requestFocus()
@@ -443,36 +417,15 @@ fun SearchOverlayScreen(
                 }
             },
         ) { padding ->
-            val submitSearch = {
-                val normalized = effectiveQuery.trim()
-                if (submitted) {
-                    focusManager.clearFocus()
-                    vm.retry()
-                } else if (isSearchQueryActive(normalized)) {
-                    focusManager.clearFocus()
-                    draftQuery = normalized
-                    submitted = true
-                    vm.updateQuery(normalized)
-                }
-            }
             SearchResultsContent(
                 state = state,
-                query = effectiveQuery,
-                resultQuery = if (submitted) state.query else "",
                 session = session,
                 padding = padding,
-                onQueryChange = { value ->
-                    if (submitted && isSearchQueryActive(value)) {
-                        vm.updateQuery(value)
-                    } else if (submitted) {
-                        draftQuery = value
-                        submitted = false
-                        vm.updateQuery("")
-                    } else {
-                        draftQuery = value
-                    }
+                onQueryChange = vm::updateQuery,
+                onRetry = {
+                    focusManager.clearFocus()
+                    vm.retry()
                 },
-                onRetry = submitSearch,
                 onRefresh = vm::refresh,
                 onItemClick = { item ->
                     onDismiss()
@@ -500,16 +453,9 @@ fun SearchOverlayScreen(
     }
 }
 
-internal const val MIN_SEARCH_QUERY_LENGTH = 2
-
-internal fun isSearchQueryActive(query: String): Boolean =
-    query.trim().length >= MIN_SEARCH_QUERY_LENGTH
-
 @Composable
 private fun SearchResultsContent(
     state: SearchUiState,
-    query: String = state.query,
-    resultQuery: String = query,
     session: AuthSession,
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
@@ -593,7 +539,7 @@ private fun SearchResultsContent(
                             )
                         }
                         SearchField(
-                            value = query,
+                            value = state.query,
                             onValueChange = onQueryChange,
                             onSubmit = onRetry,
                             onClear = { onQueryChange("") },
@@ -603,7 +549,7 @@ private fun SearchResultsContent(
                     }
                 } else {
                     SearchField(
-                        value = query,
+                        value = state.query,
                         onValueChange = onQueryChange,
                         onSubmit = onRetry,
                         onClear = { onQueryChange("") },
@@ -613,7 +559,7 @@ private fun SearchResultsContent(
                                 .then(searchFieldModifier),
                     )
                 }
-                if (resultQuery.trim().length >= 2 && !state.loading && !state.error) {
+                if (state.resultQuery.isNotEmpty() && !state.loading && !state.error) {
                     Text(
                         stringResource(R.string.search_result_count, state.results.size),
                         style = MaterialTheme.typography.labelSmall,
@@ -629,9 +575,19 @@ private fun SearchResultsContent(
             modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
         ) {
             when {
-                state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
+                state.error && state.results.isNotEmpty() ->
+                    Column(Modifier.fillMaxSize()) {
+                        SearchErrorBanner(onRetry)
+                        SearchResultsGrid(
+                            gridState = gridState,
+                            session = session,
+                            onItemClick = onItemClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
                 state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, onRetry)
-                resultQuery.trim().length < 2 -> Unit
+                state.resultQuery.isEmpty() -> Unit
 
                 state.results.isEmpty() ->
                     Text(
@@ -641,28 +597,48 @@ private fun SearchResultsContent(
                     )
 
                 else ->
-                    LazyVerticalGrid(
-                        state = gridState,
-                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
-                    ) {
-                        items(state.results.distinctBy { it.id }, key = { it.id }) { item ->
-                            Box(
-                                Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.TopCenter,
-                            ) {
-                                MediaCardForSearch(
-                                    item,
-                                    session,
-                                    onItemClick = onItemClick,
-                                )
-                            }
-                        }
-                    }
+                    SearchResultsGrid(
+                        gridState = gridState,
+                        session = session,
+                        onItemClick = onItemClick,
+                    )
             }
         }
+    }
+}
+
+@Composable
+private fun SearchResultsGrid(
+    gridState: LazyGridState,
+    session: AuthSession,
+    onItemClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = modifier,
+    ) {
+        items(itemList = emptyList(), key = { it.id }) { }
+    }
+}
+
+@Composable
+private fun SearchErrorBanner(onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            stringResource(R.string.search_load_failed),
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }
 

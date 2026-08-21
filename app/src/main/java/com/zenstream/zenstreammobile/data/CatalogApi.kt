@@ -857,7 +857,7 @@ class CatalogApi(
 
     suspend fun search(session: AuthSession, query: String): List<MediaItem> =
         withContext(Dispatchers.IO) {
-            if (query.trim().length < 2) return@withContext emptyList()
+            if (query.trim().isEmpty()) return@withContext emptyList()
             catalogItems(
                 requestJson(
                     session,
