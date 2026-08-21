@@ -110,6 +110,8 @@
     <string name="calendar_load_failed">Could not load the calendar.</string>
     <string name="calendar_follow_failed">Could not update Follow.</string>
     <string name="profile">Profile</string>
+    <string name="account_settings">Account settings</string>
+    <string name="account_settings_summary">Avatar and password</string>
     <string name="avatar_description">Avatar for %1$s</string>
     <string name="add_avatar">Add avatar</string>
     <string name="change_avatar">Change avatar</string>
