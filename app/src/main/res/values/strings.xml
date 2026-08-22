@@ -94,7 +94,6 @@
     <string name="services">Services</string>
     <string name="my_page">My Page</string>
     <string name="calendar">Calendar</string>
-    <string name="calendar_open">Open calendar</string>
     <string name="calendar_settings_summary">Upcoming releases and air dates</string>
     <string name="notification_center">Notification center</string>
     <string name="notification_center_summary">Follow and library updates</string>

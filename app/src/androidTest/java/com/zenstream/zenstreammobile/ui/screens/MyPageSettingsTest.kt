@@ -55,8 +55,8 @@ class MyPageSettingsTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.calendar)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.calendar)).performClick()
         composeRule.runOnIdle { assertTrue(opened) }
     }
 
@@ -74,7 +74,7 @@ class MyPageSettingsTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.calendar)).assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.notification_center))
             .assertIsDisplayed()

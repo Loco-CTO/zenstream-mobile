@@ -73,7 +73,6 @@
     <string name="services">サービス</string>
     <string name="my_page">マイページ</string>
     <string name="calendar">カレンダー</string>
-    <string name="calendar_open">カレンダーを開く</string>
     <string name="calendar_settings_summary">配信予定と放送予定</string>
     <string name="notification_center">通知センター</string>
     <string name="notification_center_summary">フォローとライブラリの更新</string>

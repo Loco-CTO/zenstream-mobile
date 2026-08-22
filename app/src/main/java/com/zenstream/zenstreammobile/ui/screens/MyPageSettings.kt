@@ -59,7 +59,7 @@ internal enum class MyPageSettingsSection {
 @Composable
 internal fun MyPageCalendarEntry(onOpen: () -> Unit) {
     SettingsTabRow(
-        title = stringResource(R.string.calendar_open),
+        title = stringResource(R.string.calendar),
         supporting = stringResource(R.string.calendar_settings_summary),
         icon = {
             Icon(
