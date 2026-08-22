@@ -59,10 +59,9 @@ class SearchLibraryViewModelTest {
 
     @Test
     fun searchStartsImmediatelyForEveryNonBlankQuery() = runTest {
-        val source =
-            FakeSearchDataSource { _, _ ->
-                PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
-            }
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("d")
@@ -97,17 +96,13 @@ class SearchLibraryViewModelTest {
         assertEquals(listOf("d", "du"), source.queries)
         assertTrue(viewModel.uiState.value.loading)
 
-        secondResponse.complete(
-            PagedSearch(listOf(MediaItem("new", "New result")), 1)
-        )
+        secondResponse.complete(PagedSearch(listOf(MediaItem("new", "New result")), 1))
         runCurrent()
         assertEquals("du", viewModel.uiState.value.resultQuery)
         assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
         assertFalse(viewModel.uiState.value.loading)
 
-        firstResponse.complete(
-            PagedSearch(listOf(MediaItem("old", "Old result")), 1)
-        )
+        firstResponse.complete(PagedSearch(listOf(MediaItem("old", "Old result")), 1))
         advanceUntilIdle()
         assertEquals("du", viewModel.uiState.value.resultQuery)
         assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
@@ -115,10 +110,9 @@ class SearchLibraryViewModelTest {
 
     @Test
     fun blankQueryClearsResultsWithoutIssuingAnotherRequest() = runTest {
-        val source =
-            FakeSearchDataSource { _, _ ->
-                PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
-            }
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("d")
@@ -159,22 +153,21 @@ class SearchLibraryViewModelTest {
 
     @Test
     fun searchLoadsNextPageInOrderAndRemovesDuplicateItems() = runTest {
-        val source =
-            FakeSearchDataSource { _, page ->
-                when (page) {
-                    1 ->
-                        PagedSearch(
-                            listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
-                            3,
-                        )
-                    2 ->
-                        PagedSearch(
-                            listOf(MediaItem("two", "Two"), MediaItem("three", "Three")),
-                            3,
-                        )
-                    else -> error("unexpected page $page")
-                }
+        val source = FakeSearchDataSource { _, page ->
+            when (page) {
+                1 ->
+                    PagedSearch(
+                        listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
+                        3,
+                    )
+                2 ->
+                    PagedSearch(
+                        listOf(MediaItem("two", "Two"), MediaItem("three", "Three")),
+                        3,
+                    )
+                else -> error("unexpected page $page")
             }
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("item")
@@ -190,13 +183,12 @@ class SearchLibraryViewModelTest {
 
     @Test
     fun searchStopsRequestingWhenLoadedResultsReachServerTotal() = runTest {
-        val source =
-            FakeSearchDataSource { _, _ ->
-                PagedSearch(
-                    listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
-                    2,
-                )
-            }
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(
+                listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
+                2,
+            )
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("item")
@@ -210,16 +202,15 @@ class SearchLibraryViewModelTest {
     @Test
     fun failedSearchPageRetainsResultsAndCanBeRetried() = runTest {
         var pageTwoAttempts = 0
-        val source =
-            FakeSearchDataSource { _, page ->
-                when (page) {
-                    1 -> PagedSearch(listOf(MediaItem("one", "One")), 2)
-                    2 ->
-                        if (pageTwoAttempts++ == 0) error("temporary failure")
-                        else PagedSearch(listOf(MediaItem("two", "Two")), 2)
-                    else -> error("unexpected page $page")
-                }
+        val source = FakeSearchDataSource { _, page ->
+            when (page) {
+                1 -> PagedSearch(listOf(MediaItem("one", "One")), 2)
+                2 ->
+                    if (pageTwoAttempts++ == 0) error("temporary failure")
+                    else PagedSearch(listOf(MediaItem("two", "Two")), 2)
+                else -> error("unexpected page $page")
             }
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("item")
@@ -352,9 +343,7 @@ class SearchLibraryViewModelTest {
     }
 }
 
-private class FakeSearchDataSource(
-    private val response: suspend (String, Int) -> PagedSearch,
-) :
+private class FakeSearchDataSource(private val response: suspend (String, Int) -> PagedSearch) :
     SearchDataSource {
     val queries = mutableListOf<String>()
     val pages = mutableListOf<Int>()

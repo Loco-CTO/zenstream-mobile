@@ -216,17 +216,16 @@ class SearchOverlayTest {
     @Test
     fun gridLoadsOneMorePageNearTheEndAndShowsRetryFooterAfterFailure() {
         var pageTwoAttempts = 0
-        val source =
-            PagedSearchDataSource { _, page ->
-                when (page) {
-                    1 -> PagedSearch(listOf(MediaItem("one", "Dune")), 2)
-                    2 -> {
-                        if (pageTwoAttempts++ == 0) error("temporary failure")
-                        PagedSearch(listOf(MediaItem("two", "Dune 2")), 2)
-                    }
-                    else -> error("unexpected page $page")
+        val source = PagedSearchDataSource { _, page ->
+            when (page) {
+                1 -> PagedSearch(listOf(MediaItem("one", "Dune")), 2)
+                2 -> {
+                    if (pageTwoAttempts++ == 0) error("temporary failure")
+                    PagedSearch(listOf(MediaItem("two", "Dune 2")), 2)
                 }
+                else -> error("unexpected page $page")
             }
+        }
         composeRule.setContent {
             ZenStreamTheme {
                 SearchOverlayScreen(
@@ -410,9 +409,8 @@ private class FakeSearchDataSource(private val response: suspend (String) -> Lis
     }
 }
 
-private class PagedSearchDataSource(
-    private val response: suspend (String, Int) -> PagedSearch,
-) : SearchDataSource {
+private class PagedSearchDataSource(private val response: suspend (String, Int) -> PagedSearch) :
+    SearchDataSource {
     val pages = mutableListOf<Int>()
 
     override suspend fun clearSession() = Unit
