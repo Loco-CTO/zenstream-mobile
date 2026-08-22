@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -53,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -60,8 +62,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.AppUpdate
@@ -74,6 +74,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.AppViewModel
+import com.zenstream.zenstreammobile.ui.NotificationsViewModel
 import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
@@ -84,6 +85,7 @@ import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
+import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
@@ -94,10 +96,23 @@ private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val FAVORITES = "favorites"
 private const val MYPAGE = "my-page"
+private const val NOTIFICATIONS = "notifications"
 private const val DETAIL = "detail/{itemId}"
 
 internal fun shouldShowMainSearchAction(route: String): Boolean =
     route == HOME || route == FAVORITES || route == LIBRARY
+
+internal fun shouldKeepMainBottomBarVisible(route: String): Boolean = route == MYPAGE
+
+internal fun shouldResetMyPageNavigationOnRouteChange(
+    previousRoute: String,
+    currentRoute: String,
+): Boolean = previousRoute == MYPAGE && currentRoute != MYPAGE
+
+internal fun shouldResetMyPageNavigationOnReselection(
+    currentRoute: String,
+    selectedRoute: String,
+): Boolean = currentRoute == MYPAGE && selectedRoute == MYPAGE
 
 @Composable
 fun ZenStreamApp(
@@ -194,6 +209,12 @@ private fun MainScaffold(
 ) {
     val syncplay = remember(session.token) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val notificationsViewModel: NotificationsViewModel =
+        viewModel(
+            key = "notifications-${session.userId}-${session.token}",
+            factory = NotificationsViewModel.Factory(repository, session),
+        )
+    val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
     val toast = rememberToastHostState()
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
@@ -205,7 +226,6 @@ private fun MainScaffold(
         } else {
             currentRoute
         }
-    val searchOverlayOpen = currentRoute == SEARCH
     val density = LocalDensity.current
     val context = LocalContext.current
     var followedGeneration by remember { mutableStateOf<String?>(null) }
@@ -247,6 +267,19 @@ private fun MainScaffold(
         }
     var bottomBarVisible by remember { mutableStateOf(true) }
     var topBarVisible by remember { mutableStateOf(true) }
+    var contentScrollable by remember { mutableStateOf(false) }
+    var myPageNavigationResetKey by remember { mutableStateOf(0) }
+    var lastMainRoute by remember { mutableStateOf(mainRoute) }
+    val onContentScrollabilityChanged: (Boolean) -> Unit =
+        remember(bottomBarVisibility, topBarVisibility) {
+            { isScrollable ->
+                contentScrollable = isScrollable
+                if (!isScrollable) {
+                    bottomBarVisible = bottomBarVisibility.resetForRoute()
+                    topBarVisible = topBarVisibility.resetForRoute()
+                }
+            }
+        }
     val scrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(
@@ -258,11 +291,13 @@ private fun MainScaffold(
                     bottomBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable = contentScrollable,
                     )
                 topBarVisible =
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
+                        isScrollable = contentScrollable,
                     )
                 return Offset.Zero
             }
@@ -270,12 +305,19 @@ private fun MainScaffold(
     }
 
     LaunchedEffect(mainRoute) {
+        if (shouldResetMyPageNavigationOnRouteChange(lastMainRoute, mainRoute)) {
+            myPageNavigationResetKey += 1
+        }
+        lastMainRoute = mainRoute
+        contentScrollable = false
         bottomBarVisible = bottomBarVisibility.resetForRoute()
         topBarVisible = topBarVisibility.resetForRoute()
+        if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
     }
+    LaunchedEffect(session.token) { notificationsViewModel.refresh() }
 
     val detailRoute = mainRoute == DETAIL.substringBefore("/")
-    val topBarHidden = detailRoute || mainRoute == MYPAGE
+    val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
 
     androidx.compose.material3.Scaffold(
         topBar = {
@@ -298,9 +340,12 @@ private fun MainScaffold(
                         MainTopBar(
                             syncplay = syncplay,
                             session = session,
-                            showSearchAction =
-                                !searchOverlayOpen && shouldShowMainSearchAction(mainRoute),
+                            showSearchAction = shouldShowMainSearchAction(mainRoute),
                             onSearch = { navigateToSearch(navController) },
+                            unreadCount = notificationsState.unreadCount,
+                            onNotifications = {
+                                navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                            },
                             onReturnToView = { group ->
                                 group.mediaItemId()?.let { launchPlayback(context, it, "") }
                             },
@@ -310,7 +355,7 @@ private fun MainScaffold(
             }
         },
         bottomBar = {
-            if (!detailRoute) {
+            if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
@@ -321,7 +366,7 @@ private fun MainScaffold(
                             .navigationBarsPadding()
                 ) {
                     AnimatedVisibility(
-                        visible = bottomBarVisible,
+                        visible = shouldKeepMainBottomBarVisible(mainRoute) || bottomBarVisible,
                         enter =
                             expandVertically(expandFrom = Alignment.Bottom) +
                                 slideInVertically(initialOffsetY = { it }) +
@@ -335,6 +380,9 @@ private fun MainScaffold(
                             currentRoute = mainRoute,
                             session = session,
                             onDestinationClick = { route ->
+                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                    myPageNavigationResetKey += 1
+                                }
                                 navigateToMainDestination(navController, route)
                             },
                         )
@@ -356,6 +404,7 @@ private fun MainScaffold(
                         session,
                         padding,
                         onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
                 dialog(
@@ -371,6 +420,13 @@ private fun MainScaffold(
                     SearchOverlayScreen(
                         repository = repository,
                         session = session,
+                        currentRoute = mainRoute,
+                        onDestinationClick = { route ->
+                            if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                myPageNavigationResetKey += 1
+                            }
+                            navigateToMainDestination(navController, route)
+                        },
                         onDismiss = { navController.popBackStack() },
                         onItemClick = { item ->
                             navigateToDetail(navController, item.id)
@@ -379,21 +435,21 @@ private fun MainScaffold(
                 }
                 composable(LIBRARY) {
                     LibraryScreen(
-                        repository,
-                        session,
-                        padding,
-                    ) { item ->
-                        navigateToDetail(navController, item.id)
-                    }
+                        repository = repository,
+                        session = session,
+                        padding = padding,
+                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
                 }
                 composable(FAVORITES) {
                     FavoritesScreen(
-                        repository,
-                        session,
-                        padding,
-                    ) { item ->
-                        navigateToDetail(navController, item.id)
-                    }
+                        repository = repository,
+                        session = session,
+                        padding = padding,
+                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
                 }
                 composable(MYPAGE) {
                     MyPageScreen(
@@ -405,6 +461,20 @@ private fun MainScaffold(
                         onPickAvatar = onPickAvatar,
                         avatarPickerResult = avatarPickerResult,
                         onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
+                        onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
+                        onOpenNotifications = {
+                            navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                        },
+                        navigationResetKey = myPageNavigationResetKey,
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
+                }
+                composable(NOTIFICATIONS) {
+                    NotificationsScreen(
+                        repository = repository,
+                        session = session,
+                        onBack = { navController.popBackStack() },
+                        onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
                     )
                 }
                 composable(
@@ -503,6 +573,8 @@ internal fun MainTopBar(
     onReturnToView: (SyncplayGroup) -> Unit = {},
     showSearchAction: Boolean = false,
     onSearch: () -> Unit = {},
+    unreadCount: Int = 0,
+    onNotifications: () -> Unit = {},
 ) {
     TopAppBar(
         title = {
@@ -514,20 +586,44 @@ internal fun MainTopBar(
             )
         },
         actions = {
-            if (showSearchAction) {
-                IconButton(onClick = onSearch) {
-                    Icon(
-                        imageVector = BoldGroup.MagnifyingGlass,
-                        contentDescription = stringResource(R.string.search),
-                    )
-                }
-            }
             if (syncplay != null && session != null) {
                 SyncplayGroupMenu(
                     manager = syncplay,
                     session = session,
                     onReturnToView = onReturnToView,
                 )
+            }
+            Box {
+                IconButton(onClick = onNotifications) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_bell),
+                        contentDescription = stringResource(R.string.notifications),
+                    )
+                }
+                if (unreadCount > 0) {
+                    Box(
+                        modifier =
+                            Modifier.align(Alignment.TopEnd)
+                                .padding(top = 4.dp, end = 4.dp)
+                                .size(16.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+            }
+            if (showSearchAction) {
+                IconButton(onClick = onSearch) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        contentDescription = stringResource(R.string.search),
+                    )
+                }
             }
         },
         colors =
@@ -644,11 +740,19 @@ internal class ScrollVisibilityController(
      * Applies only movement consumed by a scrollable child. Unconsumed upward drags are common on
      * empty/short screens and must not hide the chrome.
      */
-    fun onNestedScroll(consumedY: Float, availableY: Float): Boolean =
-        onScroll(
+    fun onNestedScroll(
+        consumedY: Float,
+        availableY: Float,
+        isScrollable: Boolean = true,
+    ): Boolean {
+        if (!isScrollable) {
+            return resetForRoute()
+        }
+        return onScroll(
             deltaY = consumedY,
             atTop = availableY > 0f && consumedY == 0f,
         )
+    }
 
     fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
         if (atTop) {
@@ -692,5 +796,5 @@ internal class ScrollVisibilityController(
     }
 }
 
-private const val HIDE_DISTANCE_DP = 56f
-private const val REVEAL_DISTANCE_DP = 64f
+internal const val HIDE_DISTANCE_DP = 56f
+internal const val REVEAL_DISTANCE_DP = 64f

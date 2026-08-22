@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.ui.player.InitialSeekController
@@ -387,6 +388,14 @@ class PlaybackParsingTest {
         assertEquals(300f, style.bottomSpacing)
         assertEquals(0f, style.borderSize)
         assertEquals(100f, style.backgroundOpacity)
+    }
+
+    @Test
+    fun ignoresLegacyRendererFieldWhenRestoringSubtitleStyle() {
+        assertEquals(
+            SubtitleStyle(fontFamily = "mono"),
+            subtitleStyleFromJson("{\"renderer\":\"overlay\",\"fontFamily\":\"mono\"}"),
+        )
     }
 
     @Test

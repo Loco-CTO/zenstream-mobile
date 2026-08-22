@@ -2,10 +2,10 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -77,6 +78,10 @@ fun MyPageScreen(
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
     onPasswordChanged: () -> Unit = {},
+    onOpenItem: (String) -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
+    navigationResetKey: Int = 0,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
     val settingsViewModel: SettingsViewModel =
         viewModel(
@@ -90,18 +95,54 @@ fun MyPageScreen(
     var removingAvatar by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
     var settingsSection by remember { mutableStateOf<MyPageSettingsSection?>(null) }
+    var profileOpen by remember { mutableStateOf(false) }
+    var calendarOpen by remember { mutableStateOf(false) }
     var passwordEditorOpen by remember { mutableStateOf(false) }
     var passwordChangeSucceeded by remember { mutableStateOf(false) }
+    var clearWatchHistoryOpen by remember { mutableStateOf(false) }
+    var clearingWatchHistory by remember { mutableStateOf(false) }
+    var clearWatchHistoryError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = {
+            !calendarOpen && (listState.canScrollForward || listState.canScrollBackward)
+        },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
 
-    BackHandler(enabled = settingsSection != null || passwordEditorOpen) {
+    LaunchedEffect(navigationResetKey) {
+        if (navigationResetKey == 0) return@LaunchedEffect
+        avatarActionsOpen = false
+        editorOpen = false
+        deleteConfirmationOpen = false
+        removingAvatar = false
+        avatarError = null
+        settingsSection = null
+        profileOpen = false
+        calendarOpen = false
+        passwordEditorOpen = false
+        passwordChangeSucceeded = false
+        clearWatchHistoryOpen = false
+        clearingWatchHistory = false
+        clearWatchHistoryError = false
+        listState.scrollToItem(0)
+    }
+
+    BackHandler(
+        enabled = calendarOpen || settingsSection != null || profileOpen || passwordEditorOpen
+    ) {
         if (passwordEditorOpen) {
             if (passwordChangeSucceeded) {
                 onPasswordChanged()
             } else {
                 passwordEditorOpen = false
             }
+        } else if (calendarOpen) {
+            calendarOpen = false
+        } else if (profileOpen) {
+            profileOpen = false
         } else {
             settingsSection = null
         }
@@ -113,100 +154,154 @@ fun MyPageScreen(
         }
     }
 
-    PullToRefreshLayout(
-        isRefreshing = settingsState.refreshing,
-        onRefresh = settingsViewModel::refresh,
-        modifier = Modifier.padding(outerPadding),
-    ) {
-        val activeSection = settingsSection
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding =
-                PaddingValues(
-                    start = 16.dp,
-                    top = if (activeSection == null && !passwordEditorOpen) 20.dp else 8.dp,
-                    end = 16.dp,
-                    bottom = 28.dp,
-                ),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+    if (calendarOpen) {
+        CalendarScreen(
+            repository = repository,
+            session = session,
+            modifier = Modifier.padding(outerPadding),
+            onBack = { calendarOpen = false },
+            onOpenItem = onOpenItem,
+            onScrollabilityChanged = onScrollabilityChanged,
+        )
+    } else {
+        PullToRefreshLayout(
+            isRefreshing = settingsState.refreshing,
+            onRefresh = settingsViewModel::refresh,
+            modifier = Modifier.padding(outerPadding),
         ) {
-            if (passwordEditorOpen) {
-                item {
-                    ChangePasswordSectionHeader(
-                        onBack = {
-                            if (passwordChangeSucceeded) {
-                                onPasswordChanged()
-                            } else {
-                                passwordEditorOpen = false
+            val activeSection = settingsSection
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding =
+                    PaddingValues(
+                        start = 16.dp,
+                        top =
+                            if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
+                            else 8.dp,
+                        end = 16.dp,
+                        bottom = 28.dp,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                if (passwordEditorOpen) {
+                    item {
+                        ChangePasswordSectionHeader(
+                            onBack = {
+                                if (passwordChangeSucceeded) {
+                                    onPasswordChanged()
+                                } else {
+                                    passwordEditorOpen = false
+                                }
                             }
-                        }
-                    )
-                }
-                item {
-                    ChangePasswordForm(
-                        onSubmitPasswordChange = { currentPassword, newPassword, confirmNewPassword
-                            ->
-                            repository.changePassword(
-                                session,
+                        )
+                    }
+                    item {
+                        ChangePasswordForm(
+                            onSubmitPasswordChange = {
                                 currentPassword,
                                 newPassword,
-                                confirmNewPassword,
-                            )
-                        },
-                        onClose = { passwordEditorOpen = false },
-                        onContinueToLogin = onPasswordChanged,
-                        onSuccessStateChanged = { passwordChangeSucceeded = it },
-                    )
-                }
-            } else if (activeSection == null) {
-                item {
-                    Text(
-                        text = stringResource(R.string.my_page),
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                }
-                item {
-                    ProfileCard(
-                        session = session,
-                        onEditAvatar = { avatarActionsOpen = true },
-                        onChangePassword = {
-                            passwordChangeSucceeded = false
-                            passwordEditorOpen = true
-                        },
-                        avatarError = avatarError,
-                    )
-                }
-                item {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                }
-                item {
-                    MyPageSettingsTabs(onOpenSection = { settingsSection = it })
-                }
-                item { MyPageSettingsFooter(onLogout = onLogout) }
-            } else {
-                item {
-                    MyPageSectionHeader(
-                        section = activeSection,
-                        onBack = { settingsSection = null },
-                    )
-                }
-                item {
-                    MyPageSettingsContent(
-                        section = activeSection,
-                        state = settingsState,
-                        onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
-                        onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
-                        onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
-                        onPlayerEngineChange = settingsViewModel::setPlayerEngine,
-                        onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
-                        onCheckForUpdatesOnStartupChange =
-                            settingsViewModel::setCheckForUpdatesOnStartup,
-                        onSubtitleChange = settingsViewModel::updateSubtitle,
-                    )
+                                confirmNewPassword ->
+                                repository.changePassword(
+                                    session,
+                                    currentPassword,
+                                    newPassword,
+                                    confirmNewPassword,
+                                )
+                            },
+                            onClose = { passwordEditorOpen = false },
+                            onContinueToLogin = onPasswordChanged,
+                            onSuccessStateChanged = { passwordChangeSucceeded = it },
+                        )
+                    }
+                } else if (profileOpen) {
+                    item {
+                        ProfileSettingsPage(
+                            session = session,
+                            avatarError = avatarError,
+                            onBack = { profileOpen = false },
+                            onEditAvatar = { avatarActionsOpen = true },
+                            onChangePassword = {
+                                passwordChangeSucceeded = false
+                                passwordEditorOpen = true
+                            },
+                        )
+                    }
+                } else if (activeSection == null) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.my_page),
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                    }
+                    item {
+                        ProfileCard(
+                            session = session,
+                            onOpenProfile = { profileOpen = true },
+                            avatarError = avatarError,
+                        )
+                    }
+                    item {
+                        Text(
+                            text = stringResource(R.string.services),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    }
+                    item {
+                        MyPageServiceEntries(
+                            onOpenCalendar = { calendarOpen = true },
+                            onOpenNotifications = onOpenNotifications,
+                        )
+                    }
+                    item {
+                        Text(
+                            text = stringResource(R.string.settings),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    }
+                    item {
+                        MyPageSettingsTabs(onOpenSection = { settingsSection = it })
+                    }
+                    item { MyPageSettingsFooter(onLogout = onLogout) }
+                } else {
+                    item {
+                        MyPageSectionHeader(
+                            title =
+                                stringResource(
+                                    when (activeSection) {
+                                        MyPageSettingsSection.Appearance ->
+                                            R.string.appearance_group
+                                        MyPageSettingsSection.Player -> R.string.player_group
+                                        MyPageSettingsSection.Subtitles -> R.string.subtitles_group
+                                        MyPageSettingsSection.Privacy -> R.string.privacy_group
+                                        MyPageSettingsSection.Updates -> R.string.updates_group
+                                    }
+                                ),
+                            onBack = { settingsSection = null },
+                        )
+                    }
+                    item {
+                        MyPageSettingsContent(
+                            section = activeSection,
+                            state = settingsState,
+                            onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
+                            onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
+                            onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                            onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                            onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                            onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
+                            onCheckForUpdatesOnStartupChange =
+                                settingsViewModel::setCheckForUpdatesOnStartup,
+                            onWatchHistoryChange = settingsViewModel::setWatchHistoryEnabled,
+                            onClearWatchHistory = {
+                                clearWatchHistoryError = false
+                                clearWatchHistoryOpen = true
+                            },
+                            onSubtitleChange = settingsViewModel::updateSubtitle,
+                        )
+                    }
                 }
             }
         }
@@ -266,11 +361,29 @@ fun MyPageScreen(
             onPickedImageConsumed = onAvatarPickerResultConsumed,
         )
     }
+
+    if (clearWatchHistoryOpen) {
+        ClearWatchHistoryDialog(
+            clearing = clearingWatchHistory,
+            error = clearWatchHistoryError,
+            onDismiss = { clearWatchHistoryOpen = false },
+            onConfirm = {
+                clearingWatchHistory = true
+                clearWatchHistoryError = false
+                scope.launch {
+                    runCatching { settingsViewModel.clearWatchHistory() }
+                        .onSuccess { clearWatchHistoryOpen = false }
+                        .onFailure { clearWatchHistoryError = true }
+                    clearingWatchHistory = false
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun MyPageSectionHeader(
-    section: MyPageSettingsSection,
+internal fun MyPageSectionHeader(
+    title: String,
     onBack: () -> Unit,
 ) {
     Row(
@@ -285,13 +398,7 @@ private fun MyPageSectionHeader(
             )
         }
         Text(
-            text =
-                when (section) {
-                    MyPageSettingsSection.Appearance -> stringResource(R.string.appearance_group)
-                    MyPageSettingsSection.Player -> stringResource(R.string.player_group)
-                    MyPageSettingsSection.Subtitles -> stringResource(R.string.subtitles_group)
-                    MyPageSettingsSection.Updates -> stringResource(R.string.updates_group)
-                },
+            text = title,
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.semantics { heading() },
         )
@@ -613,67 +720,147 @@ private fun AvatarActionRow(
 }
 
 @Composable
-internal fun ProfileCard(
+internal fun ProfileSettingsPage(
     session: AuthSession,
+    avatarError: String?,
+    onBack: () -> Unit,
     onEditAvatar: () -> Unit,
-    onChangePassword: () -> Unit = {},
-    avatarError: String? = null,
+    onChangePassword: () -> Unit,
 ) {
-    BoxWithConstraints {
-        val compact = maxWidth < 360.dp
-        Card(
-            colors =
-                CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(22.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        MyPageSectionHeader(
+            title = stringResource(R.string.account_settings),
+            onBack = onBack,
+        )
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            if (compact) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    ProfileIdentity(session, avatarError)
-                    AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
-                    ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    UserAvatar(
-                        session = session,
-                        userId = session.userId,
-                        username = session.username,
-                        modifier = Modifier.size(96.dp),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        ProfileDetails(session, avatarError)
-                        Spacer(Modifier.height(12.dp))
-                        AvatarButton(onEditAvatar, Modifier.fillMaxWidth(), session)
-                        ChangePasswordButton(onChangePassword, Modifier.fillMaxWidth())
-                    }
-                }
-            }
+            UserAvatar(
+                session = session,
+                userId = session.userId,
+                username = session.username,
+                modifier = Modifier.size(112.dp),
+            )
+            ProfileDetails(session, avatarError, Modifier.weight(1f))
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ProfileSettingsActionButton(
+                icon = LucideR.drawable.lucide_ic_image,
+                label =
+                    stringResource(
+                        if (session.avatarVersion == null) R.string.add_avatar
+                        else R.string.change_avatar
+                    ),
+                onClick = onEditAvatar,
+                primary = true,
+            )
+            ProfileSettingsActionButton(
+                icon = LucideR.drawable.lucide_ic_lock,
+                label = stringResource(R.string.change_password),
+                onClick = onChangePassword,
+                primary = false,
+            )
         }
     }
 }
 
 @Composable
-private fun ProfileIdentity(session: AuthSession, avatarError: String?) {
+private fun ProfileSettingsActionButton(
+    icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    primary: Boolean,
+) {
+    val buttonModifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
+    if (primary) {
+        Button(
+            onClick = onClick,
+            modifier = buttonModifier,
+            shape = RoundedCornerShape(18.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            ProfileSettingsActionContent(icon = icon, label = label)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = buttonModifier,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .82f)),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            ProfileSettingsActionContent(icon = icon, label = label)
+        }
+    }
+}
+
+@Composable
+private fun ProfileSettingsActionContent(icon: Int, label: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        UserAvatar(
-            session = session,
-            userId = session.userId,
-            username = session.username,
-            modifier = Modifier.size(96.dp),
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
         )
-        ProfileDetails(session, avatarError, Modifier.weight(1f))
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+internal fun ProfileCard(
+    session: AuthSession,
+    onOpenProfile: () -> Unit,
+    avatarError: String? = null,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenProfile),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            UserAvatar(
+                session = session,
+                userId = session.userId,
+                username = session.username,
+                modifier = Modifier.size(72.dp),
+            )
+            ProfileDetails(session, avatarError, Modifier.weight(1f))
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        }
     }
 }
 
@@ -702,30 +889,5 @@ private fun ProfileDetails(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-    }
-}
-
-@Composable
-private fun AvatarButton(
-    onEditAvatar: () -> Unit,
-    modifier: Modifier,
-    session: AuthSession,
-) {
-    OutlinedButton(onClick = onEditAvatar, modifier = modifier) {
-        Text(
-            stringResource(
-                if (session.avatarVersion == null) R.string.add_avatar else R.string.change_avatar
-            )
-        )
-    }
-}
-
-@Composable
-private fun ChangePasswordButton(
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    OutlinedButton(onClick = onClick, modifier = modifier) {
-        Text(stringResource(R.string.change_password))
     }
 }

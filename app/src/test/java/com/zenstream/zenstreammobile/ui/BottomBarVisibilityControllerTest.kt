@@ -61,6 +61,26 @@ class ScrollVisibilityControllerTest {
         assertFalse(controller.onNestedScroll(consumedY = -56f, availableY = 0f))
     }
 
+    @Test
+    fun nonScrollableContentKeepsChromeVisibleAndResetsHiddenState() {
+        val controller = controller()
+
+        assertFalse(
+            controller.onNestedScroll(
+                consumedY = -56f,
+                availableY = 0f,
+                isScrollable = true,
+            )
+        )
+        assertTrue(
+            controller.onNestedScroll(
+                consumedY = -100f,
+                availableY = 0f,
+                isScrollable = false,
+            )
+        )
+    }
+
     private fun controller() =
         ScrollVisibilityController(
             hideDistance = 56f,

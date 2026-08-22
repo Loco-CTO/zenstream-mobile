@@ -39,56 +39,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Prepare CI debug signing key
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_CI_DEBUG_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEY_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_CI_DEBUG_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
-          [ -n "$KEYSTORE_PASSWORD" ] || { echo 'ANDROID_CI_DEBUG_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
-          [ -n "$KEY_ALIAS" ] || { echo 'ANDROID_CI_DEBUG_KEY_ALIAS is not configured.' >&2; exit 1; }
-          [ -n "$KEY_PASSWORD" ] || { echo 'ANDROID_CI_DEBUG_KEY_PASSWORD is not configured.' >&2; exit 1; }
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-ci-debug.jks"
-          test -s "$RUNNER_TEMP/zenstream-ci-debug.jks"
-
       - name: Apply formatting on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bash ./gradlew spotlessApply
 
       - name: Run formatting, lint, tests, and debug build
-        env:
-          ANDROID_CI_DEBUG_STORE_FILE: ${{ runner.temp }}/zenstream-ci-debug.jks
-          ANDROID_CI_DEBUG_STORE_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEYSTORE_PASSWORD }}
-          ANDROID_CI_DEBUG_KEY_ALIAS: ${{ secrets.ANDROID_CI_DEBUG_KEY_ALIAS }}
-          ANDROID_CI_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_CI_DEBUG_KEY_PASSWORD }}
         run: bash ./gradlew spotlessCheck lint test assembleDebug
-
-      - name: Prepare debug APK
-        id: apk
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)
-          main=$(sed -nE 's/.*"main"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' .main-version.json)
-          [ -n "$version" ] || { echo 'Could not read semantic version.' >&2; exit 1; }
-          [ -n "$main" ] || { echo 'Could not read main version counter.' >&2; exit 1; }
-          build_version="$version-main.$main"
-          artifact_dir="$RUNNER_TEMP/zenstream-mobile-debug"
-          mkdir -p "$artifact_dir"
-          cp app/build/outputs/apk/debug/app-debug.apk "$artifact_dir/zenstream-mobile-v$build_version-debug.apk"
-          echo "version=$build_version" >> "$GITHUB_OUTPUT"
-          echo "path=$artifact_dir" >> "$GITHUB_OUTPUT"
-
-      - name: Upload debug APK artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
-        with:
-          name: zenstream-mobile-debug-v${{ steps.apk.outputs.version }}
-          path: ${{ steps.apk.outputs.path }}
-          if-no-files-found: error

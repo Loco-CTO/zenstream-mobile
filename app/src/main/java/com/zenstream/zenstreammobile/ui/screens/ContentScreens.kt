@@ -17,13 +17,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,9 +49,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -63,6 +66,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -73,6 +78,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,9 +93,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.MagnifyingGlass
-import com.adamglin.phosphoricons.bold.X
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -115,6 +118,9 @@ import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
+import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
+import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
+import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
 
 @Composable
@@ -122,6 +128,7 @@ fun HomeScreen(
     repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: HomeViewModel =
@@ -130,6 +137,11 @@ fun HomeScreen(
             factory = HomeViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
     when {
         state.error ->
             ErrorState(
@@ -149,6 +161,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(padding),
             ) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 20.dp),
                 ) {
@@ -335,33 +348,11 @@ internal fun calculateFeatureBarHeight(maxWidth: Dp, screenHeightDp: Int) =
     minOf(maxWidth / FEATURE_BAR_ASPECT_RATIO, featureBarMaxHeight(screenHeightDp))
 
 @Composable
-fun SearchScreen(
-    repository: SearchDataSource,
-    session: AuthSession,
-    padding: PaddingValues,
-    onItemClick: (MediaItem) -> Unit,
-) {
-    val vm: SearchViewModel =
-        viewModel(
-            key = "search-${session.userId}-${session.token}",
-            factory = SearchViewModel.Factory(repository, session),
-        )
-    val state by vm.uiState.collectAsStateWithLifecycle()
-    SearchResultsContent(
-        state = state,
-        session = session,
-        padding = padding,
-        onQueryChange = vm::updateQuery,
-        onRetry = vm::retry,
-        onRefresh = vm::refresh,
-        onItemClick = onItemClick,
-    )
-}
-
-@Composable
 fun SearchOverlayScreen(
     repository: SearchDataSource,
     session: AuthSession,
+    currentRoute: String,
+    onDestinationClick: (String) -> Unit,
     onDismiss: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
 ) {
@@ -372,89 +363,95 @@ fun SearchOverlayScreen(
             factory = SearchViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var submitted by remember { mutableStateOf(false) }
-    var draftQuery by remember { mutableStateOf("") }
-    val effectiveQuery = if (submitted) state.query else draftQuery
-    val activeSearch = isSearchQueryActive(effectiveQuery)
-    val scrimColor =
-        if (activeSearch) MaterialTheme.colorScheme.background else Color.Black.copy(alpha = .52f)
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val bottomBarVisibility =
+        remember(density) {
+            ScrollVisibilityController(
+                hideDistance = with(density) { HIDE_DISTANCE_DP.dp.toPx() },
+                revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
+            )
+        }
+    var bottomBarVisible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        searchFocusRequester.requestFocus()
+        bottomBarVisible = bottomBarVisibility.resetForRoute()
+    }
 
     Box(
         modifier =
             Modifier.fillMaxSize()
-                .background(scrimColor)
-                .clickable(onClick = onDismiss)
-                .testTag(if (activeSearch) "search-overlay-solid" else "search-overlay-transparent")
+                .background(MaterialTheme.colorScheme.background)
+                .testTag("search-overlay-solid")
     ) {
-        if (submitted) {
-            Surface(
-                modifier =
-                    Modifier.fillMaxSize()
-                        .padding(16.dp)
-                        .systemBarsPadding()
-                        .imePadding()
-                        .clickable(onClick = {})
-                        .testTag("search-dialog"),
-                color = MaterialTheme.colorScheme.background,
-                shape = MaterialTheme.shapes.large,
-            ) {
-                SearchResultsContent(
-                    state = state,
-                    session = session,
-                    padding = PaddingValues(),
-                    onQueryChange = { value ->
-                        if (isSearchQueryActive(value)) {
-                            vm.updateQuery(value)
-                        } else {
-                            draftQuery = value
-                            submitted = false
-                            vm.updateQuery("")
-                        }
-                    },
-                    onRetry = vm::retry,
-                    onRefresh = vm::refresh,
-                    onItemClick = { item ->
-                        onDismiss()
-                        onItemClick(item)
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        } else {
-            Surface(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                        .systemBarsPadding()
-                        .imePadding()
-                        .clickable(onClick = {})
-                        .testTag("search-dialog"),
-                color = MaterialTheme.colorScheme.surface,
-                shape = MaterialTheme.shapes.large,
-            ) {
-                SearchField(
-                    value = draftQuery,
-                    onValueChange = { draftQuery = it },
-                    onSubmit = {
-                        val normalized = draftQuery.trim()
-                        if (isSearchQueryActive(normalized)) {
-                            draftQuery = normalized
-                            submitted = true
-                            vm.updateQuery(normalized)
-                        }
-                    },
-                    onClear = { draftQuery = "" },
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
+        Scaffold(
+            modifier = Modifier.fillMaxSize().testTag("search-dialog"),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                Box(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .navigationBarsPadding()
+                ) {
+                    AnimatedVisibility(
+                        visible = bottomBarVisible,
+                        enter =
+                            expandVertically(expandFrom = Alignment.Bottom) +
+                                slideInVertically(initialOffsetY = { it }) +
+                                fadeIn(),
+                        exit =
+                            shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                                slideOutVertically(targetOffsetY = { it }) +
+                                fadeOut(),
+                    ) {
+                        MainNavigationBar(
+                            currentRoute = currentRoute,
+                            session = session,
+                            onDestinationClick = onDestinationClick,
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            SearchResultsContent(
+                state = state,
+                session = session,
+                padding = padding,
+                onQueryChange = vm::updateQuery,
+                onRetry = {
+                    focusManager.clearFocus()
+                    vm.retry()
+                },
+                onLoadMore = vm::loadMore,
+                onItemClick = { item ->
+                    onDismiss()
+                    onItemClick(item)
+                },
+                onNestedScroll = { consumedY, availableY, isScrollable ->
+                    bottomBarVisible =
+                        bottomBarVisibility.onNestedScroll(
+                            consumedY = consumedY,
+                            availableY = availableY,
+                            isScrollable = isScrollable,
+                        )
+                },
+                onScrollabilityChanged = { isScrollable ->
+                    if (!isScrollable) {
+                        bottomBarVisible = bottomBarVisibility.resetForRoute()
+                    }
+                },
+                searchFieldModifier = Modifier.focusRequester(searchFocusRequester),
+                showBackButton = true,
+                onBack = onDismiss,
+                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 16.dp),
+            )
         }
     }
 }
-
-internal const val MIN_SEARCH_QUERY_LENGTH = 2
-
-internal fun isSearchQueryActive(query: String): Boolean =
-    query.trim().length >= MIN_SEARCH_QUERY_LENGTH
 
 @Composable
 private fun SearchResultsContent(
@@ -463,11 +460,19 @@ private fun SearchResultsContent(
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit,
-    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
+    onNestedScroll: (consumedY: Float, availableY: Float, isScrollable: Boolean) -> Unit =
+        { _, _, _ ->
+        },
+    onScrollabilityChanged: (Boolean) -> Unit = {},
+    searchFieldModifier: Modifier = Modifier,
+    showBackButton: Boolean = false,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val topBarVisibility =
         remember(density) {
             ScrollVisibilityController(
@@ -476,25 +481,62 @@ private fun SearchResultsContent(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                topBarVisible =
-                    topBarVisibility.onNestedScroll(
-                        consumedY = consumed.y,
-                        availableY = available.y,
-                    )
-                return Offset.Zero
+    val topBarScrollConnection =
+        remember(gridState) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    val isScrollable = gridState.canScrollForward || gridState.canScrollBackward
+                    topBarVisible =
+                        topBarVisibility.onNestedScroll(
+                            consumedY = consumed.y,
+                            availableY = available.y,
+                            isScrollable = isScrollable,
+                        )
+                    onNestedScroll(consumed.y, available.y, isScrollable)
+                    return Offset.Zero
+                }
             }
         }
-    }
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
+    LaunchedEffect(
+        gridState,
+        state.results.size,
+        state.totalRecordCount,
+        state.loading,
+        state.loadingMore,
+        state.loadMoreError,
+        state.error,
+        onLoadMore,
+    ) {
+        snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
+            if (
+                lastVisible >= 0 &&
+                    lastVisible >= state.results.size - 4 &&
+                    state.results.size < state.totalRecordCount &&
+                    !state.loading &&
+                    !state.loadingMore &&
+                    !state.loadMoreError &&
+                    !state.error
+            ) {
+                onLoadMore()
+            }
+        }
+    }
+    ObserveScrollability(
+        canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
+        onScrollabilityChanged = { isScrollable ->
+            onScrollabilityChanged(isScrollable)
+            if (!isScrollable) {
+                topBarVisible = topBarVisibility.resetForRoute()
+            }
+        },
+    )
     Column(modifier.fillMaxSize().padding(padding)) {
         AnimatedVisibility(
             visible = topBarVisible,
@@ -508,16 +550,42 @@ private fun SearchResultsContent(
                     fadeOut(),
         ) {
             Column {
-                SearchField(
-                    value = state.query,
-                    onValueChange = onQueryChange,
-                    onSubmit = onRetry,
-                    onClear = { onQueryChange("") },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                if (state.query.trim().length >= 2 && !state.loading && !state.error) {
+                if (showBackButton) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                painter = painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                                contentDescription = stringResource(R.string.back),
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
+                        SearchField(
+                            value = state.query,
+                            onValueChange = onQueryChange,
+                            onSubmit = onRetry,
+                            onClear = { onQueryChange("") },
+                            compact = true,
+                            modifier = Modifier.weight(1f).height(56.dp).then(searchFieldModifier),
+                        )
+                    }
+                } else {
+                    SearchField(
+                        value = state.query,
+                        onValueChange = onQueryChange,
+                        onSubmit = onRetry,
+                        onClear = { onQueryChange("") },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .then(searchFieldModifier),
+                    )
+                }
+                if (state.resultQuery.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.search_result_count, state.results.size),
+                        stringResource(R.string.search_result_count, state.totalRecordCount),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
@@ -525,15 +593,25 @@ private fun SearchResultsContent(
                 }
             }
         }
-        PullToRefreshLayout(
-            isRefreshing = shouldShowPullToRefresh(state.loading, state.results.isNotEmpty()),
-            onRefresh = onRefresh,
-            modifier = Modifier.weight(1f).nestedScroll(topBarScrollConnection),
-        ) {
+        Box(Modifier.weight(1f).nestedScroll(topBarScrollConnection)) {
             when {
-                state.loading && state.results.isEmpty() -> CenterLoading(PaddingValues())
+                state.error && state.results.isNotEmpty() ->
+                    Column(Modifier.fillMaxSize()) {
+                        SearchErrorBanner(onRetry)
+                        SearchResultsGrid(
+                            items = state.results,
+                            gridState = gridState,
+                            session = session,
+                            loadingMore = state.loadingMore,
+                            loadMoreError = state.loadMoreError,
+                            onLoadMore = onLoadMore,
+                            onItemClick = onItemClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
                 state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, onRetry)
-                state.query.trim().length < 2 -> Unit
+                state.resultQuery.isEmpty() -> Unit
 
                 state.results.isEmpty() ->
                     Text(
@@ -543,23 +621,96 @@ private fun SearchResultsContent(
                     )
 
                 else ->
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
-                    ) {
-                        items(state.results.distinctBy { it.id }, key = { it.id }) { item ->
-                            Box(
-                                Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.TopCenter,
-                            ) {
-                                MediaCardForSearch(item, session, onItemClick)
-                            }
-                        }
-                    }
+                    SearchResultsGrid(
+                        items = state.results,
+                        gridState = gridState,
+                        session = session,
+                        loadingMore = state.loadingMore,
+                        loadMoreError = state.loadMoreError,
+                        onLoadMore = onLoadMore,
+                        onItemClick = onItemClick,
+                        modifier = Modifier.fillMaxSize(),
+                    )
             }
         }
+    }
+}
+
+@Composable
+private fun SearchResultsGrid(
+    items: List<MediaItem>,
+    gridState: LazyGridState,
+    session: AuthSession,
+    loadingMore: Boolean,
+    loadMoreError: Boolean,
+    onLoadMore: () -> Unit,
+    onItemClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = modifier,
+    ) {
+        items(items.distinctBy { it.id }, key = { it.id }) { item ->
+            Box(
+                Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                MediaCardForSearch(
+                    item,
+                    session,
+                    onItemClick = onItemClick,
+                )
+            }
+        }
+        if (loadingMore) {
+            item(
+                key = "search-loading-more",
+                span = {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                },
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+        }
+        if (loadMoreError) {
+            item(
+                key = "search-load-more-error",
+                span = {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                },
+            ) {
+                InlineLoadMoreError(onRetry = onLoadMore)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchErrorBanner(onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            stringResource(R.string.search_load_failed),
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }
 
@@ -569,22 +720,34 @@ private fun SearchField(
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onClear: () -> Unit,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        leadingIcon = {
-            Icon(
-                imageVector = BoldGroup.MagnifyingGlass,
-                contentDescription = null,
-            )
-        },
+        leadingIcon =
+            if (compact) {
+                null
+            } else {
+                {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        contentDescription = null,
+                    )
+                }
+            },
+        prefix =
+            if (compact) {
+                { Spacer(Modifier.width(4.dp)) }
+            } else {
+                null
+            },
         trailingIcon = {
             if (value.isNotEmpty())
                 IconButton(onClick = onClear) {
                     Icon(
-                        imageVector = BoldGroup.X,
+                        painter = painterResource(LucideR.drawable.lucide_ic_x),
                         contentDescription = stringResource(R.string.close),
                     )
                 }
@@ -593,6 +756,27 @@ private fun SearchField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+        colors =
+            if (compact) {
+                OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF252525),
+                    unfocusedContainerColor = Color(0xFF252525),
+                    disabledContainerColor = Color(0xFF252525),
+                    errorContainerColor = Color(0xFF252525),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    errorBorderColor = Color.Transparent,
+                )
+            } else {
+                OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    errorContainerColor = Color.Transparent,
+                )
+            },
+        shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth().then(modifier),
     )
 }
@@ -602,6 +786,7 @@ fun FavoritesScreen(
     repository: FavoritesDataSource,
     session: AuthSession,
     padding: PaddingValues,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: FavoritesViewModel =
@@ -613,6 +798,11 @@ fun FavoritesScreen(
     val episodes = state.items.filter { it.type.equals("Episode", ignoreCase = true) }
     val movies = state.items.filter { it.type.equals("Movie", ignoreCase = true) }
     val series = state.items.filter { it.type.equals("Series", ignoreCase = true) }
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
     Column(Modifier.fillMaxSize().padding(padding)) {
         FavoritesHeader(state.sort, state.totalRecordCount, vm::setSort)
         PullToRefreshLayout(
@@ -630,7 +820,10 @@ fun FavoritesScreen(
                         stringResource(R.string.no_favorites_hint),
                     )
                 else ->
-                    LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 20.dp),
+                    ) {
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
                                 FavoriteSection(
@@ -638,7 +831,7 @@ fun FavoritesScreen(
                                     episodes,
                                     session,
                                     wide = true,
-                                    onItemClick,
+                                    onItemClick = onItemClick,
                                 )
                             }
                         }
@@ -649,7 +842,7 @@ fun FavoritesScreen(
                                     movies,
                                     session,
                                     wide = false,
-                                    onItemClick,
+                                    onItemClick = onItemClick,
                                 )
                             }
                         }
@@ -825,6 +1018,7 @@ fun LibraryScreen(
     repository: LibraryDataSource,
     session: AuthSession,
     padding: PaddingValues,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: LibraryViewModel =
@@ -843,25 +1037,37 @@ fun LibraryScreen(
             )
         }
     var topBarVisible by remember { mutableStateOf(true) }
-    val topBarScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                topBarVisible =
-                    topBarVisibility.onNestedScroll(
-                        consumedY = consumed.y,
-                        availableY = available.y,
-                    )
-                return Offset.Zero
+    val topBarScrollConnection =
+        remember(gridState) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    topBarVisible =
+                        topBarVisibility.onNestedScroll(
+                            consumedY = consumed.y,
+                            availableY = available.y,
+                            isScrollable =
+                                gridState.canScrollForward || gridState.canScrollBackward,
+                        )
+                    return Offset.Zero
+                }
             }
         }
-    }
     LaunchedEffect(Unit) {
         topBarVisible = topBarVisibility.resetForRoute()
     }
+    ObserveScrollability(
+        canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
+        onScrollabilityChanged = { isScrollable ->
+            if (!isScrollable) {
+                topBarVisible = topBarVisibility.resetForRoute()
+            }
+            onScrollabilityChanged(isScrollable)
+        },
+    )
     LaunchedEffect(
         gridState,
         state.items.size,
@@ -955,7 +1161,11 @@ fun LibraryScreen(
                                 Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.TopCenter,
                             ) {
-                                LibraryPosterCard(item, session, onItemClick)
+                                LibraryPosterCard(
+                                    item,
+                                    session,
+                                    onItemClick,
+                                )
                             }
                         }
                         if (state.loadingMore) {

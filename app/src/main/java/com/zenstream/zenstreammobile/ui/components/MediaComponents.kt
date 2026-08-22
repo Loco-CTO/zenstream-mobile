@@ -118,7 +118,12 @@ fun MediaRowView(
                 }
             } else {
                 items(uniqueItems, key = { it.id }) { item ->
-                    MediaCard(item, session, row.wide, onItemClick)
+                    MediaCard(
+                        item,
+                        session,
+                        row.wide,
+                        onItemClick,
+                    )
                 }
             }
         }
@@ -205,7 +210,7 @@ private fun StackedEpisodeCard(
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
                     shape = RoundedCornerShape(50),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
                 ) {
                     Text(
                         text = stack.items.size.toString(),

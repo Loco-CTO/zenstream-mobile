@@ -6,6 +6,8 @@ import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.CalendarEvent
+import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
@@ -20,8 +22,11 @@ import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.NotificationItem
+import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -36,6 +41,7 @@ import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
+import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -850,30 +856,39 @@ class CatalogApi(
             )
         }
 
-    suspend fun search(session: AuthSession, query: String): List<MediaItem> =
+    suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch =
         withContext(Dispatchers.IO) {
-            if (query.trim().length < 2) return@withContext emptyList()
-            catalogItems(
+            if (query.trim().isEmpty()) return@withContext PagedSearch(emptyList(), 0)
+            val pageSize = 20
+            val json =
                 requestJson(
                     session,
-                    "/api/catalog/search?query=${android.net.Uri.encode(query.trim())}&pageSize=40",
+                    "/api/catalog/search",
+                    query =
+                        mapOf(
+                            "query" to query.trim(),
+                            "page" to page.coerceAtLeast(1).toString(),
+                            "pageSize" to pageSize.toString(),
+                            "view" to "card",
+                        ),
                 )
+            val parsed = catalogItems(json)
+            PagedSearch(
+                items = parsed,
+                totalRecordCount =
+                    json.optInt(
+                        "total",
+                        ((page.coerceAtLeast(1) - 1) * pageSize) + parsed.size,
+                    ),
             )
         }
 
     internal fun searchQuery(userId: String, query: String): Map<String, String> =
         mapOf(
-            "userId" to userId,
-            "searchTerm" to query.trim(),
-            "startIndex" to "0",
-            "limit" to "40",
-            "recursive" to "true",
-            "includeItemTypes" to "Series,Movie",
-            "fields" to ITEM_FIELDS,
-            "enableImages" to "true",
-            "imageTypeLimit" to "1",
-            "enableImageTypes" to ITEM_IMAGE_TYPES,
-            "enableUserData" to "true",
+            "query" to query.trim(),
+            "page" to "1",
+            "pageSize" to "20",
+            "view" to "card",
         )
 
     internal fun libraryItemsQuery(
@@ -1008,6 +1023,92 @@ class CatalogApi(
                 method = "PATCH",
                 body = JSONObject().put("played", played).toString(),
             )
+        }
+
+    suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/catalog/items/$itemId/state",
+                method = "PATCH",
+                body = JSONObject().put("following", following).toString(),
+            )
+        }
+
+    suspend fun calendar(
+        session: AuthSession,
+        start: Instant,
+        end: Instant,
+    ): CalendarResponse =
+        withContext(Dispatchers.IO) {
+            parseCalendarResponse(
+                requestJson(
+                    session,
+                    "/api/calendar",
+                    query =
+                        mapOf(
+                            "start" to start.toString(),
+                            "end" to end.toString(),
+                        ),
+                )
+            )
+        }
+
+    suspend fun setCalendarFollowing(
+        session: AuthSession,
+        eventId: String,
+        following: Boolean,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                    session,
+                    "/api/calendar/events/${android.net.Uri.encode(eventId)}/follow",
+                    method = "PATCH",
+                    body = JSONObject().put("following", following).toString(),
+                )
+                .optBoolean("following", following)
+        }
+
+    suspend fun notifications(
+        session: AuthSession,
+        limit: Int = 50,
+        cursor: String? = null,
+    ): NotificationPage =
+        withContext(Dispatchers.IO) {
+            val query = buildMap {
+                put("limit", limit.coerceIn(1, 100).toString())
+                cursor?.takeIf(String::isNotBlank)?.let { put("cursor", it) }
+            }
+            parseNotificationPage(requestJson(session, "/api/notifications", query = query))
+        }
+
+    suspend fun notificationSummary(session: AuthSession): Int =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/summary").optInt("unreadCount", 0)
+        }
+
+    suspend fun setNotificationRead(
+        session: AuthSession,
+        notificationId: String,
+        read: Boolean,
+    ) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/notifications/$notificationId",
+                method = "PATCH",
+                body = JSONObject().put("read", read).toString(),
+            )
+        }
+
+    suspend fun deleteNotification(session: AuthSession, notificationId: String) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/$notificationId", method = "DELETE")
+        }
+
+    suspend fun markAllNotificationsRead(session: AuthSession) =
+        withContext(Dispatchers.IO) {
+            requestJson(session, "/api/notifications/read-all", method = "POST")
         }
 
     private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
@@ -1191,6 +1292,71 @@ private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
             List(array.length()) { array.optJSONObject(it) ?: JSONObject() }
         }
         .orEmpty()
+
+internal fun parseNotificationPage(root: JSONObject): NotificationPage {
+    val items =
+        jsonArray(root, "items").mapNotNull { item ->
+            val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val thumbnail = item.optJSONObject("thumbnail")
+            NotificationItem(
+                id = id,
+                kind = item.optString("kind"),
+                title = item.optString("title").ifBlank { "ZenStream" },
+                subtitle = item.optNullableString("subtitle"),
+                itemId = item.optNullableString("itemId"),
+                seriesId = item.optNullableString("seriesId"),
+                seasonNumber = item.optIntOrNull("seasonNumber"),
+                episodeNumber = item.optIntOrNull("episodeNumber"),
+                createdAt = item.optString("createdAt"),
+                readAt = item.optNullableString("readAt"),
+                navigationTarget = item.optNullableString("navigationTarget"),
+                thumbnailUrl = thumbnail?.optNullableString("url"),
+                thumbnailBlurHash = thumbnail?.optNullableString("blurHash"),
+            )
+        }
+    return NotificationPage(
+        items = items,
+        unreadCount = root.optInt("unreadCount", 0).coerceAtLeast(0),
+        nextCursor = root.optNullableString("nextCursor"),
+    )
+}
+
+internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
+    val events =
+        jsonArray(root, "events")
+            .mapNotNull { event ->
+                val id = event.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+                CalendarEvent(
+                    id = id,
+                    provider = event.optString("provider"),
+                    libraryId = event.optString("libraryId"),
+                    libraryName = event.optString("libraryName"),
+                    kind = event.optString("kind"),
+                    releaseType = event.optString("releaseType"),
+                    eventAt = event.optString("eventAt"),
+                    eventDate = event.optString("eventDate"),
+                    allDay = event.optBoolean("allDay", false),
+                    seasonNumber = event.optIntOrNull("seasonNumber"),
+                    episodeNumber = event.optIntOrNull("episodeNumber"),
+                    hasFile = event.optBoolean("hasFile", false),
+                    monitored = event.optBoolean("monitored", false),
+                    state = event.optString("state").ifBlank { "future" },
+                    title = event.optNullableString("title"),
+                    seriesTitle = event.optNullableString("seriesTitle"),
+                    catalogItemId = event.optNullableString("catalogItemId"),
+                    catalogSeriesId = event.optNullableString("catalogSeriesId"),
+                    metadataStatus = event.optString("metadataStatus").ifBlank { "future" },
+                    following = event.optBoolean("following", false),
+                    followAvailable = event.optBoolean("followAvailable", false),
+                )
+            }
+            .distinctBy { it.id }
+    return CalendarResponse(
+        start = root.optString("start"),
+        end = root.optString("end"),
+        events = events,
+    )
+}
 
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
@@ -1431,6 +1597,10 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
             },
         played = state.optBoolean("played", false),
         favorite = state.optBoolean("favorite", false),
+        following =
+            if (type == "Movie" || type == "Series") {
+                state.optBoolean("following", false)
+            } else null,
         unplayedItemCount = state.optIntOrNull("unplayedItemCount"),
         playedPercentage = state.optDoubleOrNull("playedPercentage"),
         playbackPositionTicks =
@@ -1673,6 +1843,13 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> =
             seriesPrimaryImageTag = item.optString("SeriesPrimaryImageTag").ifBlank { null },
             played = userData?.optBoolean("Played") ?: false,
             favorite = userData?.optBoolean("IsFavorite") ?: false,
+            following =
+                if (
+                    item.optString("Type").equals("Movie", ignoreCase = true) ||
+                        item.optString("Type").equals("Series", ignoreCase = true)
+                ) {
+                    userData?.optBoolean("IsFollowing") ?: false
+                } else null,
             unplayedItemCount = userData?.optIntOrNull("UnplayedItemCount"),
             playedPercentage = userData?.optDoubleOrNull("PlayedPercentage"),
             playbackPositionTicks = userData?.optLongOrNull("PlaybackPositionTicks"),

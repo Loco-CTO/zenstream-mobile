@@ -28,6 +28,7 @@ import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
@@ -53,6 +54,8 @@ class ContentScreensTest {
                 SearchOverlayScreen(
                     repository = EmptySearchSource(),
                     session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
                     onDismiss = {},
                     onItemClick = {},
                 )
@@ -110,6 +113,25 @@ class ContentScreensTest {
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
         }
+    }
+
+    @Test
+    fun mediaCardsDoNotShowFollowAction() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                MediaCard(
+                    item = MediaItem("movie", "Movie", type = "Movie", following = true),
+                    session = session,
+                    wide = false,
+                    onClick = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.unfollow))
+            .assertDoesNotExist()
     }
 
     @Test
@@ -175,7 +197,8 @@ class ContentScreensTest {
 private class EmptySearchSource : SearchDataSource {
     override suspend fun clearSession() = Unit
 
-    override suspend fun search(session: AuthSession, query: String) = emptyList<MediaItem>()
+    override suspend fun search(session: AuthSession, query: String, page: Int) =
+        PagedSearch(emptyList(), 0)
 }
 
 private class LibraryScreenSource(

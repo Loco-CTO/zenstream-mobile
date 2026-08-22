@@ -8,16 +8,18 @@ import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
+import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.SortOrder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,26 +58,175 @@ class SearchLibraryViewModelTest {
     }
 
     @Test
-    fun searchDebouncesShortQueriesAndPublishesResults() = runTest {
-        val source = FakeSearchDataSource { listOf(MediaItem("dune", "Dune")) }
+    fun searchStartsImmediatelyForEveryNonBlankQuery() = runTest {
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        runCurrent()
+        assertEquals(listOf("d"), source.queries)
+
+        viewModel.updateQuery("du")
+        runCurrent()
+        assertEquals(listOf("d", "du"), source.queries)
+
+        assertEquals(listOf("dune"), viewModel.uiState.value.results.map { it.id })
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun searchRetainsCompletedResultsAndIgnoresOutOfOrderResponses() = runTest {
+        val firstResponse = CompletableDeferred<PagedSearch>()
+        val secondResponse = CompletableDeferred<PagedSearch>()
+        var request = 0
+        val source = FakeSearchDataSource { _, _ ->
+            val response = if (request++ == 0) firstResponse else secondResponse
+            withContext(NonCancellable) { response.await() }
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        runCurrent()
+        viewModel.updateQuery("du")
+        runCurrent()
+
+        assertEquals(listOf("d", "du"), source.queries)
+        assertTrue(viewModel.uiState.value.loading)
+
+        secondResponse.complete(PagedSearch(listOf(MediaItem("new", "New result")), 1))
+        runCurrent()
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
+        assertFalse(viewModel.uiState.value.loading)
+
+        firstResponse.complete(PagedSearch(listOf(MediaItem("old", "Old result")), 1))
+        advanceUntilIdle()
+        assertEquals("du", viewModel.uiState.value.resultQuery)
+        assertEquals(listOf("new"), viewModel.uiState.value.results.map { it.id })
+    }
+
+    @Test
+    fun blankQueryClearsResultsWithoutIssuingAnotherRequest() = runTest {
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
+        }
         val viewModel = SearchViewModel(source, session)
 
         viewModel.updateQuery("d")
         advanceUntilIdle()
-        assertTrue(source.queries.isEmpty())
+        viewModel.updateQuery("   ")
+        runCurrent()
 
+        assertEquals(listOf("d"), source.queries)
+        assertTrue(viewModel.uiState.value.results.isEmpty())
+        assertEquals("", viewModel.uiState.value.resultQuery)
+        assertFalse(viewModel.uiState.value.loading)
+        assertFalse(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun failedQueryRetainsLastSuccessfulResultsAndSetsRetryState() = runTest {
+        var request = 0
+        val source = FakeSearchDataSource { _, _ ->
+            if (request++ == 0) {
+                PagedSearch(listOf(MediaItem("dune", "Dune")), 1)
+            } else {
+                error("search failed")
+            }
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("d")
+        advanceUntilIdle()
         viewModel.updateQuery("du")
-        runCurrent()
-        assertTrue(source.queries.isEmpty())
-        advanceTimeBy(299)
-        runCurrent()
-        assertTrue(source.queries.isEmpty())
-        advanceTimeBy(1)
         advanceUntilIdle()
 
-        assertEquals(listOf("du"), source.queries)
+        assertEquals(listOf("d", "du"), source.queries)
+        assertTrue(viewModel.uiState.value.error)
+        assertEquals("d", viewModel.uiState.value.resultQuery)
         assertEquals(listOf("dune"), viewModel.uiState.value.results.map { it.id })
         assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun searchLoadsNextPageInOrderAndRemovesDuplicateItems() = runTest {
+        val source = FakeSearchDataSource { _, page ->
+            when (page) {
+                1 ->
+                    PagedSearch(
+                        listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
+                        3,
+                    )
+                2 ->
+                    PagedSearch(
+                        listOf(MediaItem("two", "Two"), MediaItem("three", "Three")),
+                        3,
+                    )
+                else -> error("unexpected page $page")
+            }
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("item")
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(listOf(1, 2), source.pages)
+        assertEquals(listOf("one", "two", "three"), viewModel.uiState.value.results.map { it.id })
+        assertEquals(3, viewModel.uiState.value.totalRecordCount)
+        assertFalse(viewModel.uiState.value.loadingMore)
+    }
+
+    @Test
+    fun searchStopsRequestingWhenLoadedResultsReachServerTotal() = runTest {
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(
+                listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
+                2,
+            )
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("item")
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(listOf(1), source.pages)
+    }
+
+    @Test
+    fun failedSearchPageRetainsResultsAndCanBeRetried() = runTest {
+        var pageTwoAttempts = 0
+        val source = FakeSearchDataSource { _, page ->
+            when (page) {
+                1 -> PagedSearch(listOf(MediaItem("one", "One")), 2)
+                2 ->
+                    if (pageTwoAttempts++ == 0) error("temporary failure")
+                    else PagedSearch(listOf(MediaItem("two", "Two")), 2)
+                else -> error("unexpected page $page")
+            }
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("item")
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(listOf("one"), viewModel.uiState.value.results.map { it.id })
+        assertTrue(viewModel.uiState.value.loadMoreError)
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(listOf("one", "two"), viewModel.uiState.value.results.map { it.id })
+        assertFalse(viewModel.uiState.value.loadMoreError)
+        assertEquals(2, pageTwoAttempts)
     }
 
     @Test
@@ -192,15 +343,17 @@ class SearchLibraryViewModelTest {
     }
 }
 
-private class FakeSearchDataSource(private val response: suspend (String) -> List<MediaItem>) :
+private class FakeSearchDataSource(private val response: suspend (String, Int) -> PagedSearch) :
     SearchDataSource {
     val queries = mutableListOf<String>()
+    val pages = mutableListOf<Int>()
 
     override suspend fun clearSession() = Unit
 
-    override suspend fun search(session: AuthSession, query: String): List<MediaItem> {
+    override suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch {
         queries += query
-        return response(query)
+        pages += page
+        return response(query, page)
     }
 }
 

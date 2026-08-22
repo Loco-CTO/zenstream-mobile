@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -21,6 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +39,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.adamglin.phosphoricons.BoldGroup
-import com.adamglin.phosphoricons.bold.ArrowsClockwise
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
@@ -52,7 +52,56 @@ internal enum class MyPageSettingsSection {
     Appearance,
     Player,
     Subtitles,
+    Privacy,
     Updates,
+}
+
+@Composable
+internal fun MyPageCalendarEntry(onOpen: () -> Unit) {
+    SettingsTabRow(
+        title = stringResource(R.string.calendar_open),
+        supporting = stringResource(R.string.calendar_settings_summary),
+        icon = {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_calendar_days),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        onClick = onOpen,
+    )
+}
+
+@Composable
+internal fun MyPageServiceEntries(
+    onOpenCalendar: () -> Unit,
+    onOpenNotifications: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        MyPageCalendarEntry(onOpen = onOpenCalendar)
+        MyPageNotificationsEntry(onOpen = onOpenNotifications)
+    }
+}
+
+@Composable
+internal fun MyPageNotificationsEntry(onOpen: () -> Unit) {
+    SettingsTabRow(
+        title = stringResource(R.string.notification_center),
+        supporting = stringResource(R.string.notification_center_summary),
+        icon = {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_bell),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        onClick = onOpen,
+    )
 }
 
 @Composable
@@ -101,11 +150,24 @@ internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) 
             onClick = { onOpenSection(MyPageSettingsSection.Subtitles) },
         )
         SettingsTabRow(
+            title = stringResource(R.string.privacy_group),
+            supporting = stringResource(R.string.privacy_settings_summary),
+            icon = {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_lock),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+            onClick = { onOpenSection(MyPageSettingsSection.Privacy) },
+        )
+        SettingsTabRow(
             title = stringResource(R.string.updates_group),
             supporting = stringResource(R.string.updates_settings_summary),
             icon = {
                 Icon(
-                    imageVector = BoldGroup.ArrowsClockwise,
+                    painter = painterResource(LucideR.drawable.lucide_ic_refresh_cw),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp),
@@ -125,7 +187,10 @@ internal fun MyPageSettingsContent(
     onPlaybackPreferenceChange: (String?, String?) -> Unit,
     onPlayerEngineChange: (PlayerEngine) -> Unit,
     onShowDebugIconChange: (Boolean) -> Unit,
+    onAutoplayNextEpisodeChange: (Boolean) -> Unit,
     onCheckForUpdatesOnStartupChange: (Boolean) -> Unit,
+    onWatchHistoryChange: (Boolean) -> Unit,
+    onClearWatchHistory: () -> Unit,
     onSubtitleChange: (SubtitleStyle.() -> SubtitleStyle) -> Unit,
 ) {
     when (section) {
@@ -188,6 +253,13 @@ internal fun MyPageSettingsContent(
                 EngineSelector(state.playerEngine, onPlayerEngineChange)
                 Spacer(Modifier.height(16.dp))
                 SettingSwitchRow(
+                    title = stringResource(R.string.autoplay_next_episode),
+                    supporting = stringResource(R.string.autoplay_next_episode_description),
+                    checked = state.autoplayNextEpisode,
+                    onCheckedChange = onAutoplayNextEpisodeChange,
+                )
+                Spacer(Modifier.height(16.dp))
+                SettingSwitchRow(
                     title = stringResource(R.string.player_show_debug_icon),
                     supporting = stringResource(R.string.player_show_debug_icon_description),
                     checked = state.showDebugIcon,
@@ -201,6 +273,28 @@ internal fun MyPageSettingsContent(
                 if (state.subtitleSaveError) {
                     SettingsErrorText(R.string.subtitle_save_failed)
                 }
+            }
+
+        MyPageSettingsSection.Privacy ->
+            SettingsSectionContent {
+                SettingSwitchRow(
+                    title = stringResource(R.string.watch_history),
+                    supporting = stringResource(R.string.watch_history_description),
+                    checked = state.watchHistoryEnabled,
+                    enabled = !state.watchHistorySaving,
+                    onCheckedChange = onWatchHistoryChange,
+                )
+                if (state.watchHistorySaveError) {
+                    SettingsErrorText(R.string.watch_history_save_failed)
+                }
+                Spacer(Modifier.height(8.dp))
+                SettingActionRow(
+                    title = stringResource(R.string.clear_watch_history),
+                    supporting = stringResource(R.string.clear_watch_history_description),
+                    actionLabel = stringResource(R.string.clear),
+                    destructive = true,
+                    onClick = onClearWatchHistory,
+                )
             }
 
         MyPageSettingsSection.Updates ->
@@ -480,6 +574,7 @@ private fun SettingSwitchRow(
     title: String,
     supporting: String,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -495,7 +590,42 @@ private fun SettingSwitchRow(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(enabled = enabled, checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun SettingActionRow(
+    title: String,
+    supporting: String,
+    actionLabel: String,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = supporting,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        TextButton(
+            onClick = onClick,
+            colors =
+                ButtonDefaults.textButtonColors(
+                    contentColor =
+                        if (destructive) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+                ),
+        ) {
+            Text(actionLabel)
+        }
     }
 }
 
@@ -620,6 +750,46 @@ private fun subtitleFontLabel(family: String): String =
             else -> R.string.subtitle_font_sans
         }
     )
+
+@Composable
+internal fun ClearWatchHistoryDialog(
+    clearing: Boolean,
+    error: Boolean = false,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!clearing) onDismiss() },
+        title = { Text(stringResource(R.string.clear_watch_history_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.clear_watch_history_description))
+                if (error) {
+                    Text(
+                        text = stringResource(R.string.clear_watch_history_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !clearing,
+                colors =
+                    ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text(stringResource(R.string.clear_watch_history_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !clearing) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
 
 @Composable
 private fun SliderRow(

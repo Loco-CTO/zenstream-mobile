@@ -17,6 +17,38 @@ import org.junit.Test
 
 class CatalogApiTest {
     @Test
+    fun parsesNotificationThumbnailArtwork() {
+        val page =
+            parseNotificationPage(
+                JSONObject()
+                    .put(
+                        "items",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "notification-1")
+                                    .put("createdAt", "2026-08-21T00:00:00Z")
+                                    .put(
+                                        "thumbnail",
+                                        JSONObject()
+                                            .put(
+                                                "url",
+                                                "/api/catalog/items/episode-1/images/Primary?language=en",
+                                            )
+                                            .put("blurHash", "LEHV6nWB2yk8pyo0adR*.7kCMdnj"),
+                                    )
+                            ),
+                    )
+            )
+
+        assertEquals(
+            "/api/catalog/items/episode-1/images/Primary?language=en",
+            page.items.single().thumbnailUrl,
+        )
+        assertEquals("LEHV6nWB2yk8pyo0adR*.7kCMdnj", page.items.single().thumbnailBlurHash)
+    }
+
+    @Test
     fun authenticatedImageUrlAddsTheResourceTicketWithoutDroppingExistingQuery() {
         assertEquals(
             "https://server/api/catalog/items/movie-1/images/Primary?language=en&access=ticket-1",

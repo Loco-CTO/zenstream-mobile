@@ -150,6 +150,7 @@ fun DetailScreen(
                     onSelectSeason = vm::selectSeason,
                     onTogglePlayed = vm::togglePlayed,
                     onToggleFavorite = vm::toggleFavorite,
+                    onToggleFollowing = vm::toggleFollowing,
                     onToggleSeasonPlayed = vm::toggleSeasonPlayed,
                     onToggleSeasonFavorite = vm::toggleSeasonFavorite,
                     trackSource = state.trackSource,
@@ -176,6 +177,7 @@ internal fun DetailContent(
     onSelectSeason: (String) -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleFollowing: () -> Unit = {},
     onToggleSeasonPlayed: (String) -> Unit = {},
     onToggleSeasonFavorite: (String) -> Unit = {},
     trackSource: MediaSource? = null,
@@ -209,6 +211,7 @@ internal fun DetailContent(
                     onPlay = { onPlay(playTarget(data)) },
                     onTogglePlayed = onTogglePlayed,
                     onToggleFavorite = onToggleFavorite,
+                    onToggleFollowing = onToggleFollowing,
                 )
                 if (
                     mediaItem.type in setOf("Movie", "Episode") &&
@@ -266,7 +269,12 @@ internal fun DetailContent(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(data.similar.distinctBy { it.id }, key = { it.id }) { similar ->
-                            MediaCard(similar, session, wide = false, onClick = onOpenItem)
+                            MediaCard(
+                                similar,
+                                session,
+                                wide = false,
+                                onClick = onOpenItem,
+                            )
                         }
                     }
                 }
@@ -611,6 +619,7 @@ private fun DetailActions(
     onPlay: () -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleFollowing: () -> Unit,
 ) {
     val watchedLabel =
         stringResource(if (item.played) R.string.mark_unwatched else R.string.mark_watched)
@@ -660,6 +669,26 @@ private fun DetailActions(
                     if (item.favorite) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        if (item.type == "Movie" || item.type == "Series") {
+            val followingLabel =
+                stringResource(if (item.following == true) R.string.unfollow else R.string.follow)
+            IconButton(
+                onClick = onToggleFollowing,
+                enabled = !busy,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = followingLabel
+                    },
+            ) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_bookmark),
+                    contentDescription = null,
+                    tint =
+                        if (item.following == true) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

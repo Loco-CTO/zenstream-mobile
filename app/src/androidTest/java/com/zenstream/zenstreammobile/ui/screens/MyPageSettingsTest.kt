@@ -39,9 +39,50 @@ class MyPageSettingsTest {
         composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.privacy_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.updates_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
         composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Player, selected) }
+    }
+
+    @Test
+    fun calendarEntryUsesTheMyPageRowPatternAndOpensTheCalendar() {
+        var opened = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageCalendarEntry(onOpen = { opened = true })
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).performClick()
+        composeRule.runOnIdle { assertTrue(opened) }
+    }
+
+    @Test
+    fun serviceEntriesShowCalendarAndNotificationCenter() {
+        var calendarOpened = false
+        var notificationsOpened = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageServiceEntries(
+                    onOpenCalendar = { calendarOpened = true },
+                    onOpenNotifications = { notificationsOpened = true },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.calendar_open)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.notification_center))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.notification_center)).performClick()
+        composeRule.runOnIdle {
+            assertTrue(!calendarOpened)
+            assertTrue(notificationsOpened)
+        }
     }
 
     @Test

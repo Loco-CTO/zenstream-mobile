@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,23 +20,23 @@ class MyPageScreenTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun profileFallsBackToInitialAndOffersAddAvatar() {
+    fun profileFallsBackToInitialAndOpensAccountSettings() {
         var clicked = false
         val session = AuthSession("https://server", "token", "user-1", "Miyu")
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(session = session, onEditAvatar = { clicked = true })
+                ProfileCard(session = session, onOpenProfile = { clicked = true })
             }
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText("M").assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.add_avatar)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile)).performClick()
         composeRule.runOnIdle { assertTrue(clicked) }
     }
 
     @Test
-    fun profileUsesChangeActionWithoutDuplicateDeleteActionWhenAvatarExists() {
+    fun profileSettingsUsesChangeActionWithoutDuplicateDeleteActionWhenAvatarExists() {
         val session =
             AuthSession(
                 "https://server",
@@ -46,7 +47,13 @@ class MyPageScreenTest {
             )
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(session = session, onEditAvatar = {})
+                ProfileSettingsPage(
+                    session = session,
+                    avatarError = null,
+                    onBack = {},
+                    onEditAvatar = {},
+                    onChangePassword = {},
+                )
             }
         }
 
@@ -56,13 +63,15 @@ class MyPageScreenTest {
     }
 
     @Test
-    fun profileOffersChangePasswordAction() {
+    fun profileSettingsOffersChangePasswordAction() {
         var clicked = false
         val session = AuthSession("https://server", "token", "user-1", "Miyu")
         composeRule.setContent {
             ZenStreamTheme {
-                ProfileCard(
+                ProfileSettingsPage(
                     session = session,
+                    avatarError = null,
+                    onBack = {},
                     onEditAvatar = {},
                     onChangePassword = { clicked = true },
                 )
@@ -71,6 +80,27 @@ class MyPageScreenTest {
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.change_password)).performClick()
+        composeRule.runOnIdle { assertTrue(clicked) }
+    }
+
+    @Test
+    fun profileSettingsProvidesBackNavigation() {
+        var clicked = false
+        val session = AuthSession("https://server", "token", "user-1", "Miyu")
+        composeRule.setContent {
+            ZenStreamTheme {
+                ProfileSettingsPage(
+                    session = session,
+                    avatarError = null,
+                    onBack = { clicked = true },
+                    onEditAvatar = {},
+                    onChangePassword = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
         composeRule.runOnIdle { assertTrue(clicked) }
     }
 

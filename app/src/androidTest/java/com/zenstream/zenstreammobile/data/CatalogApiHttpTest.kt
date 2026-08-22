@@ -2,12 +2,14 @@ package com.zenstream.zenstreammobile.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zenstream.zenstreammobile.model.AuthSession
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -57,6 +59,45 @@ class CatalogApiHttpTest {
         assertEquals(100.0, payload.getDouble("durationSeconds"), 0.001)
         assertTrue(!payload.has("isPaused"))
         assertTrue(!payload.has("playSessionId"))
+    }
+
+    @Test
+    fun searchAllowsOneCharacterQueriesAndSkipsBlankQueries() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put(
+                            "items",
+                            JSONArray()
+                                .put(
+                                    JSONObject()
+                                        .put("id", "movie-1")
+                                        .put("type", "movie")
+                                        .put(
+                                            "metadata",
+                                            JSONObject().put("title", "Dune"),
+                                        )
+                                ),
+                        )
+                        .put("total", 1)
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+        val api = CatalogApi(deviceId = "device-id")
+
+        assertTrue(api.search(session, "   ", 1).items.isEmpty())
+        val result = api.search(session, " d ", 1)
+        assertEquals(listOf("movie-1"), result.items.map { it.id })
+        assertEquals(1, result.totalRecordCount)
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/api/catalog/search?query=d&page=1&pageSize=20&view=card", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
     }
 
     @Test
@@ -130,6 +171,23 @@ class CatalogApiHttpTest {
         val request = server.takeRequest()
         assertEquals("DELETE", request.method)
         assertEquals("/api/playback/sessions/session-1", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun deletesNotificationWithTheAuthenticatedDeleteEndpoint() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(JSONObject().put("id", "notification-1").put("removed", true).toString())
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        CatalogApi(deviceId = "device-id").deleteNotification(session, "notification-1")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/api/notifications/notification-1", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
     }
 
@@ -228,6 +286,56 @@ class CatalogApiHttpTest {
         assertEquals("current-password", payload.getString("currentPassword"))
         assertEquals("new-password", payload.getString("newPassword"))
         assertEquals("new-password", payload.getString("confirmNewPassword"))
+    }
+
+    @Test
+    fun fetchesCalendarWithTheVisibleInstantRange() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("start", "2026-08-16T00:00:00Z")
+                        .put("end", "2026-08-23T00:00:00Z")
+                        .put("events", org.json.JSONArray())
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val response =
+            CatalogApi(deviceId = "device-id")
+                .calendar(
+                    session,
+                    Instant.parse("2026-08-16T00:00:00Z"),
+                    Instant.parse("2026-08-23T00:00:00Z"),
+                )
+
+        val request = server.takeRequest()
+        assertEquals(0, response.events.size)
+        assertEquals("GET", request.method)
+        assertEquals(
+            "/api/calendar?start=2026-08-16T00%3A00%3A00Z&end=2026-08-23T00%3A00%3A00Z",
+            request.path,
+        )
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun updatesCalendarFollowingThroughTheCalendarEndpoint() = runBlocking {
+        server.enqueue(MockResponse().setBody(JSONObject().put("following", true).toString()))
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        assertTrue(
+            CatalogApi(deviceId = "device-id").setCalendarFollowing(session, "event-1", true)
+        )
+
+        val request = server.takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/api/calendar/events/event-1/follow", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertTrue(JSONObject(request.body.readUtf8()).getBoolean("following"))
     }
 
     @Test
