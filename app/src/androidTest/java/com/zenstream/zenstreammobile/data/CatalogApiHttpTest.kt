@@ -89,7 +89,9 @@ class CatalogApiHttpTest {
         val api = CatalogApi(deviceId = "device-id")
 
         assertTrue(api.search(session, "   ", 1).items.isEmpty())
-        assertEquals(listOf("movie-1"), api.search(session, " d ", 1).items.map { it.id })
+        val result = api.search(session, " d ", 1)
+        assertEquals(listOf("movie-1"), result.items.map { it.id })
+        assertEquals(1, result.totalRecordCount)
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)

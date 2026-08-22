@@ -885,17 +885,10 @@ class CatalogApi(
 
     internal fun searchQuery(userId: String, query: String): Map<String, String> =
         mapOf(
-            "userId" to userId,
-            "searchTerm" to query.trim(),
-            "startIndex" to "0",
-            "limit" to "40",
-            "recursive" to "true",
-            "includeItemTypes" to "Series,Movie",
-            "fields" to ITEM_FIELDS,
-            "enableImages" to "true",
-            "imageTypeLimit" to "1",
-            "enableImageTypes" to ITEM_IMAGE_TYPES,
-            "enableUserData" to "true",
+            "query" to query.trim(),
+            "page" to "1",
+            "pageSize" to "20",
+            "view" to "card",
         )
 
     internal fun libraryItemsQuery(
