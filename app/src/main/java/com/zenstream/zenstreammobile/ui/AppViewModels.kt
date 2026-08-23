@@ -1075,6 +1075,8 @@ class DetailViewModel(
     private var loadGeneration = 0L
     private var loadJob: Job? = null
     private var trackLoadJob: Job? = null
+    private var bazarrSearchGeneration = 0L
+    private var bazarrSearchJob: Job? = null
 
     init {
         load()
@@ -1242,18 +1244,38 @@ class DetailViewModel(
         val item = current.data?.item ?: return
         val sourceId = current.trackSource?.id ?: return
         if (item.type != "Episode") return
-        viewModelScope.launch {
-            _uiState.value =
-                current.copy(bazarrBusy = true, bazarrError = false, bazarrSearch = null)
+        val detailGeneration = loadGeneration
+        val searchGeneration = ++bazarrSearchGeneration
+        bazarrSearchJob?.cancel()
+        bazarrSearchJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(bazarrBusy = true, bazarrError = false, bazarrSearch = null)
+            }
             runCatching { repository.searchBazarrSubtitles(session, item.id, sourceId) }
                 .onSuccess { result ->
-                    _uiState.value = _uiState.value.copy(bazarrBusy = false, bazarrSearch = result)
+                    if (
+                        searchGeneration != bazarrSearchGeneration ||
+                            detailGeneration != loadGeneration ||
+                            _uiState.value.data?.item?.id != item.id ||
+                            _uiState.value.trackSource?.id != sourceId
+                    ) {
+                        return@onSuccess
+                    }
+                    _uiState.update { it.copy(bazarrBusy = false, bazarrSearch = result) }
                 }
                 .onFailure {
+                    if (
+                        searchGeneration != bazarrSearchGeneration ||
+                            detailGeneration != loadGeneration ||
+                            _uiState.value.data?.item?.id != item.id ||
+                            _uiState.value.trackSource?.id != sourceId
+                    ) {
+                        return@onFailure
+                    }
                     if ((it as? CatalogException)?.statusCode == 401) {
                         repository.clearSessionIfCurrent(session)
                     }
-                    _uiState.value = _uiState.value.copy(bazarrBusy = false, bazarrError = true)
+                    _uiState.update { state -> state.copy(bazarrBusy = false, bazarrError = true) }
                 }
         }
     }
