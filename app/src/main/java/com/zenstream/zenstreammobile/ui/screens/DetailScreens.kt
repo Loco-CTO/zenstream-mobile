@@ -436,16 +436,6 @@ private fun DetailTrackChoices(
                             onSelectSubtitle(null)
                         },
                     )
-                    subtitles.forEach { stream ->
-                        DetailTrackOption(
-                            label = detailTrackLabel(stream),
-                            selected = selection.subtitleStreamIndex == stream.index,
-                            onClick = {
-                                picker = null
-                                onSelectSubtitle(stream.index)
-                            },
-                        )
-                    }
                     if (subtitleDownloaderAvailable) {
                         DetailTrackOption(
                             label = stringResource(R.string.bazarr_find_subtitles),
@@ -454,6 +444,16 @@ private fun DetailTrackChoices(
                             iconContentDescription =
                                 stringResource(R.string.bazarr_search_subtitles_description),
                             onClick = { picker = DetailTrackPicker.SubtitleDownloader },
+                        )
+                    }
+                    subtitles.forEach { stream ->
+                        DetailTrackOption(
+                            label = detailTrackLabel(stream),
+                            selected = selection.subtitleStreamIndex == stream.index,
+                            onClick = {
+                                picker = null
+                                onSelectSubtitle(stream.index)
+                            },
                         )
                     }
                 }
