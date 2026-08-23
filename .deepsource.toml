@@ -1,0 +1,27 @@
+version = 1
+
+test_patterns = [
+  "app/src/test/**",
+  "app/src/androidTest/**",
+  "**/*Test.kt",
+  "**/*Tests.kt"
+]
+
+[[analyzers]]
+name = "secrets"
+
+[[analyzers]]
+name = "test-coverage"
+
+[[analyzers]]
+name = "kotlin"
+
+[analyzers.meta]
+language_version = "2.1"
+runtime_version = "21"
+
+[[analyzers]]
+name = "shell"
+
+[analyzers.meta]
+dialect = "sh"
