@@ -114,8 +114,6 @@ class AppViewModel(
                 _availableUpdate.value = updateSource.checkForUpdate()
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                // Update checks are best effort and must never prevent startup.
             }
         }
     }
