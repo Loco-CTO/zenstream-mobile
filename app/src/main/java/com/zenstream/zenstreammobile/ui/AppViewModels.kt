@@ -1243,7 +1243,8 @@ class DetailViewModel(
         val sourceId = current.trackSource?.id ?: return
         if (item.type != "Episode") return
         viewModelScope.launch {
-            _uiState.value = current.copy(bazarrBusy = true, bazarrError = false, bazarrSearch = null)
+            _uiState.value =
+                current.copy(bazarrBusy = true, bazarrError = false, bazarrSearch = null)
             runCatching { repository.searchBazarrSubtitles(session, item.id, sourceId) }
                 .onSuccess { result ->
                     _uiState.value = _uiState.value.copy(bazarrBusy = false, bazarrSearch = result)
@@ -1266,11 +1267,13 @@ class DetailViewModel(
             _uiState.value = current.copy(bazarrBusy = true, bazarrError = false)
             runCatching { repository.downloadBazarrSubtitle(session, item.id, sourceId, matchId) }
                 .onSuccess {
-                    _uiState.value = _uiState.value.copy(
-                        bazarrBusy = false,
-                        bazarrSearch = null,
-                        bazarrStatus = _uiState.value.bazarrStatus?.copy(state = "download_started"),
-                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            bazarrBusy = false,
+                            bazarrSearch = null,
+                            bazarrStatus =
+                                _uiState.value.bazarrStatus?.copy(state = "download_started"),
+                        )
                 }
                 .onFailure {
                     if ((it as? CatalogException)?.statusCode == 401) {
@@ -1300,7 +1303,8 @@ class DetailViewModel(
                         ),
                 )
             if (item.type == "Episode" && source.id != null) {
-                val bazarrStatus = runCatching { repository.bazarrStatus(session, item.id, source.id) }.getOrNull()
+                val bazarrStatus =
+                    runCatching { repository.bazarrStatus(session, item.id, source.id) }.getOrNull()
                 if (generation == loadGeneration && _uiState.value.data?.item?.id == item.id) {
                     _uiState.value = _uiState.value.copy(bazarrStatus = bazarrStatus)
                 }

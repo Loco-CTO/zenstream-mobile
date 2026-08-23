@@ -319,7 +319,10 @@ private fun BazarrSubtitlePanel(
     val statusText =
         when {
             status?.state == "not_configured" -> stringResource(R.string.bazarr_not_configured)
-            status?.state == "unmatched" || status?.state == "ambiguous" || status?.state == "identity_conflict" -> stringResource(R.string.bazarr_path_conflict)
+            status?.state == "unmatched" ||
+                status?.state == "ambiguous" ||
+                status?.state == "identity_conflict" ->
+                stringResource(R.string.bazarr_path_conflict)
             status?.state == "download_started" -> stringResource(R.string.bazarr_download_queued)
             status?.hasLocalSubtitle == true -> stringResource(R.string.bazarr_existing)
             else -> null
@@ -329,8 +332,14 @@ private fun BazarrSubtitlePanel(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.medium,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Icon(
                     painter = painterResource(LucideR.drawable.lucide_ic_captions),
                     contentDescription = null,
@@ -338,19 +347,40 @@ private fun BazarrSubtitlePanel(
                     modifier = Modifier.size(20.dp),
                 )
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.bazarr_subtitles), style = MaterialTheme.typography.titleSmall)
-                    statusText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Text(
+                        stringResource(R.string.bazarr_subtitles),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    statusText?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Button(onClick = onSearch, enabled = !busy && status?.state != "not_configured") {
-                    Text(stringResource(if (busy) R.string.bazarr_searching else R.string.bazarr_find_subtitles))
+                    Text(
+                        stringResource(
+                            if (busy) R.string.bazarr_searching else R.string.bazarr_find_subtitles
+                        )
+                    )
                 }
             }
             if (error) {
-                Text(stringResource(R.string.bazarr_search_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.bazarr_search_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             search?.let { result ->
                 if (result.matches.isEmpty()) {
-                    Text(stringResource(R.string.bazarr_no_matches), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.bazarr_no_matches),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } else {
                     result.matches.forEach { match ->
                         BazarrMatchRow(match = match, busy = busy, onDownload = onDownload)
@@ -369,13 +399,24 @@ private fun BazarrMatchRow(
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(match.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                Text(listOfNotNull(match.language, match.provider, match.format).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    match.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    listOfNotNull(match.language, match.provider, match.format).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             TextButton(onClick = { onDownload(match.matchId) }, enabled = !busy) {
                 Text(stringResource(R.string.bazarr_download))

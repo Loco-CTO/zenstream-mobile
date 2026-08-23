@@ -7,9 +7,9 @@ import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.BazarrSubtitleMatch
 import com.zenstream.zenstreammobile.model.BazarrSubtitleSummary
-import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.CalendarEvent
 import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
@@ -1776,21 +1776,26 @@ private fun parseBazarrStatus(value: JSONObject): BazarrStatus {
 
 private fun parseBazarrSearchResult(value: JSONObject): BazarrSearchResult {
     val matches =
-        value.optJSONArray("matches")?.let { array ->
-            List(array.length()) { index -> array.optJSONObject(index) ?: JSONObject() }
-                .mapNotNull { match ->
-                    val matchId = match.optString("matchId").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    BazarrSubtitleMatch(
-                        matchId = matchId,
-                        name = match.optString("name").ifBlank { "Subtitle" },
-                        provider = match.optNullableString("provider"),
-                        language = match.optNullableString("language"),
-                        format = match.optNullableString("format"),
-                        hearingImpaired = match.optBoolean("hearingImpaired"),
-                        forced = match.optBoolean("forced"),
-                    )
-                }
-        }.orEmpty()
+        value
+            .optJSONArray("matches")
+            ?.let { array ->
+                List(array.length()) { index -> array.optJSONObject(index) ?: JSONObject() }
+                    .mapNotNull { match ->
+                        val matchId =
+                            match.optString("matchId").takeIf { it.isNotBlank() }
+                                ?: return@mapNotNull null
+                        BazarrSubtitleMatch(
+                            matchId = matchId,
+                            name = match.optString("name").ifBlank { "Subtitle" },
+                            provider = match.optNullableString("provider"),
+                            language = match.optNullableString("language"),
+                            format = match.optNullableString("format"),
+                            hearingImpaired = match.optBoolean("hearingImpaired"),
+                            forced = match.optBoolean("forced"),
+                        )
+                    }
+            }
+            .orEmpty()
     return BazarrSearchResult(
         state = value.optString("state").ifBlank { "no_matches" },
         matches = matches,
