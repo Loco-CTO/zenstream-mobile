@@ -22,7 +22,6 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import java.time.Instant
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -309,8 +308,6 @@ class CatalogRepository(
         } catch (error: OrchestratorException) {
             if (error.statusCode == 401) throw error
             null
-        } catch (error: CancellationException) {
-            throw error
         }
 
     private suspend fun <T> authenticatedOrchestratorRequest(
