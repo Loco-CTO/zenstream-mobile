@@ -237,6 +237,7 @@
     <string name="detail_action_failed">このタイトルを更新できませんでした。</string>
     <string name="bazarr_subtitles">字幕ダウンローダー</string>
     <string name="bazarr_find_subtitles">字幕を検索</string>
+    <string name="bazarr_search_subtitles_description">字幕を検索</string>
     <string name="bazarr_searching">検索中…</string>
     <string name="bazarr_no_matches">字幕が見つかりませんでした。</string>
     <string name="bazarr_not_configured">このライブラリには字幕ダウンローダーが設定されていません。</string>

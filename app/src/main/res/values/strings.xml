@@ -265,6 +265,7 @@
     <string name="detail_action_failed">Could not update this title.</string>
     <string name="bazarr_subtitles">Subtitle downloader</string>
     <string name="bazarr_find_subtitles">Find subtitles</string>
+    <string name="bazarr_search_subtitles_description">Search for subtitles</string>
     <string name="bazarr_searching">Searching…</string>
     <string name="bazarr_no_matches">No subtitle matches were found.</string>
     <string name="bazarr_not_configured">The subtitle downloader is not configured for this library.</string>
