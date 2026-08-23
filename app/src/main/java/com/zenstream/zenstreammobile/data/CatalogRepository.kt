@@ -309,8 +309,6 @@ class CatalogRepository(
         } catch (error: OrchestratorException) {
             if (error.statusCode == 401) throw error
             null
-        } catch (error: CancellationException) {
-            throw error
         }
 
     private suspend fun <T> authenticatedOrchestratorRequest(
