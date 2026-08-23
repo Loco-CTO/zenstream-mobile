@@ -53,4 +53,4 @@ jobs:
         run: curl -fsSL https://cli.deepsource.com/install | BINDIR=./bin sh
 
       - name: Upload Kotlin coverage
-        run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/xml/report.xml --use-oidc
+        run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/report.xml --use-oidc
