@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -322,35 +325,32 @@ private fun MainScaffold(
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!topBarHidden) {
-                Box(
+                StableChromeSlot(
+                    visible = topBarVisible,
                     modifier =
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    enter =
+                        expandVertically(expandFrom = Alignment.Top) +
+                            slideInVertically(initialOffsetY = { -it }) +
+                            fadeIn(),
+                    exit =
+                        shrinkVertically(shrinkTowards = Alignment.Top) +
+                            slideOutVertically(targetOffsetY = { -it }) +
+                            fadeOut(),
                 ) {
-                    AnimatedVisibility(
-                        visible = topBarVisible,
-                        enter =
-                            expandVertically(expandFrom = Alignment.Top) +
-                                slideInVertically(initialOffsetY = { -it }) +
-                                fadeIn(),
-                        exit =
-                            shrinkVertically(shrinkTowards = Alignment.Top) +
-                                slideOutVertically(targetOffsetY = { -it }) +
-                                fadeOut(),
-                    ) {
-                        MainTopBar(
-                            syncplay = syncplay,
-                            session = session,
-                            showSearchAction = shouldShowMainSearchAction(mainRoute),
-                            onSearch = { navigateToSearch(navController) },
-                            unreadCount = notificationsState.unreadCount,
-                            onNotifications = {
-                                navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
-                            },
-                            onReturnToView = { group ->
-                                group.mediaItemId()?.let { launchPlayback(context, it, "") }
-                            },
-                        )
-                    }
+                    MainTopBar(
+                        syncplay = syncplay,
+                        session = session,
+                        showSearchAction = shouldShowMainSearchAction(mainRoute),
+                        onSearch = { navigateToSearch(navController) },
+                        unreadCount = notificationsState.unreadCount,
+                        onNotifications = {
+                            navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                        },
+                        onReturnToView = { group ->
+                            group.mediaItemId()?.let { launchPlayback(context, it, "") }
+                        },
+                    )
                 }
             }
         },
@@ -359,34 +359,30 @@ private fun MainScaffold(
                 // Keep the system navigation-control surface mounted while the
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
-                Box(
+                StableChromeSlot(
+                    visible = shouldKeepMainBottomBarVisible(mainRoute) || bottomBarVisible,
                     modifier =
-                        Modifier.fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .navigationBarsPadding()
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    applyNavigationBarsPadding = true,
+                    enter =
+                        expandVertically(expandFrom = Alignment.Bottom) +
+                            slideInVertically(initialOffsetY = { it }) +
+                            fadeIn(),
+                    exit =
+                        shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                            slideOutVertically(targetOffsetY = { it }) +
+                            fadeOut(),
                 ) {
-                    AnimatedVisibility(
-                        visible = shouldKeepMainBottomBarVisible(mainRoute) || bottomBarVisible,
-                        enter =
-                            expandVertically(expandFrom = Alignment.Bottom) +
-                                slideInVertically(initialOffsetY = { it }) +
-                                fadeIn(),
-                        exit =
-                            shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                                slideOutVertically(targetOffsetY = { it }) +
-                                fadeOut(),
-                    ) {
-                        MainNavigationBar(
-                            currentRoute = mainRoute,
-                            session = session,
-                            onDestinationClick = { route ->
-                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
-                                    myPageNavigationResetKey += 1
-                                }
-                                navigateToMainDestination(navController, route)
-                            },
-                        )
-                    }
+                    MainNavigationBar(
+                        currentRoute = mainRoute,
+                        session = session,
+                        onDestinationClick = { route ->
+                            if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                myPageNavigationResetKey += 1
+                            }
+                            navigateToMainDestination(navController, route)
+                        },
+                    )
                 }
             }
         },
@@ -719,6 +715,47 @@ internal fun MainNavigationBar(
                     androidx.compose.material3.Text(stringResource(destination.label))
                 },
             )
+        }
+    }
+}
+
+internal fun stableChromeSlotHeight(rememberedHeight: Int, measuredHeight: Int): Int =
+    maxOf(rememberedHeight, measuredHeight)
+
+/**
+ * Keeps the Scaffold slot measured at its largest visible height while its contents animate out.
+ * Changing that footprint during a list gesture changes the viewport and can clamp the list back to
+ * the top.
+ */
+@Composable
+internal fun StableChromeSlot(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    enter: androidx.compose.animation.EnterTransition,
+    exit: androidx.compose.animation.ExitTransition,
+    applyNavigationBarsPadding: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    var rememberedHeight by remember { mutableIntStateOf(0) }
+    val minimumHeight = with(density) { rememberedHeight.toDp() }
+
+    val slotModifier =
+        if (applyNavigationBarsPadding) modifier.navigationBarsPadding() else modifier
+    Box(modifier = slotModifier) {
+        Box(
+            modifier =
+                Modifier.fillMaxWidth().heightIn(min = minimumHeight).onSizeChanged { size ->
+                    rememberedHeight = stableChromeSlotHeight(rememberedHeight, size.height)
+                }
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = enter,
+                exit = exit,
+            ) {
+                content()
+            }
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -122,6 +120,7 @@ import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
 import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
+import com.zenstream.zenstreammobile.ui.navigation.StableChromeSlot
 
 @Composable
 fun HomeScreen(
@@ -391,29 +390,25 @@ fun SearchOverlayScreen(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                Box(
+                StableChromeSlot(
+                    visible = bottomBarVisible,
                     modifier =
-                        Modifier.fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .navigationBarsPadding()
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    applyNavigationBarsPadding = true,
+                    enter =
+                        expandVertically(expandFrom = Alignment.Bottom) +
+                            slideInVertically(initialOffsetY = { it }) +
+                            fadeIn(),
+                    exit =
+                        shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                            slideOutVertically(targetOffsetY = { it }) +
+                            fadeOut(),
                 ) {
-                    AnimatedVisibility(
-                        visible = bottomBarVisible,
-                        enter =
-                            expandVertically(expandFrom = Alignment.Bottom) +
-                                slideInVertically(initialOffsetY = { it }) +
-                                fadeIn(),
-                        exit =
-                            shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                                slideOutVertically(targetOffsetY = { it }) +
-                                fadeOut(),
-                    ) {
-                        MainNavigationBar(
-                            currentRoute = currentRoute,
-                            session = session,
-                            onDestinationClick = onDestinationClick,
-                        )
-                    }
+                    MainNavigationBar(
+                        currentRoute = currentRoute,
+                        session = session,
+                        onDestinationClick = onDestinationClick,
+                    )
                 }
             },
         ) { padding ->
@@ -538,8 +533,9 @@ private fun SearchResultsContent(
         },
     )
     Column(modifier.fillMaxSize().padding(padding)) {
-        AnimatedVisibility(
+        StableChromeSlot(
             visible = topBarVisible,
+            modifier = Modifier.fillMaxWidth(),
             enter =
                 expandVertically(expandFrom = Alignment.Top) +
                     slideInVertically(initialOffsetY = { -it }) +
@@ -1088,8 +1084,9 @@ fun LibraryScreen(
         }
     }
     Column(Modifier.fillMaxSize().padding(padding)) {
-        AnimatedVisibility(
+        StableChromeSlot(
             visible = topBarVisible,
+            modifier = Modifier.fillMaxWidth(),
             enter =
                 expandVertically(expandFrom = Alignment.Top) +
                     slideInVertically(initialOffsetY = { -it }) +

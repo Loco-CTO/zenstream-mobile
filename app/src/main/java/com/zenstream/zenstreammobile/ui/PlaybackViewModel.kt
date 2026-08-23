@@ -128,11 +128,13 @@ internal enum class EpisodeCompletionAction {
 internal fun episodeCompletionAction(
     episodeNeighborsLoaded: Boolean,
     nextEpisode: MediaItem?,
+    autoplayNextEpisode: Boolean = true,
 ): EpisodeCompletionAction =
     when {
         !episodeNeighborsLoaded -> EpisodeCompletionAction.WAIT_FOR_NEIGHBORS
-        nextEpisode != null -> EpisodeCompletionAction.PLAY_NEXT
-        else -> EpisodeCompletionAction.CLOSE
+        nextEpisode == null -> EpisodeCompletionAction.CLOSE
+        !autoplayNextEpisode -> EpisodeCompletionAction.CLOSE
+        else -> EpisodeCompletionAction.PLAY_NEXT
     }
 
 private data class PlaybackProgressSnapshot(
@@ -837,14 +839,11 @@ class PlaybackViewModel(
 
     private fun advanceAfterEpisodeEnd() {
         val nextEpisode = _uiState.value.nextEpisode
-        if (nextEpisode != null && !_uiState.value.autoplayNextEpisode) {
-            pendingCompletionGeneration = null
-            return
-        }
         when (
             episodeCompletionAction(
                 episodeNeighborsLoaded = _uiState.value.episodeNeighborsLoaded,
                 nextEpisode = nextEpisode,
+                autoplayNextEpisode = _uiState.value.autoplayNextEpisode,
             )
         ) {
             EpisodeCompletionAction.WAIT_FOR_NEIGHBORS -> {

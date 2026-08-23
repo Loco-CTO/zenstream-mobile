@@ -81,10 +81,26 @@ class PlaybackViewModelTest {
     }
 
     @Test
+    fun completionClosesWhenAutoplayIsDisabledEvenWithAnAdjacentEpisode() {
+        assertEquals(
+            EpisodeCompletionAction.CLOSE,
+            episodeCompletionAction(
+                episodeNeighborsLoaded = true,
+                nextEpisode = MediaItem("episode-3", "Episode 3", type = "Episode"),
+                autoplayNextEpisode = false,
+            ),
+        )
+    }
+
+    @Test
     fun completionClosesWhenThereIsNoAdjacentEpisode() {
         assertEquals(
             EpisodeCompletionAction.CLOSE,
-            episodeCompletionAction(episodeNeighborsLoaded = true, nextEpisode = null),
+            episodeCompletionAction(
+                episodeNeighborsLoaded = true,
+                nextEpisode = null,
+                autoplayNextEpisode = true,
+            ),
         )
     }
 
