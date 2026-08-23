@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: android-ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +22,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -43,5 +46,11 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bash ./gradlew spotlessApply
 
-      - name: Run formatting, lint, tests, and debug build
-        run: bash ./gradlew spotlessCheck lint test assembleDebug
+      - name: Run formatting, lint, unit tests, coverage, and debug build
+        run: bash ./gradlew spotlessCheck lint :app:koverXmlReport assembleDebug
+
+      - name: Install DeepSource CLI
+        run: curl -fsSL https://cli.deepsource.com/install | BINDIR=./bin sh
+
+      - name: Upload Kotlin coverage
+        run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/xml/report.xml --use-oidc
