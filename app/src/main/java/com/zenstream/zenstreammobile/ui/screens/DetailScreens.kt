@@ -75,6 +75,8 @@ import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
@@ -157,6 +159,12 @@ fun DetailScreen(
                     trackSelection = state.trackSelection,
                     onSelectAudioTrack = vm::selectAudioTrack,
                     onSelectSubtitleTrack = vm::selectSubtitleTrack,
+                    bazarrStatus = state.bazarrStatus,
+                    bazarrSearch = state.bazarrSearch,
+                    bazarrBusy = state.bazarrBusy,
+                    bazarrError = state.bazarrError,
+                    onSearchBazarr = vm::searchBazarrSubtitles,
+                    onDownloadBazarr = vm::downloadBazarrSubtitle,
                 )
         }
     }
@@ -184,6 +192,12 @@ internal fun DetailContent(
     trackSelection: PlaybackTrackSelection? = null,
     onSelectAudioTrack: (Int) -> Unit = {},
     onSelectSubtitleTrack: (Int?) -> Unit = {},
+    bazarrStatus: BazarrStatus? = null,
+    bazarrSearch: BazarrSearchResult? = null,
+    bazarrBusy: Boolean = false,
+    bazarrError: Boolean = false,
+    onSearchBazarr: () -> Unit = {},
+    onDownloadBazarr: (String) -> Unit = {},
 ) {
     val mediaItem = data.item
     val listState = rememberLazyListState()
@@ -223,6 +237,16 @@ internal fun DetailContent(
                         selection = trackSelection,
                         onSelectAudio = onSelectAudioTrack,
                         onSelectSubtitle = onSelectSubtitleTrack,
+                    )
+                }
+                if (mediaItem.type == "Episode" && trackSource?.id != null) {
+                    BazarrSubtitlePanel(
+                        status = bazarrStatus,
+                        search = bazarrSearch,
+                        busy = bazarrBusy,
+                        error = bazarrError,
+                        onSearch = onSearchBazarr,
+                        onDownload = onDownloadBazarr,
                     )
                 }
                 if (actionError) {
@@ -278,6 +302,83 @@ internal fun DetailContent(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BazarrSubtitlePanel(
+    status: BazarrStatus?,
+    search: BazarrSearchResult?,
+    busy: Boolean,
+    error: Boolean,
+    onSearch: () -> Unit,
+    onDownload: (String) -> Unit,
+) {
+    val statusText =
+        when {
+            status?.state == "not_configured" -> stringResource(R.string.bazarr_not_configured)
+            status?.state == "unmatched" || status?.state == "ambiguous" || status?.state == "identity_conflict" -> stringResource(R.string.bazarr_path_conflict)
+            status?.state == "download_started" -> stringResource(R.string.bazarr_download_queued)
+            status?.hasLocalSubtitle == true -> stringResource(R.string.bazarr_existing)
+            else -> null
+        }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_captions),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.bazarr_subtitles), style = MaterialTheme.typography.titleSmall)
+                    statusText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                Button(onClick = onSearch, enabled = !busy && status?.state != "not_configured") {
+                    Text(stringResource(if (busy) R.string.bazarr_searching else R.string.bazarr_find_subtitles))
+                }
+            }
+            if (error) {
+                Text(stringResource(R.string.bazarr_search_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            search?.let { result ->
+                if (result.matches.isEmpty()) {
+                    Text(stringResource(R.string.bazarr_no_matches), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    result.matches.forEach { match ->
+                        BazarrMatchRow(match = match, busy = busy, onDownload = onDownload)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BazarrMatchRow(
+    match: com.zenstream.zenstreammobile.model.BazarrSubtitleMatch,
+    busy: Boolean,
+    onDownload: (String) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(match.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                Text(listOfNotNull(match.language, match.provider, match.format).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { onDownload(match.matchId) }, enabled = !busy) {
+                Text(stringResource(R.string.bazarr_download))
             }
         }
     }

@@ -6,6 +6,10 @@ import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrSubtitleMatch
+import com.zenstream.zenstreammobile.model.BazarrSubtitleSummary
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.CalendarEvent
 import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
@@ -317,6 +321,52 @@ class CatalogApi(
                     session,
                     "/api/playback/items/${android.net.Uri.encode(itemId)}/source",
                 )
+            )
+        }
+
+    suspend fun bazarrStatus(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+    ): BazarrStatus =
+        withContext(Dispatchers.IO) {
+            parseBazarrStatus(
+                requestJson(
+                    session,
+                    "/api/catalog/items/${android.net.Uri.encode(itemId)}/bazarr/status",
+                    query = mapOf("sourceId" to sourceId),
+                )
+            )
+        }
+
+    suspend fun searchBazarrSubtitles(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+    ): BazarrSearchResult =
+        withContext(Dispatchers.IO) {
+            parseBazarrSearchResult(
+                requestJson(
+                    session,
+                    "/api/catalog/items/${android.net.Uri.encode(itemId)}/bazarr/search",
+                    method = "POST",
+                    body = JSONObject().put("sourceId", sourceId).toString(),
+                )
+            )
+        }
+
+    suspend fun downloadBazarrSubtitle(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+        matchId: String,
+    ) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/catalog/items/${android.net.Uri.encode(itemId)}/bazarr/download",
+                method = "POST",
+                body = JSONObject().put("sourceId", sourceId).put("matchId", matchId).toString(),
             )
         }
 
@@ -1693,6 +1743,57 @@ internal fun parseMediaSource(source: JSONObject): MediaSource {
         container = source.optString("container").ifBlank { null },
         transcodingContainer = source.optString("transcodingContainer").ifBlank { null },
         bitrate = source.optIntOrNull("bitrate"),
+    )
+}
+
+private fun parseBazarrStatus(value: JSONObject): BazarrStatus {
+    val episode = value.optJSONObject("episode")
+    val subtitles =
+        episode
+            ?.optJSONArray("subtitles")
+            ?.let { array ->
+                List(array.length()) { index -> array.optJSONObject(index) ?: JSONObject() }
+                    .map { subtitle ->
+                        BazarrSubtitleSummary(
+                            language = subtitle.optNullableString("language"),
+                            name = subtitle.optNullableString("name"),
+                            provider = subtitle.optNullableString("provider"),
+                            hearingImpaired = subtitle.optBoolean("hearingImpaired"),
+                            forced = subtitle.optBoolean("forced"),
+                            format = subtitle.optNullableString("format"),
+                        )
+                    }
+            }
+            .orEmpty()
+    return BazarrStatus(
+        state = value.optString("state").ifBlank { "unknown" },
+        relativePath = value.optNullableString("relativePath"),
+        hasLocalSubtitle = value.optBoolean("hasLocalSubtitle"),
+        message = value.optNullableString("message"),
+        subtitles = subtitles,
+    )
+}
+
+private fun parseBazarrSearchResult(value: JSONObject): BazarrSearchResult {
+    val matches =
+        value.optJSONArray("matches")?.let { array ->
+            List(array.length()) { index -> array.optJSONObject(index) ?: JSONObject() }
+                .mapNotNull { match ->
+                    val matchId = match.optString("matchId").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    BazarrSubtitleMatch(
+                        matchId = matchId,
+                        name = match.optString("name").ifBlank { "Subtitle" },
+                        provider = match.optNullableString("provider"),
+                        language = match.optNullableString("language"),
+                        format = match.optNullableString("format"),
+                        hearingImpaired = match.optBoolean("hearingImpaired"),
+                        forced = match.optBoolean("forced"),
+                    )
+                }
+        }.orEmpty()
+    return BazarrSearchResult(
+        state = value.optString("state").ifBlank { "no_matches" },
+        matches = matches,
     )
 }
 

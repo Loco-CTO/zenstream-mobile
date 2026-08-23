@@ -3,6 +3,8 @@ package com.zenstream.zenstreammobile.data
 import android.content.ContentResolver
 import android.net.Uri
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.FavoriteSort
@@ -502,6 +504,22 @@ class CatalogRepository(
 
     suspend fun playbackSource(session: AuthSession, itemId: String) =
         api.playbackSource(session, itemId)
+
+    suspend fun bazarrStatus(session: AuthSession, itemId: String, sourceId: String): BazarrStatus =
+        api.bazarrStatus(session, itemId, sourceId)
+
+    suspend fun searchBazarrSubtitles(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+    ): BazarrSearchResult = api.searchBazarrSubtitles(session, itemId, sourceId)
+
+    suspend fun downloadBazarrSubtitle(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+        matchId: String,
+    ) = api.downloadBazarrSubtitle(session, itemId, sourceId, matchId)
 
     suspend fun episodeNeighbors(session: AuthSession, item: MediaItem): EpisodeNeighbors =
         api.episodeNeighbors(session, item)
