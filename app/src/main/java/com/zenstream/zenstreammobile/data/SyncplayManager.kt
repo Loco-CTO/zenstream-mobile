@@ -304,12 +304,6 @@ class SyncplayManager(
                         presence(next)
                     } catch (error: kotlinx.coroutines.CancellationException) {
                         throw error
-                    } catch (error: Exception) {
-                        Log.w(
-                            SYNCPLAY_LOG_TAG,
-                            "Syncplay readiness update failed: ${error.javaClass.simpleName}",
-                        )
-                        notify(SyncplayNotification.Failure(SyncplayFailure.PRESENCE))
                     }
                 }
             } finally {

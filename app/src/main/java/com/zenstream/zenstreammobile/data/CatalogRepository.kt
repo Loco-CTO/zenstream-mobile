@@ -311,8 +311,6 @@ class CatalogRepository(
             null
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            null
         }
 
     private suspend fun <T> authenticatedOrchestratorRequest(
