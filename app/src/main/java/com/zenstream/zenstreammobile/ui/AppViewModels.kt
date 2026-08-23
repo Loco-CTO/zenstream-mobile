@@ -15,6 +15,8 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
@@ -1042,6 +1044,10 @@ data class DetailUiState(
     val actionError: Boolean = false,
     val trackSource: MediaSource? = null,
     val trackSelection: PlaybackTrackSelection? = null,
+    val bazarrStatus: BazarrStatus? = null,
+    val bazarrSearch: BazarrSearchResult? = null,
+    val bazarrBusy: Boolean = false,
+    val bazarrError: Boolean = false,
 )
 
 internal fun defaultTrackSelection(
@@ -1067,6 +1073,8 @@ class DetailViewModel(
     private var loadGeneration = 0L
     private var loadJob: Job? = null
     private var trackLoadJob: Job? = null
+    private var bazarrSearchGeneration = 0L
+    private var bazarrSearchJob: Job? = null
 
     init {
         load()
@@ -1229,6 +1237,73 @@ class DetailViewModel(
 
     fun playbackTrackSelection(): PlaybackTrackSelection? = _uiState.value.trackSelection
 
+    fun searchBazarrSubtitles() {
+        val current = _uiState.value
+        val item = current.data?.item ?: return
+        val sourceId = current.trackSource?.id ?: return
+        if (item.type != "Episode") return
+        val detailGeneration = loadGeneration
+        val searchGeneration = ++bazarrSearchGeneration
+        bazarrSearchJob?.cancel()
+        bazarrSearchJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(bazarrBusy = true, bazarrError = false, bazarrSearch = null)
+            }
+            runCatching { repository.searchBazarrSubtitles(session, item.id, sourceId) }
+                .onSuccess { result ->
+                    if (
+                        searchGeneration != bazarrSearchGeneration ||
+                            detailGeneration != loadGeneration ||
+                            _uiState.value.data?.item?.id != item.id ||
+                            _uiState.value.trackSource?.id != sourceId
+                    ) {
+                        return@onSuccess
+                    }
+                    _uiState.update { it.copy(bazarrBusy = false, bazarrSearch = result) }
+                }
+                .onFailure {
+                    if (
+                        searchGeneration != bazarrSearchGeneration ||
+                            detailGeneration != loadGeneration ||
+                            _uiState.value.data?.item?.id != item.id ||
+                            _uiState.value.trackSource?.id != sourceId
+                    ) {
+                        return@onFailure
+                    }
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                    _uiState.update { state -> state.copy(bazarrBusy = false, bazarrError = true) }
+                }
+        }
+    }
+
+    fun downloadBazarrSubtitle(matchId: String) {
+        val current = _uiState.value
+        val item = current.data?.item ?: return
+        val sourceId = current.trackSource?.id ?: return
+        if (item.type != "Episode" || matchId.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = current.copy(bazarrBusy = true, bazarrError = false)
+            runCatching { repository.downloadBazarrSubtitle(session, item.id, sourceId, matchId) }
+                .onSuccess {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            bazarrBusy = false,
+                            bazarrSearch = null,
+                            bazarrStatus =
+                                _uiState.value.bazarrStatus?.copy(state = "download_started"),
+                        )
+                }
+                .onFailure {
+                    if ((it as? CatalogException)?.statusCode == 401) {
+                        repository.clearSessionIfCurrent(session)
+                    }
+                    _uiState.value = _uiState.value.copy(bazarrBusy = false, bazarrError = true)
+                }
+        }
+    }
+
     private fun loadTrackSource(generation: Long, item: MediaItem) {
         trackLoadJob?.cancel()
         if (item.type !in setOf("Movie", "Episode")) return
@@ -1247,6 +1322,13 @@ class DetailViewModel(
                             runCatching { repository.loadPlaybackPreference() }.getOrNull(),
                         ),
                 )
+            if (item.type == "Episode" && source.id != null) {
+                val bazarrStatus =
+                    runCatching { repository.bazarrStatus(session, item.id, source.id) }.getOrNull()
+                if (generation == loadGeneration && _uiState.value.data?.item?.id == item.id) {
+                    _uiState.value = _uiState.value.copy(bazarrStatus = bazarrStatus)
+                }
+            }
         }
     }
 

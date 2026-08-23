@@ -75,6 +75,8 @@ import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.data.landscapeImageType
 import com.zenstream.zenstreammobile.data.posterImageType
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrSearchResult
+import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
@@ -157,6 +159,12 @@ fun DetailScreen(
                     trackSelection = state.trackSelection,
                     onSelectAudioTrack = vm::selectAudioTrack,
                     onSelectSubtitleTrack = vm::selectSubtitleTrack,
+                    bazarrStatus = state.bazarrStatus,
+                    bazarrSearch = state.bazarrSearch,
+                    bazarrBusy = state.bazarrBusy,
+                    bazarrError = state.bazarrError,
+                    onSearchBazarr = vm::searchBazarrSubtitles,
+                    onDownloadBazarr = vm::downloadBazarrSubtitle,
                 )
         }
     }
@@ -184,6 +192,12 @@ internal fun DetailContent(
     trackSelection: PlaybackTrackSelection? = null,
     onSelectAudioTrack: (Int) -> Unit = {},
     onSelectSubtitleTrack: (Int?) -> Unit = {},
+    bazarrStatus: BazarrStatus? = null,
+    bazarrSearch: BazarrSearchResult? = null,
+    bazarrBusy: Boolean = false,
+    bazarrError: Boolean = false,
+    onSearchBazarr: () -> Unit = {},
+    onDownloadBazarr: (String) -> Unit = {},
 ) {
     val mediaItem = data.item
     val listState = rememberLazyListState()
@@ -223,6 +237,12 @@ internal fun DetailContent(
                         selection = trackSelection,
                         onSelectAudio = onSelectAudioTrack,
                         onSelectSubtitle = onSelectSubtitleTrack,
+                        bazarrStatus = bazarrStatus,
+                        bazarrSearch = bazarrSearch,
+                        bazarrBusy = bazarrBusy,
+                        bazarrError = bazarrError,
+                        onSearchBazarr = onSearchBazarr,
+                        onDownloadBazarr = onDownloadBazarr,
                     )
                 }
                 if (actionError) {
@@ -283,9 +303,44 @@ internal fun DetailContent(
     }
 }
 
+@Composable
+private fun BazarrMatchRow(
+    match: com.zenstream.zenstreammobile.model.BazarrSubtitleMatch,
+    busy: Boolean,
+    onDownload: (String) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
+        Row(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    match.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    listOfNotNull(match.language, match.provider, match.format).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { onDownload(match.matchId) }, enabled = !busy) {
+                Text(stringResource(R.string.bazarr_download))
+            }
+        }
+    }
+}
+
 private enum class DetailTrackPicker {
     Audio,
     Subtitles,
+    SubtitleDownloader,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -295,9 +350,16 @@ private fun DetailTrackChoices(
     selection: PlaybackTrackSelection,
     onSelectAudio: (Int) -> Unit,
     onSelectSubtitle: (Int?) -> Unit,
+    bazarrStatus: BazarrStatus?,
+    bazarrSearch: BazarrSearchResult?,
+    bazarrBusy: Boolean,
+    bazarrError: Boolean,
+    onSearchBazarr: () -> Unit,
+    onDownloadBazarr: (String) -> Unit,
 ) {
     val audio = source.mediaStreams.filter { it.type.equals("audio", true) }
     val subtitles = source.mediaStreams.filter { it.type.equals("subtitle", true) }
+    val subtitleDownloaderAvailable = isSubtitleDownloaderAvailable(bazarrStatus)
     var picker by remember(source.id) { mutableStateOf<DetailTrackPicker?>(null) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -317,7 +379,7 @@ private fun DetailTrackChoices(
                 onClick = { picker = DetailTrackPicker.Audio },
             )
         }
-        if (subtitles.isNotEmpty()) {
+        if (subtitles.isNotEmpty() || subtitleDownloaderAvailable) {
             DetailTrackPickerRow(
                 label = stringResource(R.string.subtitle_track),
                 value =
@@ -331,8 +393,11 @@ private fun DetailTrackChoices(
     val currentPicker = picker ?: return
     val title =
         stringResource(
-            if (currentPicker == DetailTrackPicker.Audio) R.string.audio_track
-            else R.string.subtitle_track
+            when (currentPicker) {
+                DetailTrackPicker.Audio -> R.string.audio_track
+                DetailTrackPicker.Subtitles -> R.string.subtitle_track
+                DetailTrackPicker.SubtitleDownloader -> R.string.bazarr_subtitles
+            }
         )
     ModalBottomSheet(
         onDismissRequest = { picker = null },
@@ -351,31 +416,133 @@ private fun DetailTrackChoices(
                 modifier =
                     Modifier.padding(horizontal = 4.dp, vertical = 4.dp).semantics { heading() },
             )
-            if (currentPicker == DetailTrackPicker.Subtitles) {
-                DetailTrackOption(
-                    label = stringResource(R.string.subtitles_off),
-                    selected = selection.subtitleStreamIndex == null,
-                    onClick = {
-                        picker = null
-                        onSelectSubtitle(null)
-                    },
+            when (currentPicker) {
+                DetailTrackPicker.SubtitleDownloader ->
+                    BazarrDownloaderSheetContent(
+                        status = bazarrStatus,
+                        search = bazarrSearch,
+                        busy = bazarrBusy,
+                        error = bazarrError,
+                        onSearch = onSearchBazarr,
+                        onDownload = onDownloadBazarr,
+                    )
+
+                DetailTrackPicker.Subtitles -> {
+                    DetailTrackOption(
+                        label = stringResource(R.string.subtitles_off),
+                        selected = selection.subtitleStreamIndex == null,
+                        onClick = {
+                            picker = null
+                            onSelectSubtitle(null)
+                        },
+                    )
+                    if (subtitleDownloaderAvailable) {
+                        DetailTrackOption(
+                            label = stringResource(R.string.bazarr_find_subtitles),
+                            selected = false,
+                            icon = LucideR.drawable.lucide_ic_search,
+                            iconContentDescription =
+                                stringResource(R.string.bazarr_search_subtitles_description),
+                            onClick = { picker = DetailTrackPicker.SubtitleDownloader },
+                        )
+                    }
+                    subtitles.forEach { stream ->
+                        DetailTrackOption(
+                            label = detailTrackLabel(stream),
+                            selected = selection.subtitleStreamIndex == stream.index,
+                            onClick = {
+                                picker = null
+                                onSelectSubtitle(stream.index)
+                            },
+                        )
+                    }
+                }
+
+                DetailTrackPicker.Audio ->
+                    audio.forEach { stream ->
+                        DetailTrackOption(
+                            label = detailTrackLabel(stream),
+                            selected = selection.audioStreamId == stream.index,
+                            onClick = {
+                                picker = null
+                                onSelectAudio(stream.index)
+                            },
+                        )
+                    }
+            }
+        }
+    }
+}
+
+private fun isSubtitleDownloaderAvailable(status: BazarrStatus?): Boolean =
+    status?.state == "matched" || status?.state == "download_started"
+
+@Composable
+private fun BazarrDownloaderSheetContent(
+    status: BazarrStatus?,
+    search: BazarrSearchResult?,
+    busy: Boolean,
+    error: Boolean,
+    onSearch: () -> Unit,
+    onDownload: (String) -> Unit,
+) {
+    val statusText =
+        when {
+            status?.state == "download_started" -> stringResource(R.string.bazarr_download_queued)
+            status?.hasLocalSubtitle == true -> stringResource(R.string.bazarr_existing)
+            else -> null
+        }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        statusText?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Button(
+            onClick = onSearch,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_search),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
                 )
             }
-            (if (currentPicker == DetailTrackPicker.Audio) audio else subtitles).forEach { stream ->
-                DetailTrackOption(
-                    label = detailTrackLabel(stream),
-                    selected =
-                        if (currentPicker == DetailTrackPicker.Audio) {
-                            selection.audioStreamId == stream.index
-                        } else {
-                            selection.subtitleStreamIndex == stream.index
-                        },
-                    onClick = {
-                        picker = null
-                        if (currentPicker == DetailTrackPicker.Audio) onSelectAudio(stream.index)
-                        else onSelectSubtitle(stream.index)
-                    },
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                stringResource(
+                    if (busy) R.string.bazarr_searching else R.string.bazarr_find_subtitles
                 )
+            )
+        }
+        if (error) {
+            Text(
+                stringResource(R.string.bazarr_search_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        search?.let { result ->
+            if (result.matches.isEmpty()) {
+                Text(
+                    stringResource(R.string.bazarr_no_matches),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                result.matches.forEach { match ->
+                    BazarrMatchRow(match = match, busy = busy, onDownload = onDownload)
+                }
             }
         }
     }
@@ -411,7 +578,13 @@ private fun DetailTrackPickerRow(label: String, value: String, onClick: () -> Un
 }
 
 @Composable
-private fun DetailTrackOption(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun DetailTrackOption(
+    label: String,
+    selected: Boolean,
+    icon: Int? = null,
+    iconContentDescription: String? = null,
+    onClick: () -> Unit,
+) {
     Surface(
         modifier =
             Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).semantics {
@@ -425,11 +598,20 @@ private fun DetailTrackOption(label: String, selected: Boolean, onClick: () -> U
             else MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.small,
     ) {
-        Text(
-            label,
+        Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            icon?.let {
+                Icon(
+                    painter = painterResource(it),
+                    contentDescription = iconContentDescription,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }
 

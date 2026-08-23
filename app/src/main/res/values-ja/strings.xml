@@ -235,6 +235,17 @@
     <string name="detail_title">詳細</string>
     <string name="detail_load_failed">このタイトルを読み込めませんでした。</string>
     <string name="detail_action_failed">このタイトルを更新できませんでした。</string>
+    <string name="bazarr_subtitles">字幕ダウンローダー</string>
+    <string name="bazarr_find_subtitles">字幕を検索</string>
+    <string name="bazarr_search_subtitles_description">字幕を検索</string>
+    <string name="bazarr_searching">検索中…</string>
+    <string name="bazarr_no_matches">字幕が見つかりませんでした。</string>
+    <string name="bazarr_not_configured">このライブラリには字幕ダウンローダーが設定されていません。</string>
+    <string name="bazarr_path_conflict">このファイルに一致する字幕ダウンローダーのエントリが一意に見つかりません。</string>
+    <string name="bazarr_existing">このファイルにはローカル字幕が登録されています。</string>
+    <string name="bazarr_download">ダウンロード</string>
+    <string name="bazarr_download_queued">ダウンロードをキューに追加しました。まもなくライブラリを更新します。</string>
+    <string name="bazarr_search_failed">字幕を検索できませんでした。</string>
     <string name="rating_value">★ %1$.1f</string>
     <string name="runtime_minutes">%1$d分</string>
     <string name="season_episode">シーズン%1$d · エピソード%2$d</string>
