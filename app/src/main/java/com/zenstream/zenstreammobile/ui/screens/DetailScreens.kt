@@ -319,7 +319,7 @@ private fun BazarrMatchRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    match.name,
+                    match.releaseName ?: match.name,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
