@@ -6,6 +6,8 @@ import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.BazarrEpisodeStatus
+import com.zenstream.zenstreammobile.model.BazarrMovieStatus
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.BazarrSubtitleMatch
@@ -1748,8 +1750,10 @@ internal fun parseMediaSource(source: JSONObject): MediaSource {
 
 private fun parseBazarrStatus(value: JSONObject): BazarrStatus {
     val episode = value.optJSONObject("episode")
-    val subtitles =
-        episode
+    val movie = value.optJSONObject("movie")
+
+    fun parseSubtitles(owner: JSONObject?): List<BazarrSubtitleSummary> =
+        owner
             ?.optJSONArray("subtitles")
             ?.let { array ->
                 List(array.length()) { index -> array.optJSONObject(index) ?: JSONObject() }
@@ -1765,12 +1769,33 @@ private fun parseBazarrStatus(value: JSONObject): BazarrStatus {
                     }
             }
             .orEmpty()
+    val episodeSubtitles = parseSubtitles(episode)
+    val movieSubtitles = parseSubtitles(movie)
     return BazarrStatus(
         state = value.optString("state").ifBlank { "unknown" },
         relativePath = value.optNullableString("relativePath"),
         hasLocalSubtitle = value.optBoolean("hasLocalSubtitle"),
         message = value.optNullableString("message"),
-        subtitles = subtitles,
+        subtitles = episodeSubtitles.ifEmpty { movieSubtitles },
+        episode =
+            episode?.let {
+                BazarrEpisodeStatus(
+                    seriesId = it.optIntOrNull("seriesId"),
+                    episodeId = it.optIntOrNull("episodeId"),
+                    title = it.optNullableString("title"),
+                    season = it.optIntOrNull("season"),
+                    episode = it.optIntOrNull("episode"),
+                    subtitles = episodeSubtitles,
+                )
+            },
+        movie =
+            movie?.let {
+                BazarrMovieStatus(
+                    movieId = it.optIntOrNull("movieId"),
+                    title = it.optNullableString("title"),
+                    subtitles = movieSubtitles,
+                )
+            },
     )
 }
 
