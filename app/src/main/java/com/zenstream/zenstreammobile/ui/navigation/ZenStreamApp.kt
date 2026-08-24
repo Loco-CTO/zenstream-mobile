@@ -736,8 +736,8 @@ internal fun ChromeVisibilitySlot(
 }
 
 /**
- * Keeps the status-bar region measured and covered while the shared toolbar body animates out.
- * The toolbar content receives zero insets because this wrapper owns that space.
+ * Keeps the status-bar region measured and covered while the shared toolbar body animates out. The
+ * toolbar content receives zero insets because this wrapper owns that space.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
