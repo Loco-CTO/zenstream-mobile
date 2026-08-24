@@ -322,6 +322,7 @@ private fun MainScaffold(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
                 ) {
                     MainTopBar(
+                        windowInsets = WindowInsets(0, 0, 0, 0),
                         syncplay = syncplay,
                         session = session,
                         showSearchAction = shouldShowMainSearchAction(mainRoute),
@@ -549,6 +550,7 @@ internal fun MainTopBar(
     onSearch: () -> Unit = {},
     unreadCount: Int = 0,
     onNotifications: () -> Unit = {},
+    windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
     TopAppBar(
         title = {
@@ -604,6 +606,7 @@ internal fun MainTopBar(
             TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             ),
+        windowInsets = windowInsets,
     )
 }
 
@@ -733,8 +736,8 @@ internal fun ChromeVisibilitySlot(
 }
 
 /**
- * Keeps the status-bar region measured and covered while only the shared toolbar body collapses.
- * The toolbar content receives no status-bar insets because this wrapper owns that space.
+ * Keeps the status-bar region measured and covered while the shared toolbar body animates out. The
+ * toolbar content receives zero insets because this wrapper owns that space.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)

@@ -508,9 +508,7 @@ private fun SearchResultsContent(
     }
     ObserveScrollability(
         canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
-        onScrollabilityChanged = { isScrollable ->
-            onScrollabilityChanged(isScrollable)
-        },
+        onScrollabilityChanged = { isScrollable -> onScrollabilityChanged(isScrollable) },
     )
     Column(modifier.fillMaxSize().padding(padding)) {
         ChromeVisibilitySlot(
@@ -1029,9 +1027,7 @@ fun LibraryScreen(
     }
     ObserveScrollability(
         canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
-        onScrollabilityChanged = { isScrollable ->
-            onScrollabilityChanged(isScrollable)
-        },
+        onScrollabilityChanged = { isScrollable -> onScrollabilityChanged(isScrollable) },
     )
     LaunchedEffect(
         gridState,

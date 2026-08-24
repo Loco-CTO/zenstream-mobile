@@ -198,10 +198,13 @@ class MainNavigationTest {
         }
 
         composeRule.waitForIdle()
-
         val partiallyCollapsedBounds =
             composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
-        assertEquals((statusBarInset + 52.dp).value, partiallyCollapsedBounds.top.value, 0.5f)
+        assertEquals(
+            (statusBarInset + 52.dp).value,
+            partiallyCollapsedBounds.top.value,
+            0.5f,
+        )
 
         composeRule.runOnIdle { chromeVisibilityFraction.value = 0f }
         composeRule.waitForIdle()
