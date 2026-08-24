@@ -116,11 +116,11 @@ import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
+import com.zenstream.zenstreammobile.ui.navigation.ChromeVisibilitySlot
 import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
 import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
-import com.zenstream.zenstreammobile.ui.navigation.StableChromeSlot
 
 @Composable
 fun HomeScreen(
@@ -390,7 +390,7 @@ fun SearchOverlayScreen(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                StableChromeSlot(
+                ChromeVisibilitySlot(
                     visible = bottomBarVisible,
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
@@ -533,7 +533,7 @@ private fun SearchResultsContent(
         },
     )
     Column(modifier.fillMaxSize().padding(padding)) {
-        StableChromeSlot(
+        ChromeVisibilitySlot(
             visible = topBarVisible,
             modifier = Modifier.fillMaxWidth(),
             enter =
@@ -1084,7 +1084,7 @@ fun LibraryScreen(
         }
     }
     Column(Modifier.fillMaxSize().padding(padding)) {
-        StableChromeSlot(
+        ChromeVisibilitySlot(
             visible = topBarVisible,
             modifier = Modifier.fillMaxWidth(),
             enter =
