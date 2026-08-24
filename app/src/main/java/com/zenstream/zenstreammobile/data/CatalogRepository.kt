@@ -593,39 +593,13 @@ class CatalogRepository(
         SyncplaySession.manager(session, sessionStore)
 
     override suspend fun loadSubtitleStyle(): SubtitleStyle {
-        val local = sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
-        val current = session.first() ?: return local
-        return runCatching {
-                authenticatedOrchestratorRequest(current) {
-                    orchestratorApi.fetchSubtitlePreference(current.serverUrl, current.token)
-                }
-            }
-            .getOrNull()
-            ?.let { remote ->
-                remote.copy(bottomSpacing = local.bottomSpacing).also {
-                    sessionStore.cacheSubtitleStyle(it)
-                }
-            } ?: local
+        return sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
     }
 
     override suspend fun saveSubtitleStyle(style: SubtitleStyle): SubtitleStyle {
         val normalized = normalizeSubtitleStyle(style)
-        val current = session.first()
-        val saved = current?.let {
-            runCatching {
-                    authenticatedOrchestratorRequest(it) {
-                        orchestratorApi.setSubtitlePreference(
-                            it.serverUrl,
-                            it.token,
-                            normalized,
-                        )
-                    }
-                }
-                .getOrNull()
-        }
-        val result = saved?.copy(bottomSpacing = normalized.bottomSpacing) ?: normalized
-        sessionStore.cacheSubtitleStyle(result)
-        return result
+        sessionStore.cacheSubtitleStyle(normalized)
+        return normalized
     }
 
     override suspend fun loadWatchHistoryPreference(): Boolean {

@@ -54,8 +54,11 @@ class SessionStoreTest {
         store.clearAll()
         val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
 
+        store.saveSession(AuthSession("https://server-one.example", "token-one", "user-1", "One"))
         store.cacheSubtitleStyle(style)
         store.clearSession()
+        assertEquals(style, store.cachedSubtitleStyle())
+        store.saveSession(AuthSession("https://server-two.example", "token-two", "user-2", "Two"))
         assertEquals(style, store.cachedSubtitleStyle())
         store.clearAll()
         assertEquals(style, store.cachedSubtitleStyle())
@@ -90,12 +93,16 @@ class SessionStoreTest {
                 dataStoreName = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_engine",
             )
         store.clearAll()
+        store.savePlayerEngine(PlayerEngine.MPV)
 
         assertEquals(PlayerEngine.MPV, store.playerEngine.first())
         store.savePlayerEngine(PlayerEngine.MEDIA3)
         assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
 
+        store.clearSession()
+        assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
         store.clearAll()
-        assertEquals(PlayerEngine.MPV, store.playerEngine.first())
+        assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
+        store.savePlayerEngine(PlayerEngine.MPV)
     }
 }

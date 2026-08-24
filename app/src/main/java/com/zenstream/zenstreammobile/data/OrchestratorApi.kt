@@ -1,6 +1,5 @@
 package com.zenstream.zenstreammobile.data
 
-import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -143,34 +142,6 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                         .put("subtitleLanguage", subtitleLanguage ?: JSONObject.NULL)
                         .toString(),
                 )
-            )
-        }
-
-    suspend fun fetchSubtitlePreference(
-        orchestratorUrl: String,
-        token: String,
-    ): SubtitleStyle =
-        withContext(Dispatchers.IO) {
-            subtitleStyleFromJson(
-                authenticatedJson(orchestratorUrl, token, "/api/preferences/subtitles").toString()
-            )
-        }
-
-    suspend fun setSubtitlePreference(
-        orchestratorUrl: String,
-        token: String,
-        style: SubtitleStyle,
-    ): SubtitleStyle =
-        withContext(Dispatchers.IO) {
-            subtitleStyleFromJson(
-                authenticatedJson(
-                        orchestratorUrl,
-                        token,
-                        "/api/preferences/subtitles",
-                        "PATCH",
-                        subtitleStyleToJson(style),
-                    )
-                    .toString()
             )
         }
 

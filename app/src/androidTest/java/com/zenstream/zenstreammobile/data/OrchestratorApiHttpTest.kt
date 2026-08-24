@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -74,5 +75,29 @@ class OrchestratorApiHttpTest {
         assertNull(store.session.first())
         store.clearAll()
         store.saveInterfaceLocaleMode(InterfaceLocaleMode.Automatic)
+    }
+
+    @Test
+    fun repositorySubtitleStyleUsesDeviceStorageWithoutOrchestratorRequests() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store =
+            SessionStore(
+                context,
+                dataStoreName = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_subtitle_local",
+                systemLanguageTags = { listOf("en-GB") },
+            )
+        store.clearAll()
+        store.cacheSubtitleStyle(DEFAULT_SUBTITLE_STYLE)
+        val serverUrl = server.url("/").toString().trimEnd('/')
+        store.saveServerConfig(serverUrl)
+        store.saveSession(AuthSession(serverUrl, "test-token", "user-1", "Test"))
+        val repository = CatalogRepository(CatalogApi(), store, OrchestratorApi(OkHttpClient()))
+        val style = SubtitleStyle(fontFamily = "mono", textScale = 140f)
+
+        assertEquals(DEFAULT_SUBTITLE_STYLE, repository.loadSubtitleStyle())
+        assertEquals(style, repository.saveSubtitleStyle(style))
+        assertEquals(style, repository.loadSubtitleStyle())
+        assertEquals(0, server.requestCount)
+        store.clearAll()
     }
 }
