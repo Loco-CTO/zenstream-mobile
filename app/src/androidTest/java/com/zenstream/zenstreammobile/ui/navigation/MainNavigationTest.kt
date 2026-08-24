@@ -14,13 +14,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.compose.NavHost
@@ -147,15 +147,9 @@ class MainNavigationTest {
                         enter = EnterTransition.None,
                         exit = ExitTransition.None,
                     ) {
-                        Box(
-                            Modifier.fillMaxWidth()
-                                .height(104.dp)
-                                .testTag("chrome-slot-content")
-                        )
+                        Box(Modifier.fillMaxWidth().height(104.dp).testTag("chrome-slot-content"))
                     }
-                    Box(
-                        Modifier.fillMaxWidth().weight(1f).testTag("chrome-following-content")
-                    )
+                    Box(Modifier.fillMaxWidth().weight(1f).testTag("chrome-following-content"))
                 }
             }
         }
