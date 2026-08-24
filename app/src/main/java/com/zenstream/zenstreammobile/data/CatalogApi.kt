@@ -1815,6 +1815,8 @@ private fun parseBazarrSearchResult(value: JSONObject): BazarrSearchResult {
                             releaseName = match.optNullableString("releaseName"),
                             provider = match.optNullableString("provider"),
                             language = match.optNullableString("language"),
+                            score = match.optDoubleOrNull("score"),
+                            uploader = match.optNullableString("uploader"),
                             format = match.optNullableString("format"),
                             hearingImpaired = match.optBoolean("hearingImpaired"),
                             forced = match.optBoolean("forced"),

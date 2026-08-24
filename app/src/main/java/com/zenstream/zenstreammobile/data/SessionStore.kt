@@ -270,6 +270,8 @@ class SessionStore(
     }
 
     suspend fun clearSession() {
+        // Player engine and subtitle style are device-local preferences. They
+        // intentionally survive logout and account changes.
         dataStore.edit {
             it.remove(Keys.token)
             it.remove(Keys.resourceTicket)
@@ -283,6 +285,8 @@ class SessionStore(
     }
 
     suspend fun clearAll() {
+        // Keep player engine and subtitle style when the configured server or
+        // account changes; both preferences belong to this installation.
         dataStore.edit {
             it.remove(Keys.orchestratorUrl)
             it.remove(Keys.serverUrl)

@@ -69,6 +69,8 @@ data class BazarrSubtitleMatch(
     val releaseName: String? = null,
     val provider: String? = null,
     val language: String? = null,
+    val score: Double? = null,
+    val uploader: String? = null,
     val format: String? = null,
     val hearingImpaired: Boolean = false,
     val forced: Boolean = false,
