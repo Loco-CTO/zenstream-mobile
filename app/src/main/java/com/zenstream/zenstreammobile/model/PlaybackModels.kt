@@ -49,6 +49,7 @@ data class BazarrStatus(
 data class BazarrSubtitleMatch(
     val matchId: String,
     val name: String,
+    val releaseName: String? = null,
     val provider: String? = null,
     val language: String? = null,
     val format: String? = null,

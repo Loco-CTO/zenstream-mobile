@@ -1787,6 +1787,7 @@ private fun parseBazarrSearchResult(value: JSONObject): BazarrSearchResult {
                         BazarrSubtitleMatch(
                             matchId = matchId,
                             name = match.optString("name").ifBlank { "Subtitle" },
+                            releaseName = match.optNullableString("releaseName"),
                             provider = match.optNullableString("provider"),
                             language = match.optNullableString("language"),
                             format = match.optNullableString("format"),
