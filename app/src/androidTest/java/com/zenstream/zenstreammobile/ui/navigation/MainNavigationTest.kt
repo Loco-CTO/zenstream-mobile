@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -161,6 +163,55 @@ class MainNavigationTest {
         val contentBounds =
             composeRule.onNodeWithTag("chrome-following-content").getUnclippedBoundsInRoot()
         assertEquals(0.dp, contentBounds.top)
+    }
+
+    @Test
+    fun hiddenTopBarKeepsOnlyTheStatusBarInset() {
+        val chromeVisible = mutableStateOf(true)
+        val statusBarInset = 24.dp
+        val topBarBodyHeight = 104.dp
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                val density = LocalDensity.current
+                val statusBarInsets =
+                    WindowInsets(
+                        0,
+                        with(density) { statusBarInset.roundToPx() },
+                        0,
+                        0,
+                    )
+                Column(Modifier.fillMaxSize()) {
+                    StatusBarAwareTopBarSlot(
+                        visible = chromeVisible.value,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter = androidx.compose.animation.EnterTransition.None,
+                        exit = androidx.compose.animation.ExitTransition.None,
+                        statusBarInsets = statusBarInsets,
+                    ) {
+                        Box(Modifier.fillMaxWidth().height(topBarBodyHeight))
+                    }
+                    Box(Modifier.fillMaxWidth().weight(1f).testTag("status-bar-following-content"))
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        val visibleBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(
+            (statusBarInset + topBarBodyHeight).value,
+            visibleBounds.top.value,
+            0.5f,
+        )
+
+        composeRule.runOnIdle { chromeVisible.value = false }
+        composeRule.waitForIdle()
+
+        val hiddenBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(statusBarInset.value, hiddenBounds.top.value, 0.5f)
+        assertTrue(hiddenBounds.top.value > 0f)
     }
 
     @Test
