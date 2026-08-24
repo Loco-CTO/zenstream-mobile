@@ -15,12 +15,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -322,7 +327,7 @@ private fun MainScaffold(
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!topBarHidden) {
-                ChromeVisibilitySlot(
+                StatusBarAwareTopBarSlot(
                     visible = topBarVisible,
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
@@ -336,6 +341,7 @@ private fun MainScaffold(
                             fadeOut(),
                 ) {
                     MainTopBar(
+                        windowInsets = WindowInsets(0, 0, 0, 0),
                         syncplay = syncplay,
                         session = session,
                         showSearchAction = shouldShowMainSearchAction(mainRoute),
@@ -568,6 +574,7 @@ internal fun MainTopBar(
     onSearch: () -> Unit = {},
     unreadCount: Int = 0,
     onNotifications: () -> Unit = {},
+    windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
     TopAppBar(
         title = {
@@ -623,6 +630,7 @@ internal fun MainTopBar(
             TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             ),
+        windowInsets = windowInsets,
     )
 }
 
@@ -739,6 +747,35 @@ internal fun ChromeVisibilitySlot(
         exit = exit,
     ) {
         content()
+    }
+}
+
+/**
+ * Keeps the system status-bar region measured and covered while the shared top-bar body animates
+ * out. The body receives zero insets because the status-bar height is owned by this wrapper.
+ */
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun StatusBarAwareTopBarSlot(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    enter: androidx.compose.animation.EnterTransition,
+    exit: androidx.compose.animation.ExitTransition,
+    statusBarInsets: WindowInsets = WindowInsets.statusBarsIgnoringVisibility,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier) {
+        Column(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(statusBarInsets))
+            AnimatedVisibility(
+                visible = visible,
+                modifier = Modifier.fillMaxWidth(),
+                enter = enter,
+                exit = exit,
+            ) {
+                content()
+            }
+        }
     }
 }
 
