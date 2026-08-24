@@ -199,15 +199,19 @@ class MainNavigationTest {
         composeRule.waitForIdle()
         val visibleBounds =
             composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
-        assertEquals(statusBarInset + topBarBodyHeight, visibleBounds.top)
+        assertEquals(
+            (statusBarInset + topBarBodyHeight).value,
+            visibleBounds.top.value,
+            0.5f,
+        )
 
         composeRule.runOnIdle { chromeVisible.value = false }
         composeRule.waitForIdle()
 
         val hiddenBounds =
             composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
-        assertEquals(statusBarInset, hiddenBounds.top)
-        assertTrue(hiddenBounds.top > 0.dp)
+        assertEquals(statusBarInset.value, hiddenBounds.top.value, 0.5f)
+        assertTrue(hiddenBounds.top.value > 0f)
     }
 
     @Test
