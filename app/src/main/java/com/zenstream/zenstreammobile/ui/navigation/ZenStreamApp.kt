@@ -4,23 +4,21 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,9 +42,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -89,6 +89,7 @@ import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private const val HOME = "home"
@@ -265,21 +266,14 @@ private fun MainScaffold(
                 revealDistance = with(density) { REVEAL_DISTANCE_DP.dp.toPx() },
             )
         }
-    var bottomBarVisible by remember { mutableStateOf(true) }
-    var topBarVisible by remember { mutableStateOf(true) }
+    var bottomBarVisibilityFraction by remember { mutableStateOf(1f) }
+    var topBarVisibilityFraction by remember { mutableStateOf(1f) }
     var contentScrollable by remember { mutableStateOf(false) }
     var myPageNavigationResetKey by remember { mutableStateOf(0) }
     var lastMainRoute by remember { mutableStateOf(mainRoute) }
-    val onContentScrollabilityChanged: (Boolean) -> Unit =
-        remember(bottomBarVisibility, topBarVisibility) {
-            { isScrollable ->
-                contentScrollable = isScrollable
-                if (!isScrollable) {
-                    bottomBarVisible = bottomBarVisibility.resetForRoute()
-                    topBarVisible = topBarVisibility.resetForRoute()
-                }
-            }
-        }
+    val onContentScrollabilityChanged: (Boolean) -> Unit = remember {
+        { isScrollable -> contentScrollable = isScrollable }
+    }
     val scrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(
@@ -287,13 +281,13 @@ private fun MainScaffold(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                bottomBarVisible =
+                bottomBarVisibilityFraction =
                     bottomBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
                         isScrollable = contentScrollable,
                     )
-                topBarVisible =
+                topBarVisibilityFraction =
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
@@ -310,8 +304,8 @@ private fun MainScaffold(
         }
         lastMainRoute = mainRoute
         contentScrollable = false
-        bottomBarVisible = bottomBarVisibility.resetForRoute()
-        topBarVisible = topBarVisibility.resetForRoute()
+        bottomBarVisibilityFraction = bottomBarVisibility.resetForRoute()
+        topBarVisibilityFraction = topBarVisibility.resetForRoute()
         if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
     }
     LaunchedEffect(session.token) { notificationsViewModel.refresh() }
@@ -322,18 +316,10 @@ private fun MainScaffold(
     androidx.compose.material3.Scaffold(
         topBar = {
             if (!topBarHidden) {
-                ChromeVisibilitySlot(
-                    visible = topBarVisible,
+                StatusBarAwareTopBarSlot(
+                    visibilityFraction = topBarVisibilityFraction,
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
-                    enter =
-                        expandVertically(expandFrom = Alignment.Top) +
-                            slideInVertically(initialOffsetY = { -it }) +
-                            fadeIn(),
-                    exit =
-                        shrinkVertically(shrinkTowards = Alignment.Top) +
-                            slideOutVertically(targetOffsetY = { -it }) +
-                            fadeOut(),
                 ) {
                     MainTopBar(
                         syncplay = syncplay,
@@ -357,18 +343,13 @@ private fun MainScaffold(
                 // menu items animate. This prevents content from showing through
                 // the Android control strip during the transition.
                 ChromeVisibilitySlot(
-                    visible = shouldKeepMainBottomBarVisible(mainRoute) || bottomBarVisible,
+                    visibilityFraction =
+                        if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
+                        else bottomBarVisibilityFraction,
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    collapseFromBottom = true,
                     applyNavigationBarsPadding = true,
-                    enter =
-                        expandVertically(expandFrom = Alignment.Bottom) +
-                            slideInVertically(initialOffsetY = { it }) +
-                            fadeIn(),
-                    exit =
-                        shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                            slideOutVertically(targetOffsetY = { it }) +
-                            fadeOut(),
                 ) {
                     MainNavigationBar(
                         currentRoute = mainRoute,
@@ -717,28 +698,61 @@ internal fun MainNavigationBar(
 }
 
 /**
- * Animates a chrome slot and lets the slot collapse after the exit animation completes. The system
- * navigation inset remains applied to the bottom slot so content does not render under the Android
- * navigation controls when the app navigation bar is hidden.
+ * Measures the chrome body at full height, then exposes only the fraction that the scroll gesture
+ * has left visible. The body is clipped while its parent slot shrinks, so Scaffold gives content
+ * the matching amount of newly available space.
  */
 @Composable
 internal fun ChromeVisibilitySlot(
-    visible: Boolean,
+    visibilityFraction: Float,
     modifier: Modifier = Modifier,
-    enter: androidx.compose.animation.EnterTransition,
-    exit: androidx.compose.animation.ExitTransition,
+    collapseFromBottom: Boolean = false,
     applyNavigationBarsPadding: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val fraction = visibilityFraction.coerceIn(0f, 1f)
     val slotModifier =
         if (applyNavigationBarsPadding) modifier.navigationBarsPadding() else modifier
-    AnimatedVisibility(
-        visible = visible,
-        modifier = slotModifier,
-        enter = enter,
-        exit = exit,
-    ) {
-        content()
+    Box(modifier = slotModifier) {
+        Layout(
+            content = content,
+            modifier =
+                Modifier.fillMaxWidth().graphicsLayer {
+                    alpha = fraction
+                    clip = true
+                },
+        ) { measurables, constraints ->
+            val placeable = measurables.single().measure(constraints.copy(minHeight = 0))
+            val visibleHeight = (placeable.height * fraction).roundToInt()
+            layout(placeable.width, visibleHeight) {
+                val y = if (collapseFromBottom) 0 else visibleHeight - placeable.height
+                placeable.placeRelative(0, y)
+            }
+        }
+    }
+}
+
+/**
+ * Keeps the status-bar region measured and covered while only the shared toolbar body collapses.
+ * The toolbar content receives no status-bar insets because this wrapper owns that space.
+ */
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun StatusBarAwareTopBarSlot(
+    visibilityFraction: Float,
+    modifier: Modifier = Modifier,
+    statusBarInsets: WindowInsets = WindowInsets.statusBarsIgnoringVisibility,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier) {
+        Column(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(statusBarInsets))
+            ChromeVisibilitySlot(
+                visibilityFraction = visibilityFraction,
+                modifier = Modifier.fillMaxWidth(),
+                content = content,
+            )
+        }
     }
 }
 
@@ -746,72 +760,41 @@ internal class ScrollVisibilityController(
     private val hideDistance: Float,
     private val revealDistance: Float,
 ) {
-    private enum class ScrollDirection {
-        HIDE,
-        REVEAL,
-    }
-
-    private var direction: ScrollDirection? = null
-    private var accumulatedDistance = 0f
-    private var isVisible = true
+    private var visibilityFraction = 1f
 
     /**
-     * Applies only movement consumed by a scrollable child. Unconsumed upward drags are common on
-     * empty/short screens and must not hide the chrome.
+     * Applies consumed child movement, or unconsumed movement when the child has no current scroll
+     * range. This lets a short page settle into a partial chrome state instead of resetting during
+     * the remeasure caused by the shrinking slot.
      */
     fun onNestedScroll(
         consumedY: Float,
         availableY: Float,
         isScrollable: Boolean = true,
-    ): Boolean {
-        if (!isScrollable) {
-            return resetForRoute()
-        }
-        return onScroll(
-            deltaY = consumedY,
-            atTop = availableY > 0f && consumedY == 0f,
-        )
-    }
-
-    fun onScroll(deltaY: Float, atTop: Boolean = false): Boolean {
-        if (atTop) {
-            return reset(visible = true)
-        }
-
-        val nextDirection =
+    ): Float {
+        val deltaY =
             when {
-                deltaY < 0f -> ScrollDirection.HIDE
-                deltaY > 0f -> ScrollDirection.REVEAL
-                else -> return isVisible
+                consumedY != 0f -> consumedY
+                !isScrollable -> availableY
+                availableY > 0f -> availableY
+                else -> 0f
             }
-
-        if (direction != nextDirection) {
-            direction = nextDirection
-            accumulatedDistance = 0f
-        }
-        accumulatedDistance += kotlin.math.abs(deltaY)
-
-        when (nextDirection) {
-            ScrollDirection.HIDE ->
-                if (accumulatedDistance >= hideDistance) {
-                    isVisible = false
-                }
-
-            ScrollDirection.REVEAL ->
-                if (accumulatedDistance >= revealDistance) {
-                    isVisible = true
-                }
-        }
-        return isVisible
+        return onScroll(deltaY)
     }
 
-    fun resetForRoute(): Boolean = reset(visible = true)
+    fun onScroll(deltaY: Float): Float {
+        if (deltaY == 0f) {
+            return visibilityFraction
+        }
 
-    private fun reset(visible: Boolean): Boolean {
-        direction = null
-        accumulatedDistance = 0f
-        isVisible = visible
-        return isVisible
+        val distance = if (deltaY < 0f) hideDistance else revealDistance
+        visibilityFraction = (visibilityFraction + deltaY / distance).coerceIn(0f, 1f)
+        return visibilityFraction
+    }
+
+    fun resetForRoute(): Float {
+        visibilityFraction = 1f
+        return visibilityFraction
     }
 }
 

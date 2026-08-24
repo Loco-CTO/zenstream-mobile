@@ -2,10 +2,9 @@ package com.zenstream.zenstreammobile.ui.navigation
 
 import android.content.ContextWrapper
 import android.content.Intent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -135,17 +135,15 @@ class MainNavigationTest {
     }
 
     @Test
-    fun hidingChromeReleasesItsLayoutFootprint() {
-        val chromeVisible = mutableStateOf(true)
+    fun partiallyCollapsedChromeReleasesItsMatchingLayoutFootprint() {
+        val chromeVisibilityFraction = mutableStateOf(1f)
 
         composeRule.setContent {
             ZenStreamTheme {
                 Column(Modifier.fillMaxSize()) {
                     ChromeVisibilitySlot(
-                        visible = chromeVisible.value,
+                        visibilityFraction = chromeVisibilityFraction.value,
                         modifier = Modifier.fillMaxWidth(),
-                        enter = EnterTransition.None,
-                        exit = ExitTransition.None,
                     ) {
                         Box(Modifier.fillMaxWidth().height(104.dp).testTag("chrome-slot-content"))
                     }
@@ -155,12 +153,99 @@ class MainNavigationTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.runOnIdle { chromeVisible.value = false }
+        composeRule.runOnIdle { chromeVisibilityFraction.value = 0.5f }
         composeRule.waitForIdle()
 
-        val contentBounds =
+        val partiallyCollapsedBounds =
             composeRule.onNodeWithTag("chrome-following-content").getUnclippedBoundsInRoot()
-        assertEquals(0.dp, contentBounds.top)
+        assertEquals(52f, partiallyCollapsedBounds.top.value, 0.5f)
+
+        composeRule.runOnIdle { chromeVisibilityFraction.value = 0f }
+        composeRule.waitForIdle()
+
+        val hiddenBounds =
+            composeRule.onNodeWithTag("chrome-following-content").getUnclippedBoundsInRoot()
+        assertEquals(0f, hiddenBounds.top.value, 0.5f)
+    }
+
+    @Test
+    fun partiallyCollapsedTopBarKeepsStatusBarInset() {
+        val chromeVisibilityFraction = mutableStateOf(0.5f)
+        val statusBarInset = 24.dp
+        val topBarBodyHeight = 104.dp
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                val density = LocalDensity.current
+                val statusBarInsets =
+                    WindowInsets(
+                        0,
+                        with(density) { statusBarInset.roundToPx() },
+                        0,
+                        0,
+                    )
+                Column(Modifier.fillMaxSize()) {
+                    StatusBarAwareTopBarSlot(
+                        visibilityFraction = chromeVisibilityFraction.value,
+                        modifier = Modifier.fillMaxWidth(),
+                        statusBarInsets = statusBarInsets,
+                    ) {
+                        Box(Modifier.fillMaxWidth().height(topBarBodyHeight))
+                    }
+                    Box(Modifier.fillMaxWidth().weight(1f).testTag("status-bar-following-content"))
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        val partiallyCollapsedBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals((statusBarInset + 52.dp).value, partiallyCollapsedBounds.top.value, 0.5f)
+
+        composeRule.runOnIdle { chromeVisibilityFraction.value = 0f }
+        composeRule.waitForIdle()
+
+        val hiddenBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(statusBarInset.value, hiddenBounds.top.value, 0.5f)
+    }
+
+    @Test
+    fun partiallyCollapsedBottomBarKeepsNavigationInsetFixed() {
+        val chromeVisibilityFraction = mutableStateOf(1f)
+        val bottomBarBodyHeight = 104.dp
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxWidth().weight(1f).testTag("bottom-bar-following-content"))
+                    ChromeVisibilitySlot(
+                        visibilityFraction = chromeVisibilityFraction.value,
+                        modifier = Modifier.fillMaxWidth(),
+                        collapseFromBottom = true,
+                        applyNavigationBarsPadding = true,
+                    ) {
+                        Box(Modifier.fillMaxWidth().height(bottomBarBodyHeight))
+                    }
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        val fullyVisibleBounds =
+            composeRule.onNodeWithTag("bottom-bar-following-content").getUnclippedBoundsInRoot()
+
+        composeRule.runOnIdle { chromeVisibilityFraction.value = 0.5f }
+        composeRule.waitForIdle()
+
+        val partiallyCollapsedBounds =
+            composeRule.onNodeWithTag("bottom-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(
+            (bottomBarBodyHeight / 2).value,
+            (partiallyCollapsedBounds.bottom - fullyVisibleBounds.bottom).value,
+            0.5f,
+        )
     }
 
     @Test
