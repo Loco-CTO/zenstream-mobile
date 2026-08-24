@@ -415,6 +415,40 @@ class DetailScreensTest {
     }
 
     @Test
+    fun matchedMovieWithoutSubtitleTracksShowsDownloaderOption() {
+        val movie = MediaItem("movie", "Film", type = "Movie")
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = DetailData(item = movie),
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                    trackSource =
+                        MediaSource("source-1", mediaStreams = listOf(MediaStream(1, "Audio"))),
+                    trackSelection = PlaybackTrackSelection(),
+                    bazarrStatus = BazarrStatus("matched"),
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.subtitle_track)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.bazarr_find_subtitles))
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.bazarr_subtitles)).assertIsDisplayed()
+    }
+
+    @Test
     fun matchedEpisodePlacesDownloaderAfterOffAndBeforeExistingSubtitleTracks() {
         val episode = MediaItem("episode", "Pilot", type = "Episode")
         val session = AuthSession("https://example.com", "token", "user", "name")
@@ -524,6 +558,68 @@ class DetailScreensTest {
         composeRule.onNodeWithText(context.getString(R.string.bazarr_download)).performClick()
 
         assertEquals("match-1", downloadedMatchId)
+        composeRule
+            .onNodeWithText(context.getString(R.string.bazarr_download_queued))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun movieDownloaderSheetShowsMatchesAndInvokesDownloadCallback() {
+        val movie = MediaItem("movie", "Film", type = "Movie")
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        val searchResult =
+            BazarrSearchResult(
+                state = "matched",
+                matches =
+                    listOf(
+                        BazarrSubtitleMatch(
+                            matchId = "movie-match",
+                            name = "English subtitle",
+                            provider = "opensubtitles",
+                            language = "en",
+                            format = "srt",
+                        )
+                    ),
+            )
+        val status = mutableStateOf(BazarrStatus("matched"))
+        val search = mutableStateOf<BazarrSearchResult?>(null)
+        var downloadedMatchId: String? = null
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = DetailData(item = movie),
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                    trackSource =
+                        MediaSource("source-1", mediaStreams = listOf(MediaStream(1, "Audio"))),
+                    trackSelection = PlaybackTrackSelection(),
+                    bazarrStatus = status.value,
+                    bazarrSearch = search.value,
+                    onSearchBazarr = { search.value = searchResult },
+                    onDownloadBazarr = {
+                        downloadedMatchId = it
+                        status.value = status.value.copy(state = "download_started")
+                        search.value = null
+                    },
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.subtitle_track)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
+        composeRule.onNodeWithText("English subtitle").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.bazarr_download)).performClick()
+
+        assertEquals("movie-match", downloadedMatchId)
         composeRule
             .onNodeWithText(context.getString(R.string.bazarr_download_queued))
             .assertIsDisplayed()

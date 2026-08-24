@@ -38,12 +38,29 @@ data class BazarrSubtitleSummary(
     val format: String? = null,
 )
 
+data class BazarrEpisodeStatus(
+    val seriesId: Int? = null,
+    val episodeId: Int? = null,
+    val title: String? = null,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val subtitles: List<BazarrSubtitleSummary> = emptyList(),
+)
+
+data class BazarrMovieStatus(
+    val movieId: Int? = null,
+    val title: String? = null,
+    val subtitles: List<BazarrSubtitleSummary> = emptyList(),
+)
+
 data class BazarrStatus(
     val state: String,
     val relativePath: String? = null,
     val hasLocalSubtitle: Boolean = false,
     val message: String? = null,
     val subtitles: List<BazarrSubtitleSummary> = emptyList(),
+    val episode: BazarrEpisodeStatus? = null,
+    val movie: BazarrMovieStatus? = null,
 )
 
 data class BazarrSubtitleMatch(

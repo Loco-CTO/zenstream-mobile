@@ -1241,7 +1241,7 @@ class DetailViewModel(
         val current = _uiState.value
         val item = current.data?.item ?: return
         val sourceId = current.trackSource?.id ?: return
-        if (item.type != "Episode") return
+        if (item.type !in setOf("Movie", "Episode")) return
         val detailGeneration = loadGeneration
         val searchGeneration = ++bazarrSearchGeneration
         bazarrSearchJob?.cancel()
@@ -1282,7 +1282,7 @@ class DetailViewModel(
         val current = _uiState.value
         val item = current.data?.item ?: return
         val sourceId = current.trackSource?.id ?: return
-        if (item.type != "Episode" || matchId.isBlank()) return
+        if (item.type !in setOf("Movie", "Episode") || matchId.isBlank()) return
         viewModelScope.launch {
             _uiState.value = current.copy(bazarrBusy = true, bazarrError = false)
             runCatching { repository.downloadBazarrSubtitle(session, item.id, sourceId, matchId) }
@@ -1322,7 +1322,7 @@ class DetailViewModel(
                             runCatching { repository.loadPlaybackPreference() }.getOrNull(),
                         ),
                 )
-            if (item.type == "Episode" && source.id != null) {
+            if (item.type in setOf("Movie", "Episode") && source.id != null) {
                 val bazarrStatus =
                     runCatching { repository.bazarrStatus(session, item.id, source.id) }.getOrNull()
                 if (generation == loadGeneration && _uiState.value.data?.item?.id == item.id) {
