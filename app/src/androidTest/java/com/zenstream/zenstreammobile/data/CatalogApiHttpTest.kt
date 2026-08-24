@@ -408,11 +408,12 @@ class CatalogApiHttpTest {
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         val playback =
-            CatalogApi(deviceId = "device-id").playback(
-                session,
-                "episode-1",
-                PlaybackOptions(engine = PlayerEngine.MEDIA3),
-            )
+            CatalogApi(deviceId = "device-id")
+                .playback(
+                    session,
+                    "episode-1",
+                    PlaybackOptions(engine = PlayerEngine.MEDIA3),
+                )
 
         assertEquals("direct", playback.mode)
         server.takeRequest()
