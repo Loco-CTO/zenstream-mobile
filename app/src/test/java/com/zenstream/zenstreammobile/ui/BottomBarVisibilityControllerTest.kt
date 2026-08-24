@@ -1,84 +1,112 @@
 package com.zenstream.zenstreammobile.ui
 
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ScrollVisibilityControllerTest {
     @Test
-    fun hideThresholdIsNotCrossedPrematurely() {
+    fun upwardScrollProgressivelyHidesChrome() {
         val controller = controller()
 
-        assertTrue(controller.onScroll(-55f))
+        assertEquals(0.5f, controller.onScroll(-28f), EPSILON)
+        assertEquals(0.25f, controller.onScroll(-14f), EPSILON)
     }
 
     @Test
-    fun hideOccursAtThreshold() {
+    fun visibilityClampsAtFullyHiddenAndFullyShown() {
         val controller = controller()
 
-        assertFalse(controller.onScroll(-56f))
+        assertEquals(0f, controller.onScroll(-100f), EPSILON)
+        assertEquals(1f, controller.onScroll(100f), EPSILON)
     }
 
     @Test
-    fun revealRequiresFullReverseDistance() {
+    fun reverseScrollRevealsProportionally() {
         val controller = controller()
         controller.onScroll(-56f)
 
-        assertFalse(controller.onScroll(63f))
-        assertTrue(controller.onScroll(1f))
+        assertEquals(0.5f, controller.onScroll(32f), EPSILON)
+        assertEquals(1f, controller.onScroll(32f), EPSILON)
     }
 
     @Test
-    fun changingDirectionResetsAccumulatedDistance() {
+    fun changingDirectionKeepsTheCurrentPartialFraction() {
         val controller = controller()
 
-        assertTrue(controller.onScroll(-40f))
-        assertTrue(controller.onScroll(32f))
-        assertTrue(controller.onScroll(-40f))
-        assertFalse(controller.onScroll(-16f))
+        assertEquals(0.5f, controller.onScroll(-28f), EPSILON)
+        assertEquals(0.75f, controller.onScroll(16f), EPSILON)
+        assertEquals(0.5714286f, controller.onScroll(-10f), EPSILON)
     }
 
     @Test
-    fun reachingTopRestoresVisibility() {
+    fun upwardDragWithNoScrollRangeCollapsesChrome() {
+        val controller = controller()
+
+        assertEquals(
+            0.5f,
+            controller.onNestedScroll(
+                consumedY = 0f,
+                availableY = -28f,
+                isScrollable = false,
+            ),
+            EPSILON,
+        )
+    }
+
+    @Test
+    fun downwardDragAtTopRevealsChromeProportionally() {
         val controller = controller()
         controller.onScroll(-56f)
 
-        assertTrue(controller.onScroll(0f, atTop = true))
+        assertEquals(
+            0.5f,
+            controller.onNestedScroll(
+                consumedY = 0f,
+                availableY = 32f,
+                isScrollable = true,
+            ),
+            EPSILON,
+        )
     }
 
     @Test
-    fun unconsumedUpwardDragDoesNotHideVisibility() {
+    fun consumedScrollStillUpdatesChrome() {
         val controller = controller()
 
-        assertTrue(controller.onNestedScroll(consumedY = 0f, availableY = -100f))
-    }
-
-    @Test
-    fun consumedScrollStillHidesVisibility() {
-        val controller = controller()
-
-        assertFalse(controller.onNestedScroll(consumedY = -56f, availableY = 0f))
-    }
-
-    @Test
-    fun nonScrollableContentKeepsChromeVisibleAndResetsHiddenState() {
-        val controller = controller()
-
-        assertFalse(
+        assertEquals(
+            0f,
             controller.onNestedScroll(
                 consumedY = -56f,
                 availableY = 0f,
                 isScrollable = true,
-            )
+            ),
+            EPSILON,
         )
-        assertTrue(
+    }
+
+    @Test
+    fun nonScrollableRemeasureDoesNotResetPartialState() {
+        val controller = controller()
+        controller.onScroll(-28f)
+
+        assertEquals(
+            0.5f,
             controller.onNestedScroll(
-                consumedY = -100f,
+                consumedY = 0f,
                 availableY = 0f,
                 isScrollable = false,
-            )
+            ),
+            EPSILON,
         )
+    }
+
+    @Test
+    fun routeResetRestoresFullVisibility() {
+        val controller = controller()
+        controller.onScroll(-28f)
+
+        assertEquals(1f, controller.resetForRoute(), EPSILON)
     }
 
     private fun controller() =
@@ -86,4 +114,8 @@ class ScrollVisibilityControllerTest {
             hideDistance = 56f,
             revealDistance = 64f,
         )
+
+    private companion object {
+        const val EPSILON = 0.0001f
+    }
 }
