@@ -513,8 +513,11 @@ class DetailScreensTest {
                         BazarrSubtitleMatch(
                             matchId = "match-1",
                             name = "Japanese subtitle",
+                            releaseName = "[SubsPlease] Show - 01 [1080p].srt",
                             provider = "opensubtitles",
                             language = "ja",
+                            score = 86.0,
+                            uploader = "excaliburrr",
                             format = "srt",
                         )
                     ),
@@ -554,7 +557,8 @@ class DetailScreensTest {
         composeRule.onNodeWithText(context.getString(R.string.subtitle_track)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
-        composeRule.onNodeWithText("Japanese subtitle").assertIsDisplayed()
+        composeRule.onNodeWithText("[SubsPlease] Show - 01 [1080p].srt").assertIsDisplayed()
+        composeRule.onNodeWithText("86% · ja · opensubtitles · excaliburrr").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_download)).performClick()
 
         assertEquals("match-1", downloadedMatchId)
@@ -575,8 +579,11 @@ class DetailScreensTest {
                         BazarrSubtitleMatch(
                             matchId = "movie-match",
                             name = "English subtitle",
+                            releaseName = null,
                             provider = "opensubtitles",
                             language = "en",
+                            score = null,
+                            uploader = null,
                             format = "srt",
                         )
                     ),
@@ -616,7 +623,7 @@ class DetailScreensTest {
         composeRule.onNodeWithText(context.getString(R.string.subtitle_track)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_find_subtitles)).performClick()
-        composeRule.onNodeWithText("English subtitle").assertIsDisplayed()
+        composeRule.onNodeWithText("— · en · opensubtitles · —").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.bazarr_download)).performClick()
 
         assertEquals("movie-match", downloadedMatchId)

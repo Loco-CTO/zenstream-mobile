@@ -2,6 +2,8 @@ package com.zenstream.zenstreammobile.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.PlaybackOptions
+import com.zenstream.zenstreammobile.model.PlayerEngine
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
@@ -376,6 +378,47 @@ class CatalogApiHttpTest {
         assertEquals("direct", playback.mode)
         assertEquals("/api/catalog/items/episode-1", server.takeRequest().path)
         assertEquals("/api/playback/items/episode-1/negotiate", server.takeRequest().path)
+        assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun playbackNegotiationSendsTheSelectedEngineCapability() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("id", "episode-1")
+                        .put("type", "episode")
+                        .put("metadata", JSONObject().put("title", "Episode"))
+                        .toString()
+                )
+        )
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("mode", "direct")
+                        .put("sessionState", "ready")
+                        .put("url", "/api/playback/items/episode-1/stream?access=lease")
+                        .put("source", JSONObject().put("streams", JSONArray()))
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val playback =
+            CatalogApi(deviceId = "device-id")
+                .playback(
+                    session,
+                    "episode-1",
+                    PlaybackOptions(engine = PlayerEngine.MEDIA3),
+                )
+
+        assertEquals("direct", playback.mode)
+        server.takeRequest()
+        val negotiation = server.takeRequest()
+        assertEquals("media3", JSONObject(negotiation.body.readUtf8()).getString("engine"))
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
     }
 }

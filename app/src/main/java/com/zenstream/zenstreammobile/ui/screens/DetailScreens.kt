@@ -309,6 +309,26 @@ private fun BazarrMatchRow(
     busy: Boolean,
     onDownload: (String) -> Unit,
 ) {
+    val missingValue = "—"
+    val release = match.releaseName?.trim()?.takeIf(String::isNotEmpty) ?: missingValue
+    val score =
+        match.score?.let { value ->
+            if (!value.isFinite()) {
+                missingValue
+            } else if (value % 1.0 == 0.0) {
+                "${value.toInt()}%"
+            } else {
+                "$value%"
+            }
+        } ?: missingValue
+    val metadata =
+        listOf(
+                score,
+                match.language?.trim()?.takeIf(String::isNotEmpty) ?: missingValue,
+                match.provider?.trim()?.takeIf(String::isNotEmpty) ?: missingValue,
+                match.uploader?.trim()?.takeIf(String::isNotEmpty) ?: missingValue,
+            )
+            .joinToString(" · ")
     Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
         Row(
             modifier =
@@ -319,13 +339,13 @@ private fun BazarrMatchRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    match.releaseName ?: match.name,
+                    release,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    listOfNotNull(match.language, match.provider, match.format).joinToString(" · "),
+                    metadata,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
