@@ -8,6 +8,8 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -420,5 +422,82 @@ class CatalogApiHttpTest {
         val negotiation = server.takeRequest()
         assertEquals("media3", JSONObject(negotiation.body.readUtf8()).getString("engine"))
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun trickplayManifestNormalizesSourceMapAndFetchesTheAuthenticatedSheet() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    JSONObject()
+                        .put(
+                            "sources",
+                            JSONObject()
+                                .put(
+                                    "source-1",
+                                    JSONObject()
+                                        .put("state", "ready")
+                                        .put("frameWidth", 320)
+                                        .put("frameHeight", 180)
+                                        .put("intervalSeconds", 5)
+                                        .put("columns", 10)
+                                        .put("rows", 10)
+                                        .put("frameCount", 1)
+                                        .put(
+                                            "sheets",
+                                            JSONArray()
+                                                .put(
+                                                    JSONObject()
+                                                        .put("index", 0)
+                                                        .put("frameCount", 1)
+                                                        .put(
+                                                            "url",
+                                                            "/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket",
+                                                        )
+                                                ),
+                                        ),
+                                ),
+                        )
+                        .toString()
+                )
+        )
+        server.enqueue(MockResponse().setHeader("Content-Type", "image/webp").setBody("sheet"))
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val manifest = CatalogApi(deviceId = "device-id").trickplay(session, "item-1", "source-1")
+
+        assertEquals("source-1", manifest?.sourceId)
+        assertEquals(1, manifest?.sheets?.single()?.frameCount)
+        assertEquals(
+            server.url("/").toString().trimEnd('/') +
+                "/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket",
+            manifest?.sheets?.single()?.url,
+        )
+
+        val manifestRequest = server.takeRequest()
+        assertEquals(
+            "/api/playback/items/item-1/trickplay?sourceId=source-1",
+            manifestRequest.path,
+        )
+        assertEquals("Bearer test-token", manifestRequest.getHeader("Authorization"))
+
+        OkHttpClient()
+            .newCall(
+                Request.Builder()
+                    .url(manifest!!.sheets.single().url)
+                    .header("Authorization", "Bearer test-token")
+                    .build()
+            )
+            .execute()
+            .use { response -> assertTrue(response.isSuccessful) }
+
+        val sheetRequest = server.takeRequest()
+        assertEquals(
+            "/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket",
+            sheetRequest.path,
+        )
+        assertEquals("Bearer test-token", sheetRequest.getHeader("Authorization"))
     }
 }

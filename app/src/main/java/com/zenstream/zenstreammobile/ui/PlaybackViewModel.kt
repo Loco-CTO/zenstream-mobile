@@ -26,6 +26,7 @@ import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.SyncplayGroup
+import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
@@ -136,6 +137,35 @@ internal fun episodeCompletionAction(
         !autoplayNextEpisode -> EpisodeCompletionAction.CLOSE
         else -> EpisodeCompletionAction.PLAY_NEXT
     }
+
+internal fun isUsableTrickplayManifest(manifest: TrickplayManifest?): Boolean {
+    if (manifest == null || !manifest.state.equals("ready", ignoreCase = true)) return false
+    return manifest.frameWidth > 0 &&
+        manifest.frameHeight > 0 &&
+        manifest.intervalSeconds.isFinite() &&
+        manifest.intervalSeconds > 0.0 &&
+        manifest.columns > 0 &&
+        manifest.rows > 0 &&
+        manifest.frameCount > 0 &&
+        manifest.sheets.isNotEmpty()
+}
+
+internal fun shouldLoadTrickplay(manifest: TrickplayManifest?): Boolean =
+    !isUsableTrickplayManifest(manifest)
+
+internal fun shouldApplyTrickplayManifest(
+    loadGeneration: Long,
+    playbackGeneration: Long,
+    currentSourceId: String?,
+    requestedSourceId: String?,
+    manifest: TrickplayManifest?,
+): Boolean {
+    if (loadGeneration != playbackGeneration || !isUsableTrickplayManifest(manifest)) {
+        return false
+    }
+    return (currentSourceId == null || manifest?.sourceId == currentSourceId) &&
+        (requestedSourceId == null || manifest?.sourceId == requestedSourceId)
+}
 
 private data class PlaybackProgressSnapshot(
     val itemId: String,
@@ -513,7 +543,7 @@ class PlaybackViewModel(
             loadTrickplay(
                 loadGeneration,
                 playbackData.source.id,
-                playbackData.source.trickplay == null,
+                shouldLoadTrickplay(playbackData.source.trickplay),
             )
             loadEpisodeNeighbors(loadGeneration, playbackData.item)
         }
@@ -558,25 +588,56 @@ class PlaybackViewModel(
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
             repeat(TRICKPLAY_MANIFEST_ATTEMPTS) { attempt ->
-                val manifest =
-                    runCatching {
-                            repository.trickplay(session, currentItemId, sourceId)
-                        }
-                        .getOrNull()
+                val result = runCatching { repository.trickplay(session, currentItemId, sourceId) }
+                result.exceptionOrNull()?.let { error ->
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "trickplay manifest request failed item=$currentItemId source=${sourceId ?: "auto"} attempt=${attempt + 1} error=${redactPlaybackUrl(error.message)}",
+                    )
+                }
+                val manifest = result.getOrNull()
                 if (loadGeneration != playbackGeneration) return@launch
-                if (manifest?.state == "ready" && manifest.sheets.isNotEmpty()) {
+                if (manifest != null && isUsableTrickplayManifest(manifest)) {
                     val current = _uiState.value.playback ?: return@launch
-                    if (current.source.id == manifest.sourceId || sourceId == null) {
+                    if (
+                        shouldApplyTrickplayManifest(
+                            loadGeneration = loadGeneration,
+                            playbackGeneration = playbackGeneration,
+                            currentSourceId = current.source.id,
+                            requestedSourceId = sourceId,
+                            manifest = manifest,
+                        )
+                    ) {
                         _uiState.value =
                             _uiState.value.copy(
                                 playback =
                                     current.copy(source = current.source.copy(trickplay = manifest))
                             )
+                        Log.i(
+                            PLAYBACK_TAG,
+                            "trickplay manifest accepted item=$currentItemId source=${manifest.sourceId} sheets=${manifest.sheets.size} firstSheet=${redactPlaybackUrl(manifest.sheets.firstOrNull()?.url)}",
+                        )
+                    } else {
+                        Log.w(
+                            PLAYBACK_TAG,
+                            "trickplay manifest rejected item=$currentItemId source=${manifest.sourceId} expected=${current.source.id ?: sourceId ?: "auto"} generation=$loadGeneration/$playbackGeneration",
+                        )
                     }
                     return@launch
                 }
+                if (manifest == null) {
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "trickplay manifest unavailable item=$currentItemId source=${sourceId ?: "auto"} attempt=${attempt + 1}",
+                    )
+                    return@launch
+                }
+                Log.i(
+                    PLAYBACK_TAG,
+                    "trickplay manifest pending or incomplete item=$currentItemId source=${manifest.sourceId} state=${manifest.state} sheets=${manifest.sheets.size} attempt=${attempt + 1}",
+                )
                 if (
-                    manifest?.state !in setOf("queued", "generating") ||
+                    manifest.state !in setOf("queued", "generating") ||
                         attempt == TRICKPLAY_MANIFEST_ATTEMPTS - 1
                 )
                     return@launch

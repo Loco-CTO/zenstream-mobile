@@ -5,6 +5,8 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
+import com.zenstream.zenstreammobile.model.TrickplayManifest
+import com.zenstream.zenstreammobile.model.TrickplaySheet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -103,6 +105,95 @@ class PlaybackViewModelTest {
             ),
         )
     }
+
+    @Test
+    fun trickplayLoadsUntilItHasAUsableReadyManifest() {
+        assertTrue(shouldLoadTrickplay(null))
+        assertTrue(
+            shouldLoadTrickplay(
+                TrickplayManifest(
+                    state = "generating",
+                    sourceId = "source-1",
+                    frameWidth = 320,
+                    frameHeight = 180,
+                    intervalSeconds = 5.0,
+                    columns = 10,
+                    rows = 10,
+                    frameCount = 0,
+                    sheets = emptyList(),
+                )
+            )
+        )
+        assertTrue(
+            shouldLoadTrickplay(
+                TrickplayManifest(
+                    state = "ready",
+                    sourceId = "source-1",
+                    frameWidth = 320,
+                    frameHeight = 180,
+                    intervalSeconds = 5.0,
+                    columns = 10,
+                    rows = 10,
+                    frameCount = 0,
+                    sheets = emptyList(),
+                )
+            )
+        )
+        assertFalse(shouldLoadTrickplay(usableTrickplayManifest()))
+    }
+
+    @Test
+    fun trickplayAppliesOnlyToTheActiveGenerationAndSource() {
+        val manifest = usableTrickplayManifest()
+
+        assertTrue(
+            shouldApplyTrickplayManifest(
+                loadGeneration = 4,
+                playbackGeneration = 4,
+                currentSourceId = "source-1",
+                requestedSourceId = "source-1",
+                manifest = manifest,
+            )
+        )
+        assertFalse(
+            shouldApplyTrickplayManifest(
+                loadGeneration = 3,
+                playbackGeneration = 4,
+                currentSourceId = "source-1",
+                requestedSourceId = "source-1",
+                manifest = manifest,
+            )
+        )
+        assertFalse(
+            shouldApplyTrickplayManifest(
+                loadGeneration = 4,
+                playbackGeneration = 4,
+                currentSourceId = "source-2",
+                requestedSourceId = "source-2",
+                manifest = manifest,
+            )
+        )
+    }
+
+    private fun usableTrickplayManifest() =
+        TrickplayManifest(
+            state = "ready",
+            sourceId = "source-1",
+            frameWidth = 320,
+            frameHeight = 180,
+            intervalSeconds = 5.0,
+            columns = 10,
+            rows = 10,
+            frameCount = 1,
+            sheets =
+                listOf(
+                    TrickplaySheet(
+                        index = 0,
+                        frameCount = 1,
+                        url = "https://example.test/0.webp",
+                    )
+                ),
+        )
 
     @Test
     fun defaultsDetailSelectionAndKeepsSubtitleChoiceExplicit() {

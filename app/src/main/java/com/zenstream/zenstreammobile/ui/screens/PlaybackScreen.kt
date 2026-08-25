@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.os.Build
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -126,6 +127,9 @@ internal fun shouldShowPlayerLoading(
 ): Boolean =
     error == null &&
         (loading || engineBuffering || (hasPlayback && !engineReady) || waitingForSyncplayMembers)
+
+private fun redactTrickplayError(value: String?): String =
+    value.orEmpty().replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>").take(240)
 
 @Composable
 fun PlaybackScreen(
@@ -1346,7 +1350,13 @@ private fun TrickplaySpriteFrame(
                 contentDescription = contentDescription,
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier,
-                onError = { onError() },
+                onError = { result ->
+                    Log.w(
+                        "ZenStreamPlayback",
+                        "trickplay sheet load failed url=${preview.url.substringBefore('?')} error=${result.result.throwable::class.simpleName}:${redactTrickplayError(result.result.throwable.message)}",
+                    )
+                    onError()
+                },
             )
         },
     ) { measurables, _ ->

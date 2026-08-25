@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.ui.player.subtitleOutlineStrokeWidthDp
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -139,6 +140,81 @@ class PlaybackParsingTest {
             "https://orchestrator.example/api/playback/items/item-1/trickplay/generation/0.webp?access=ticket",
             manifest?.sheets?.single()?.url,
         )
+    }
+
+    @Test
+    fun parsingNestedTrickplayManifestUsesTheNestedPayload() {
+        val manifest =
+            parseTrickplayManifest(
+                JSONObject(
+                    """{
+                    "trickplay": {
+                        "state":"ready", "sourceId":"source-1", "frameWidth":320, "frameHeight":180,
+                        "intervalSeconds":5, "columns":10, "rows":10, "frameCount":1,
+                        "sheets":[{"index":0,"frameCount":1,"url":"/nested.webp?access=ticket"}]
+                    }
+                }"""
+                ),
+                "https://orchestrator.example",
+                "source-1",
+            )
+
+        assertEquals("source-1", manifest?.sourceId)
+        assertEquals("ready", manifest?.state)
+        assertEquals(
+            "https://orchestrator.example/nested.webp?access=ticket",
+            manifest?.sheets?.single()?.url,
+        )
+    }
+
+    @Test
+    fun parsingSourceMapSelectsRequestedSourceAndSupportsLegacyAliases() {
+        val manifest =
+            parseTrickplayManifest(
+                JSONObject(
+                    """{
+                    "sources": {
+                        "source-1": {
+                            "state":"ready", "width":320, "height":180, "interval":5000,
+                            "tileWidth":10, "tileHeight":10, "frameCount":1,
+                            "sheets":[{"sheetIndex":0,"frames":1,"sheetUrl":"legacy.webp"}]
+                        }
+                    }
+                }"""
+                ),
+                "https://orchestrator.example",
+                "source-1",
+            )
+
+        assertEquals("source-1", manifest?.sourceId)
+        assertEquals(5.0, manifest?.intervalSeconds ?: 0.0, 0.0)
+        assertEquals(10, manifest?.columns)
+        assertEquals(
+            "https://orchestrator.example/legacy.webp",
+            manifest?.sheets?.single()?.url,
+        )
+    }
+
+    @Test
+    fun parsingSourceMapRejectsARequestedSourceThatIsNotPresent() {
+        val manifest =
+            parseTrickplayManifest(
+                JSONObject(
+                    """{
+                    "sources": {
+                        "source-2": {
+                            "state":"ready", "sourceId":"source-2", "frameWidth":320, "frameHeight":180,
+                            "intervalSeconds":5, "columns":10, "rows":10, "frameCount":1,
+                            "sheets":[{"index":0,"frameCount":1,"url":"/wrong.webp"}]
+                        }
+                    }
+                }"""
+                ),
+                "https://orchestrator.example",
+                "source-1",
+            )
+
+        assertNull(manifest)
     }
 
     @Test
