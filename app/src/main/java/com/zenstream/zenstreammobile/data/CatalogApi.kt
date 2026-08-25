@@ -556,7 +556,15 @@ class CatalogApi(
                             sourceId?.takeIf(String::isNotBlank)?.let { put("sourceId", it) }
                         },
                 )
-            parseTrickplayManifest(manifest, session.serverUrl)
+            parseTrickplayManifest(manifest, session.serverUrl, sourceId).also { parsed ->
+                if (parsed == null) {
+                    val keys = manifest.keys().asSequence().take(12).joinToString(",")
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "trickplay manifest parse rejected item=$itemId source=${sourceId ?: "auto"} responseKeys=$keys",
+                    )
+                }
+            }
         }
 
     suspend fun subtitleWebVtt(
@@ -1833,8 +1841,23 @@ private fun parseBazarrSearchResult(value: JSONObject): BazarrSearchResult {
 internal fun withNegotiatedPlaybackUrl(source: MediaSource, url: String?): MediaSource =
     source.copy(url = url?.trim()?.takeIf(String::isNotBlank) ?: source.url)
 
-internal fun parseTrickplayManifest(value: JSONObject?, serverUrl: String): TrickplayManifest? {
-    val manifest = value ?: return null
+internal fun parseTrickplayManifest(
+    value: JSONObject?,
+    serverUrl: String,
+    requestedSourceId: String? = null,
+): TrickplayManifest? {
+    val response = value ?: return null
+    val manifest =
+        response.optJSONObject("trickplay")
+            ?: response.optJSONObject("sources")?.let { sources ->
+                when {
+                    requestedSourceId != null -> sources.optJSONObject(requestedSourceId)
+                    sources.length() == 1 -> sources.optJSONObject(sources.keys().next())
+                    else -> null
+                }
+            }
+            ?: response.takeUnless { response.has("sources") }
+            ?: return null
     val sheets = manifest.optJSONArray("sheets") ?: manifest.optJSONArray("sheetList")
     val parsedSheets =
         List(sheets?.length() ?: 0) { sheets?.optJSONObject(it) }
@@ -1847,16 +1870,22 @@ internal fun parseTrickplayManifest(value: JSONObject?, serverUrl: String): Tric
                 TrickplaySheet(index, frameCount, url)
             }
     return TrickplayManifest(
-        state = manifest.optStringAny("state") ?: return null,
-        sourceId = manifest.optStringAny("sourceId", "source_id") ?: return null,
-        frameWidth = manifest.optIntAny("frameWidth", "frame_width") ?: return null,
-        frameHeight = manifest.optIntAny("frameHeight", "frame_height") ?: return null,
+        state = manifest.optStringAny("state", "status")?.lowercase() ?: return null,
+        sourceId =
+            manifest.optStringAny("sourceId", "source_id") ?: requestedSourceId ?: return null,
+        frameWidth =
+            manifest.optIntAny("frameWidth", "frame_width", "width", "Width") ?: return null,
+        frameHeight =
+            manifest.optIntAny("frameHeight", "frame_height", "height", "Height") ?: return null,
         intervalSeconds =
-            manifest.optDoubleAny("intervalSeconds", "interval_seconds") ?: return null,
-        columns = manifest.optIntAny("columns") ?: return null,
-        rows = manifest.optIntAny("rows") ?: return null,
+            manifest.optDoubleAny("intervalSeconds", "interval_seconds")
+                ?: manifest.optDoubleAny("interval", "Interval")?.div(1_000.0)
+                ?: return null,
+        columns = manifest.optIntAny("columns", "tileWidth", "TileWidth") ?: return null,
+        rows = manifest.optIntAny("rows", "tileHeight", "TileHeight") ?: return null,
         frameCount =
-            manifest.optIntAny("frameCount", "frame_count") ?: parsedSheets.sumOf { it.frameCount },
+            manifest.optIntAny("frameCount", "frame_count", "thumbnailCount", "ThumbnailCount")
+                ?: parsedSheets.sumOf { it.frameCount },
         sheets = parsedSheets,
     )
 }
@@ -1871,8 +1900,8 @@ private fun JSONObject.optDoubleAny(vararg keys: String): Double? =
     keys.asSequence().mapNotNull { optDoubleOrNull(it) }.firstOrNull()
 
 private fun resolveTrickplayUrl(serverUrl: String, value: String): String? =
-    runCatching { value.toHttpUrl().toString() }.getOrNull()
-        ?: value.takeIf { it.startsWith('/') }?.let { serverUrl.trimEnd('/') + it }
+    runCatching { value.trim().toHttpUrl().toString() }.getOrNull()
+        ?: runCatching { serverUrl.toHttpUrl().resolve(value.trim())?.toString() }.getOrNull()
 
 internal fun playbackMimeType(source: MediaSource, bitrate: Int = 0): String? {
     val negotiatedUrl = source.url
