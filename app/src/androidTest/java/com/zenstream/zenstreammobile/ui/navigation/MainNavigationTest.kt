@@ -252,6 +252,55 @@ class MainNavigationTest {
     }
 
     @Test
+    fun hiddenTopBarKeepsStatusBarInsetAndDoesNotPutContentAtScreenEdge() {
+        val chromeVisible = mutableStateOf(true)
+        val statusBarInset = 24.dp
+        val topBarBodyHeight = 104.dp
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                val density = LocalDensity.current
+                val statusBarInsets =
+                    WindowInsets(
+                        0,
+                        with(density) { statusBarInset.roundToPx() },
+                        0,
+                        0,
+                    )
+                Column(Modifier.fillMaxSize()) {
+                    StatusBarAwareTopBarSlot(
+                        visible = chromeVisible.value,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter = EnterTransition.None,
+                        exit = ExitTransition.None,
+                        statusBarInsets = statusBarInsets,
+                    ) {
+                        Box(Modifier.fillMaxWidth().height(topBarBodyHeight))
+                    }
+                    Box(Modifier.fillMaxWidth().weight(1f).testTag("status-bar-following-content"))
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        val visibleBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(
+            (statusBarInset + topBarBodyHeight).value,
+            visibleBounds.top.value,
+            0.5f,
+        )
+
+        composeRule.runOnIdle { chromeVisible.value = false }
+        composeRule.waitForIdle()
+
+        val hiddenBounds =
+            composeRule.onNodeWithTag("status-bar-following-content").getUnclippedBoundsInRoot()
+        assertEquals(statusBarInset.value, hiddenBounds.top.value, 0.5f)
+        assertTrue(hiddenBounds.top.value > 0f)
+    }
+
+    @Test
     fun selectingHomeAfterSearchRemovesSearchRoute() {
         composeRule.setContent {
             ZenStreamTheme {

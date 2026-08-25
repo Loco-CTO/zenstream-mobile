@@ -317,6 +317,7 @@ private fun MainScaffold(
         topBar = {
             if (!topBarHidden) {
                 StatusBarAwareTopBarSlot(
+                    visible = topBarVisible,
                     visibilityFraction = topBarVisibilityFraction,
                     modifier =
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
@@ -755,6 +756,35 @@ internal fun StatusBarAwareTopBarSlot(
                 modifier = Modifier.fillMaxWidth(),
                 content = content,
             )
+        }
+    }
+}
+
+/**
+ * Keeps the system status-bar region measured and covered while the shared top-bar body animates
+ * out. The body receives zero insets because the status-bar height is owned by this wrapper.
+ */
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun StatusBarAwareTopBarSlot(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    enter: androidx.compose.animation.EnterTransition,
+    exit: androidx.compose.animation.ExitTransition,
+    statusBarInsets: WindowInsets = WindowInsets.statusBarsIgnoringVisibility,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier) {
+        Column(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(statusBarInsets))
+            AnimatedVisibility(
+                visible = visible,
+                modifier = Modifier.fillMaxWidth(),
+                enter = enter,
+                exit = exit,
+            ) {
+                content()
+            }
         }
     }
 }
