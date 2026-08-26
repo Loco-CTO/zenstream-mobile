@@ -58,6 +58,18 @@ class PlayerEngineTest {
     }
 
     @Test
+    fun mpvRenderingOverridesFastProfileScalingQuality() {
+        assertEquals(
+            listOf(
+                "profile" to "fast",
+                "scale" to "lanczos",
+                "cscale" to "lanczos",
+            ),
+            mpvVideoRenderingOptions,
+        )
+    }
+
+    @Test
     fun releasedMpvEngineDoesNotTouchNativeState() {
         val engine = MpvPlaybackEngine(InstrumentationRegistry.getInstrumentation().targetContext)
 

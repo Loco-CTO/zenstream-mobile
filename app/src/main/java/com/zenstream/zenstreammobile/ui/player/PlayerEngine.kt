@@ -25,6 +25,13 @@ internal val mpvCaptionOptions =
         "secondary-sid" to "no",
     )
 
+internal val mpvVideoRenderingOptions =
+    listOf(
+        "profile" to "fast",
+        "scale" to "lanczos",
+        "cscale" to "lanczos",
+    )
+
 internal class MpvSurfaceLifecycle {
     private var surfaceReady = false
     private var destroyRequested = false
@@ -476,7 +483,11 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         private var destroyAfterSurfaceTeardown = false
 
         override fun initOptions() {
-            MPVLib.setOptionString("profile", "fast")
+            // Keep the fast profile's playback tuning while overriding its
+            // bilinear scaler for sharper upscaling on larger displays.
+            mpvVideoRenderingOptions.forEach { (name, value) ->
+                MPVLib.setOptionString(name, value)
+            }
             MPVLib.setOptionString("vo", "gpu-next")
             MPVLib.setOptionString("ao", "aaudio")
             MPVLib.setOptionString("gpu-context", "android")
