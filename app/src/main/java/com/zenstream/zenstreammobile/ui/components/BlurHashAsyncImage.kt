@@ -32,7 +32,7 @@ fun BlurHashAsyncImage(
             Image(
                 bitmap = placeholder,
                 contentDescription = null,
-                contentScale = contentScale,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         }
