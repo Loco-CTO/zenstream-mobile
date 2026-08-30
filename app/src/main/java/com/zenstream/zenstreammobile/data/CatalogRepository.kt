@@ -18,6 +18,7 @@ import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
+import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
@@ -189,6 +190,8 @@ class CatalogRepository(
     override val interfaceLocaleMode: Flow<InterfaceLocaleMode> = sessionStore.interfaceLocaleMode
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     override val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
+    val playbackTimeDisplayMode: Flow<PlaybackTimeDisplayMode> =
+        sessionStore.playbackTimeDisplayMode
     override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
     override val autoplayNextEpisode: Flow<Boolean> = sessionStore.autoplayNextEpisode
     override val checkForUpdatesOnStartup: Flow<Boolean> = sessionStore.checkForUpdatesOnStartup
@@ -579,6 +582,9 @@ class CatalogRepository(
 
     override suspend fun savePlayerEngine(engine: PlayerEngine) =
         sessionStore.savePlayerEngine(engine)
+
+    suspend fun savePlaybackTimeDisplayMode(mode: PlaybackTimeDisplayMode) =
+        sessionStore.savePlaybackTimeDisplayMode(mode)
 
     override suspend fun saveShowDebugIcon(enabled: Boolean) =
         sessionStore.saveShowDebugIcon(enabled)

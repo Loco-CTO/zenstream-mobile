@@ -22,6 +22,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
+import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleCue
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -51,6 +52,7 @@ data class PlaybackUiState(
     val itemId: String = "",
     val playback: PlaybackData? = null,
     val engineType: PlayerEngine = PlayerEngine.MPV,
+    val timeDisplayMode: PlaybackTimeDisplayMode = PlaybackTimeDisplayMode.Remaining,
     val showDebugIcon: Boolean = false,
     val autoplayNextEpisode: Boolean = true,
     val watchHistoryEnabled: Boolean = true,
@@ -226,6 +228,7 @@ class PlaybackViewModel(
         subtitleSelectionInitialized = hasInitialSubtitleSelection
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
+            val timeDisplayMode = repository.playbackTimeDisplayMode.first()
             val autoplayNextEpisode = repository.autoplayNextEpisode.first()
             val watchHistoryEnabled =
                 runCatching { repository.loadWatchHistoryPreference() }
@@ -235,6 +238,7 @@ class PlaybackViewModel(
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
+                    timeDisplayMode = timeDisplayMode,
                     autoplayNextEpisode = autoplayNextEpisode,
                     watchHistoryEnabled = watchHistoryEnabled,
                     subtitleStyle = subtitleStyle,
@@ -1092,6 +1096,12 @@ class PlaybackViewModel(
         val next = change(previous)
         _uiState.value = _uiState.value.copy(subtitleStyle = next)
         viewModelScope.launch { repository.saveSubtitleStyle(next) }
+    }
+
+    fun toggleTimeDisplayMode() {
+        val next = _uiState.value.timeDisplayMode.toggled()
+        _uiState.value = _uiState.value.copy(timeDisplayMode = next)
+        viewModelScope.launch { repository.savePlaybackTimeDisplayMode(next) }
     }
 
     fun flushProgress() {

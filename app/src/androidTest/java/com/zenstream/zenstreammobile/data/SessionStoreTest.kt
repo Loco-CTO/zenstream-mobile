@@ -3,8 +3,10 @@ package com.zenstream.zenstreammobile.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -104,5 +106,24 @@ class SessionStoreTest {
         store.clearAll()
         assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
         store.savePlayerEngine(PlayerEngine.MPV)
+    }
+
+    @Test
+    fun playbackTimeDisplayModeDefaultsToRemainingAndSurvivesSessionClears() = runBlocking {
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_time_display_${UUID.randomUUID()}",
+            )
+
+        assertEquals(PlaybackTimeDisplayMode.Remaining, store.playbackTimeDisplayMode.first())
+        store.savePlaybackTimeDisplayMode(PlaybackTimeDisplayMode.Elapsed)
+        assertEquals(PlaybackTimeDisplayMode.Elapsed, store.playbackTimeDisplayMode.first())
+
+        store.clearSession()
+        assertEquals(PlaybackTimeDisplayMode.Elapsed, store.playbackTimeDisplayMode.first())
+        store.clearAll()
+        assertEquals(PlaybackTimeDisplayMode.Elapsed, store.playbackTimeDisplayMode.first())
     }
 }
