@@ -164,6 +164,8 @@
     <string name="player_debug_error">&#x30A8;&#x30E9;&#x30FC;</string>
     <string name="player_show_debug">&#x518D;&#x751F;&#x8A3A;&#x65AD;&#x3092;&#x8868;&#x793A;</string>
     <string name="player_hide_debug">&#x518D;&#x751F;&#x8A3A;&#x65AD;&#x3092;&#x975E;&#x8868;&#x793A;</string>
+    <string name="player_show_elapsed_time">経過時間を表示</string>
+    <string name="player_show_remaining_time">残り時間を表示</string>
     <string name="audio_track">音声トラック</string>
     <string name="player_audio_track_format">音声トラック %1$d</string>
     <string name="subtitle_track">字幕トラック</string>

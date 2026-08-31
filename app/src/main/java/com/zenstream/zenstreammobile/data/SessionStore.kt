@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -64,6 +65,7 @@ class SessionStore(
         val interfaceLocaleMode = stringPreferencesKey("interface_locale_mode")
         val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
+        val playbackTimeDisplayMode = stringPreferencesKey("playback_time_display_mode")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
         val autoplayNextEpisode = booleanPreferencesKey("autoplay_next_episode")
         val checkForUpdatesOnStartup = booleanPreferencesKey("check_for_updates_on_startup")
@@ -101,6 +103,11 @@ class SessionStore(
                 runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }
                     .getOrDefault(PlayerEngine.MPV)
             }
+            .distinctUntilChanged()
+
+    val playbackTimeDisplayMode: Flow<PlaybackTimeDisplayMode> =
+        dataStore.data
+            .map { PlaybackTimeDisplayMode.fromStorageValue(it[Keys.playbackTimeDisplayMode]) }
             .distinctUntilChanged()
 
     val showDebugIcon: Flow<Boolean> =
@@ -199,6 +206,10 @@ class SessionStore(
         dataStore.edit { it[Keys.playerEngine] = engine.name }
     }
 
+    suspend fun savePlaybackTimeDisplayMode(mode: PlaybackTimeDisplayMode) {
+        dataStore.edit { it[Keys.playbackTimeDisplayMode] = mode.storageValue }
+    }
+
     suspend fun saveShowDebugIcon(enabled: Boolean) {
         dataStore.edit { it[Keys.showDebugIcon] = enabled }
     }
@@ -270,8 +281,8 @@ class SessionStore(
     }
 
     suspend fun clearSession() {
-        // Player engine and subtitle style are device-local preferences. They
-        // intentionally survive logout and account changes.
+        // Player engine, time display mode, and subtitle style are device-local
+        // preferences. They intentionally survive logout and account changes.
         dataStore.edit {
             it.remove(Keys.token)
             it.remove(Keys.resourceTicket)
@@ -285,8 +296,9 @@ class SessionStore(
     }
 
     suspend fun clearAll() {
-        // Keep player engine and subtitle style when the configured server or
-        // account changes; both preferences belong to this installation.
+        // Keep player engine, time display mode, and subtitle style when the
+        // configured server or account changes; these preferences belong to
+        // this installation.
         dataStore.edit {
             it.remove(Keys.orchestratorUrl)
             it.remove(Keys.serverUrl)

@@ -185,6 +185,8 @@
     <string name="player_debug_error">Error</string>
     <string name="player_show_debug">Show playback diagnostics</string>
     <string name="player_hide_debug">Hide playback diagnostics</string>
+    <string name="player_show_elapsed_time">Show elapsed time</string>
+    <string name="player_show_remaining_time">Show remaining time</string>
     <string name="audio_track">Audio track</string>
     <string name="player_audio_track_format">Audio track %1$d</string>
     <string name="subtitle_track">Subtitle track</string>

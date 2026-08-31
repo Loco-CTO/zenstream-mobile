@@ -5,6 +5,18 @@ enum class PlayerEngine {
     MPV,
 }
 
+enum class PlaybackTimeDisplayMode(val storageValue: String) {
+    Elapsed("elapsed"),
+    Remaining("remaining");
+
+    fun toggled(): PlaybackTimeDisplayMode = if (this == Elapsed) Remaining else Elapsed
+
+    companion object {
+        fun fromStorageValue(value: String?): PlaybackTimeDisplayMode =
+            entries.firstOrNull { it.storageValue == value } ?: Remaining
+    }
+}
+
 enum class PlaybackSegmentType {
     INTRO,
     OUTRO,

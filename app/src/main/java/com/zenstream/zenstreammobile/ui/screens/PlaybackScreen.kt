@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -103,6 +104,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
+import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.TrickplayPreview
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
@@ -674,11 +676,11 @@ fun PlaybackScreen(
                             timeSeconds = state.mediaOriginSeconds + scrub.positionSeconds,
                         )
                     }
-                    Text(
-                        "${formatTime(displayedPosition)} / ${formatTime(state.engine.durationSeconds)}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                    PlaybackTimeToggle(
+                        positionSeconds = displayedPosition,
+                        durationSeconds = state.engine.durationSeconds,
+                        mode = state.timeDisplayMode,
+                        onToggle = vm::toggleTimeDisplayMode,
                     )
                     PlaybackProgress(
                         session = session,
@@ -1316,6 +1318,54 @@ private fun TrickplayBubble(
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
+    }
+}
+
+@Composable
+internal fun PlaybackTimeToggle(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    mode: PlaybackTimeDisplayMode,
+    onToggle: () -> Unit,
+) {
+    val actionDescription =
+        stringResourceCompat(
+            if (mode == PlaybackTimeDisplayMode.Remaining) {
+                R.string.player_show_elapsed_time
+            } else {
+                R.string.player_show_remaining_time
+            }
+        )
+    Text(
+        text = playbackTimeText(positionSeconds, durationSeconds, mode),
+        color = Color.White,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier =
+            Modifier.testTag("player-time")
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp)
+                .toggleable(
+                    value = mode == PlaybackTimeDisplayMode.Elapsed,
+                    role = Role.Button,
+                    onValueChange = { onToggle() },
+                )
+                .semantics { contentDescription = actionDescription },
+    )
+}
+
+internal fun playbackTimeText(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    mode: PlaybackTimeDisplayMode,
+): String {
+    val position = positionSeconds.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0
+    val duration = durationSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+    val boundedPosition = if (duration > 0.0) position.coerceAtMost(duration) else position
+    val formattedDuration = formatTime(duration)
+    return when (mode) {
+        PlaybackTimeDisplayMode.Elapsed -> "${formatTime(boundedPosition)} / $formattedDuration"
+        PlaybackTimeDisplayMode.Remaining ->
+            "-${formatTime((duration - boundedPosition).coerceAtLeast(0.0))} / $formattedDuration"
     }
 }
 
