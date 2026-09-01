@@ -286,18 +286,19 @@ class PlaybackViewModel(
         engineJob = viewModelScope.launch {
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
-                val room = syncplay?.state?.value?.active
+                val manager = syncplay
+                val room = manager?.state?.value?.active
                 if (
                     _uiState.value.syncplaySettling &&
-                        room?.itemId == currentItemId &&
-                        state.ready &&
-                        !state.isBuffering &&
-                        kotlin.math.abs(
-                            state.positionSeconds -
-                                syncplayTimelineTarget(room, syncplay.serverNow()).positionSeconds
-                        ) <= 1.5
+                        syncplayTimelineIsSettled(
+                            room,
+                            currentItemId,
+                            state,
+                            manager?.serverNow() ?: 0.0,
+                        )
                 ) {
                     _uiState.value = _uiState.value.copy(syncplaySettling = false)
+                    manager?.reportPresence(viewing = true, loading = false)
                 }
                 if (state.error != null) {
                     Log.w(

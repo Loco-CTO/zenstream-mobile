@@ -129,6 +129,13 @@ class SyncplayApiTest {
     }
 
     @Test
+    fun immediateReadyPresenceIsNotTreatedAsLifecycleCritical() {
+        assertFalse(syncplayPresenceReportIsCritical(viewing = true, pauseRoom = false))
+        assertTrue(syncplayPresenceReportIsCritical(viewing = false, pauseRoom = false))
+        assertTrue(syncplayPresenceReportIsCritical(viewing = true, pauseRoom = true))
+    }
+
+    @Test
     fun syncplaySocketDoesNotExpireDuringAnIdleRoom() {
         val client = syncplaySocketClient()
 
