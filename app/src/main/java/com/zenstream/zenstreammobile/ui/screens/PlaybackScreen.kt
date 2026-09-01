@@ -107,6 +107,7 @@ import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.TrickplayPreview
 import com.zenstream.zenstreammobile.model.mediaItemId
+import com.zenstream.zenstreammobile.ui.PlaybackUiState
 import com.zenstream.zenstreammobile.ui.PlaybackViewModel
 import com.zenstream.zenstreammobile.ui.SyncplayTimelineScheduler
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
@@ -129,6 +130,10 @@ internal fun shouldShowPlayerLoading(
 ): Boolean =
     error == null &&
         (loading || engineBuffering || (hasPlayback && !engineReady) || waitingForSyncplayMembers)
+
+internal fun syncplayPresenceLoading(state: PlaybackUiState): Boolean =
+    state.error == null &&
+        (state.loading || state.syncplaySettling || !state.engine.ready || state.engine.isBuffering)
 
 private fun redactTrickplayError(value: String?): String =
     value.orEmpty().replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>").take(240)
@@ -226,47 +231,62 @@ fun PlaybackScreen(
     }
 
     DisposableEffect(vm, lifecycleOwner, timelineScheduler) {
-        fun reportPresence(viewing: Boolean, immediate: Boolean = false) {
+        var backgroundPresenceSent = false
+
+        fun reportPresence(
+            viewing: Boolean,
+            immediate: Boolean = false,
+            pauseRoom: Boolean = false,
+            loadingOverride: Boolean? = null,
+        ) {
             val room = syncplay.state.value.active
+            val member = syncplay.state.value.currentMember()
             if (
-                room?.mediaItemId() == latestState.itemId &&
-                    syncplay.state.value.currentMember()?.watchingTogether == true
+                member?.watchingTogether == true &&
+                    (pauseRoom || !viewing || room?.mediaItemId() == latestState.itemId)
             ) {
+                val effectiveViewing = viewing && latestState.error == null
                 syncplay.reportPresence(
-                    viewing = viewing,
+                    viewing = effectiveViewing,
                     loading =
-                        viewing &&
-                            (latestState.loading ||
-                                latestState.syncplaySettling ||
-                                !latestState.engine.ready ||
-                                latestState.engine.isBuffering),
+                        effectiveViewing &&
+                            (loadingOverride ?: syncplayPresenceLoading(latestState)),
                     immediate = immediate,
+                    pauseRoom = pauseRoom,
                 )
             }
         }
+
+        fun pauseForBackground() {
+            if (backgroundPresenceSent) return
+            backgroundPresenceSent = true
+            playerVisible = false
+            vm.pauseForBackground()
+            reportPresence(viewing = false, immediate = true, pauseRoom = true)
+        }
+
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
+                    backgroundPresenceSent = false
                     playerVisible = true
-                    reportPresence(viewing = true, immediate = true)
+                    val recoveryLoading = vm.recoverFromBackground()
+                    reportPresence(
+                        viewing = true,
+                        immediate = true,
+                        loadingOverride = recoveryLoading,
+                    )
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     if (shouldPauseForBackground()) {
-                        playerVisible = false
-                        vm.pauseForBackground()
-                        reportPresence(viewing = false, immediate = true)
+                        pauseForBackground()
                     }
                     vm.flushProgress()
                 }
                 Lifecycle.Event.ON_STOP -> {
-                    // A PiP activity stays paused rather than stopped. Reaching ON_STOP therefore
-                    // means PiP was dismissed (or the app was otherwise backgrounded) and must
-                    // never leave audio playing.
-                    if (playerVisible) {
-                        playerVisible = false
-                        vm.pauseForBackground()
-                        reportPresence(viewing = false, immediate = true)
-                    }
+                    // Some devices report ON_STOP without a preceding ON_PAUSE. Recheck the
+                    // activity boundary here, while keeping PiP and finishing paths local.
+                    if (shouldPauseForBackground()) pauseForBackground()
                     vm.flushProgress()
                 }
                 else -> Unit
@@ -276,7 +296,7 @@ fun PlaybackScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             timelineScheduler.cancel()
-            reportPresence(viewing = false, immediate = true)
+            reportPresence(viewing = false, immediate = true, pauseRoom = false)
             vm.flushProgress()
         }
     }
@@ -319,6 +339,7 @@ fun PlaybackScreen(
         syncplayState.active?.timelineRevision,
         state.itemId,
         playerVisible,
+        state.error,
     ) {
         val room = syncplayState.active
         if (
@@ -327,18 +348,16 @@ fun PlaybackScreen(
                 syncplayState.currentMember()?.watchingTogether == true
         ) {
             syncplay.reportPresence(
-                viewing = true,
-                loading =
-                    state.loading ||
-                        state.syncplaySettling ||
-                        !state.engine.ready ||
-                        state.engine.isBuffering,
+                viewing = state.error == null,
+                loading = state.error == null && syncplayPresenceLoading(state),
                 immediate = true,
             )
         }
     }
     LaunchedEffect(
         state.loading,
+        state.error,
+        state.syncplaySettling,
         state.engine.ready,
         state.engine.isBuffering,
     ) {
@@ -349,12 +368,8 @@ fun PlaybackScreen(
                 syncplayState.currentMember()?.watchingTogether == true
         ) {
             syncplay.reportPresence(
-                viewing = true,
-                loading =
-                    state.loading ||
-                        state.syncplaySettling ||
-                        !state.engine.ready ||
-                        state.engine.isBuffering,
+                viewing = state.error == null,
+                loading = state.error == null && syncplayPresenceLoading(state),
             )
         }
     }

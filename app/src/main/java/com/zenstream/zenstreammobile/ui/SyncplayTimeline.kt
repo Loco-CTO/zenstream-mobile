@@ -49,8 +49,8 @@ internal fun syncplayWaitingForMembers(room: SyncplayGroup?, itemId: String): Bo
     return room.resumeWhenReady &&
         room.members.any { member ->
             member.watchingTogether &&
-                member.viewing &&
-                (member.loading || member.readyGeneration != room.mediaGeneration)
+                (member.loading ||
+                    (member.viewing && member.readyGeneration != room.mediaGeneration))
         }
 }
 

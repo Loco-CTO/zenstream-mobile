@@ -4,6 +4,7 @@ import android.util.Log
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayUiState
+import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
@@ -57,6 +58,7 @@ class SyncplayManager(
     private val stateNotificationDeduper = SyncplayNotificationDeduper()
     private val presenceLock = Any()
     private var pendingPresence: PresenceReport? = null
+    private val pendingCriticalPresence = ArrayDeque<PresenceReport>()
     private var presenceWorker: Job? = null
 
     init {
@@ -250,34 +252,49 @@ class SyncplayManager(
         }
     }
 
-    private suspend fun presence(report: PresenceReport) {
-        val active = mutex.withLock { _state.value.active }?.takeIf(report::isCurrent) ?: return
+    private suspend fun presence(report: PresenceReport): Boolean {
+        val active =
+            mutex.withLock { _state.value.active }?.takeIf(report::isSendable) ?: return false
         val result =
             api.presence(
                 session,
                 participant(),
-                report.room,
+                active,
                 report.viewing,
                 report.loading,
                 report.sequence,
+                report.pauseRoom,
+                report.operationId,
             )
         mutex.withLock {
             if (_state.value.active?.id == active.id) adopt(result)
         }
+        return true
     }
 
-    fun reportPresence(viewing: Boolean, loading: Boolean, immediate: Boolean = false) {
+    fun reportPresence(
+        viewing: Boolean,
+        loading: Boolean,
+        immediate: Boolean = false,
+        pauseRoom: Boolean = false,
+    ) {
         val room = _state.value.active ?: return
         val report =
             PresenceReport(
                 room = room,
                 viewing = viewing,
-                loading = loading,
+                loading = loading && viewing,
                 immediate = immediate,
                 sequence = synchronized(presenceLock) { ++presenceSequence },
+                pauseRoom = pauseRoom,
+                operationId = java.util.UUID.randomUUID().toString(),
             )
         synchronized(presenceLock) {
-            pendingPresence = report
+            if (report.isCritical) {
+                pendingCriticalPresence.addLast(report)
+            } else {
+                pendingPresence = report
+            }
             startPresenceWorkerLocked()
         }
     }
@@ -290,28 +307,47 @@ class SyncplayManager(
                 while (true) {
                     val next =
                         synchronized(presenceLock) {
-                            pendingPresence.also { pendingPresence = null }
+                            if (pendingCriticalPresence.isNotEmpty()) {
+                                pendingCriticalPresence.removeFirst()
+                            } else {
+                                pendingPresence.also { pendingPresence = null }
+                            }
                         } ?: break
                     if (!next.immediate) {
                         delay(if (next.loading) 750 else 300)
                         val superseded =
                             synchronized(presenceLock) {
-                                pendingPresence != null
+                                pendingCriticalPresence.isNotEmpty() || pendingPresence != null
                             }
                         if (superseded) continue
                     }
-                    try {
-                        presence(next)
-                    } catch (error: kotlinx.coroutines.CancellationException) {
-                        throw error
-                    }
+                    sendPresence(next)
                 }
             } finally {
                 synchronized(presenceLock) {
                     presenceWorker = null
-                    if (pendingPresence != null) startPresenceWorkerLocked()
+                    if (pendingCriticalPresence.isNotEmpty() || pendingPresence != null) {
+                        startPresenceWorkerLocked()
+                    }
                 }
             }
+        }
+    }
+
+    private suspend fun sendPresence(report: PresenceReport) {
+        val attempts = if (report.isCritical) CRITICAL_PRESENCE_ATTEMPTS else 1
+        repeat(attempts) { attempt ->
+            try {
+                if (presence(report)) return
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(
+                    SYNCPLAY_LOG_TAG,
+                    "Syncplay presence failed critical=${report.isCritical} attempt=${attempt + 1}/${attempts}: ${error.javaClass.simpleName}",
+                )
+            }
+            if (attempt + 1 < attempts) delay(CRITICAL_PRESENCE_RETRY_MILLIS * (attempt + 1))
         }
     }
 
@@ -320,6 +356,7 @@ class SyncplayManager(
         connectionGeneration.incrementAndGet()
         synchronized(presenceLock) {
             pendingPresence = null
+            pendingCriticalPresence.clear()
             presenceWorker?.cancel()
             presenceWorker = null
         }
@@ -619,13 +656,20 @@ class SyncplayManager(
         val loading: Boolean,
         val immediate: Boolean,
         val sequence: Int,
+        val pauseRoom: Boolean,
+        val operationId: String,
     ) {
-        fun isCurrent(active: SyncplayGroup): Boolean =
-            syncplayPresenceReportIsCurrent(room, active)
+        val isCritical: Boolean
+            get() = pauseRoom || !viewing || immediate
+
+        fun isSendable(active: SyncplayGroup): Boolean =
+            syncplayPresenceReportCanSend(room, active, isCritical)
     }
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
+private const val CRITICAL_PRESENCE_ATTEMPTS = 3
+private const val CRITICAL_PRESENCE_RETRY_MILLIS = 250L
 
 internal fun syncplayPresenceReportIsCurrent(
     report: SyncplayGroup,
@@ -635,6 +679,13 @@ internal fun syncplayPresenceReportIsCurrent(
         report.itemId == active.itemId &&
         report.mediaGeneration == active.mediaGeneration &&
         report.timelineRevision == active.timelineRevision
+
+internal fun syncplayPresenceReportCanSend(
+    report: SyncplayGroup,
+    active: SyncplayGroup,
+    lifecycle: Boolean,
+): Boolean =
+    report.id == active.id && (lifecycle || syncplayPresenceReportIsCurrent(report, active))
 
 internal fun latestSyncplayGroup(
     known: SyncplayGroup?,

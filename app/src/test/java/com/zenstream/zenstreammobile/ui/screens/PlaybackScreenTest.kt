@@ -1,7 +1,11 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.ui.unit.dp
+import com.zenstream.zenstreammobile.ui.PlaybackUiState
+import com.zenstream.zenstreammobile.ui.player.EngineState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackScreenTest {
@@ -38,6 +42,19 @@ class PlaybackScreenTest {
         assertEquals(
             false,
             shouldShowPlayerLoading("Playback failed", true, false, true, true, true),
+        )
+    }
+
+    @Test
+    fun syncplayPresenceLoadingStopsForPlaybackErrors() {
+        assertTrue(syncplayPresenceLoading(PlaybackUiState(loading = true)))
+        assertTrue(
+            syncplayPresenceLoading(
+                PlaybackUiState(loading = false, engine = EngineState(ready = false))
+            )
+        )
+        assertFalse(
+            syncplayPresenceLoading(PlaybackUiState(loading = true, error = "Playback failed"))
         )
     }
 }

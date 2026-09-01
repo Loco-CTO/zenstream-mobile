@@ -223,6 +223,9 @@ class PlaybackViewModel(
     private val viewerCommandAcks = mutableListOf<ViewerCommandAck>()
     private val closeCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var closeCleanupJob: Job? = null
+    private var backgrounded = false
+    private var backgroundRecoveryJob: Job? = null
+    private var backgroundRecoveryGeneration = 0L
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
@@ -442,6 +445,7 @@ class PlaybackViewModel(
                             _uiState.value =
                                 _uiState.value.copy(
                                     loading = false,
+                                    syncplaySettling = false,
                                     error = it.message ?: "Playback failed",
                                 )
                             transitionInProgress = false
@@ -501,6 +505,7 @@ class PlaybackViewModel(
                         _uiState.value =
                             _uiState.value.copy(
                                 loading = false,
+                                syncplaySettling = false,
                                 error =
                                     error.message
                                         ?: "Playback response did not include a usable stream URL",
@@ -861,8 +866,68 @@ class PlaybackViewModel(
     }
 
     fun pauseForBackground() {
+        backgrounded = true
+        backgroundRecoveryGeneration++
+        backgroundRecoveryJob?.cancel()
+        playbackGeneration++
+        playbackLoadJob?.cancel()
+        viewerHeartbeatJob?.cancel()
+        syncplayTimelineKey = null
         playbackEngine?.pause()
-        _uiState.value = _uiState.value.copy(engine = _uiState.value.engine.copy(isPlaying = false))
+        _uiState.value =
+            _uiState.value.copy(
+                engine = _uiState.value.engine.copy(isPlaying = false),
+                syncplaySettling = false,
+            )
+    }
+
+    fun recoverFromBackground(): Boolean? {
+        if (!backgrounded) return null
+        backgrounded = false
+        backgroundRecoveryJob?.cancel()
+        val recoveryGeneration = ++backgroundRecoveryGeneration
+        syncplayTimelineKey = null
+        val current = _uiState.value
+        val needsPlaybackLoad =
+            current.playback == null ||
+                current.loading ||
+                current.error != null ||
+                !current.engine.ready ||
+                current.engine.isBuffering
+        if (needsPlaybackLoad) {
+            loadPlayback(
+                PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()),
+                playWhenReadyOverride = false,
+            )
+        } else {
+            startViewerHeartbeat()
+        }
+        backgroundRecoveryJob = viewModelScope.launch {
+            delay(BACKGROUND_RECOVERY_TIMEOUT_MILLIS)
+            if (recoveryGeneration != backgroundRecoveryGeneration) return@launch
+            val latest = _uiState.value
+            if (latest.error != null) {
+                if (latest.syncplaySettling) {
+                    _uiState.value = latest.copy(syncplaySettling = false)
+                }
+                return@launch
+            }
+            if (
+                latest.playback == null ||
+                    latest.loading ||
+                    !latest.engine.ready ||
+                    latest.syncplaySettling
+            ) {
+                _uiState.value =
+                    latest.copy(
+                        loading = false,
+                        syncplaySettling = false,
+                        error = "Playback did not recover after returning to the app",
+                    )
+                syncplay?.reportPresence(viewing = false, loading = false, immediate = true)
+            }
+        }
+        return needsPlaybackLoad
     }
 
     fun seekBy(deltaSeconds: Double) {
@@ -1128,6 +1193,7 @@ class PlaybackViewModel(
         trickplayJob?.cancel()
         subtitleJob?.cancel()
         episodeNeighborsJob?.cancel()
+        backgroundRecoveryJob?.cancel()
         engineJob?.cancel()
         playbackEngine?.release()
         playbackEngine = null
@@ -1140,6 +1206,7 @@ class PlaybackViewModel(
 
     private companion object {
         const val PROGRESS_FLUSH_DEBOUNCE_MILLIS = 1_000L
+        const val BACKGROUND_RECOVERY_TIMEOUT_MILLIS = 10_000L
     }
 
     class Factory(

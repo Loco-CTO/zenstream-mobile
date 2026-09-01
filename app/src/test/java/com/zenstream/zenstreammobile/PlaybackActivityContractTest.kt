@@ -59,4 +59,13 @@ class PlaybackActivityContractTest {
         gate.cancelLaunch()
         assertTrue(gate.claimActivity())
     }
+
+    @Test
+    fun backgroundPauseExcludesFinishingPiPAndConfigurationChanges() {
+        assertTrue(shouldPausePlaybackForBackground(false, false, false, false))
+        assertFalse(shouldPausePlaybackForBackground(true, false, false, false))
+        assertFalse(shouldPausePlaybackForBackground(false, true, false, false))
+        assertFalse(shouldPausePlaybackForBackground(false, false, true, false))
+        assertFalse(shouldPausePlaybackForBackground(false, false, false, true))
+    }
 }
