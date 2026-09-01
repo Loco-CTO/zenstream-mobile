@@ -129,6 +129,8 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         viewing: Boolean,
         loading: Boolean,
         sequence: Int,
+        pauseRoom: Boolean = false,
+        operationId: String = java.util.UUID.randomUUID().toString(),
     ): SyncplayGroup =
         parseSyncplayGroup(
             request(
@@ -136,9 +138,10 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                 participantId,
                 "groups/${encode(group.id)}/presence",
                 "POST",
-                operation()
+                operation(operationId = operationId)
                     .put("viewing", viewing)
                     .put("loading", loading)
+                    .put("pauseRoom", pauseRoom)
                     .put("mediaGeneration", group.mediaGeneration)
                     .put("timelineRevision", group.timelineRevision)
                     .put("presenceSequence", sequence),

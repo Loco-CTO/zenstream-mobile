@@ -109,6 +109,17 @@ internal class PlaybackActivityLaunchGate {
 
 private val playbackActivityLaunchGate = PlaybackActivityLaunchGate()
 
+internal fun shouldPausePlaybackForBackground(
+    isFinishing: Boolean,
+    isChangingConfigurations: Boolean,
+    isInPictureInPictureMode: Boolean,
+    enteringPictureInPicture: Boolean,
+): Boolean =
+    !isFinishing &&
+        !isChangingConfigurations &&
+        !isInPictureInPictureMode &&
+        !enteringPictureInPicture
+
 fun playbackIntent(
     context: Context,
     itemId: String,
@@ -290,7 +301,12 @@ class PlaybackActivity : ComponentActivity() {
     }
 
     private fun shouldPauseForBackground(): Boolean =
-        !isInPictureInPictureMode && !enteringPictureInPicture
+        shouldPausePlaybackForBackground(
+            isFinishing = isFinishing,
+            isChangingConfigurations = isChangingConfigurations,
+            isInPictureInPictureMode = isInPictureInPictureMode,
+            enteringPictureInPicture = enteringPictureInPicture,
+        )
 
     private fun applyImmersiveMode() {
         if (isInPictureInPictureMode || immersiveModeApplied) return

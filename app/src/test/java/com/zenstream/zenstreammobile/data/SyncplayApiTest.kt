@@ -95,6 +95,40 @@ class SyncplayApiTest {
     }
 
     @Test
+    fun lifecyclePresenceMayUseTheCurrentTimelineAfterItBecomesStale() {
+        val current =
+            parseSyncplayGroup(
+                JSONObject()
+                    .put("id", "room-1")
+                    .put("itemId", "item-1")
+                    .put("mediaGeneration", 3)
+                    .put("timelineRevision", 7)
+            )
+
+        assertTrue(
+            syncplayPresenceReportCanSend(
+                current.copy(timelineRevision = 6),
+                current,
+                lifecycle = true,
+            )
+        )
+        assertFalse(
+            syncplayPresenceReportCanSend(
+                current.copy(timelineRevision = 6),
+                current,
+                lifecycle = false,
+            )
+        )
+        assertFalse(
+            syncplayPresenceReportCanSend(
+                current.copy(id = "room-2"),
+                current,
+                lifecycle = true,
+            )
+        )
+    }
+
+    @Test
     fun syncplaySocketDoesNotExpireDuringAnIdleRoom() {
         val client = syncplaySocketClient()
 
