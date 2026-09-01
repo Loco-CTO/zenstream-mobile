@@ -660,7 +660,7 @@ class SyncplayManager(
         val operationId: String,
     ) {
         val isCritical: Boolean
-            get() = pauseRoom || !viewing || immediate
+            get() = syncplayPresenceReportIsCritical(viewing, pauseRoom)
 
         fun isSendable(active: SyncplayGroup): Boolean =
             syncplayPresenceReportCanSend(room, active, isCritical)
@@ -670,6 +670,9 @@ class SyncplayManager(
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
 private const val CRITICAL_PRESENCE_ATTEMPTS = 3
 private const val CRITICAL_PRESENCE_RETRY_MILLIS = 250L
+
+internal fun syncplayPresenceReportIsCritical(viewing: Boolean, pauseRoom: Boolean): Boolean =
+    pauseRoom || !viewing
 
 internal fun syncplayPresenceReportIsCurrent(
     report: SyncplayGroup,

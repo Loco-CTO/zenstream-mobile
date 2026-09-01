@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
+import com.zenstream.zenstreammobile.ui.player.EngineState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -385,6 +386,55 @@ class PlaybackViewModelTest {
         assertFalse(syncplayWaitingForMembers(waiting.copy(resumeWhenReady = false), "item-1"))
         assertFalse(syncplayWaitingForMembers(waiting.copy(members = emptyList()), "item-1"))
         assertFalse(syncplayWaitingForMembers(waiting, "other-item"))
+    }
+
+    @Test
+    fun syncplaySeekReadinessAcceptsPausedAndPlayingTargetsOnlyWhenSettled() {
+        val pausedSeek =
+            syncplayRoom(
+                    playbackState = "paused",
+                    anchorPosition = 45.0,
+                )
+                .copy(
+                    mediaGeneration = 2,
+                    timelineRevision = 4,
+                    resumeWhenReady = true,
+                    pauseReason = "seek",
+                )
+        val pausedEngine =
+            EngineState(
+                positionSeconds = 45.0,
+                durationSeconds = 120.0,
+                ready = true,
+            )
+
+        assertTrue(syncplayTimelineIsSettled(pausedSeek, "item-1", pausedEngine, 110.0))
+        assertFalse(
+            syncplayTimelineIsSettled(
+                pausedSeek,
+                "item-1",
+                pausedEngine.copy(positionSeconds = 42.0),
+                110.0,
+            )
+        )
+        assertFalse(
+            syncplayTimelineIsSettled(
+                pausedSeek,
+                "item-1",
+                pausedEngine.copy(ready = false),
+                110.0,
+            )
+        )
+
+        val playingSeek = pausedSeek.copy(playbackState = "playing", resumeWhenReady = false)
+        assertTrue(
+            syncplayTimelineIsSettled(
+                playingSeek,
+                "item-1",
+                pausedEngine.copy(positionSeconds = 55.0, isPlaying = true),
+                110.0,
+            )
+        )
     }
 
     private fun syncplayRoom(
