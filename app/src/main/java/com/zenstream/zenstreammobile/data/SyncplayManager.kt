@@ -341,11 +341,6 @@ class SyncplayManager(
                 if (presence(report)) return
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
-            } catch (error: Exception) {
-                Log.w(
-                    SYNCPLAY_LOG_TAG,
-                    "Syncplay presence failed critical=${report.isCritical} attempt=${attempt + 1}/${attempts}: ${error.javaClass.simpleName}",
-                )
             }
             if (attempt + 1 < attempts) delay(CRITICAL_PRESENCE_RETRY_MILLIS * (attempt + 1))
         }
