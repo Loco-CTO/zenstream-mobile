@@ -51,6 +51,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -72,6 +73,9 @@ data class EpisodeNeighbors(
     val previous: MediaItem? = null,
     val next: MediaItem? = null,
 )
+
+internal const val HOME_FEATURED_LIST_LIMIT = 25
+internal const val HOME_FEATURED_ITEM_LIMIT = 5
 
 class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
@@ -713,9 +717,12 @@ class CatalogApi(
 
     suspend fun fetchHomeFeatured(session: AuthSession): List<MediaItem> =
         withContext(Dispatchers.IO) {
-            catalogItems(homeSection(session, "featured"), "latestItems")
-                .filter { it.backdropImageTags.isNotEmpty() }
-                .take(5)
+            selectRandomFeaturedItems(
+                catalogItems(
+                    homeSection(session, "featured", HOME_FEATURED_LIST_LIMIT),
+                    "latestItems",
+                )
+            )
         }
 
     suspend fun fetchHomeContinueWatching(session: AuthSession): List<MediaItem> =
@@ -733,10 +740,14 @@ class CatalogApi(
             parseDerivedHomeData(homeSection(session, "derived"))
         }
 
-    private suspend fun homeSection(session: AuthSession, section: String): JSONObject =
+    private suspend fun homeSection(
+        session: AuthSession,
+        section: String,
+        limit: Int? = null,
+    ): JSONObject =
         requestJson(
             session,
-            "/api/catalog/home?section=${android.net.Uri.encode(section)}",
+            homeSectionPath(section, limit),
             requestTimeoutMillis = HOME_REQUEST_TIMEOUT_MILLIS,
         )
 
@@ -1421,6 +1432,25 @@ internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
 
+internal fun selectRandomFeaturedItems(
+    items: List<MediaItem>,
+    random: Random = Random.Default,
+): List<MediaItem> =
+    items
+        .filter { it.backdropImageTags.isNotEmpty() }
+        .shuffled(random)
+        .take(HOME_FEATURED_ITEM_LIMIT)
+
+internal fun homeSectionPath(
+    section: String,
+    limit: Int? = null,
+    encode: (String) -> String = android.net.Uri::encode,
+): String = buildString {
+    append("/api/catalog/home?section=")
+    append(encode(section))
+    if (limit != null) append("&limit=").append(limit)
+}
+
 internal fun parseHomeData(payload: JSONObject): HomeData {
     val globalRows =
         listOfNotNull(
@@ -1454,10 +1484,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                 }
         }
     return HomeData(
-        featured =
-            catalogItems(payload, "latestItems")
-                .filter { it.backdropImageTags.isNotEmpty() }
-                .take(5),
+        featured = selectRandomFeaturedItems(catalogItems(payload, "latestItems")),
         rows = orderedHomeRows(globalRows + parseDerivedHomeData(payload).rows() + libraryRows),
     )
 }

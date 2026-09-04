@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
+import kotlin.random.Random
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -202,6 +203,67 @@ class CatalogApiTest {
         assertEquals("Drama", home.rows[5].label)
         assertEquals("genre:drama", home.rows[5].key)
         assertTrue(home.rows[2].stackEpisodes)
+    }
+
+    @Test
+    fun randomlySelectsAtMostFiveUniqueFeaturedItems() {
+        val items =
+            (0 until 10).map { index ->
+                MediaItem(
+                    "hero-$index",
+                    "Hero $index",
+                    backdropImageTags = listOf("backdrop-$index"),
+                )
+            }
+
+        val selected = selectRandomFeaturedItems(items, Random(0))
+
+        assertEquals(5, selected.size)
+        assertEquals(5, selected.map { it.id }.toSet().size)
+        assertFalse(selected.map { it.id } == items.take(5).map { it.id })
+    }
+
+    @Test
+    fun filtersNonVisualFeaturedItemsAndKeepsAllItemsBelowTheCap() {
+        val items =
+            listOf(
+                MediaItem("no-backdrop", "No Backdrop"),
+                MediaItem("hero-1", "Hero 1", backdropImageTags = listOf("backdrop-1")),
+                MediaItem("hero-2", "Hero 2", backdropImageTags = listOf("backdrop-2")),
+                MediaItem("hero-3", "Hero 3", backdropImageTags = listOf("backdrop-3")),
+            )
+
+        val selected = selectRandomFeaturedItems(items, Random(0))
+
+        assertEquals(listOf("hero-1", "hero-2", "hero-3").toSet(), selected.map { it.id }.toSet())
+        assertEquals(3, selected.size)
+    }
+
+    @Test
+    fun featuredHomeSectionRequestsTheFullFeaturedList() {
+        assertEquals(
+            "/api/catalog/home?section=featured&limit=25",
+            homeSectionPath("featured", HOME_FEATURED_LIST_LIMIT, encode = { it }),
+        )
+    }
+
+    @Test
+    fun aggregateHomeParsingCapsFeaturedItemsAfterLoadingTheFullList() {
+        val payload =
+            JSONObject()
+                .put(
+                    "latestItems",
+                    JSONArray().apply {
+                        repeat(10) { index ->
+                            put(catalogItem("hero-$index", "Hero $index", backdrop = true))
+                        }
+                    },
+                )
+
+        val home = parseHomeData(payload)
+
+        assertEquals(5, home.featured.size)
+        assertEquals(5, home.featured.map { it.id }.toSet().size)
     }
 
     @Test
