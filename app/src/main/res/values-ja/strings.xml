@@ -282,6 +282,8 @@
     <string name="no_libraries">ライブラリが見つかりません</string>
     <string name="no_libraries_hint">Orchestratorでメディアライブラリへのアクセスを許可して、このページを更新してください。</string>
     <string name="library_item_count">%1$d件</string>
+    <string name="collection_item_count">%1$d件</string>
+    <string name="collection_empty">コレクションは空です。</string>
     <string name="favorite_episodes">お気に入りのエピソード</string>
     <string name="favorite_movies">お気に入りの映画</string>
     <string name="favorite_series">お気に入りのシリーズ</string>

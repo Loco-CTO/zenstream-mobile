@@ -1004,14 +1004,14 @@ class CatalogApi(
                         session,
                         "/api/catalog/items/${android.net.Uri.encode(itemId)}/detail$suffix",
                     )
-                return@withContext DetailData(
-                    item = catalogMediaItem(payload.getJSONObject("item")),
-                    parentSeries = payload.optJSONObject("backgroundItem")?.let(::catalogMediaItem),
-                    seasons = catalogItems(payload, "seasons"),
-                    episodes = catalogItems(payload, "episodes"),
-                    similar = catalogItems(payload, "similar"),
-                    selectedSeasonId = payload.optString("selectedSeasonId").ifBlank { null },
-                )
+                val data = parseDetailData(payload)
+                return@withContext if (
+                    data.item.type == "BoxSet" && !payload.has("collectionItems")
+                ) {
+                    data.copy(collectionItems = getChildren(session, data.item))
+                } else {
+                    data
+                }
             } catch (error: CatalogException) {
                 if (error.statusCode != 404 && error.statusCode != 405) throw error
             }
@@ -1032,12 +1032,15 @@ class CatalogApi(
                 if (seriesId != null && selectedSeason != null) {
                     getEpisodes(session, seriesId, selectedSeason.id)
                 } else emptyList()
+            val collectionItems =
+                if (item.type == "BoxSet") getChildren(session, item) else emptyList()
             val similar = if (item.type == "Episode") emptyList() else getSimilar(session, item.id)
             DetailData(
                 item = item,
                 parentSeries = parentSeries,
                 seasons = seasons,
                 episodes = episodes,
+                collectionItems = collectionItems,
                 similar = similar,
                 selectedSeasonId = selectedSeason?.id,
             )
@@ -1432,6 +1435,19 @@ internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
 
+internal fun parseDetailData(payload: JSONObject): DetailData {
+    val item = catalogMediaItem(payload.getJSONObject("item"))
+    return DetailData(
+        item = item,
+        parentSeries = payload.optJSONObject("backgroundItem")?.let(::catalogMediaItem),
+        seasons = catalogItems(payload, "seasons"),
+        episodes = catalogItems(payload, "episodes"),
+        collectionItems = catalogItems(payload, "collectionItems"),
+        similar = catalogItems(payload, "similar"),
+        selectedSeasonId = payload.optString("selectedSeasonId").ifBlank { null },
+    )
+}
+
 internal fun selectRandomFeaturedItems(
     items: List<MediaItem>,
     random: Random = Random.Default,
@@ -1642,6 +1658,7 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
                 metadata.optString("releaseDate").ifBlank { null }
             },
         productionYear = metadata.optIntOrNull("year"),
+        collectionYearRange = item.optString("collectionYearRange").ifBlank { null },
         officialRating =
             metadata
                 .optString("officialRating")
@@ -2020,6 +2037,7 @@ fun parseMediaItems(json: JSONObject): List<MediaItem> =
             overview = item.optString("Overview").ifBlank { null },
             premiereDate = item.optString("PremiereDate").ifBlank { null },
             productionYear = item.optIntOrNull("ProductionYear"),
+            collectionYearRange = item.optString("CollectionYearRange").ifBlank { null },
             officialRating = item.optString("OfficialRating").ifBlank { null },
             communityRating = item.optDoubleOrNull("CommunityRating"),
             genres = stringArray(item, "Genres"),

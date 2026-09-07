@@ -48,4 +48,19 @@ class MediaHelpersTest {
         assertEquals("The Series", episodeCardTitle(episode))
         assertEquals("S02E07 · The Episode", episodeCardSubtitle(episode))
     }
+
+    @Test
+    fun collectionCardUsesWebYearRangeWithoutTypeSubtitle() {
+        assertEquals(
+            "2007-2019",
+            episodeCardSubtitle(
+                MediaItem(
+                    id = "collection-1",
+                    name = "The Collection",
+                    type = "BoxSet",
+                    collectionYearRange = "2007-2019",
+                )
+            ),
+        )
+    }
 }

@@ -520,6 +520,42 @@ class CatalogApiTest {
     }
 
     @Test
+    fun parsesCollectionItemsFromDetailPayload() {
+        val payload =
+            JSONObject()
+                .put(
+                    "item",
+                    JSONObject()
+                        .put("id", "collection")
+                        .put("type", "collection")
+                        .put("collectionYearRange", "2007-2019")
+                        .put("metadata", JSONObject().put("title", "Collection")),
+                )
+                .put(
+                    "collectionItems",
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("id", "series-1")
+                                .put("type", "series")
+                                .put("metadata", JSONObject().put("title", "Series One"))
+                        )
+                        .put(
+                            JSONObject()
+                                .put("id", "movie-1")
+                                .put("type", "movie")
+                                .put("metadata", JSONObject().put("title", "Movie One"))
+                        ),
+                )
+
+        val data = parseDetailData(payload)
+
+        assertEquals("BoxSet", data.item.type)
+        assertEquals("2007-2019", data.item.collectionYearRange)
+        assertEquals(listOf("series-1", "movie-1"), data.collectionItems.map { it.id })
+    }
+
+    @Test
     fun removesDuplicateCatalogItemsBeforeComposeListsRenderThem() {
         val item =
             JSONObject()
