@@ -128,7 +128,7 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         group: SyncplayGroup,
         viewing: Boolean,
         loading: Boolean,
-        sequence: Int,
+        sequence: Long,
         pauseRoom: Boolean = false,
         operationId: String = java.util.UUID.randomUUID().toString(),
     ): SyncplayGroup =

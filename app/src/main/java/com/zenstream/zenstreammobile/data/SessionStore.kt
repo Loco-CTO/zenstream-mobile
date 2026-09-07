@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -73,6 +74,7 @@ class SessionStore(
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
+        val syncplayPresenceSequence = longPreferencesKey("syncplay_presence_sequence")
         val deviceId = stringPreferencesKey("device_id")
     }
 
@@ -336,6 +338,17 @@ class SessionStore(
             }
         }
         return dataStore.data.first()[Keys.syncplayParticipantId] ?: generated
+    }
+
+    suspend fun syncplayPresenceSequence(): Long =
+        dataStore.data.first()[Keys.syncplayPresenceSequence] ?: 0L
+
+    suspend fun recordSyncplayPresenceSequence(sequence: Long) {
+        if (sequence < 0) return
+        dataStore.edit { preferences ->
+            val current = preferences[Keys.syncplayPresenceSequence] ?: 0L
+            if (sequence > current) preferences[Keys.syncplayPresenceSequence] = sequence
+        }
     }
 }
 
