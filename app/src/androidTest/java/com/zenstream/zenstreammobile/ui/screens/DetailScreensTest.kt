@@ -85,6 +85,57 @@ class DetailScreensTest {
     }
 
     @Test
+    fun collectionDetailShowsItemsWithoutPlaybackOrStateActions() {
+        val collection = MediaItem("collection", "Code Geass Series", type = "BoxSet")
+        val data =
+            DetailData(
+                item = collection,
+                collectionItems =
+                    listOf(
+                        MediaItem("series-1", "Series One", type = "Series", productionYear = 2018),
+                        MediaItem("movie-1", "Movie One", type = "Movie", productionYear = 2019),
+                    ),
+            )
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailContent(
+                    data = data,
+                    session = session,
+                    padding = PaddingValues(),
+                    actionBusy = false,
+                    actionError = false,
+                    onPlay = {},
+                    onOpenItem = {},
+                    onSelectSeason = {},
+                    onTogglePlayed = {},
+                    onToggleFavorite = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithText(context.getString(R.string.collection_item_count, 2))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Series One").assertIsDisplayed()
+        composeRule.onNodeWithText("Movie One").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.play)).assertDoesNotExist()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.mark_watched))
+            .assertDoesNotExist()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.mark_unwatched))
+            .assertDoesNotExist()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.add_favorite))
+            .assertDoesNotExist()
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.remove_favorite))
+            .assertDoesNotExist()
+    }
+
+    @Test
     fun seasonDrawerShowsWatchedAndFavoriteActions() {
         val series = MediaItem("series", "Example Series", type = "Series")
         val data =

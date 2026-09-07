@@ -218,40 +218,42 @@ internal fun DetailContent(
             item {
                 DetailHero(mediaItem, data.parentSeries, session)
             }
-            item {
-                DetailActions(
-                    item = mediaItem,
-                    busy = actionBusy,
-                    onPlay = { onPlay(playTarget(data)) },
-                    onTogglePlayed = onTogglePlayed,
-                    onToggleFavorite = onToggleFavorite,
-                    onToggleFollowing = onToggleFollowing,
-                )
-                if (
-                    mediaItem.type in setOf("Movie", "Episode") &&
-                        trackSource != null &&
-                        trackSelection != null
-                ) {
-                    DetailTrackChoices(
-                        source = trackSource,
-                        selection = trackSelection,
-                        onSelectAudio = onSelectAudioTrack,
-                        onSelectSubtitle = onSelectSubtitleTrack,
-                        bazarrStatus = bazarrStatus,
-                        bazarrSearch = bazarrSearch,
-                        bazarrBusy = bazarrBusy,
-                        bazarrError = bazarrError,
-                        onSearchBazarr = onSearchBazarr,
-                        onDownloadBazarr = onDownloadBazarr,
+            if (mediaItem.type != "BoxSet") {
+                item {
+                    DetailActions(
+                        item = mediaItem,
+                        busy = actionBusy,
+                        onPlay = { onPlay(playTarget(data)) },
+                        onTogglePlayed = onTogglePlayed,
+                        onToggleFavorite = onToggleFavorite,
+                        onToggleFollowing = onToggleFollowing,
                     )
-                }
-                if (actionError) {
-                    Text(
-                        stringResource(R.string.detail_action_failed),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
+                    if (
+                        mediaItem.type in setOf("Movie", "Episode") &&
+                            trackSource != null &&
+                            trackSelection != null
+                    ) {
+                        DetailTrackChoices(
+                            source = trackSource,
+                            selection = trackSelection,
+                            onSelectAudio = onSelectAudioTrack,
+                            onSelectSubtitle = onSelectSubtitleTrack,
+                            bazarrStatus = bazarrStatus,
+                            bazarrSearch = bazarrSearch,
+                            bazarrBusy = bazarrBusy,
+                            bazarrError = bazarrError,
+                            onSearchBazarr = onSearchBazarr,
+                            onDownloadBazarr = onDownloadBazarr,
+                        )
+                    }
+                    if (actionError) {
+                        Text(
+                            stringResource(R.string.detail_action_failed),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
             if (mediaItem.genres.isNotEmpty()) {
@@ -278,6 +280,15 @@ internal fun DetailContent(
                     )
                 }
             }
+            if (mediaItem.type == "BoxSet") {
+                item {
+                    CollectionSection(
+                        items = data.collectionItems,
+                        session = session,
+                        onOpenItem = onOpenItem,
+                    )
+                }
+            }
             if (mediaItem.people.any { it.creditType == "cast" || it.creditType == "crew" }) {
                 item { PeopleSection(mediaItem.people, session) }
             }
@@ -297,6 +308,53 @@ internal fun DetailContent(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionSection(
+    items: List<MediaItem>,
+    session: AuthSession,
+    onOpenItem: (MediaItem) -> Unit,
+) {
+    val uniqueItems = items.distinctBy { it.id }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            stringResource(R.string.collection_item_count, uniqueItems.size),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .82f),
+            modifier = Modifier.semantics { heading() },
+        )
+        if (uniqueItems.isEmpty()) {
+            Text(
+                stringResource(R.string.collection_empty),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            uniqueItems.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    rowItems.forEach { item ->
+                        Box(Modifier.weight(1f)) {
+                            MediaCard(
+                                item = item,
+                                session = session,
+                                wide = false,
+                                onClick = onOpenItem,
+                                showRating = true,
+                                gridCard = true,
+                            )
+                        }
+                    }
+                    if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }

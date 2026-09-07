@@ -29,6 +29,7 @@ data class MediaItem(
     val overview: String? = null,
     val premiereDate: String? = null,
     val productionYear: Int? = null,
+    val collectionYearRange: String? = null,
     val officialRating: String? = null,
     val communityRating: Double? = null,
     val genres: List<String> = emptyList(),
@@ -170,6 +171,7 @@ data class DetailData(
     val parentSeries: MediaItem? = null,
     val seasons: List<MediaItem> = emptyList(),
     val episodes: List<MediaItem> = emptyList(),
+    val collectionItems: List<MediaItem> = emptyList(),
     val similar: List<MediaItem> = emptyList(),
     val selectedSeasonId: String? = null,
 )

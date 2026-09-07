@@ -258,13 +258,19 @@ fun MediaCard(
         } else {
             Modifier.width(if (wide) 224.dp else POSTER_CARD_MIN_WIDTH)
         }
-    val playDescription = stringResource(R.string.play_description, item.name)
+    val cardDescription =
+        stringResource(
+            if (item.type == "BoxSet") R.string.open_details_description
+            else R.string.play_description,
+            item.name,
+        )
+    val subtitle = episodeCardSubtitle(item)
     Column(
         modifier =
             cardWidthModifier
                 .semantics {
                     role = Role.Button
-                    contentDescription = playDescription
+                    contentDescription = cardDescription
                 }
                 .clickable { onClick(item) }
     ) {
@@ -276,7 +282,7 @@ fun MediaCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
-            if (item.played || item.unplayedItemCount != null) {
+            if (item.type != "BoxSet" && (item.played || item.unplayedItemCount != null)) {
                 Surface(
                     color = Color.Black.copy(alpha = .65f),
                     shape = RoundedCornerShape(50),
@@ -341,14 +347,16 @@ fun MediaCard(
             color = Color.White.copy(alpha = .82f),
             modifier = Modifier.padding(top = 7.dp),
         )
-        Text(
-            episodeCardSubtitle(item),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = .42f),
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        if (subtitle.isNotBlank()) {
+            Text(
+                subtitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = .42f),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
@@ -426,14 +434,20 @@ internal fun episodeCardSubtitle(item: MediaItem): String =
     }
 
 fun itemSubtitle(item: MediaItem): String =
-    listOfNotNull(
-            item.productionYear?.toString(),
-            if (
-                item.type == "Episode" && item.parentIndexNumber != null && item.indexNumber != null
+    if (item.type == "BoxSet") {
+        item.collectionYearRange.orEmpty()
+    } else {
+        listOfNotNull(
+                item.productionYear?.toString(),
+                if (
+                    item.type == "Episode" &&
+                        item.parentIndexNumber != null &&
+                        item.indexNumber != null
+                )
+                    "S${item.parentIndexNumber}:E${item.indexNumber}"
+                else null,
+                item.officialRating,
             )
-                "S${item.parentIndexNumber}:E${item.indexNumber}"
-            else null,
-            item.officialRating,
-        )
-        .joinToString(" · ")
-        .ifBlank { item.type.orEmpty() }
+            .joinToString(" · ")
+            .ifBlank { item.type.orEmpty() }
+    }
