@@ -49,7 +49,8 @@ class SyncplayManager(
     @Volatile private var stopped = false
     private val connectionGeneration = AtomicLong(0)
     private var connectionJob: Job? = null
-    private var presenceSequence = 0
+    private var presenceSequence = 0L
+    private val presenceSequenceReady = CompletableDeferred<Unit>()
     private var serverOffsetSeconds = 0.0
     private var bestRttSeconds = Double.POSITIVE_INFINITY
     private var connectionEnded: CompletableDeferred<Unit>? = null
@@ -60,6 +61,7 @@ class SyncplayManager(
     private var pendingPresence: PresenceReport? = null
     private val pendingCriticalPresence = ArrayDeque<PresenceReport>()
     private var presenceWorker: Job? = null
+    private var lastPresenceIntent: PresenceIntent? = null
 
     init {
         scope.launch { start() }
@@ -70,6 +72,13 @@ class SyncplayManager(
     private suspend fun start() {
         val participantId = sessionStore.syncplayParticipantId()
         _state.value = _state.value.copy(participantId = participantId)
+        try {
+            presenceSequence = sessionStore.syncplayPresenceSequence()
+            presenceSequenceReady.complete(Unit)
+        } catch (error: Exception) {
+            presenceSequenceReady.completeExceptionally(error)
+            throw error
+        }
         runCatching { refresh() }
             .onFailure { error ->
                 Log.w(
@@ -180,6 +189,9 @@ class SyncplayManager(
 
     suspend fun setWatchingTogether(watching: Boolean) = mutex.withLock {
         _state.value.active?.let { group ->
+            if (!watching) {
+                synchronized(presenceLock) { lastPresenceIntent = null }
+            }
             adopt(
                 group.copy(
                     members =
@@ -279,17 +291,26 @@ class SyncplayManager(
         pauseRoom: Boolean = false,
     ) {
         val room = _state.value.active ?: return
+        val effectiveLoading = loading && viewing
         val report =
             PresenceReport(
                 room = room,
                 viewing = viewing,
-                loading = loading && viewing,
+                loading = effectiveLoading,
                 immediate = immediate,
-                sequence = synchronized(presenceLock) { ++presenceSequence },
+                sequence = 0L,
                 pauseRoom = pauseRoom,
                 operationId = java.util.UUID.randomUUID().toString(),
             )
         synchronized(presenceLock) {
+            lastPresenceIntent =
+                PresenceIntent(
+                    groupId = room.id,
+                    itemId = room.itemId,
+                    viewing = viewing,
+                    loading = effectiveLoading,
+                    pauseRoom = pauseRoom,
+                )
             if (report.isCritical) {
                 pendingCriticalPresence.addLast(report)
             } else {
@@ -335,15 +356,33 @@ class SyncplayManager(
     }
 
     private suspend fun sendPresence(report: PresenceReport) {
+        presenceSequenceReady.await()
+        val sequencedReport = report.copy(sequence = nextPresenceSequence())
         val attempts = if (report.isCritical) CRITICAL_PRESENCE_ATTEMPTS else 1
         repeat(attempts) { attempt ->
             try {
-                if (presence(report)) return
+                if (presence(sequencedReport)) return
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
             }
             if (attempt + 1 < attempts) delay(CRITICAL_PRESENCE_RETRY_MILLIS * (attempt + 1))
         }
+    }
+
+    private suspend fun nextPresenceSequence(): Long {
+        val next =
+            synchronized(presenceLock) {
+                ++presenceSequence
+                presenceSequence
+            }
+        runCatching { sessionStore.recordSyncplayPresenceSequence(next) }
+            .onFailure { error ->
+                Log.w(
+                    SYNCPLAY_LOG_TAG,
+                    "Syncplay presence sequence persistence failed: ${error.javaClass.simpleName}",
+                )
+            }
+        return next
     }
 
     fun stop() {
@@ -352,9 +391,11 @@ class SyncplayManager(
         synchronized(presenceLock) {
             pendingPresence = null
             pendingCriticalPresence.clear()
+            lastPresenceIntent = null
             presenceWorker?.cancel()
             presenceWorker = null
         }
+        if (!presenceSequenceReady.isCompleted) presenceSequenceReady.cancel()
         socket?.close(1000, "Session ended")
         socket = null
         connectionEnded?.complete(Unit)
@@ -413,7 +454,10 @@ class SyncplayManager(
             _state.value = _state.value.copy(connected = true, error = null)
             Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket connected")
             scope.launch {
-                runCatching { refreshConnectionSnapshot() }
+                runCatching {
+                        refreshConnectionSnapshot()
+                        if (isCurrent(webSocket)) replayLatestPresence()
+                    }
                     .onFailure { error ->
                         Log.w(
                             SYNCPLAY_LOG_TAG,
@@ -428,6 +472,18 @@ class SyncplayManager(
                     if (_state.value.connected && socket === webSocket) syncClock(webSocket)
                 }
             }
+        }
+
+        private fun replayLatestPresence() {
+            val intent = synchronized(presenceLock) { lastPresenceIntent } ?: return
+            val active = _state.value.active ?: return
+            if (active.id != intent.groupId || active.itemId != intent.itemId) return
+            reportPresence(
+                viewing = intent.viewing,
+                loading = intent.loading,
+                immediate = true,
+                pauseRoom = intent.pauseRoom,
+            )
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -650,7 +706,7 @@ class SyncplayManager(
         val viewing: Boolean,
         val loading: Boolean,
         val immediate: Boolean,
-        val sequence: Int,
+        val sequence: Long,
         val pauseRoom: Boolean,
         val operationId: String,
     ) {
@@ -660,6 +716,14 @@ class SyncplayManager(
         fun isSendable(active: SyncplayGroup): Boolean =
             syncplayPresenceReportCanSend(room, active, isCritical)
     }
+
+    private data class PresenceIntent(
+        val groupId: String,
+        val itemId: String?,
+        val viewing: Boolean,
+        val loading: Boolean,
+        val pauseRoom: Boolean,
+    )
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"

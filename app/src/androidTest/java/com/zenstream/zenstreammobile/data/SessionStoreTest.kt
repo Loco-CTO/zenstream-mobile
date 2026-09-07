@@ -126,4 +126,24 @@ class SessionStoreTest {
         store.clearAll()
         assertEquals(PlaybackTimeDisplayMode.Elapsed, store.playbackTimeDisplayMode.first())
     }
+
+    @Test
+    fun syncplayPresenceSequenceIsMonotonicAndDeviceLocal() = runBlocking {
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_presence_${UUID.randomUUID()}",
+            )
+
+        assertEquals(0L, store.syncplayPresenceSequence())
+        store.recordSyncplayPresenceSequence(7L)
+        store.recordSyncplayPresenceSequence(3L)
+        assertEquals(7L, store.syncplayPresenceSequence())
+
+        store.clearSession()
+        assertEquals(7L, store.syncplayPresenceSequence())
+        store.clearAll()
+        assertEquals(7L, store.syncplayPresenceSequence())
+    }
 }

@@ -269,10 +269,8 @@ class MainNavigationTest {
                     )
                 Column(Modifier.fillMaxSize()) {
                     StatusBarAwareTopBarSlot(
-                        visible = chromeVisible.value,
+                        visibilityFraction = if (chromeVisible.value) 1f else 0f,
                         modifier = Modifier.fillMaxWidth(),
-                        enter = EnterTransition.None,
-                        exit = ExitTransition.None,
                         statusBarInsets = statusBarInsets,
                     ) {
                         Box(Modifier.fillMaxWidth().height(topBarBodyHeight))
