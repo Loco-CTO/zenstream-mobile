@@ -538,13 +538,13 @@ class CatalogApiTest {
                             JSONObject()
                                 .put("id", "series-1")
                                 .put("type", "series")
-                                .put("metadata", JSONObject().put("title", "Series One")),
+                                .put("metadata", JSONObject().put("title", "Series One"))
                         )
                         .put(
                             JSONObject()
                                 .put("id", "movie-1")
                                 .put("type", "movie")
-                                .put("metadata", JSONObject().put("title", "Movie One")),
+                                .put("metadata", JSONObject().put("title", "Movie One"))
                         ),
                 )
 

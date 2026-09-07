@@ -1005,7 +1005,9 @@ class CatalogApi(
                         "/api/catalog/items/${android.net.Uri.encode(itemId)}/detail$suffix",
                     )
                 val data = parseDetailData(payload)
-                return@withContext if (data.item.type == "BoxSet" && !payload.has("collectionItems")) {
+                return@withContext if (
+                    data.item.type == "BoxSet" && !payload.has("collectionItems")
+                ) {
                     data.copy(collectionItems = getChildren(session, data.item))
                 } else {
                     data
