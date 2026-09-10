@@ -356,7 +356,8 @@ private fun MainScaffold(
             )
     val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
 
-    androidx.compose.material3.Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.material3.Scaffold(
         topBar = {
             if (!topBarHidden) {
                 StatusBarAwareTopBarSlot(
@@ -381,51 +382,9 @@ private fun MainScaffold(
                 }
             }
         },
-        bottomBar = {
-            // Keep the slot around the mini-player transparent. The navigation bar owns its
-            // own surface, while detail routes should not paint a solid block beneath audio.
-            Column(Modifier.fillMaxWidth()) {
-                if (audioState.currentEntry != null && currentRoute != NOW_PLAYING) {
-                    AudioMiniPlayer(
-                        state = audioState,
-                        session = session,
-                        coordinator = audio,
-                        modifier =
-                            if (detailRoute || mainRoute == NOTIFICATIONS || currentRoute == SEARCH) {
-                                Modifier.navigationBarsPadding()
-                            } else {
-                                Modifier
-                            },
-                        onOpenNowPlaying = { navController.navigate(NOW_PLAYING) { launchSingleTop = true } },
-                        onFavorite = onAudioFavorite,
-                    )
-                }
-                if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
-                    // Keep the system navigation-control surface mounted while the
-                    // menu items animate. This prevents content from showing through
-                    // the Android control strip during the transition.
-                    ChromeVisibilitySlot(
-                        visibilityFraction =
-                            if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
-                            else bottomBarVisibilityFraction,
-                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
-                        collapseFromBottom = true,
-                        applyNavigationBarsPadding = true,
-                    ) {
-                        MainNavigationBar(
-                            currentRoute = mainRoute,
-                            session = session,
-                            onDestinationClick = { route ->
-                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
-                                    myPageNavigationResetKey += 1
-                                }
-                                navigateToMainDestination(navController, route)
-                            },
-                        )
-                    }
-                }
-            }
-        },
+        // Player and navigation chrome are drawn in the transparent overlay below. Keeping the
+        // Scaffold bottom slot empty lets the current screen continue behind that chrome.
+        bottomBar = {},
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -634,6 +593,47 @@ private fun MainScaffold(
                 toast = toast,
             )
             ToastHost(state = toast)
+        }
+    }
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        ) {
+            if (audioState.currentEntry != null && currentRoute != NOW_PLAYING) {
+                AudioMiniPlayer(
+                    state = audioState,
+                    session = session,
+                    coordinator = audio,
+                    modifier =
+                        if (detailRoute || mainRoute == NOTIFICATIONS || currentRoute == SEARCH) {
+                            Modifier.navigationBarsPadding()
+                        } else {
+                            Modifier
+                        },
+                    onOpenNowPlaying = { navController.navigate(NOW_PLAYING) { launchSingleTop = true } },
+                    onFavorite = onAudioFavorite,
+                )
+            }
+            if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
+                ChromeVisibilitySlot(
+                    visibilityFraction =
+                        if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
+                        else bottomBarVisibilityFraction,
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    collapseFromBottom = true,
+                    applyNavigationBarsPadding = true,
+                ) {
+                    MainNavigationBar(
+                        currentRoute = mainRoute,
+                        session = session,
+                        onDestinationClick = { route ->
+                            if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                myPageNavigationResetKey += 1
+                            }
+                            navigateToMainDestination(navController, route)
+                        },
+                    )
+                }
+            }
         }
     }
 }
