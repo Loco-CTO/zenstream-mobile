@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,6 +96,7 @@ fun AudioCard(
 fun MusicArtwork(
     item: MediaItem,
     session: AuthSession,
+    fallbackItem: MediaItem? = null,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     requestedSize: Int = 640,
@@ -102,9 +104,11 @@ fun MusicArtwork(
     fallbackGlyph: String = "♪",
 ) {
     val safeSize = requestedSize.coerceIn(160, 1_024)
-    val url = imageUrl(session.serverUrl, item, "Primary", safeSize, safeSize)
+    val sourceItem =
+        if (item.imageTags["Primary"].isNullOrBlank()) fallbackItem ?: item else item
+    val url = imageUrl(session.serverUrl, sourceItem, "Primary", safeSize, safeSize)
     val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
-    val blurHash = imageBlurHash(item, "Primary")
+    val blurHash = imageBlurHash(sourceItem, "Primary")
     var imageFailed by remember(url) { mutableStateOf(url == null) }
     Box(
         modifier = modifier
@@ -186,6 +190,7 @@ fun AudioTrackRow(
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
     onArtistClick: (String) -> Unit = {},
+    artworkItem: MediaItem? = null,
     modifier: Modifier = Modifier,
 ) {
     val credits = artistCreditsForTrack(item)
@@ -221,6 +226,15 @@ fun AudioTrackRow(
                 )
             }
         }
+        MusicArtwork(
+            item = item,
+            session = session,
+            fallbackItem = artworkItem,
+            requestedSize = 256,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.size(44.dp),
+            contentDescription = "${item.name} artwork",
+        )
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,

@@ -24,10 +24,6 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.LibraryResult
-import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaLibraryService.LibraryParams
-import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
@@ -40,6 +36,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.data.audioQueueScope
 import com.zenstream.zenstreammobile.data.audioQueueSnapshotFromJson
+import com.zenstream.zenstreammobile.data.withPrimaryArtworkFallback
 import com.zenstream.zenstreammobile.model.AudioPlayerState
 import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioQueueSnapshot
@@ -221,6 +218,7 @@ class AudioPlaybackService : MediaLibraryService() {
         val scope = account?.let { accountScope(it) }
         if (scope == playerScope && account != null) {
             loadAutoCatalog()
+            applyQueueArtworkFallbacks()
             return
         }
         persistJob?.cancel()
@@ -235,6 +233,7 @@ class AudioPlaybackService : MediaLibraryService() {
             restoreAudioPreferences()
         }
         loadAutoCatalog()
+        applyQueueArtworkFallbacks()
     }
 
     private suspend fun restoreAudioPreferences() {
@@ -817,6 +816,31 @@ class AudioPlaybackService : MediaLibraryService() {
         }
     }
 
+    /** Rehydrates artwork for queue snapshots written before artwork metadata was persisted. */
+    private suspend fun applyQueueArtworkFallbacks() {
+        if (currentState.queue.isEmpty()) return
+        val albumsById =
+            catalogAlbums.values
+                .asSequence()
+                .flatten()
+                .distinctBy { it.id }
+                .associateBy { it.id }
+        if (albumsById.isEmpty()) return
+        val updated =
+            currentState.queue.map { entry ->
+                entry.copy(
+                    track =
+                        entry.track.withPrimaryArtworkFallback(
+                            entry.track.albumId?.let(albumsById::get),
+                        ),
+                )
+            }
+        if (updated == currentState.queue) return
+        currentState = currentState.copy(queue = updated)
+        publishPlayerState()
+        persistSnapshot()
+    }
+
     private fun parseSnapshot(encoded: String): AudioQueueSnapshot? =
         runCatching { audioQueueSnapshotFromJson(JSONObject(encoded)) }.getOrNull()
 
@@ -1175,7 +1199,14 @@ class AudioPlaybackService : MediaLibraryService() {
         val ticket =
             (account.artworkTicket ?: account.resourceTicket)?.takeIf(String::isNotBlank)
                 ?: return null
-        val path = item?.imageTags?.get("Primary")?.takeIf { it.startsWith("/api/") } ?: return null
+        val artworkItem =
+            item?.withPrimaryArtworkFallback(
+                item.albumId?.let { albumId ->
+                    catalogAlbums.values.asSequence().flatten().firstOrNull { it.id == albumId }
+                },
+            )
+        val path = artworkItem?.imageTags?.get("Primary")?.takeIf { it.startsWith("/api/") }
+            ?: return null
         return runCatching {
                 val absolute = resolveSameOriginUrl(account.serverUrl, path)
                 Uri.parse(

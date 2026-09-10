@@ -34,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -229,6 +230,7 @@ private fun AlbumContent(
                     },
                     onFavorite = onFavoriteTrack,
                     onArtistClick = onArtistClick,
+                    artworkItem = data.album,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -508,6 +510,7 @@ private fun ArtistContent(
     val artist = data.artist
     val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
     val albums = remember(data.albums) { data.albums.distinctBy { it.id } }
+    val albumsById = remember(albums) { albums.associateBy { it.id } }
     val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
     val accent = palette.accent
     val listState = rememberLazyListState()
@@ -649,6 +652,7 @@ private fun ArtistContent(
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)) },
                     onArtistClick = onArtistClick,
+                    artworkItem = albumsById[track.albumId],
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -692,6 +696,7 @@ private fun ArtistContent(
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, index) },
                     onArtistClick = onArtistClick,
+                    artworkItem = albumsById[track.albumId],
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }

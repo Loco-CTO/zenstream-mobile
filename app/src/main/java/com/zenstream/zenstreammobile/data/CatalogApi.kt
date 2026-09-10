@@ -981,10 +981,14 @@ class CatalogApi(
                     session,
                     musicAlbumPath(albumId),
                 )
+            val album = catalogMediaItem(payload.getJSONObject("album"))
             MusicAlbumData(
-                album = catalogMediaItem(payload.getJSONObject("album")),
+                album = album,
                 artist = payload.optJSONObject("artist")?.let(::catalogMediaItem),
-                tracks = catalogItems(payload, "tracks"),
+                tracks =
+                    catalogItems(payload, "tracks").map { track ->
+                        track.withPrimaryArtworkFallback(album)
+                    },
                 relatedAlbums = catalogItems(payload, "relatedAlbums"),
                 catalogGeneration = payload.optLongOrNull("catalogGeneration"),
             )
@@ -1001,10 +1005,15 @@ class CatalogApi(
                     musicArtistPath(artistId),
                     query = mapOf("includeTracks" to "false"),
                 )
-            val tracks = catalogItems(payload, "tracks")
+            val albums = catalogItems(payload, "albums")
+            val albumsById = albums.associateBy { it.id }
+            val tracks =
+                catalogItems(payload, "tracks").map { track ->
+                    track.withPrimaryArtworkFallback(albumsById[track.albumId])
+                }
             MusicArtistData(
                 artist = catalogMediaItem(payload.getJSONObject("artist")),
-                albums = catalogItems(payload, "albums"),
+                albums = albums,
                 tracks = tracks,
                 trackCount = payload.optInt("trackCount", tracks.size),
                 appearsIn = catalogItems(payload, "appearsIn"),

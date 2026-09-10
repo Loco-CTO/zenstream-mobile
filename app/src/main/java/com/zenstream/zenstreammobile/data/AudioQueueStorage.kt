@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.MediaItem
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 
 internal const val AUDIO_QUEUE_SCHEMA_VERSION = 1
 private const val AUDIO_QUEUE_MAX_ENTRIES = 500
@@ -70,6 +71,11 @@ private fun MediaItem.toAudioQueueJson(): JSONObject =
         .put("discNumber", discNumber)
         .put("trackNumber", trackNumber)
         .put("durationSeconds", durationSeconds)
+        .put("primaryImageTag", safeQueueArtworkTag(imageTags["Primary"]))
+        .put(
+            "primaryImageBlurHash",
+            imageBlurHashes["Primary"]?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
+        )
 
 internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? {
     if (value.optInt("schemaVersion", -1) != AUDIO_QUEUE_SCHEMA_VERSION) return null
@@ -166,6 +172,9 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
                     .filter { it.name.isNotBlank() }
             }
             .orEmpty()
+    val primaryImageTag = safeQueueArtworkTag(value.optString("primaryImageTag").ifBlank { null })
+    val primaryImageBlurHash =
+        value.optString("primaryImageBlurHash").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null }
     return MediaItem(
         id = id,
         name = name,
@@ -181,7 +190,33 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
         discNumber = value.optIntOrNull("discNumber"),
         trackNumber = value.optIntOrNull("trackNumber"),
         durationSeconds = value.optDoubleOrNull("durationSeconds"),
+        imageTags = primaryImageTag?.let { mapOf("Primary" to it) }.orEmpty(),
+        imageBlurHashes = primaryImageBlurHash?.let { mapOf("Primary" to it) }.orEmpty(),
     )
+}
+
+/** Queue snapshots may keep catalog artwork metadata, but never access-bearing URLs. */
+private fun safeQueueArtworkTag(value: String?): String? {
+    val tag = value?.trim()?.takeIf(String::isNotBlank) ?: return null
+    val uri = try {
+        URI(tag)
+    } catch (_: IllegalArgumentException) {
+        return null
+    }
+    val path = uri.path ?: return null
+    if (uri.isAbsolute || uri.host != null) return null
+    if (!path.matches(Regex("/api/catalog/items/[^/]+/images/Primary"))) return null
+    if (
+        uri.query.orEmpty().split('&').any { parameter ->
+            val key = parameter.substringBefore('=').trim()
+            key.equals("access", ignoreCase = true) ||
+                key.equals("token", ignoreCase = true) ||
+                key.equals("ticket", ignoreCase = true)
+        }
+    ) {
+        return null
+    }
+    return tag.take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
 }
 
 private fun JSONObject.optIntOrNull(key: String): Int? =

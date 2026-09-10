@@ -26,6 +26,12 @@ class AudioQueueStorageTest {
                 artists = listOf("Artist"),
                 artistCredits = listOf(ArtistCredit("artist-1", "Artist", "")),
                 durationSeconds = 123.5,
+                imageTags =
+                    mapOf(
+                        "Primary" to
+                            "/api/catalog/items/track-1/images/Primary?language=ja",
+                    ),
+                imageBlurHashes = mapOf("Primary" to "LNGb[3Me_2D+4moGIVt800xvRjs,"),
             )
         val snapshot =
             AudioQueueSnapshot(
@@ -49,6 +55,14 @@ class AudioQueueStorageTest {
         assertEquals("https://music.example", restored?.serverUrl)
         assertEquals(listOf("entry-a", "entry-b"), restored?.entries?.map { it.entryId })
         assertEquals(listOf("track-1", "track-1"), restored?.entries?.map { it.track.id })
+        assertEquals(
+            "/api/catalog/items/track-1/images/Primary?language=ja",
+            restored?.entries?.first()?.track?.imageTags?.get("Primary"),
+        )
+        assertEquals(
+            "LNGb[3Me_2D+4moGIVt800xvRjs,",
+            restored?.entries?.first()?.track?.imageBlurHashes?.get("Primary"),
+        )
         assertEquals("instance-a", restored?.entries?.first()?.playbackInstanceId)
         assertEquals(AudioRepeatMode.Queue, restored?.repeatMode)
         assertFalse(encoded.contains("access"))

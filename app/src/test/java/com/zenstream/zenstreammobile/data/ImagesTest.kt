@@ -61,6 +61,23 @@ class ImagesTest {
     }
 
     @Test
+    fun musicTracksCanUseTheirAlbumPrimaryArtworkWhenTrackArtworkIsMissing() {
+        val album =
+            MediaItem(
+                id = "album-1",
+                name = "Album",
+                imageTags = mapOf("Primary" to "/api/catalog/items/album-1/images/Primary"),
+                imageBlurHashes = mapOf("Primary" to "LNGb[3Me_2D+4moGIVt800xvRjs,"),
+            )
+        val track = MediaItem(id = "track-1", name = "Track", albumId = album.id, type = "Audio")
+
+        val resolved = track.withPrimaryArtworkFallback(album)
+
+        assertEquals(album.imageTags["Primary"], resolved.imageTags["Primary"])
+        assertEquals(album.imageBlurHashes["Primary"], resolved.imageBlurHashes["Primary"])
+    }
+
+    @Test
     fun seriesPosterPrefersTheSeriesArtworkOverAnEpisodeScreencap() {
         val episode =
             item.copy(

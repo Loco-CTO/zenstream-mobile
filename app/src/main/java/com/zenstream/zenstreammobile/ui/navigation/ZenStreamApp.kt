@@ -6,6 +6,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -605,7 +611,19 @@ private fun MainScaffold(
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
         ) {
-            if (audioState.currentEntry != null && currentRoute != NOW_PLAYING) {
+            AnimatedVisibility(
+                visible = audioState.currentEntry != null && currentRoute != NOW_PLAYING,
+                enter =
+                    slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(durationMillis = 260),
+                    ) + fadeIn(animationSpec = tween(durationMillis = 180)),
+                exit =
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(durationMillis = 220),
+                    ) + fadeOut(animationSpec = tween(durationMillis = 160)),
+            ) {
                 AudioMiniPlayer(
                     state = audioState,
                     session = session,
