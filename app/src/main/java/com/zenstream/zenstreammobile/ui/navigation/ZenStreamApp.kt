@@ -619,7 +619,6 @@ private fun MainScaffold(
                 ToastHost(state = toast)
             }
         }
-    }
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
         ) {

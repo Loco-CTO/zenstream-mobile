@@ -3,6 +3,7 @@
 
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +53,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -103,19 +107,6 @@ fun AudioMiniPlayer(
             tonalElevation = 0.dp,
         ) {
             Column {
-                LinearProgressIndicator(
-                    progress = {
-                        if (state.durationSeconds > 0) {
-                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
-                                0f,
-                                1f,
-                            )
-                        } else 0f
-                    },
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = palette.accent,
-                    trackColor = Color.White.copy(alpha = .16f),
-                )
                 Row(
                     modifier =
                         Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
@@ -178,6 +169,27 @@ fun AudioMiniPlayer(
                         )
                     }
                 }
+                LinearProgressIndicator(
+                    progress = {
+                        if (state.durationSeconds > 0) {
+                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
+                                0f,
+                                1f,
+                            )
+                        } else 0f
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .height(3.dp)
+                            .clip(
+                                RoundedCornerShape(
+                                    bottomStart = 14.dp,
+                                    bottomEnd = 14.dp,
+                                )
+                            ),
+                    color = palette.accent,
+                    trackColor = Color.White.copy(alpha = .16f),
+                )
             }
         }
     }
@@ -465,20 +477,11 @@ private fun NowPlayingMain(
             )
         }
         Spacer(Modifier.height(18.dp))
-        Slider(
-            value =
-                state.positionSeconds
-                    .toFloat()
-                    .coerceIn(0f, state.durationSeconds.coerceAtLeast(1L).toFloat()),
-            onValueChange = { coordinator.seekTo(it.toLong()) },
-            valueRange = 0f..state.durationSeconds.coerceAtLeast(1L).toFloat(),
-            modifier = Modifier.fillMaxWidth(),
-            colors =
-                SliderDefaults.colors(
-                    thumbColor = accent,
-                    activeTrackColor = accent,
-                    inactiveTrackColor = Color.White.copy(alpha = .20f),
-                ),
+        AudioProgressScrubber(
+            positionSeconds = state.positionSeconds,
+            durationSeconds = state.durationSeconds,
+            accent = accent,
+            onSeek = { coordinator.seekTo(it) },
         )
         Row(
             Modifier.fillMaxWidth().clickable(onClick = onToggleTimer),
@@ -598,6 +601,73 @@ private fun NowPlayingMain(
                 )
             }
         }
+    }
+}
+
+/** Artwork-led seek control with a slim rail and an intentional, easy-to-grab handle. */
+@Composable
+private fun AudioProgressScrubber(
+    positionSeconds: Long,
+    durationSeconds: Long,
+    accent: Color,
+    onSeek: (Long) -> Unit,
+) {
+    val duration = durationSeconds.coerceAtLeast(1L)
+    val position = positionSeconds.coerceIn(0L, duration)
+    val fraction = position.toFloat() / duration.toFloat()
+    Box(
+        modifier = Modifier.fillMaxWidth().height(38.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val horizontalInset = 14.dp.toPx()
+            val centerY = size.height / 2f
+            val trackWidth = (size.width - horizontalInset * 2f).coerceAtLeast(0f)
+            val startX = horizontalInset
+            val endX = startX + trackWidth
+            val thumbX = startX + trackWidth * fraction
+            val trackStroke = 6.dp.toPx()
+
+            drawLine(
+                color = Color.White.copy(alpha = .13f),
+                start = Offset(startX, centerY),
+                end = Offset(endX, centerY),
+                strokeWidth = trackStroke,
+                cap = StrokeCap.Round,
+            )
+            if (fraction > 0f) {
+                drawLine(
+                    brush = Brush.horizontalGradient(listOf(accent.copy(alpha = .72f), accent)),
+                    start = Offset(startX, centerY),
+                    end = Offset(thumbX, centerY),
+                    strokeWidth = trackStroke,
+                    cap = StrokeCap.Round,
+                )
+            }
+            if (durationSeconds > 0) {
+                drawCircle(
+                    color = accent,
+                    radius = 9.dp.toPx(),
+                    center = Offset(thumbX, centerY),
+                )
+            }
+        }
+        // Keep the standard semantics and drag/tap behavior while the canvas owns the visual.
+        Slider(
+            value = position.toFloat(),
+            onValueChange = { onSeek(it.toLong().coerceIn(0L, duration)) },
+            valueRange = 0f..duration.toFloat(),
+            enabled = durationSeconds > 0,
+            modifier = Modifier.fillMaxWidth().height(38.dp),
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = Color.Transparent,
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent,
+                ),
+        )
     }
 }
 
