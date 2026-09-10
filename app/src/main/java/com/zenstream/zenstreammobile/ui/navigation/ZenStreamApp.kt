@@ -562,13 +562,16 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         artistId = artistId,
-                        outerPadding = padding,
+                        // The nested detail scaffold owns the status-bar inset;
+                        // carry only the root mini-player/navigation slot into it.
+                        outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                         currentTrackId = audioState.currentEntry?.track?.id,
                         onBack = { navController.popBackStack() },
                         onOpenArtist = { relatedId -> navigateToArtist(navController, relatedId) },
                         onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
                         onPlayTracks = { tracks, index, shuffle -> audio.playTracks(tracks, index, shuffle) },
                         onAddToQueue = audio::addToQueue,
+                        onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }

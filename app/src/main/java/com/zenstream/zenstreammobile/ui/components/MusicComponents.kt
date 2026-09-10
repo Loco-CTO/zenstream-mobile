@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,6 +102,8 @@ fun MusicArtwork(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     requestedSize: Int = 640,
+    shape: Shape = RoundedCornerShape(12.dp),
+    fallbackGlyph: String = "♪",
 ) {
     val safeSize = requestedSize.coerceIn(160, 1_024)
     val url = imageUrl(session.serverUrl, item, "Primary", safeSize, safeSize)
@@ -109,7 +112,7 @@ fun MusicArtwork(
     var imageFailed by remember(url) { mutableStateOf(url == null) }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
@@ -124,11 +127,57 @@ fun MusicArtwork(
         )
         if (imageFailed && blurHash.isNullOrBlank()) {
             Text(
-                text = "♪",
+                text = fallbackGlyph,
                 style = MaterialTheme.typography.displayMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .72f),
             )
         }
+    }
+}
+
+@Composable
+fun MusicArtistCard(
+    item: MediaItem,
+    session: AuthSession,
+    onClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 112.dp,
+) {
+    Column(
+        modifier = modifier
+            .width(size)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open ${item.name}"
+            }
+            .clickable { onClick(item) },
+        horizontalAlignment = Alignment.Start,
+    ) {
+        MusicArtwork(
+            item = item,
+            session = session,
+            requestedSize = 320,
+            fallbackGlyph = "★",
+            shape = CircleShape,
+            modifier = Modifier.size(size),
+            contentDescription = item.name,
+        )
+        Text(
+            text = item.name,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White.copy(alpha = .9f),
+            modifier = Modifier.padding(top = 9.dp),
+        )
+        Text(
+            text = "Artist",
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
