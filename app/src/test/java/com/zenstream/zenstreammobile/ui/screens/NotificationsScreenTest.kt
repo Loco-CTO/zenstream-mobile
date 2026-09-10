@@ -1,8 +1,8 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import com.zenstream.zenstreammobile.model.NotificationItem
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

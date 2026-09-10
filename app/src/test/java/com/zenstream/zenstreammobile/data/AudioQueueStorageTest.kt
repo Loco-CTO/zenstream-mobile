@@ -67,16 +67,17 @@ class AudioQueueStorageTest {
                 .put("userId", "user-1")
                 .put(
                     "entries",
-                    org.json.JSONArray()
+                    org.json
+                        .JSONArray()
                         .put(
                             JSONObject()
                                 .put("entryId", "same")
-                                .put("track", JSONObject().put("id", "track-1")),
+                                .put("track", JSONObject().put("id", "track-1"))
                         )
                         .put(
                             JSONObject()
                                 .put("entryId", "same")
-                                .put("track", JSONObject().put("id", "track-2")),
+                                .put("track", JSONObject().put("id", "track-2"))
                         ),
                 )
 

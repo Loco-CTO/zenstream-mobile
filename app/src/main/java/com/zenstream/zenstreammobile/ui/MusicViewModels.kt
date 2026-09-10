@@ -83,7 +83,8 @@ class MusicAlbumViewModel(
                 state.copy(
                     data =
                         state.data?.copy(
-                            tracks = state.data.tracks.map { if (it.id == result.id) result else it }
+                            tracks =
+                                state.data.tracks.map { if (it.id == result.id) result else it }
                         )
                 )
             }
@@ -196,7 +197,11 @@ class MusicArtistViewModel(
                 val unique = tracks.distinctBy { it.id }
                 _uiState.update {
                     it.copy(
-                        data = it.data?.copy(tracks = unique, trackCount = maxOf(it.data.trackCount, unique.size)),
+                        data =
+                            it.data?.copy(
+                                tracks = unique,
+                                trackCount = maxOf(it.data.trackCount, unique.size),
+                            ),
                         tracksLoading = false,
                         tracksLoaded = true,
                     )
@@ -264,7 +269,11 @@ class MusicArtistViewModel(
                     repository.clearSessionIfCurrent(session)
                 }
                 _uiState.update {
-                    it.copy(data = it.data?.copy(artist = previous), actionBusy = false, actionError = true)
+                    it.copy(
+                        data = it.data?.copy(artist = previous),
+                        actionBusy = false,
+                        actionError = true,
+                    )
                 }
             }
         }

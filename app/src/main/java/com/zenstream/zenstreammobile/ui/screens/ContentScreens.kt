@@ -105,8 +105,8 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchUiState
 import com.zenstream.zenstreammobile.ui.SearchViewModel
-import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.AudioCard
+import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
@@ -588,7 +588,9 @@ private fun SearchResultsContent(
                     )
 
                 else ->
-                    if (state.results.any { it.type in setOf("MusicArtist", "MusicAlbum", "Audio") }) {
+                    if (
+                        state.results.any { it.type in setOf("MusicArtist", "MusicAlbum", "Audio") }
+                    ) {
                         SearchResultSections(
                             items = state.results,
                             session = session,
@@ -1027,12 +1029,17 @@ private fun SearchResultSections(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
     )
-    val sections = listOf(
-        "Artists" to items.filter { it.type == "MusicArtist" }.distinctBy { it.id },
-        "Albums" to items.filter { it.type == "MusicAlbum" }.distinctBy { it.id },
-        "Tracks" to items.filter { it.type == "Audio" }.distinctBy { it.id },
-        "Video" to items.filter { it.type !in setOf("MusicArtist", "MusicAlbum", "Audio") }.distinctBy { it.id },
-    ).filter { it.second.isNotEmpty() }
+    val sections =
+        listOf(
+                "Artists" to items.filter { it.type == "MusicArtist" }.distinctBy { it.id },
+                "Albums" to items.filter { it.type == "MusicAlbum" }.distinctBy { it.id },
+                "Tracks" to items.filter { it.type == "Audio" }.distinctBy { it.id },
+                "Video" to
+                    items
+                        .filter { it.type !in setOf("MusicArtist", "MusicAlbum", "Audio") }
+                        .distinctBy { it.id },
+            )
+            .filter { it.second.isNotEmpty() }
     LazyColumn(
         state = listState,
         modifier = modifier,
@@ -1084,7 +1091,8 @@ private fun SearchResultSections(
     LaunchedEffect(listState, items.size, loadingMore, loadMoreError) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .collect { lastVisible ->
-                if (lastVisible >= sections.size * 2 - 2 && !loadingMore && !loadMoreError) onLoadMore()
+                if (lastVisible >= sections.size * 2 - 2 && !loadingMore && !loadMoreError)
+                    onLoadMore()
             }
     }
 }
@@ -1376,28 +1384,28 @@ private fun LibraryHeader(
                         listOf(LibrarySortBy.Title, LibrarySortBy.Year, LibrarySortBy.Added)
                     } else {
                         LibrarySortBy.entries.filter {
-                            it != LibrarySortBy.LastAdded || state.selected?.supportsLastAdded == true
+                            it != LibrarySortBy.LastAdded ||
+                                state.selected?.supportsLastAdded == true
                         }
                     }
-                sortOptions
-                    .forEach { sortBy ->
-                        DropdownMenuItem(
-                            text = { Text(sortLabel(sortBy)) },
-                            onClick = {
-                                menuExpanded = false
-                                onSortChanged(state.sort.copy(sortBy = sortBy))
-                            },
-                            leadingIcon =
-                                if (sortBy == state.sort.sortBy) {
-                                    {
-                                        Icon(
-                                            painterResource(LucideR.drawable.lucide_ic_check),
-                                            contentDescription = null,
-                                        )
-                                    }
-                                } else null,
-                        )
-                    }
+                sortOptions.forEach { sortBy ->
+                    DropdownMenuItem(
+                        text = { Text(sortLabel(sortBy)) },
+                        onClick = {
+                            menuExpanded = false
+                            onSortChanged(state.sort.copy(sortBy = sortBy))
+                        },
+                        leadingIcon =
+                            if (sortBy == state.sort.sortBy) {
+                                {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_check),
+                                        contentDescription = null,
+                                    )
+                                }
+                            } else null,
+                    )
+                }
             }
         }
     }

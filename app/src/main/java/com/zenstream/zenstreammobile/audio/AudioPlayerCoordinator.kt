@@ -2,17 +2,17 @@ package com.zenstream.zenstreammobile.audio
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.media3.common.util.UnstableApi
+import com.google.common.util.concurrent.MoreExecutors
 import com.zenstream.zenstreammobile.data.toJson
 import com.zenstream.zenstreammobile.model.AudioPlayerState
 import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioQueueSnapshot
-import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.MediaItem
 import java.util.UUID
-import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.flow.StateFlow
 
 /** UI-facing commands. All playback state and actual media loading live in AudioPlaybackService. */
@@ -25,9 +25,13 @@ class AudioPlayerCoordinator(
     private var mediaController: MediaController? = null
     private val mediaControllerFuture =
         MediaController.Builder(
-            appContext,
-            SessionToken(appContext, ComponentName(appContext, AudioPlaybackService::class.java)),
-        ).buildAsync()
+                appContext,
+                SessionToken(
+                    appContext,
+                    ComponentName(appContext, AudioPlaybackService::class.java),
+                ),
+            )
+            .buildAsync()
     val state: StateFlow<AudioPlayerState> = AudioServiceBridge.state
 
     init {
@@ -41,9 +45,12 @@ class AudioPlayerCoordinator(
     }
 
     fun playTracks(tracks: List<MediaItem>, selectedIndex: Int = 0, shuffle: Boolean = false) {
-        val entries = tracks.filter { it.id.isNotBlank() }.map { track ->
-            AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
-        }
+        val entries =
+            tracks
+                .filter { it.id.isNotBlank() }
+                .map { track ->
+                    AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
+                }
         if (entries.isEmpty()) return
         val selectedEntry = entries.getOrNull(selectedIndex.coerceIn(0, entries.lastIndex))
         val ordered = if (shuffle) entries.shuffled() else entries
@@ -60,9 +67,12 @@ class AudioPlayerCoordinator(
     }
 
     fun addToQueue(tracks: List<MediaItem>) {
-        val entries = tracks.filter { it.id.isNotBlank() }.map { track ->
-            AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
-        }
+        val entries =
+            tracks
+                .filter { it.id.isNotBlank() }
+                .map { track ->
+                    AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
+                }
         if (entries.isEmpty()) return
         val snapshot =
             AudioQueueSnapshot(
@@ -106,13 +116,16 @@ class AudioPlayerCoordinator(
         }
     }
 
-    fun toggleShuffle() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_SHUFFLE)
+    fun toggleShuffle() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_SHUFFLE)
 
-    fun toggleRepeat() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_REPEAT)
+    fun toggleRepeat() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_REPEAT)
 
-    fun setVolume(value: Float) = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SET_VOLUME) {
-        putExtra(AudioServiceBridge.EXTRA_VOLUME, value.coerceIn(0f, 1f))
-    }
+    fun setVolume(value: Float) =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SET_VOLUME) {
+            putExtra(AudioServiceBridge.EXTRA_VOLUME, value.coerceIn(0f, 1f))
+        }
 
     fun toggleMute() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_MUTE)
 
@@ -124,18 +137,21 @@ class AudioPlayerCoordinator(
             }
     }
 
-    fun removeQueueEntry(entryId: String) = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_REMOVE_QUEUE) {
-        putExtra(AudioServiceBridge.EXTRA_ENTRY_ID, entryId)
-    }
+    fun removeQueueEntry(entryId: String) =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_REMOVE_QUEUE) {
+            putExtra(AudioServiceBridge.EXTRA_ENTRY_ID, entryId)
+        }
 
-    fun reorderQueue(from: Int, to: Int) = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_REORDER_QUEUE) {
-        putExtra(AudioServiceBridge.EXTRA_FROM, from)
-        putExtra(AudioServiceBridge.EXTRA_TO, to)
-    }
+    fun reorderQueue(from: Int, to: Int) =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_REORDER_QUEUE) {
+            putExtra(AudioServiceBridge.EXTRA_FROM, from)
+            putExtra(AudioServiceBridge.EXTRA_TO, to)
+        }
 
     fun clearQueue() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_CLEAR_QUEUE)
 
-    fun pauseForVideo() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO)
+    fun pauseForVideo() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO)
 
     fun updateFavorite(itemId: String, favorite: Boolean) =
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_UPDATE_FAVORITE) {
@@ -143,7 +159,8 @@ class AudioPlayerCoordinator(
             putExtra(AudioServiceBridge.EXTRA_FAVORITE, favorite)
         }
 
-    fun stopAndClear() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_CLEAR_QUEUE)
+    fun stopAndClear() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_CLEAR_QUEUE)
 
     fun release() {
         mediaController?.release()

@@ -46,7 +46,11 @@ object AudioServiceBridge {
         _state.value = value
     }
 
-    fun start(context: Context, action: String = ACTION_RESTORE, snapshot: AudioQueueSnapshot? = null) {
+    fun start(
+        context: Context,
+        action: String = ACTION_RESTORE,
+        snapshot: AudioQueueSnapshot? = null,
+    ) {
         val intent = Intent(context, AudioPlaybackService::class.java).setAction(action)
         snapshot?.let { intent.putExtra(EXTRA_SNAPSHOT, it.toJson().toString()) }
         ContextCompat.startForegroundService(context.applicationContext, intent)

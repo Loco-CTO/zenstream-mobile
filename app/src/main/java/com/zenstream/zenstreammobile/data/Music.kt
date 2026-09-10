@@ -5,9 +5,8 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import java.util.Locale
 
 /**
- * The mobile equivalent of the web music credit normalizer. Credits remain
- * atomic and ordered: a joined display artist is never invented when the
- * server supplied distinct credit boundaries.
+ * The mobile equivalent of the web music credit normalizer. Credits remain atomic and ordered: a
+ * joined display artist is never invented when the server supplied distinct credit boundaries.
  */
 fun normalizeArtistCredits(vararg sources: List<ArtistCredit>?): List<ArtistCredit> {
     val credits = mutableListOf<ArtistCredit>()
@@ -57,9 +56,11 @@ fun artistCreditSeparator(credits: List<ArtistCredit>, index: Int): String {
 }
 
 fun formatArtistCredits(credits: List<ArtistCredit>): String =
-    credits.mapIndexed { index, credit ->
-        "${credit.name}${artistCreditSeparator(credits, index)}"
-    }.joinToString("")
+    credits
+        .mapIndexed { index, credit ->
+            "${credit.name}${artistCreditSeparator(credits, index)}"
+        }
+        .joinToString("")
 
 fun artistCreditsForTrack(track: MediaItem): List<ArtistCredit> {
     val sourceCredits =
@@ -94,13 +95,14 @@ fun artistCreditsForAlbum(
 ): List<ArtistCredit> {
     val credits =
         if (album.artistCredits.isNotEmpty()) {
-            normalizeArtistCredits(album.artistCredits)
-        } else {
-            normalizeArtistCredits(
-                album.artists.map { ArtistCredit(name = it) },
-                album.contributingArtists.map { ArtistCredit(name = it) },
-            )
-        }.toMutableList()
+                normalizeArtistCredits(album.artistCredits)
+            } else {
+                normalizeArtistCredits(
+                    album.artists.map { ArtistCredit(name = it) },
+                    album.contributingArtists.map { ArtistCredit(name = it) },
+                )
+            }
+            .toMutableList()
     val primaryName = (primaryArtist?.name ?: album.albumArtist)?.trim()?.lowercase(Locale.ROOT)
     val primaryId = primaryArtist?.id ?: album.artistId
     val primaryIndex =
@@ -108,8 +110,9 @@ fun artistCreditsForAlbum(
             credits.indexOfFirst { it.name.trim().lowercase(Locale.ROOT) == name }
         } ?: -1
     if (credits.isEmpty()) {
-        val fallbackName = primaryArtist?.name?.trim()?.takeIf(String::isNotEmpty)
-            ?: album.albumArtist?.trim()?.takeIf(String::isNotEmpty)
+        val fallbackName =
+            primaryArtist?.name?.trim()?.takeIf(String::isNotEmpty)
+                ?: album.albumArtist?.trim()?.takeIf(String::isNotEmpty)
         return fallbackName?.let { listOf(ArtistCredit(primaryId, it)) }.orEmpty()
     }
     return credits.mapIndexed { index, credit ->

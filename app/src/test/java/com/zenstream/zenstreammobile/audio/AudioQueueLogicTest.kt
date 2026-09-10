@@ -4,10 +4,10 @@ import com.zenstream.zenstreammobile.model.AudioPlayerState
 import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.MediaItem
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import kotlin.random.Random
 
 class AudioQueueLogicTest {
     private val queue =

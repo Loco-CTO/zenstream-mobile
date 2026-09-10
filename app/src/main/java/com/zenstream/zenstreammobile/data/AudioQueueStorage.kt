@@ -28,8 +28,11 @@ internal fun AudioQueueSnapshot.toJson(): JSONObject =
                     put(
                         JSONObject()
                             .put("entryId", entry.entryId.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
-                            .put("playbackInstanceId", entry.playbackInstanceId?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
-                            .put("track", entry.track.toAudioQueueJson()),
+                            .put(
+                                "playbackInstanceId",
+                                entry.playbackInstanceId?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
+                            )
+                            .put("track", entry.track.toAudioQueueJson())
                     )
                 }
             },
@@ -51,48 +54,58 @@ private fun MediaItem.toAudioQueueJson(): JSONObject =
         .put("albumArtist", albumArtist?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
         .put("albumType", albumType?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
         .put("artists", JSONArray(artists.take(32).map { it.take(AUDIO_QUEUE_MAX_TEXT_LENGTH) }))
-        .put("artistCredits", JSONArray().apply {
-            artistCredits.forEach { credit ->
-                put(
-                    JSONObject()
-                        .put("id", credit.id?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
-                        .put("name", credit.name.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
-                        .put("joinPhrase", credit.joinPhrase?.take(128)),
-                )
-            }
-        })
+        .put(
+            "artistCredits",
+            JSONArray().apply {
+                artistCredits.forEach { credit ->
+                    put(
+                        JSONObject()
+                            .put("id", credit.id?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
+                            .put("name", credit.name.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
+                            .put("joinPhrase", credit.joinPhrase?.take(128))
+                    )
+                }
+            },
+        )
         .put("discNumber", discNumber)
         .put("trackNumber", trackNumber)
         .put("durationSeconds", durationSeconds)
 
 internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? {
     if (value.optInt("schemaVersion", -1) != AUDIO_QUEUE_SCHEMA_VERSION) return null
-    val serverUrl = value.optString("serverUrl").take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
-        .takeIf(String::isNotBlank) ?: return null
-    val userId = value.optString("userId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
-        .takeIf(String::isNotBlank) ?: return null
-    val normalizedServerUrl = runCatching { normalizeServerUrl(serverUrl) }.getOrNull() ?: return null
+    val serverUrl =
+        value.optString("serverUrl").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf(String::isNotBlank)
+            ?: return null
+    val userId =
+        value.optString("userId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf(String::isNotBlank)
+            ?: return null
+    val normalizedServerUrl =
+        runCatching { normalizeServerUrl(serverUrl) }.getOrNull() ?: return null
     val entries =
-        value.optJSONArray("entries")?.let { array ->
-            val ids = mutableSetOf<String>()
-            List(minOf(array.length(), AUDIO_QUEUE_MAX_ENTRIES)) { index ->
-                    val raw = array.optJSONObject(index) ?: return@List null
-                    val entryId = raw.optString("entryId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf(String::isNotBlank)
-                        ?: return@List null
-                    if (!ids.add(entryId)) return@List null
-                    val track = audioQueueTrackFromJson(raw.optJSONObject("track"))
-                        ?: return@List null
-                    AudioQueueEntry(
-                        entryId = entryId,
-                        track = track,
-                        playbackInstanceId =
-                            raw.optString("playbackInstanceId")
+        value
+            .optJSONArray("entries")
+            ?.let { array ->
+                val ids = mutableSetOf<String>()
+                List(minOf(array.length(), AUDIO_QUEUE_MAX_ENTRIES)) { index ->
+                        val raw = array.optJSONObject(index) ?: return@List null
+                        val entryId =
+                            raw.optString("entryId")
                                 .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
-                                .ifBlank { null },
-                    )
-                }
-                .filterNotNull()
-        }
+                                .takeIf(String::isNotBlank) ?: return@List null
+                        if (!ids.add(entryId)) return@List null
+                        val track =
+                            audioQueueTrackFromJson(raw.optJSONObject("track")) ?: return@List null
+                        AudioQueueEntry(
+                            entryId = entryId,
+                            track = track,
+                            playbackInstanceId =
+                                raw.optString("playbackInstanceId")
+                                    .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+                                    .ifBlank { null },
+                        )
+                    }
+                    .filterNotNull()
+            }
             .orEmpty()
     if (entries.isEmpty()) return null
     val repeatMode =
@@ -104,8 +117,11 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
         userId = userId,
         entries = entries,
         currentIndex = value.optInt("currentIndex", 0).coerceIn(0, entries.lastIndex),
-        positionSeconds = value.optDouble("positionSeconds", 0.0).takeIf(Double::isFinite)
-            ?.coerceIn(0.0, AUDIO_QUEUE_MAX_POSITION_SECONDS) ?: 0.0,
+        positionSeconds =
+            value
+                .optDouble("positionSeconds", 0.0)
+                .takeIf(Double::isFinite)
+                ?.coerceIn(0.0, AUDIO_QUEUE_MAX_POSITION_SECONDS) ?: 0.0,
         shuffle = value.optBoolean("shuffle", false),
         repeatMode = repeatMode,
         updatedAt = value.optLong("updatedAt", 0L).coerceAtLeast(0L),
@@ -114,22 +130,42 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
 
 private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
     value ?: return null
-    val id = value.optString("id").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf(String::isNotBlank) ?: return null
+    val id =
+        value.optString("id").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf(String::isNotBlank)
+            ?: return null
     val name = value.optString("name").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { "Untitled" }
-    val artists = value.optJSONArray("artists")?.let { array ->
-        List(minOf(array.length(), 32)) { array.optString(it).take(AUDIO_QUEUE_MAX_TEXT_LENGTH) }
-            .filter(String::isNotBlank)
-    }.orEmpty()
-    val credits = value.optJSONArray("artistCredits")?.let { array ->
-        List(array.length()) { index ->
-            val credit = array.optJSONObject(index) ?: return@List null
-            ArtistCredit(
-                id = credit.optString("id").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
-                name = credit.optString("name").take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
-                joinPhrase = if (credit.has("joinPhrase")) credit.optString("joinPhrase").take(128) else null,
-            )
-        }.filterNotNull().filter { it.name.isNotBlank() }
-    }.orEmpty()
+    val artists =
+        value
+            .optJSONArray("artists")
+            ?.let { array ->
+                List(minOf(array.length(), 32)) {
+                        array.optString(it).take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+                    }
+                    .filter(String::isNotBlank)
+            }
+            .orEmpty()
+    val credits =
+        value
+            .optJSONArray("artistCredits")
+            ?.let { array ->
+                List(array.length()) { index ->
+                        val credit = array.optJSONObject(index) ?: return@List null
+                        ArtistCredit(
+                            id =
+                                credit.optString("id").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank {
+                                    null
+                                },
+                            name = credit.optString("name").take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
+                            joinPhrase =
+                                if (credit.has("joinPhrase"))
+                                    credit.optString("joinPhrase").take(128)
+                                else null,
+                        )
+                    }
+                    .filterNotNull()
+                    .filter { it.name.isNotBlank() }
+            }
+            .orEmpty()
     return MediaItem(
         id = id,
         name = name,
@@ -137,7 +173,8 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
         albumId = value.optString("albumId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
         artistId = value.optString("artistId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
         album = value.optString("album").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
-        albumArtist = value.optString("albumArtist").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
+        albumArtist =
+            value.optString("albumArtist").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
         albumType = value.optString("albumType").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
         artists = artists,
         artistCredits = credits,
