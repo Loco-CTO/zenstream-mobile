@@ -299,8 +299,12 @@ class CatalogApiTest {
 
         assertEquals("media3", capabilities.engine)
         assertTrue("mkv" in capabilities.containers)
+        assertTrue("mp3" in capabilities.containers)
+        assertTrue("flac" in capabilities.containers)
+        assertTrue("wav" in capabilities.containers)
         assertTrue("h265" in capabilities.videoCodecs)
         assertTrue("eac3" in capabilities.audioCodecs)
+        assertTrue("pcm_s16le" in capabilities.audioCodecs)
     }
 
     @Test
