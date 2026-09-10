@@ -382,7 +382,9 @@ private fun MainScaffold(
             }
         },
         bottomBar = {
-            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+            // Keep the slot around the mini-player transparent. The navigation bar owns its
+            // own surface, while detail routes should not paint a solid block beneath audio.
+            Column(Modifier.fillMaxWidth()) {
                 if (audioState.currentEntry != null && currentRoute != NOW_PLAYING) {
                     AudioMiniPlayer(
                         state = audioState,
@@ -595,7 +597,10 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         itemId = itemId,
-                        outerPadding = padding,
+                        // DetailScreen owns its Material top app bar and therefore
+                        // applies the status-bar inset itself. Only carry the
+                        // root mini-player/navigation slot into the detail route.
+                        outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                         onBack = { navController.popBackStack() },
                         onOpenItem = { item -> navigateToDetail(navController, item.id) },
                         onPlay = { item, tracks ->

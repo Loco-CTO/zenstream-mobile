@@ -87,68 +87,70 @@ fun AudioMiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val entry = state.currentEntry ?: return
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-            .clickable(onClick = onOpenNowPlaying),
-        shape = RoundedCornerShape(14.dp),
-        color = musicBackdropColor(entry.track).copy(alpha = .9f),
-        tonalElevation = 4.dp,
-    ) {
-        Column {
-            LinearProgressIndicator(
-                progress = {
-                    if (state.durationSeconds > 0) {
-                        (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(0f, 1f)
-                    } else 0f
-                },
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = .2f),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                MusicArtwork(
-                    entry.track,
-                    session,
-                    modifier = Modifier.size(46.dp),
-                    contentDescription = entry.track.name,
-                    requestedSize = 256,
+    Box(modifier = modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+                .clickable(onClick = onOpenNowPlaying),
+            shape = RoundedCornerShape(14.dp),
+            color = musicBackdropColor(entry.track).copy(alpha = .62f),
+            tonalElevation = 0.dp,
+        ) {
+            Column {
+                LinearProgressIndicator(
+                    progress = {
+                        if (state.durationSeconds > 0) {
+                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(0f, 1f)
+                        } else 0f
+                    },
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = .2f),
                 )
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        entry.track.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyMedium,
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    MusicArtwork(
+                        entry.track,
+                        session,
+                        modifier = Modifier.size(46.dp),
+                        contentDescription = entry.track.name,
+                        requestedSize = 256,
                     )
-                    Text(
-                        entry.track.albumArtist ?: entry.track.artists.firstOrNull() ?: "Unknown artist",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = { onFavorite(entry.track) }, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_heart),
-                        contentDescription = if (entry.track.favorite) "Remove favorite" else "Add favorite",
-                        tint = if (entry.track.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        painterResource(if (state.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
-                        contentDescription = if (state.isPlaying) "Pause" else "Play",
-                    )
-                }
-                IconButton(onClick = coordinator::next, modifier = Modifier.size(40.dp)) {
-                    Icon(painterResource(LucideR.drawable.lucide_ic_skip_forward), contentDescription = "Next track")
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            entry.track.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            entry.track.albumArtist ?: entry.track.artists.firstOrNull() ?: "Unknown artist",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { onFavorite(entry.track) }, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_heart),
+                            contentDescription = if (entry.track.favorite) "Remove favorite" else "Add favorite",
+                            tint = if (entry.track.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            painterResource(if (state.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
+                            contentDescription = if (state.isPlaying) "Pause" else "Play",
+                        )
+                    }
+                    IconButton(onClick = coordinator::next, modifier = Modifier.size(40.dp)) {
+                        Icon(painterResource(LucideR.drawable.lucide_ic_skip_forward), contentDescription = "Next track")
+                    }
                 }
             }
         }
