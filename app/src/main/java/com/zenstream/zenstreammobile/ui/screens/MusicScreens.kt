@@ -3,6 +3,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,10 +24,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +67,7 @@ import com.zenstream.zenstreammobile.ui.MusicAlbumViewModel
 import com.zenstream.zenstreammobile.ui.MusicArtistViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.AudioTrackRow
+import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.MusicArtistCard
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
@@ -254,24 +257,26 @@ private fun AlbumHeader(
     val year = album.releaseDate?.take(4)?.takeIf { it.length == 4 } ?: album.productionYear?.toString()
     val uniqueTracks = data.tracks.distinctBy { it.id }
     val duration = uniqueTracks.sumOf { it.durationSeconds ?: 0.0 }
-    val accent = remember(album.id, album.imageBlurHashes["Primary"]) { musicAccentColor(album) }
+    val palette = remember(album.id, album.imageBlurHashes["Primary"]) { musicArtworkPalette(album) }
+    val accent = palette.accent
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().height(360.dp),
+            modifier = Modifier.fillMaxWidth().height(304.dp),
             contentAlignment = Alignment.Center,
         ) {
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
                         listOf(
-                            accent.copy(alpha = .62f),
-                            MaterialTheme.colorScheme.background.copy(alpha = .88f),
+                            palette.background.copy(alpha = .92f),
+                            palette.surface.copy(alpha = .62f),
+                            MaterialTheme.colorScheme.background,
                             MaterialTheme.colorScheme.background,
                         ),
                     ),
                 ),
             )
-            val artworkSize = minOf(maxWidth - 64.dp, 264.dp).coerceAtLeast(204.dp)
+            val artworkSize = minOf(maxWidth - 64.dp, 240.dp).coerceAtLeast(200.dp)
             Surface(
                 modifier = Modifier.size(artworkSize),
                 shape = RoundedCornerShape(18.dp),
@@ -303,7 +308,13 @@ private fun AlbumHeader(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },
             )
-            MusicCreditLine(album, data.artist, onArtistClick, modifier = Modifier.fillMaxWidth())
+            MusicCreditLine(
+                album,
+                data.artist,
+                onArtistClick,
+                modifier = Modifier.fillMaxWidth(),
+                accentColor = accent,
+            )
             Text(
                 listOfNotNull(
                         year,
@@ -318,7 +329,12 @@ private fun AlbumHeader(
             if (album.genres.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(album.genres.distinct().take(8), key = { it }) { genre ->
-                        AssistChip(onClick = {}, label = { Text(genre, maxLines = 1) })
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(genre, maxLines = 1) },
+                            colors = AssistChipDefaults.assistChipColors(labelColor = accent),
+                            border = BorderStroke(1.dp, accent.copy(alpha = .46f)),
+                        )
                     }
                 }
             }
@@ -333,38 +349,46 @@ private fun AlbumHeader(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
+                Button(
                     onClick = onPlay,
-                    modifier = Modifier.size(60.dp),
-                    shape = CircleShape,
-                    color = accent,
-                    contentColor = Color.Black,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = palette.onAccent,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
                 ) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_play),
                         contentDescription = "Play album",
-                        modifier = Modifier.size(27.dp),
+                        modifier = Modifier.size(20.dp),
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Play", maxLines = 1)
                 }
-                IconButton(
+                OutlinedButton(
                     onClick = onShuffle,
-                    modifier = Modifier.size(52.dp),
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                    border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
                 ) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_shuffle),
                         contentDescription = "Shuffle album",
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp),
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Shuffle", maxLines = 1)
                 }
-                Spacer(Modifier.weight(1f))
                 IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_heart),
                         contentDescription = if (album.favorite) "Remove favorite" else "Add favorite",
-                        tint = if (album.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (album.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
@@ -472,7 +496,8 @@ private fun ArtistContent(
     val artist = data.artist
     val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
     val albums = remember(data.albums) { data.albums.distinctBy { it.id } }
-    val accent = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicAccentColor(artist) }
+    val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
+    val accent = palette.accent
     val listState = rememberLazyListState()
     ObserveScrollability(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
@@ -487,14 +512,15 @@ private fun ArtistContent(
         item(key = "artist-header") {
             Column(Modifier.fillMaxWidth()) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(252.dp),
+                    modifier = Modifier.fillMaxWidth().height(238.dp),
                 ) {
                     Box(
                         Modifier.fillMaxSize().background(
                             Brush.verticalGradient(
                                 listOf(
-                                    accent.copy(alpha = .7f),
-                                    MaterialTheme.colorScheme.background.copy(alpha = .82f),
+                                    palette.background.copy(alpha = .92f),
+                                    palette.surface.copy(alpha = .58f),
+                                    MaterialTheme.colorScheme.background,
                                     MaterialTheme.colorScheme.background,
                                 ),
                             ),
@@ -503,7 +529,7 @@ private fun ArtistContent(
                     MusicArtwork(
                         artist,
                         session,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(216.dp).clip(RoundedCornerShape(22.dp)),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(204.dp).clip(RoundedCornerShape(22.dp)),
                         contentDescription = artist.name,
                         requestedSize = 560,
                         shape = RoundedCornerShape(22.dp),
@@ -526,6 +552,41 @@ private fun ArtistContent(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Button(
+                            onClick = onPlayAll,
+                            enabled = !tracksLoading,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accent,
+                                contentColor = palette.onAccent,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                        ) {
+                            if (tracksLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(19.dp),
+                                    strokeWidth = 2.dp,
+                                    color = palette.onAccent,
+                                )
+                            } else {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_play),
+                                    contentDescription = "Play all artist tracks",
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(7.dp))
+                                Text("Play all", maxLines = 1)
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = onFollow,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                            border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                        ) {
+                            Text(if (artist.following == true) "Following" else "Follow", maxLines = 1)
+                        }
                         IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_heart),
@@ -533,38 +594,12 @@ private fun ArtistContent(
                                 tint = if (artist.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        OutlinedButton(onClick = onFollow, modifier = Modifier.height(44.dp)) {
-                            Text(if (artist.following == true) "Following" else "Follow")
-                        }
-                        Spacer(Modifier.weight(1f))
                         IconButton(onClick = onShuffleAll, enabled = !tracksLoading, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_shuffle),
                                 contentDescription = "Shuffle artist tracks",
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = if (!tracksLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-                        Surface(
-                            onClick = onPlayAll,
-                            enabled = !tracksLoading,
-                            modifier = Modifier.size(60.dp),
-                            shape = CircleShape,
-                            color = accent,
-                            contentColor = Color.Black,
-                        ) {
-                            if (tracksLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.padding(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color.Black,
-                                )
-                            } else {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_play),
-                                    contentDescription = "Play all artist tracks",
-                                    modifier = Modifier.padding(17.dp),
-                                )
-                            }
                         }
                     }
                     Text(
@@ -575,7 +610,12 @@ private fun ArtistContent(
                     if (artist.genres.isNotEmpty()) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(artist.genres.distinct().take(8), key = { it }) { genre ->
-                                AssistChip(onClick = {}, label = { Text(genre, maxLines = 1) })
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text(genre, maxLines = 1) },
+                                    colors = AssistChipDefaults.assistChipColors(labelColor = accent),
+                                    border = BorderStroke(1.dp, accent.copy(alpha = .46f)),
+                                )
                             }
                         }
                     }
@@ -708,12 +748,6 @@ private fun MusicSection(
             }
         }
     }
-}
-
-private fun musicAccentColor(item: MediaItem): Color {
-    val seed = item.imageBlurHashes["Primary"]?.takeIf(String::isNotBlank) ?: item.id
-    val hue = ((seed.hashCode() and Int.MAX_VALUE) % 360).toFloat()
-    return Color.hsv(hue, saturation = .42f, value = .58f)
 }
 
 @Composable

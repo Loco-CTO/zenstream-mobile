@@ -293,13 +293,15 @@ fun MusicCreditLine(
     primaryArtist: MediaItem? = null,
     onArtistClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     val credits = artistCreditsForAlbum(item, primaryArtist)
+    val linkColor = accentColor ?: MaterialTheme.colorScheme.primary
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
         credits.forEachIndexed { index, credit ->
             Text(
                 text = credit.name,
-                color = MaterialTheme.colorScheme.primary,
+                color = linkColor,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

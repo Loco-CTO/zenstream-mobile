@@ -1,9 +1,14 @@
 package com.zenstream.zenstreammobile.audio
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -26,6 +31,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.zenstream.zenstreammobile.MainActivity
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -98,6 +104,7 @@ class AudioPlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        startServiceForeground()
         sessionStore = SessionStore(applicationContext)
         repository = CatalogRepository(CatalogApi(), sessionStore)
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
@@ -827,7 +834,53 @@ class AudioPlaybackService : MediaLibraryService() {
         player.removeListener(playerListener)
         player.release()
         serviceScope.coroutineContext.cancel()
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
+    }
+
+    /**
+     * Restore is issued when the app starts, before there is necessarily a current
+     * MediaItem for Media3's own notification provider. Starting foreground work
+     * immediately prevents Android's foreground-service timeout from turning a
+     * normal cold start into an ANR. Media3 updates its session notification once
+     * the player has queue metadata.
+     */
+    private fun startServiceForeground() {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                AUDIO_NOTIFICATION_CHANNEL,
+                getString(R.string.app_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Audio playback controls"
+                setShowBadge(false)
+            },
+        )
+        val contentIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val notification =
+            NotificationCompat.Builder(this, AUDIO_NOTIFICATION_CHANNEL)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText("Audio player ready")
+                .setContentIntent(contentIntent)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+        ServiceCompat.startForeground(
+            this,
+            AUDIO_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+        )
     }
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
@@ -1125,6 +1178,8 @@ class AudioPlaybackService : MediaLibraryService() {
         private const val AUTO_PAGE_SIZE = 100
         private const val AUTO_MAX_ALBUMS = 1_000
         private const val AUTO_ARTIST_LIMIT = 100
+        private const val AUDIO_NOTIFICATION_CHANNEL = "audio_playback"
+        private const val AUDIO_NOTIFICATION_ID = 21_847
 
         private fun primaryArtist(item: CatalogMediaItem): String =
             item.artistCredits.firstOrNull()?.name

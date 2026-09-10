@@ -34,6 +34,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -72,8 +73,10 @@ import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
+import com.zenstream.zenstreammobile.ui.components.ArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
+import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -87,6 +90,9 @@ fun AudioMiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val entry = state.currentEntry ?: return
+    val palette = remember(entry.track.id, entry.track.imageBlurHashes["Primary"]) {
+        musicArtworkPalette(entry.track)
+    }
     Box(modifier = modifier.fillMaxWidth()) {
         Surface(
             modifier = Modifier
@@ -94,7 +100,7 @@ fun AudioMiniPlayer(
                 .padding(horizontal = 12.dp, vertical = 5.dp)
                 .clickable(onClick = onOpenNowPlaying),
             shape = RoundedCornerShape(14.dp),
-            color = musicBackdropColor(entry.track),
+            color = palette.surface,
             tonalElevation = 0.dp,
         ) {
             Column {
@@ -105,8 +111,8 @@ fun AudioMiniPlayer(
                         } else 0f
                     },
                     modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = .2f),
+                    color = palette.accent,
+                    trackColor = Color.White.copy(alpha = .16f),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
@@ -139,7 +145,7 @@ fun AudioMiniPlayer(
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_heart),
                             contentDescription = if (entry.track.favorite) "Remove favorite" else "Add favorite",
-                            tint = if (entry.track.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (entry.track.favorite) palette.accent else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(40.dp)) {
@@ -197,15 +203,16 @@ fun NowPlayingScreen(
         }
     }
 
-    val artworkAccent = remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
-        musicBackdropColor(current)
+    val artworkPalette = remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
+        current?.let(::musicArtworkPalette) ?: ArtworkPalette.fallback
     }
     Box(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(
                 listOf(
-                    artworkAccent.copy(alpha = .72f),
-                    MaterialTheme.colorScheme.background.copy(alpha = .97f),
+                    artworkPalette.background.copy(alpha = .96f),
+                    artworkPalette.surface.copy(alpha = .72f),
+                    MaterialTheme.colorScheme.background.copy(alpha = .98f),
                     MaterialTheme.colorScheme.background,
                 ),
             ),
@@ -278,6 +285,7 @@ fun NowPlayingScreen(
                             current = current,
                             session = session,
                             timerMode = timerMode,
+                            palette = artworkPalette,
                             onToggleTimer = {
                                 scope.launch { store.savePlaybackTimeDisplayMode(timerMode.toggled()) }
                             },
@@ -310,15 +318,23 @@ fun NowPlayingScreen(
                         }
                     }
                     item(key = "now-playing-tabs") {
-                        TabRow(selectedTabIndex = tab) {
+                        TabRow(
+                            selectedTabIndex = tab,
+                            containerColor = Color.Transparent,
+                            contentColor = artworkPalette.accent,
+                        ) {
                             Tab(
                                 selected = tab == 0,
                                 onClick = { tab = 0 },
+                                selectedContentColor = artworkPalette.accent,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 text = { Text("Queue · ${state.queue.size}") },
                             )
                             Tab(
                                 selected = tab == 1,
                                 onClick = { tab = 1 },
+                                selectedContentColor = artworkPalette.accent,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 text = { Text("Lyrics") },
                             )
                         }
@@ -349,18 +365,13 @@ fun NowPlayingScreen(
     }
 }
 
-private fun musicBackdropColor(item: MediaItem?): Color {
-    val seed = item?.imageBlurHashes?.get("Primary")?.takeIf(String::isNotBlank) ?: item?.id
-    val hue = ((seed?.hashCode() ?: 248) and Int.MAX_VALUE) % 360
-    return Color.hsv(hue.toFloat(), saturation = .38f, value = .42f)
-}
-
 @Composable
 private fun NowPlayingMain(
     state: AudioPlayerState,
     current: MediaItem,
     session: AuthSession,
     timerMode: PlaybackTimeDisplayMode,
+    palette: ArtworkPalette,
     onToggleTimer: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
@@ -369,10 +380,10 @@ private fun NowPlayingMain(
     onOpenQueue: () -> Unit,
     onOpenLyrics: () -> Unit,
 ) {
-    val accent = musicBackdropColor(current)
+    val accent = palette.accent
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            val artSize = maxWidth.coerceAtMost(360.dp).coerceAtLeast(210.dp)
+            val artSize = maxWidth.coerceAtMost(320.dp).coerceAtLeast(220.dp)
             Surface(
                 modifier = Modifier.size(artSize),
                 shape = RoundedCornerShape(18.dp),
@@ -418,6 +429,11 @@ private fun NowPlayingMain(
             onValueChange = { coordinator.seekTo(it.toLong()) },
             valueRange = 0f..state.durationSeconds.coerceAtLeast(1L).toFloat(),
             modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = accent,
+                activeTrackColor = accent,
+                inactiveTrackColor = Color.White.copy(alpha = .20f),
+            ),
         )
         Row(
             Modifier.fillMaxWidth().clickable(onClick = onToggleTimer),
@@ -454,19 +470,19 @@ private fun NowPlayingMain(
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_shuffle),
                     contentDescription = if (state.shuffle) "Turn off shuffle" else "Turn on shuffle",
-                    tint = if (state.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (state.shuffle) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = coordinator::previous, modifier = Modifier.size(52.dp)) {
                 Icon(painterResource(LucideR.drawable.lucide_ic_skip_back), contentDescription = "Previous track")
             }
             IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(76.dp)) {
-                Surface(shape = CircleShape, color = accent) {
+                Surface(shape = CircleShape, color = accent, contentColor = palette.onAccent) {
                     Icon(
                         painterResource(if (state.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
                         modifier = Modifier.padding(22.dp),
-                        tint = Color.Black,
+                        tint = palette.onAccent,
                     )
                 }
             }
@@ -484,7 +500,7 @@ private fun NowPlayingMain(
                         AudioRepeatMode.Queue -> "Repeat queue"
                         AudioRepeatMode.Track -> "Repeat track"
                     },
-                    tint = if (state.repeatMode != AudioRepeatMode.Off) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (state.repeatMode != AudioRepeatMode.Off) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -518,7 +534,7 @@ private fun NowPlayingMain(
                 Icon(
                     painterResource(if (state.muted) LucideR.drawable.lucide_ic_volume_x else LucideR.drawable.lucide_ic_volume_2),
                     contentDescription = if (state.muted) "Unmute" else "Mute",
-                    tint = if (state.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (state.muted) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
