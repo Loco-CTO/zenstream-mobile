@@ -1,3 +1,5 @@
+@file:Suppress("UnsafeOptInUsageError")
+
 package com.zenstream.zenstreammobile.ui.navigation
 
 import android.app.Activity
@@ -32,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,8 +70,10 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.mediaItemId
@@ -80,12 +85,17 @@ import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
+import com.zenstream.zenstreammobile.ui.screens.AudioMiniPlayer
+import com.zenstream.zenstreammobile.ui.screens.MusicAlbumScreen
+import com.zenstream.zenstreammobile.ui.screens.MusicArtistScreen
+import com.zenstream.zenstreammobile.ui.screens.NowPlayingScreen
 import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
 import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
 import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
+import com.zenstream.zenstreammobile.ui.screens.NotificationDestination
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
@@ -99,6 +109,9 @@ private const val FAVORITES = "favorites"
 private const val MYPAGE = "my-page"
 private const val NOTIFICATIONS = "notifications"
 private const val DETAIL = "detail/{itemId}"
+private const val ALBUM = "album/{albumId}?trackId={trackId}"
+private const val ARTIST = "artist/{artistId}"
+private const val NOW_PLAYING = "now-playing"
 
 internal fun shouldShowMainSearchAction(route: String): Boolean =
     route == HOME || route == FAVORITES || route == LIBRARY
@@ -208,6 +221,12 @@ private fun MainScaffold(
     avatarPickerResult: Uri?,
     onAvatarPickerResultConsumed: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val audio = remember(session.token) { AudioPlayerCoordinator(context, session) }
+    val audioState by audio.state.collectAsStateWithLifecycle()
+    DisposableEffect(audio) {
+        onDispose { audio.release() }
+    }
     val syncplay = remember(session.token) { repository.syncplayManager(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val notificationsViewModel: NotificationsViewModel =
@@ -218,6 +237,23 @@ private fun MainScaffold(
     val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
     val toast = rememberToastHostState()
     val scope = rememberCoroutineScope()
+    val onAudioFavorite: (MediaItem) -> Unit = { item ->
+        val favorite = !item.favorite
+        audio.updateFavorite(item.id, favorite)
+        scope.launch {
+            try {
+                repository.setFavorite(session, item.id, favorite)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                audio.updateFavorite(item.id, !favorite)
+                throw error
+            } catch (error: Throwable) {
+                if (error is com.zenstream.zenstreammobile.data.CatalogException && error.statusCode == 401) {
+                    repository.clearSessionIfCurrent(session)
+                }
+                audio.updateFavorite(item.id, !favorite)
+            }
+        }
+    }
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = routeName(backStackEntry?.destination?.route) ?: HOME
@@ -228,7 +264,6 @@ private fun MainScaffold(
             currentRoute
         }
     val density = LocalDensity.current
-    val context = LocalContext.current
     var followedGeneration by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(
         syncplayState.active?.id,
@@ -310,7 +345,14 @@ private fun MainScaffold(
     }
     LaunchedEffect(session.token) { notificationsViewModel.refresh() }
 
-    val detailRoute = mainRoute == DETAIL.substringBefore("/")
+    val detailRoute =
+        mainRoute in
+            setOf(
+                DETAIL.substringBefore("/"),
+                ALBUM.substringBefore("/"),
+                ARTIST.substringBefore("/"),
+                NOW_PLAYING,
+            )
     val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
 
     androidx.compose.material3.Scaffold(
@@ -339,29 +381,45 @@ private fun MainScaffold(
             }
         },
         bottomBar = {
-            if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
-                // Keep the system navigation-control surface mounted while the
-                // menu items animate. This prevents content from showing through
-                // the Android control strip during the transition.
-                ChromeVisibilitySlot(
-                    visibilityFraction =
-                        if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
-                        else bottomBarVisibilityFraction,
-                    modifier =
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
-                    collapseFromBottom = true,
-                    applyNavigationBarsPadding = true,
-                ) {
-                    MainNavigationBar(
-                        currentRoute = mainRoute,
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+                if (audioState.currentEntry != null && currentRoute != NOW_PLAYING) {
+                    AudioMiniPlayer(
+                        state = audioState,
                         session = session,
-                        onDestinationClick = { route ->
-                            if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
-                                myPageNavigationResetKey += 1
-                            }
-                            navigateToMainDestination(navController, route)
-                        },
+                        coordinator = audio,
+                        modifier =
+                            if (detailRoute || mainRoute == NOTIFICATIONS || currentRoute == SEARCH) {
+                                Modifier.navigationBarsPadding()
+                            } else {
+                                Modifier
+                            },
+                        onOpenNowPlaying = { navController.navigate(NOW_PLAYING) { launchSingleTop = true } },
+                        onFavorite = onAudioFavorite,
                     )
+                }
+                if (!detailRoute && mainRoute != NOTIFICATIONS && currentRoute != SEARCH) {
+                    // Keep the system navigation-control surface mounted while the
+                    // menu items animate. This prevents content from showing through
+                    // the Android control strip during the transition.
+                    ChromeVisibilitySlot(
+                        visibilityFraction =
+                            if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
+                            else bottomBarVisibilityFraction,
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                        collapseFromBottom = true,
+                        applyNavigationBarsPadding = true,
+                    ) {
+                        MainNavigationBar(
+                            currentRoute = mainRoute,
+                            session = session,
+                            onDestinationClick = { route ->
+                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                    myPageNavigationResetKey += 1
+                                }
+                                navigateToMainDestination(navController, route)
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -378,7 +436,7 @@ private fun MainScaffold(
                         repository,
                         session,
                         padding,
-                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onItemClick = { item -> navigateToMedia(navController, item) },
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
@@ -404,7 +462,7 @@ private fun MainScaffold(
                         },
                         onDismiss = { navController.popBackStack() },
                         onItemClick = { item ->
-                            navigateToDetail(navController, item.id)
+                            navigateToMedia(navController, item)
                         },
                     )
                 }
@@ -413,7 +471,7 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         padding = padding,
-                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onItemClick = { item -> navigateToMedia(navController, item) },
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
@@ -422,7 +480,7 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         padding = padding,
-                        onItemClick = { item -> navigateToDetail(navController, item.id) },
+                        onItemClick = { item -> navigateToMedia(navController, item) },
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
                 }
@@ -430,7 +488,10 @@ private fun MainScaffold(
                     MyPageScreen(
                         repository = repository,
                         session = session,
-                        onLogout = onLogout,
+                        onLogout = {
+                            audio.stopAndClear()
+                            onLogout()
+                        },
                         onPasswordChanged = onPasswordChanged,
                         outerPadding = padding,
                         onPickAvatar = onPickAvatar,
@@ -448,8 +509,75 @@ private fun MainScaffold(
                     NotificationsScreen(
                         repository = repository,
                         session = session,
+                        outerPadding = padding,
                         onBack = { navController.popBackStack() },
-                        onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
+                        onOpenDestination = { destination ->
+                            when (destination) {
+                                is NotificationDestination.Album ->
+                                    navigateToAlbum(navController, destination.albumId)
+                                is NotificationDestination.Video ->
+                                    navigateToDetail(navController, destination.itemId)
+                            }
+                        },
+                    )
+                }
+                composable(
+                    ALBUM,
+                    arguments =
+                        listOf(
+                            navArgument("albumId") { type = NavType.StringType },
+                            navArgument("trackId") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) { entry ->
+                    val albumId = Uri.decode(entry.arguments?.getString("albumId").orEmpty())
+                    val trackId = entry.arguments?.getString("trackId")?.let(Uri::decode)
+                    MusicAlbumScreen(
+                        repository = repository,
+                        session = session,
+                        albumId = albumId,
+                        selectedTrackId = trackId,
+                        currentTrackId = audioState.currentEntry?.track?.id,
+                        outerPadding = padding,
+                        onBack = { navController.popBackStack() },
+                        onOpenArtist = { artistId -> navigateToArtist(navController, artistId) },
+                        onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
+                        onPlayTracks = { tracks, index, shuffle -> audio.playTracks(tracks, index, shuffle) },
+                        onAddToQueue = audio::addToQueue,
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
+                }
+                composable(
+                    ARTIST,
+                    arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
+                ) { entry ->
+                    val artistId = Uri.decode(entry.arguments?.getString("artistId").orEmpty())
+                    MusicArtistScreen(
+                        repository = repository,
+                        session = session,
+                        artistId = artistId,
+                        outerPadding = padding,
+                        currentTrackId = audioState.currentEntry?.track?.id,
+                        onBack = { navController.popBackStack() },
+                        onOpenArtist = { relatedId -> navigateToArtist(navController, relatedId) },
+                        onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
+                        onPlayTracks = { tracks, index, shuffle -> audio.playTracks(tracks, index, shuffle) },
+                        onAddToQueue = audio::addToQueue,
+                        onScrollabilityChanged = onContentScrollabilityChanged,
+                    )
+                }
+                composable(NOW_PLAYING) {
+                    NowPlayingScreen(
+                        repository = repository,
+                        session = session,
+                        coordinator = audio,
+                        onBack = { navController.popBackStack() },
+                        onOpenAlbum = { albumId -> navigateToAlbum(navController, albumId) },
+                        onOpenArtist = { artistId -> navigateToArtist(navController, artistId) },
+                        onFavorite = onAudioFavorite,
                     )
                 }
                 composable(
@@ -461,11 +589,12 @@ private fun MainScaffold(
                         repository = repository,
                         session = session,
                         itemId = itemId,
-                        outerPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                        outerPadding = padding,
                         onBack = { navController.popBackStack() },
                         onOpenItem = { item -> navigateToDetail(navController, item.id) },
                         onPlay = { item, tracks ->
                             scope.launch {
+                                audio.pauseForVideo()
                                 val active = syncplay.state.value.active
                                 if (
                                     active == null ||
@@ -501,6 +630,27 @@ private fun MainScaffold(
 private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
     navController.navigate("detail/${Uri.encode(itemId)}") {
         launchSingleTop = true
+    }
+}
+
+private fun navigateToAlbum(navController: androidx.navigation.NavHostController, albumId: String, trackId: String? = null) {
+    val route = "album/${Uri.encode(albumId)}" + (trackId?.let { "?trackId=${Uri.encode(it)}" } ?: "")
+    navController.navigate(route) { launchSingleTop = true }
+}
+
+private fun navigateToArtist(navController: androidx.navigation.NavHostController, artistId: String) {
+    navController.navigate("artist/${Uri.encode(artistId)}") { launchSingleTop = true }
+}
+
+private fun navigateToMedia(navController: androidx.navigation.NavHostController, item: MediaItem) {
+    when (item.type) {
+        "MusicArtist" -> item.id.takeIf(String::isNotBlank)?.let { navigateToArtist(navController, it) }
+        "MusicAlbum" -> item.id.takeIf(String::isNotBlank)?.let { navigateToAlbum(navController, it) }
+        "Audio" -> {
+            val albumId = item.albumId
+            if (!albumId.isNullOrBlank()) navigateToAlbum(navController, albumId, item.id)
+        }
+        else -> navigateToDetail(navController, item.id)
     }
 }
 

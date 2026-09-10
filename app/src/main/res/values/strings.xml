@@ -60,6 +60,10 @@
     <string name="favorite_episodes">Favorite Episodes</string>
     <string name="favorite_movies">Favorite Movies</string>
     <string name="favorite_series">Favorite Series</string>
+    <string name="favorite_artists">Favorite Artists</string>
+    <string name="favorite_albums">Favorite Albums</string>
+    <string name="favorite_tracks">Favorite Tracks</string>
+    <string name="favorite_music">Favorite Music</string>
     <string name="favorite_item_count">%1$d favorites</string>
     <string name="no_favorites">You have no favorites yet.</string>
     <string name="no_favorites_hint">Add titles to favorites to see them here.</string>
@@ -79,6 +83,7 @@
     <string name="sort_last_added">Last added</string>
     <string name="sort_release_date">Release date</string>
     <string name="sort_runtime">Runtime</string>
+    <string name="sort_year">Year</string>
     <string name="rating_description">Rating for %1$s</string>
     <string name="episodes_unwatched">%1$d</string>
     <string name="progress">%1$d%%</string>

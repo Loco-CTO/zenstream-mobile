@@ -29,6 +29,7 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -484,7 +485,7 @@ private fun HomeData.withRow(title: RowTitle, items: List<MediaItem>, wide: Bool
 }
 
 private fun HomeData.withDerivedRows(derivedRows: List<MediaRow>): HomeData {
-    val derivedTitles = setOf(RowTitle.MyList, RowTitle.Genre)
+    val derivedTitles = setOf(RowTitle.MyList, RowTitle.FavoriteMusic, RowTitle.Genre)
     val globalRows =
         rows.filter { it.libraryName == null && it.title !in derivedTitles } + derivedRows
     return copy(rows = orderedHomeRows(globalRows + rows.filter { it.libraryName != null }))
@@ -615,12 +616,13 @@ class LibraryViewModel(
 
     fun setSort(sort: LibrarySort) {
         val library = _uiState.value.selected ?: return
-        if (_uiState.value.sort == sort) return
+        val normalizedSort = normalizeLibrarySort(library, sort)
+        if (_uiState.value.sort == normalizedSort) return
         requestJob?.cancel()
         val generation = ++requestGeneration
         _uiState.value =
             _uiState.value.copy(
-                sort = sort,
+                sort = normalizedSort,
                 loading = true,
                 error = false,
                 loadMoreError = false,
@@ -628,9 +630,9 @@ class LibraryViewModel(
                 totalRecordCount = 0,
             )
         requestJob = viewModelScope.launch {
-            repository.saveLibrarySort(session.userId, library.id, sort)
+            repository.saveLibrarySort(session.userId, library.id, normalizedSort)
             if (generation != requestGeneration) return@launch
-            loadFirstPage(library, generation, sort)
+            loadFirstPage(library, generation, normalizedSort)
         }
     }
 
@@ -724,10 +726,13 @@ class LibraryViewModel(
 }
 
 private fun normalizeLibrarySort(library: Library, sort: LibrarySort): LibrarySort =
-    if (!library.supportsLastAdded && sort.sortBy == LibrarySortBy.LastAdded) {
-        sort.copy(sortBy = LibrarySortBy.Added)
-    } else {
-        sort
+    when {
+        library.collectionType == "music" &&
+            sort.sortBy !in setOf(LibrarySortBy.Title, LibrarySortBy.Year, LibrarySortBy.Added) ->
+            LibrarySort(LibrarySortBy.Title, SortOrder.Ascending)
+        !library.supportsLastAdded && sort.sortBy == LibrarySortBy.LastAdded ->
+            sort.copy(sortBy = LibrarySortBy.Added)
+        else -> sort
     }
 
 data class SearchUiState(

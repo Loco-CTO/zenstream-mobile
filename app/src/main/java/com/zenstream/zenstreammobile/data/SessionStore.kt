@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.AudioQueueSnapshot
+import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.LibrarySort
@@ -76,6 +78,11 @@ class SessionStore(
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
         val syncplayPresenceSequence = longPreferencesKey("syncplay_presence_sequence")
         val deviceId = stringPreferencesKey("device_id")
+        val audioVolume = stringPreferencesKey("audio_volume")
+        val audioMuted = booleanPreferencesKey("audio_muted")
+        val audioShuffle = booleanPreferencesKey("audio_shuffle")
+        val audioRepeatMode = stringPreferencesKey("audio_repeat_mode")
+        val audioQueueSnapshots = stringPreferencesKey("audio_queue_snapshots")
     }
 
     // `server_url` is retained as a migration key, but it now always contains
@@ -123,6 +130,25 @@ class SessionStore(
 
     val watchHistoryEnabled: Flow<Boolean> =
         dataStore.data.map { it[Keys.watchHistoryEnabled] ?: true }.distinctUntilChanged()
+
+    val audioVolume: Flow<Float> =
+        dataStore.data
+            .map { it[Keys.audioVolume]?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f }
+            .distinctUntilChanged()
+
+    val audioMuted: Flow<Boolean> =
+        dataStore.data.map { it[Keys.audioMuted] ?: false }.distinctUntilChanged()
+
+    val audioShuffle: Flow<Boolean> =
+        dataStore.data.map { it[Keys.audioShuffle] ?: false }.distinctUntilChanged()
+
+    val audioRepeatMode: Flow<AudioRepeatMode> =
+        dataStore.data
+            .map {
+                runCatching { AudioRepeatMode.valueOf(it[Keys.audioRepeatMode].orEmpty()) }
+                    .getOrDefault(AudioRepeatMode.Off)
+            }
+            .distinctUntilChanged()
 
     val session: Flow<AuthSession?> =
         dataStore.data
@@ -228,6 +254,50 @@ class SessionStore(
         dataStore.edit { it[Keys.watchHistoryEnabled] = enabled }
     }
 
+    suspend fun saveAudioVolume(value: Float) {
+        dataStore.edit { it[Keys.audioVolume] = value.coerceIn(0f, 1f).toString() }
+    }
+
+    suspend fun saveAudioMuted(value: Boolean) {
+        dataStore.edit { it[Keys.audioMuted] = value }
+    }
+
+    suspend fun saveAudioShuffle(value: Boolean) {
+        dataStore.edit { it[Keys.audioShuffle] = value }
+    }
+
+    suspend fun saveAudioRepeatMode(value: AudioRepeatMode) {
+        dataStore.edit { it[Keys.audioRepeatMode] = value.name }
+    }
+
+    suspend fun loadAudioQueueSnapshot(serverUrl: String, userId: String): AudioQueueSnapshot? {
+        val encoded = dataStore.data.first()[Keys.audioQueueSnapshots] ?: return null
+        val root = runCatching { JSONObject(encoded) }.getOrNull() ?: return null
+        val value = root.optJSONObject(audioQueueScope(serverUrl, userId)) ?: return null
+        return audioQueueSnapshotFromJson(value)
+    }
+
+    suspend fun saveAudioQueueSnapshot(snapshot: AudioQueueSnapshot) {
+        val current =
+            dataStore.data.first()[Keys.audioQueueSnapshots]?.let {
+                runCatching { JSONObject(it) }.getOrNull()
+            } ?: JSONObject()
+        current.put(audioQueueScope(snapshot.serverUrl, snapshot.userId), snapshot.toJson())
+        dataStore.edit { it[Keys.audioQueueSnapshots] = current.toString() }
+    }
+
+    suspend fun clearAudioQueueSnapshot(serverUrl: String, userId: String) {
+        val current =
+            dataStore.data.first()[Keys.audioQueueSnapshots]?.let {
+                runCatching { JSONObject(it) }.getOrNull()
+            } ?: return
+        current.remove(audioQueueScope(serverUrl, userId))
+        dataStore.edit {
+            if (current.length() == 0) it.remove(Keys.audioQueueSnapshots)
+            else it[Keys.audioQueueSnapshots] = current.toString()
+        }
+    }
+
     suspend fun cacheSubtitleStyle(style: SubtitleStyle) {
         dataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
@@ -285,6 +355,14 @@ class SessionStore(
     suspend fun clearSession() {
         // Player engine, time display mode, and subtitle style are device-local
         // preferences. They intentionally survive logout and account changes.
+        val current = dataStore.data.first()
+        val server = current[Keys.orchestratorUrl] ?: current[Keys.serverUrl]
+        val userId = current[Keys.userId]
+        val snapshots =
+            current[Keys.audioQueueSnapshots]?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (server != null && userId != null) {
+            snapshots?.remove(audioQueueScope(server, userId))
+        }
         dataStore.edit {
             it.remove(Keys.token)
             it.remove(Keys.resourceTicket)
@@ -294,6 +372,8 @@ class SessionStore(
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
             it.remove(Keys.watchHistoryEnabled)
+            if (snapshots == null || snapshots.length() == 0) it.remove(Keys.audioQueueSnapshots)
+            else it[Keys.audioQueueSnapshots] = snapshots.toString()
         }
     }
 
@@ -313,6 +393,7 @@ class SessionStore(
             it.remove(Keys.metadataLanguage)
             it.remove(Keys.watchHistoryEnabled)
             it.remove(Keys.librarySorts)
+            it.remove(Keys.audioQueueSnapshots)
         }
     }
 

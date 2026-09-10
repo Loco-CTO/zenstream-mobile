@@ -59,13 +59,28 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 
+sealed interface NotificationDestination {
+    data class Video(val itemId: String) : NotificationDestination
+    data class Album(val albumId: String) : NotificationDestination
+}
+
+internal fun notificationDestination(item: NotificationItem): NotificationDestination? =
+    when (item.kind.lowercase(Locale.ROOT)) {
+        "new_release" -> item.itemId?.takeIf(String::isNotBlank)?.let(NotificationDestination::Album)
+        "new_episode" ->
+            (item.seriesId ?: item.itemId)?.takeIf(String::isNotBlank)?.let(NotificationDestination::Video)
+        "new_movie" -> item.itemId?.takeIf(String::isNotBlank)?.let(NotificationDestination::Video)
+        else -> null
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
     repository: CatalogRepository,
     session: AuthSession,
+    outerPadding: PaddingValues = PaddingValues(),
     onBack: () -> Unit,
-    onOpenItem: (String) -> Unit,
+    onOpenDestination: (NotificationDestination) -> Unit,
 ) {
     val vm: NotificationsViewModel =
         viewModel(
@@ -76,6 +91,7 @@ fun NotificationsScreen(
     LaunchedEffect(Unit) { vm.refresh() }
 
     Scaffold(
+        modifier = Modifier.padding(outerPadding),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.notifications)) },
@@ -110,6 +126,7 @@ fun NotificationsScreen(
                 NotificationEmptyState(
                     stringResource(R.string.notifications_empty),
                     stringResource(R.string.notifications_empty_hint),
+                    padding,
                 )
             else ->
                 LazyColumn(
@@ -123,7 +140,7 @@ fun NotificationsScreen(
                             session = session,
                             onClick = {
                                 vm.setRead(item, true)
-                                (item.seriesId ?: item.itemId)?.let(onOpenItem)
+                                notificationDestination(item)?.let(onOpenDestination)
                             },
                             onToggleRead = { vm.setRead(item, item.readAt == null) },
                             onRemove = { vm.remove(item) },
@@ -172,9 +189,9 @@ private fun NotificationErrorState(
 }
 
 @Composable
-private fun NotificationEmptyState(title: String, detail: String) {
+private fun NotificationEmptyState(title: String, detail: String, padding: PaddingValues) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(padding).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

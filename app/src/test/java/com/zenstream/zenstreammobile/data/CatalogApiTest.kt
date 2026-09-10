@@ -1,9 +1,13 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.Library
+import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.RowVariant
+import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
@@ -17,6 +21,182 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatalogApiTest {
+    @Test
+    fun includesGrantedMusicLibrariesAlongsideVideoLibraries() {
+        val libraries =
+            parseLibraries(
+                JSONObject().put(
+                    "libraries",
+                    JSONArray()
+                        .put(JSONObject().put("id", "shows").put("name", "Shows").put("type", "tv_series"))
+                        .put(JSONObject().put("id", "music").put("name", "Music").put("type", "music"))
+                        .put(JSONObject().put("id", "unknown").put("type", "unsupported")),
+                )
+            )
+
+        assertEquals(listOf("tvshows", "music"), libraries.map { it.collectionType })
+        assertEquals("Music", libraries[1].name)
+    }
+
+    @Test
+    fun mapsMusicEntitiesAndRetainsCreditsArtworkAndUserState() {
+        val item =
+            catalogMediaItem(
+                JSONObject()
+                    .put("id", "track-1")
+                    .put("type", "track")
+                    .put("albumId", "album-1")
+                    .put("artistId", "artist-1")
+                    .put("discNumber", 2)
+                    .put("trackNumber", 4)
+                    .put(
+                        "metadata",
+                        JSONObject()
+                            .put("title", "Song")
+                            .put("album", "Release")
+                            .put("albumArtist", "Artist A")
+                            .put("albumType", "album")
+                            .put("label", "Label")
+                            .put("date", "2026-04-01")
+                            .put("durationSeconds", 201.5)
+                            .put(
+                                "artists",
+                                JSONArray().put(
+                                    JSONObject().put("id", "artist-1").put("name", "Artist A").put("joinPhrase", " & ")
+                                ).put(
+                                    JSONObject().put("id", "artist-2").put("name", "Artist B")
+                                ),
+                            )
+                            .put("tags", JSONArray().put("Ambient"))
+                            .put(
+                                "images",
+                                JSONObject().put(
+                                    "Primary",
+                                    JSONObject().put("url", "/art/track-1").put("blurHash", "hash"),
+                                ),
+                            ),
+                    )
+                    .put("userState", JSONObject().put("favorite", true).put("following", true).put("playCount", 7)),
+            )
+
+        assertEquals("Audio", item.type)
+        assertEquals("album-1", item.albumId)
+        assertEquals("artist-1", item.artistId)
+        assertEquals(listOf("artist-1", "artist-2"), item.artistCredits.map { it.id })
+        assertEquals(" & ", item.artistCredits.first().joinPhrase)
+        assertEquals("Label", item.label)
+        assertEquals("2026-04-01", item.releaseDate)
+        assertEquals(2, item.discNumber)
+        assertEquals(4, item.trackNumber)
+        assertEquals(201.5, item.durationSeconds ?: -1.0, 0.0)
+        assertEquals(7, item.playCount)
+        assertTrue(item.favorite)
+        assertNull(item.following)
+        assertEquals("hash", item.imageBlurHashes["Primary"])
+    }
+
+    @Test
+    fun mapsFollowStateOnlyForMusicArtists() {
+        val artist =
+            catalogMediaItem(
+                JSONObject()
+                    .put("id", "artist-1")
+                    .put("type", "artist")
+                    .put("metadata", JSONObject().put("title", "Artist A"))
+                    .put("userState", JSONObject().put("following", true)),
+            )
+
+        assertEquals("MusicArtist", artist.type)
+        assertTrue(artist.following == true)
+    }
+
+    @Test
+    fun parsesFavoriteMusicAsASquareHomeRowAndDeduplicatesIds() {
+        val track = catalogItem("track-1", "Track").put("type", "track")
+        val home =
+            parseHomeData(
+                JSONObject()
+                    .put("favoriteMusic", JSONArray().put(track).put(track))
+            )
+
+        assertEquals(RowTitle.FavoriteMusic, home.rows.single().title)
+        assertEquals(RowVariant.Square, home.rows.single().variant)
+        assertEquals(listOf("track-1"), home.rows.single().items.map { it.id })
+    }
+
+    @Test
+    fun exposesCanonicalMusicPathsAndQuerySemantics() {
+        assertEquals(
+            "/api/catalog/music/albums/album%2F1",
+            musicAlbumPath("album/1"),
+        )
+        assertEquals(
+            "/api/catalog/music/artists/artist%2F1/tracks",
+            musicArtistTracksPath("artist/1"),
+        )
+        assertEquals(
+            "/api/playback/items/track%2F1/lyrics",
+            audioLyricsPath("track/1"),
+        )
+        assertEquals(
+            "/api/catalog/items/track%2F1/play-start",
+            audioPlayStartPath("track/1"),
+        )
+        assertEquals(
+            "/api/catalog/items/track%2F1/progress",
+            catalogProgressPath("track/1"),
+        )
+        assertEquals(
+            mapOf(
+                "libraryId" to "music",
+                "page" to "2",
+                "pageSize" to "50",
+                "sortBy" to "year",
+                "sortOrder" to "descending",
+            ),
+            musicAlbumsQuery(
+                "music",
+                2,
+                50,
+                LibrarySort(LibrarySortBy.Year, SortOrder.Descending),
+            ),
+        )
+    }
+
+    @Test
+    fun parsesLyricsAndReleaseNotificationContext() {
+        val lyrics =
+            parseAudioLyrics(
+                JSONObject()
+                    .put("source", "embedded")
+                    .put("timed", true)
+                    .put(
+                        "lines",
+                        JSONArray().put(
+                            JSONObject().put("text", "First line").put("startSeconds", 1.5)
+                        ),
+                    ),
+            )
+        val notification =
+            parseNotificationPage(
+                JSONObject().put(
+                    "items",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("id", "notification-1")
+                            .put("kind", "new_release")
+                            .put("itemId", "album-1")
+                            .put("artistId", "artist-1")
+                            .put("createdAt", "2026-08-21T00:00:00Z"),
+                    ),
+                ),
+            )
+
+        assertEquals("embedded", lyrics?.source)
+        assertEquals(1.5, lyrics?.lines?.single()?.startSeconds)
+        assertEquals("artist-1", notification.items.single().artistId)
+    }
+
     @Test
     fun parsesNotificationThumbnailArtwork() {
         val page =

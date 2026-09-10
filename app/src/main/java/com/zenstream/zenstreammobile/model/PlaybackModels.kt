@@ -175,6 +175,7 @@ data class PlaybackData(
     val sessionId: String? = null,
     val viewerSessionId: String? = null,
     val url: String? = null,
+    val mimeType: String? = null,
     val durationSeconds: Double? = null,
     val startPositionSeconds: Double = 0.0,
     val expiresAt: String? = null,

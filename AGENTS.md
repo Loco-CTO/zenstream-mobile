@@ -1,0 +1,8 @@
+# ZenStream mobile guide
+
+- `app/src/main/java/com/zenstream/zenstreammobile/data` is the authenticated Orchestrator boundary. Music entities map `artist`, `release`, and `track` to `MusicArtist`, `MusicAlbum`, and `Audio`; deduplicate media IDs before passing rows to Compose lazy lists, and use `Music.kt` for ordered atomic artist credits and exact join phrases.
+- Audio is owned by `AudioPlaybackService`/`MediaLibraryService` and coordinated through `AudioServiceBridge` and `AudioPlayerCoordinator`. Audio must never launch `PlaybackActivity`, enter SyncPlay, or use the video engine. Queue snapshots are versioned, scoped by normalized server URL plus user, restored paused, and cleared on explicit logout.
+- Use authenticated Coil requests for artwork and blur-hash placeholders. New and changed client controls use Lucide drawables; do not add Phosphor or Tabler icons.
+- Home keeps its video-only hero. Music integrates into Library, Favorites, Search, and per-library Home music rows; album and artist routes preserve the originating main-tab state.
+- Keep device-local audio preferences and queue data separate from Orchestrator account preferences. Never persist bearer tokens, resource tickets, or negotiated playback URLs.
+- Run `./gradlew.bat --console=plain :app:testDebugUnitTest` for JVM tests and `./gradlew.bat --console=plain :app:assembleDebug` for a debug build.

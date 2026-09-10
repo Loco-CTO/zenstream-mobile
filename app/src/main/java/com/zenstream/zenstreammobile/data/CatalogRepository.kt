@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.data
 import android.content.ContentResolver
 import android.net.Uri
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.AudioLyrics
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.CalendarResponse
@@ -16,6 +17,8 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
+import com.zenstream.zenstreammobile.model.MusicAlbumData
+import com.zenstream.zenstreammobile.model.MusicArtistData
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
@@ -100,6 +103,26 @@ interface FavoritesDataSource : CatalogRefreshSource {
     suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort)
 }
 
+interface MusicDataSource : CatalogRefreshSource {
+    override suspend fun clearSession()
+
+    suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData
+
+    suspend fun musicArtist(session: AuthSession, artistId: String): MusicArtistData
+
+    suspend fun musicArtistTracks(session: AuthSession, artistId: String): List<MediaItem>
+
+    suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics?
+
+    suspend fun recordAudioPlayStart(
+        session: AuthSession,
+        itemId: String,
+        playbackInstanceId: String,
+    )
+
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean)
+}
+
 interface CalendarDataSource : CatalogRefreshSource {
     override suspend fun clearSession()
 
@@ -171,6 +194,7 @@ class CatalogRepository(
     LibraryDataSource,
     SearchDataSource,
     FavoritesDataSource,
+    MusicDataSource,
     CalendarDataSource,
     SettingsDataSource {
 
@@ -425,6 +449,27 @@ class CatalogRepository(
         sort: FavoriteSort,
     ) = api.fetchFavoritesPage(session, startIndex, limit, sort)
 
+    override suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData =
+        api.musicAlbum(session, albumId)
+
+    override suspend fun musicArtist(session: AuthSession, artistId: String): MusicArtistData =
+        api.musicArtist(session, artistId)
+
+    override suspend fun musicArtistTracks(session: AuthSession, artistId: String): List<MediaItem> =
+        api.musicArtistTracks(session, artistId)
+
+    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
+        api.audioLyrics(session, itemId)
+
+    override suspend fun recordAudioPlayStart(
+        session: AuthSession,
+        itemId: String,
+        playbackInstanceId: String,
+    ) {
+        api.recordAudioPlayStart(session, itemId, playbackInstanceId)
+        invalidateCatalogState()
+    }
+
     override suspend fun cachedFavoriteSort(userId: String): FavoriteSort? =
         sessionStore.cachedFavoriteSort(userId)
 
@@ -440,7 +485,10 @@ class CatalogRepository(
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 
-    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
+    suspend fun catalogItem(session: AuthSession, itemId: String): MediaItem =
+        api.catalogItem(session, itemId)
+
+    override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
         api.setFavorite(session, itemId, favorite)
         invalidateCatalogState()
     }
