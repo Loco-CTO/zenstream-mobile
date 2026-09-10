@@ -46,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -55,6 +54,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.shape.CircleShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
@@ -230,6 +230,11 @@ private fun AlbumContent(
                 )
             }
         }
+        if (data.album.genres.isNotEmpty() || !data.album.overview.isNullOrBlank()) {
+            item(key = "album-details") {
+                AlbumDetails(data.album)
+            }
+        }
         if (data.relatedAlbums.isNotEmpty()) {
             item(key = "related-albums") {
                 MusicSection(
@@ -261,7 +266,7 @@ private fun AlbumHeader(
     val accent = palette.accent
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().height(304.dp),
+            modifier = Modifier.fillMaxWidth().height(320.dp),
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -276,7 +281,7 @@ private fun AlbumHeader(
                     ),
                 ),
             )
-            val artworkSize = minOf(maxWidth - 64.dp, 240.dp).coerceAtLeast(200.dp)
+            val artworkSize = (maxWidth - 32.dp).coerceAtMost(272.dp).coerceAtLeast(0.dp)
             Surface(
                 modifier = Modifier.size(artworkSize),
                 shape = RoundedCornerShape(18.dp),
@@ -303,7 +308,7 @@ private fun AlbumHeader(
             )
             Text(
                 album.name,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },
@@ -326,64 +331,11 @@ private fun AlbumHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (album.genres.isNotEmpty()) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(album.genres.distinct().take(8), key = { it }) { genre ->
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(genre, maxLines = 1) },
-                            colors = AssistChipDefaults.assistChipColors(labelColor = accent),
-                            border = BorderStroke(1.dp, accent.copy(alpha = .46f)),
-                        )
-                    }
-                }
-            }
-            album.overview?.takeIf(String::isNotBlank)?.let {
-                Text(
-                    it,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = onPlay,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accent,
-                        contentColor = palette.onAccent,
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                ) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_play),
-                        contentDescription = "Play album",
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Play", maxLines = 1)
-                }
-                OutlinedButton(
-                    onClick = onShuffle,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
-                    border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                ) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_shuffle),
-                        contentDescription = "Shuffle album",
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Shuffle", maxLines = 1)
-                }
                 IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_heart),
@@ -397,7 +349,61 @@ private fun AlbumHeader(
                         contentDescription = "Add album to queue",
                     )
                 }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onShuffle, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_shuffle),
+                        contentDescription = "Shuffle album",
+                        tint = accent,
+                    )
+                }
+                IconButton(onClick = onPlay, modifier = Modifier.size(60.dp)) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape,
+                        color = accent,
+                        contentColor = palette.onAccent,
+                    ) {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_play),
+                            contentDescription = "Play album",
+                            modifier = Modifier.padding(17.dp),
+                            tint = palette.onAccent,
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun AlbumDetails(album: MediaItem) {
+    val palette = remember(album.id, album.imageBlurHashes["Primary"]) { musicArtworkPalette(album) }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (album.genres.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(album.genres.distinct().take(8), key = { it }) { genre ->
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(genre, maxLines = 1) },
+                        colors = AssistChipDefaults.assistChipColors(labelColor = palette.accent),
+                        border = BorderStroke(1.dp, palette.accent.copy(alpha = .46f)),
+                    )
+                }
+            }
+        }
+        album.overview?.takeIf(String::isNotBlank)?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 6,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -511,8 +517,9 @@ private fun ArtistContent(
     ) {
         item(key = "artist-header") {
             Column(Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(238.dp),
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Box(
                         Modifier.fillMaxSize().background(
@@ -526,15 +533,22 @@ private fun ArtistContent(
                             ),
                         ),
                     )
-                    MusicArtwork(
-                        artist,
-                        session,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(204.dp).clip(RoundedCornerShape(22.dp)),
-                        contentDescription = artist.name,
-                        requestedSize = 560,
+                    val artworkSize = (maxWidth - 32.dp).coerceAtMost(272.dp).coerceAtLeast(0.dp)
+                    Surface(
+                        modifier = Modifier.size(artworkSize),
                         shape = RoundedCornerShape(22.dp),
-                        fallbackGlyph = "★",
-                    )
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        MusicArtwork(
+                            artist,
+                            session,
+                            modifier = Modifier.fillMaxSize(),
+                            contentDescription = artist.name,
+                            requestedSize = 560,
+                            shape = RoundedCornerShape(22.dp),
+                            fallbackGlyph = "★",
+                        )
+                    }
                 }
                 Column(
                     Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -542,51 +556,21 @@ private fun ArtistContent(
                 ) {
                     Text(
                         artist.name,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineLarge,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
+                    Text(
+                        "${albums.size} releases · ${data.trackCount} tracks",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Button(
-                            onClick = onPlayAll,
-                            enabled = !tracksLoading,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = accent,
-                                contentColor = palette.onAccent,
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp),
-                        ) {
-                            if (tracksLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(19.dp),
-                                    strokeWidth = 2.dp,
-                                    color = palette.onAccent,
-                                )
-                            } else {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_play),
-                                    contentDescription = "Play all artist tracks",
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(Modifier.width(7.dp))
-                                Text("Play all", maxLines = 1)
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = onFollow,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
-                            border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
-                            contentPadding = PaddingValues(horizontal = 10.dp),
-                        ) {
-                            Text(if (artist.following == true) "Following" else "Follow", maxLines = 1)
-                        }
                         IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_heart),
@@ -594,6 +578,16 @@ private fun ArtistContent(
                                 tint = if (artist.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        OutlinedButton(
+                            onClick = onFollow,
+                            modifier = Modifier.height(44.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                            border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                        ) {
+                            Text(if (artist.following == true) "Following" else "Follow", maxLines = 1)
+                        }
+                        Spacer(Modifier.weight(1f))
                         IconButton(onClick = onShuffleAll, enabled = !tracksLoading, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_shuffle),
@@ -601,32 +595,33 @@ private fun ArtistContent(
                                 tint = if (!tracksLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    }
-                    Text(
-                        "${albums.size} releases · ${data.trackCount} tracks",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (artist.genres.isNotEmpty()) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(artist.genres.distinct().take(8), key = { it }) { genre ->
-                                AssistChip(
-                                    onClick = {},
-                                    label = { Text(genre, maxLines = 1) },
-                                    colors = AssistChipDefaults.assistChipColors(labelColor = accent),
-                                    border = BorderStroke(1.dp, accent.copy(alpha = .46f)),
-                                )
+                        IconButton(
+                            onClick = onPlayAll,
+                            enabled = !tracksLoading,
+                            modifier = Modifier.size(60.dp),
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = CircleShape,
+                                color = accent,
+                                contentColor = palette.onAccent,
+                            ) {
+                                if (tracksLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.padding(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = palette.onAccent,
+                                    )
+                                } else {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_play),
+                                        contentDescription = "Play all artist tracks",
+                                        modifier = Modifier.padding(17.dp),
+                                        tint = palette.onAccent,
+                                    )
+                                }
                             }
                         }
-                    }
-                    artist.overview?.takeIf(String::isNotBlank)?.let {
-                        Text(
-                            it,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 7,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
                     if (tracksError) Text("Could not load tracks", color = MaterialTheme.colorScheme.error)
                 }
@@ -650,6 +645,11 @@ private fun ArtistContent(
                     onArtistClick = onArtistClick,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+            }
+        }
+        if (artist.genres.isNotEmpty() || !artist.overview.isNullOrBlank()) {
+            item(key = "artist-details") {
+                ArtistDetails(artist)
             }
         }
         val releaseGroups = albums.groupBy { releaseLabel(it) }
@@ -689,6 +689,37 @@ private fun ArtistContent(
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ArtistDetails(artist: MediaItem) {
+    val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (artist.genres.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(artist.genres.distinct().take(8), key = { it }) { genre ->
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(genre, maxLines = 1) },
+                        colors = AssistChipDefaults.assistChipColors(labelColor = palette.accent),
+                        border = BorderStroke(1.dp, palette.accent.copy(alpha = .46f)),
+                    )
+                }
+            }
+        }
+        artist.overview?.takeIf(String::isNotBlank)?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 7,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

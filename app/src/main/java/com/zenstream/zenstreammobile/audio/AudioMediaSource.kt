@@ -1,11 +1,14 @@
 package com.zenstream.zenstreammobile.audio
 
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DataSource
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 
 internal enum class AudioSourceKind {
     Hls,
@@ -36,6 +39,7 @@ internal fun normalizeAudioSource(
             MimeTypes.APPLICATION_M3U8.lowercase(),
             "application/vnd.apple.mpegurl",
             "application/mpegurl",
+            "application/x-mpegurl",
         )
     val normalizedMode = mode?.trim()?.lowercase()?.takeIf(String::isNotBlank)
     val isHls =
@@ -69,6 +73,47 @@ internal fun normalizeAudioSource(
         mimeType = inferredMime,
         mode = normalizedMode,
     )
+}
+
+/**
+ * The same source selection is used by the service's player and by MediaSession
+ * clients such as Android Auto. In particular, never let an HLS playlist fall
+ * through to a progressive extractor.
+ */
+internal class AudioMediaSourceFactory(
+    private val dataSourceFactory: DataSource.Factory,
+) : MediaSource.Factory {
+    private val progressiveFactory = DefaultMediaSourceFactory(dataSourceFactory)
+    private val hlsFactory = HlsMediaSource.Factory(dataSourceFactory)
+
+    override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+        val configuration = mediaItem.localConfiguration
+        val source =
+            normalizeAudioSource(
+                url = configuration?.uri?.toString().orEmpty(),
+                mimeType = configuration?.mimeType,
+                mode = null,
+            )
+        return when (source.kind) {
+            AudioSourceKind.Hls -> hlsFactory.createMediaSource(mediaItem)
+            AudioSourceKind.Progressive ->
+                progressiveFactory.createMediaSource(mediaItem)
+        }
+    }
+
+    override fun getSupportedTypes(): IntArray = intArrayOf(C.CONTENT_TYPE_HLS, C.CONTENT_TYPE_OTHER)
+
+    override fun setDrmSessionManagerProvider(provider: DrmSessionManagerProvider): MediaSource.Factory {
+        progressiveFactory.setDrmSessionManagerProvider(provider)
+        hlsFactory.setDrmSessionManagerProvider(provider)
+        return this
+    }
+
+    override fun setLoadErrorHandlingPolicy(policy: LoadErrorHandlingPolicy): MediaSource.Factory {
+        progressiveFactory.setLoadErrorHandlingPolicy(policy)
+        hlsFactory.setLoadErrorHandlingPolicy(policy)
+        return this
+    }
 }
 
 internal fun buildAudioMediaSource(

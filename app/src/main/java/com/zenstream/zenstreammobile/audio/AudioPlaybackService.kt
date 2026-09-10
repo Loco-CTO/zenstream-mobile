@@ -19,7 +19,6 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -111,7 +110,7 @@ class AudioPlaybackService : MediaLibraryService() {
         dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
         player =
             ExoPlayer.Builder(this)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+                .setMediaSourceFactory(AudioMediaSourceFactory(dataSourceFactory))
                 .setAudioAttributes(
                     androidx.media3.common.AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -169,10 +168,7 @@ class AudioPlaybackService : MediaLibraryService() {
             AudioServiceBridge.ACTION_PREVIOUS -> serviceScope.launch { previous() }
             AudioServiceBridge.ACTION_TOGGLE_SHUFFLE -> serviceScope.launch { toggleShuffle() }
             AudioServiceBridge.ACTION_TOGGLE_REPEAT -> serviceScope.launch { toggleRepeat() }
-            AudioServiceBridge.ACTION_SET_VOLUME -> {
-                val value = intent.getFloatExtra(AudioServiceBridge.EXTRA_VOLUME, currentState.volume)
-                serviceScope.launch { setVolume(value) }
-            }
+            AudioServiceBridge.ACTION_SET_VOLUME -> serviceScope.launch { setVolume() }
             AudioServiceBridge.ACTION_TOGGLE_MUTE -> serviceScope.launch { toggleMute() }
             AudioServiceBridge.ACTION_RETRY -> serviceScope.launch { retryCurrent() }
             AudioServiceBridge.ACTION_SEEK -> {
@@ -240,8 +236,6 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun restoreAudioPreferences() {
-        val volume = sessionStore.audioVolume.first()
-        val muted = sessionStore.audioMuted.first()
         val shuffle =
             currentState.queue
                 .takeIf { it.isNotEmpty() }
@@ -252,11 +246,14 @@ class AudioPlaybackService : MediaLibraryService() {
                 .takeIf { it.isNotEmpty() }
                 ?.let { currentState.repeatMode }
                 ?: sessionStore.audioRepeatMode.first()
-        player.volume = if (muted) 0f else volume
+        // Android's media stream volume is the only volume authority. Ignore
+        // legacy app-local gain/mute values so an old saved mute cannot silence
+        // playback after the in-app volume control has been removed.
+        player.volume = 1f
         currentState =
             currentState.copy(
-                volume = volume,
-                muted = muted,
+                volume = 1f,
+                muted = false,
                 shuffle = shuffle,
                 repeatMode = repeatMode,
             )
@@ -391,6 +388,9 @@ class AudioPlaybackService : MediaLibraryService() {
                             .build()
                     )
                     .build()
+            // Keep ExoPlayer at unity gain and let the device media stream
+            // volume control the audible level.
+            player.volume = 1f
             player.setMediaSource(buildAudioMediaSource(dataSourceFactory, mediaItem, normalizedSource))
             player.prepare()
             retryEntryId = null
@@ -500,19 +500,18 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
     }
 
-    private suspend fun setVolume(value: Float) {
-        val normalized = value.coerceIn(0f, 1f)
-        player.volume = normalized
-        sessionStore.saveAudioVolume(normalized)
-        currentState = currentState.copy(volume = normalized, muted = false)
+    private suspend fun setVolume() {
+        // Retain the bridge action for compatibility with older clients, but
+        // never apply software gain. Volume belongs to Android's media stream.
+        player.volume = 1f
+        currentState = currentState.copy(volume = 1f, muted = false)
         publishPlayerState()
     }
 
     private suspend fun toggleMute() {
-        val muted = !currentState.muted
-        sessionStore.saveAudioMuted(muted)
-        player.volume = if (muted) 0f else currentState.volume
-        currentState = currentState.copy(muted = muted)
+        // There is no app-level mute anymore; use the phone's volume controls.
+        player.volume = 1f
+        currentState = currentState.copy(volume = 1f, muted = false)
         publishPlayerState()
     }
 

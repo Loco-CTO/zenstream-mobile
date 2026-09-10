@@ -530,13 +530,6 @@ private fun NowPlayingMain(
                     tint = if (current.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = coordinator::toggleMute, modifier = Modifier.size(52.dp)) {
-                Icon(
-                    painterResource(if (state.muted) LucideR.drawable.lucide_ic_volume_x else LucideR.drawable.lucide_ic_volume_2),
-                    contentDescription = if (state.muted) "Unmute" else "Mute",
-                    tint = if (state.muted) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
