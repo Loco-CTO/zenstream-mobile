@@ -68,10 +68,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
-import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -85,18 +85,18 @@ import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
-import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.AudioMiniPlayer
-import com.zenstream.zenstreammobile.ui.screens.MusicAlbumScreen
-import com.zenstream.zenstreammobile.ui.screens.MusicArtistScreen
-import com.zenstream.zenstreammobile.ui.screens.NowPlayingScreen
+import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
 import com.zenstream.zenstreammobile.ui.screens.HomeScreen
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.LoginScreen
+import com.zenstream.zenstreammobile.ui.screens.MusicAlbumScreen
+import com.zenstream.zenstreammobile.ui.screens.MusicArtistScreen
 import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
-import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
 import com.zenstream.zenstreammobile.ui.screens.NotificationDestination
+import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
+import com.zenstream.zenstreammobile.ui.screens.NowPlayingScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
@@ -248,7 +248,10 @@ private fun MainScaffold(
                 audio.updateFavorite(item.id, !favorite)
                 throw error
             } catch (error: Throwable) {
-                if (error is com.zenstream.zenstreammobile.data.CatalogException && error.statusCode == 401) {
+                if (
+                    error is com.zenstream.zenstreammobile.data.CatalogException &&
+                        error.statusCode == 401
+                ) {
                     repository.clearSessionIfCurrent(session)
                 }
                 audio.updateFavorite(item.id, !favorite)
@@ -509,7 +512,9 @@ private fun MainScaffold(
                         onBack = { navController.popBackStack() },
                         onOpenArtist = { artistId -> navigateToArtist(navController, artistId) },
                         onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
-                        onPlayTracks = { tracks, index, shuffle -> audio.playTracks(tracks, index, shuffle) },
+                        onPlayTracks = { tracks, index, shuffle ->
+                            audio.playTracks(tracks, index, shuffle)
+                        },
                         onAddToQueue = audio::addToQueue,
                         onScrollabilityChanged = onContentScrollabilityChanged,
                     )
@@ -530,7 +535,9 @@ private fun MainScaffold(
                         onBack = { navController.popBackStack() },
                         onOpenArtist = { relatedId -> navigateToArtist(navController, relatedId) },
                         onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
-                        onPlayTracks = { tracks, index, shuffle -> audio.playTracks(tracks, index, shuffle) },
+                        onPlayTracks = { tracks, index, shuffle ->
+                            audio.playTracks(tracks, index, shuffle)
+                        },
                         onAddToQueue = audio::addToQueue,
                         onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
                         onScrollabilityChanged = onContentScrollabilityChanged,
@@ -644,19 +651,29 @@ private fun navigateToDetail(navController: androidx.navigation.NavHostControlle
     }
 }
 
-private fun navigateToAlbum(navController: androidx.navigation.NavHostController, albumId: String, trackId: String? = null) {
-    val route = "album/${Uri.encode(albumId)}" + (trackId?.let { "?trackId=${Uri.encode(it)}" } ?: "")
+private fun navigateToAlbum(
+    navController: androidx.navigation.NavHostController,
+    albumId: String,
+    trackId: String? = null,
+) {
+    val route =
+        "album/${Uri.encode(albumId)}" + (trackId?.let { "?trackId=${Uri.encode(it)}" } ?: "")
     navController.navigate(route) { launchSingleTop = true }
 }
 
-private fun navigateToArtist(navController: androidx.navigation.NavHostController, artistId: String) {
+private fun navigateToArtist(
+    navController: androidx.navigation.NavHostController,
+    artistId: String,
+) {
     navController.navigate("artist/${Uri.encode(artistId)}") { launchSingleTop = true }
 }
 
 private fun navigateToMedia(navController: androidx.navigation.NavHostController, item: MediaItem) {
     when (item.type) {
-        "MusicArtist" -> item.id.takeIf(String::isNotBlank)?.let { navigateToArtist(navController, it) }
-        "MusicAlbum" -> item.id.takeIf(String::isNotBlank)?.let { navigateToAlbum(navController, it) }
+        "MusicArtist" ->
+            item.id.takeIf(String::isNotBlank)?.let { navigateToArtist(navController, it) }
+        "MusicAlbum" ->
+            item.id.takeIf(String::isNotBlank)?.let { navigateToAlbum(navController, it) }
         "Audio" -> {
             val albumId = item.albumId
             if (!albumId.isNullOrBlank()) navigateToAlbum(navController, albumId, item.id)

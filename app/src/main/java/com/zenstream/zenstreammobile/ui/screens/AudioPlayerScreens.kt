@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -178,7 +177,10 @@ fun NowPlayingScreen(
     val current = state.currentEntry?.track
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember(context) { SessionStore(context.applicationContext) }
-    val timerMode by store.playbackTimeDisplayMode.collectAsStateWithLifecycle(initialValue = PlaybackTimeDisplayMode.Remaining)
+    val timerMode by
+        store.playbackTimeDisplayMode.collectAsStateWithLifecycle(
+            initialValue = PlaybackTimeDisplayMode.Remaining
+        )
     val scope = rememberCoroutineScope()
     var lyrics by remember(current?.id) { mutableStateOf<AudioLyrics?>(null) }
     var lyricsLoading by remember(current?.id) { mutableStateOf(false) }
@@ -194,7 +196,10 @@ fun NowPlayingScreen(
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                if (error is com.zenstream.zenstreammobile.data.CatalogException && error.statusCode == 401) {
+                if (
+                    error is com.zenstream.zenstreammobile.data.CatalogException &&
+                        error.statusCode == 401
+                ) {
                     repository.clearSessionIfCurrent(session)
                 }
                 lyricsError = true
@@ -618,7 +623,10 @@ private fun LyricsPanel(
     onRetry: () -> Unit,
 ) {
     when {
-        loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        loading ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         error ->
             Column(
                 Modifier.fillMaxSize(),
@@ -655,7 +663,10 @@ private fun LyricsPanel(
             }
             Column(Modifier.fillMaxSize()) {
                 if (!followCurrentLine && lyrics.timed) {
-                    TextButton(onClick = { followCurrentLine = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    TextButton(
+                        onClick = { followCurrentLine = true },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
                         Text("Follow current line")
                     }
                 }

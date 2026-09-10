@@ -41,11 +41,12 @@ internal fun removeQueueEntry(
     if (removedIndex < 0) return null
     val remaining = state.queue.filterNot { it.entryId == entryId }
     if (remaining.isEmpty()) return QueueRemoval(emptyList(), -1, removedCurrent = true)
-    val currentIndex = when {
-        removedIndex < state.currentIndex -> state.currentIndex - 1
-        state.currentIndex >= remaining.size -> remaining.lastIndex
-        else -> state.currentIndex
-    }
+    val currentIndex =
+        when {
+            removedIndex < state.currentIndex -> state.currentIndex - 1
+            state.currentIndex >= remaining.size -> remaining.lastIndex
+            else -> state.currentIndex
+        }
     return QueueRemoval(
         entries = remaining,
         currentIndex = currentIndex.coerceIn(0, remaining.lastIndex),

@@ -25,13 +25,24 @@ class CatalogApiTest {
     fun includesGrantedMusicLibrariesAlongsideVideoLibraries() {
         val libraries =
             parseLibraries(
-                JSONObject().put(
-                    "libraries",
-                    JSONArray()
-                        .put(JSONObject().put("id", "shows").put("name", "Shows").put("type", "tv_series"))
-                        .put(JSONObject().put("id", "music").put("name", "Music").put("type", "music"))
-                        .put(JSONObject().put("id", "unknown").put("type", "unsupported")),
-                )
+                JSONObject()
+                    .put(
+                        "libraries",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "shows")
+                                    .put("name", "Shows")
+                                    .put("type", "tv_series")
+                            )
+                            .put(
+                                JSONObject()
+                                    .put("id", "music")
+                                    .put("name", "Music")
+                                    .put("type", "music")
+                            )
+                            .put(JSONObject().put("id", "unknown").put("type", "unsupported")),
+                    )
             )
 
         assertEquals(listOf("tvshows", "music"), libraries.map { it.collectionType })
@@ -61,22 +72,36 @@ class CatalogApiTest {
                             .put("durationSeconds", 201.5)
                             .put(
                                 "artists",
-                                JSONArray().put(
-                                    JSONObject().put("id", "artist-1").put("name", "Artist A").put("joinPhrase", " & ")
-                                ).put(
-                                    JSONObject().put("id", "artist-2").put("name", "Artist B")
-                                ),
+                                JSONArray()
+                                    .put(
+                                        JSONObject()
+                                            .put("id", "artist-1")
+                                            .put("name", "Artist A")
+                                            .put("joinPhrase", " & ")
+                                    )
+                                    .put(
+                                        JSONObject().put("id", "artist-2").put("name", "Artist B")
+                                    ),
                             )
                             .put("tags", JSONArray().put("Ambient"))
                             .put(
                                 "images",
-                                JSONObject().put(
-                                    "Primary",
-                                    JSONObject().put("url", "/art/track-1").put("blurHash", "hash"),
-                                ),
+                                JSONObject()
+                                    .put(
+                                        "Primary",
+                                        JSONObject()
+                                            .put("url", "/art/track-1")
+                                            .put("blurHash", "hash"),
+                                    ),
                             ),
                     )
-                    .put("userState", JSONObject().put("favorite", true).put("following", true).put("playCount", 7)),
+                    .put(
+                        "userState",
+                        JSONObject()
+                            .put("favorite", true)
+                            .put("following", true)
+                            .put("playCount", 7),
+                    )
             )
 
         assertEquals("Audio", item.type)
@@ -103,7 +128,7 @@ class CatalogApiTest {
                     .put("id", "artist-1")
                     .put("type", "artist")
                     .put("metadata", JSONObject().put("title", "Artist A"))
-                    .put("userState", JSONObject().put("following", true)),
+                    .put("userState", JSONObject().put("following", true))
             )
 
         assertEquals("MusicArtist", artist.type)
@@ -114,10 +139,7 @@ class CatalogApiTest {
     fun parsesFavoriteMusicAsASquareHomeRowAndDeduplicatesIds() {
         val track = catalogItem("track-1", "Track").put("type", "track")
         val home =
-            parseHomeData(
-                JSONObject()
-                    .put("favoriteMusic", JSONArray().put(track).put(track))
-            )
+            parseHomeData(JSONObject().put("favoriteMusic", JSONArray().put(track).put(track)))
 
         assertEquals(RowTitle.FavoriteMusic, home.rows.single().title)
         assertEquals(RowVariant.Square, home.rows.single().variant)
@@ -172,24 +194,25 @@ class CatalogApiTest {
                     .put("timed", true)
                     .put(
                         "lines",
-                        JSONArray().put(
-                            JSONObject().put("text", "First line").put("startSeconds", 1.5)
-                        ),
-                    ),
+                        JSONArray()
+                            .put(JSONObject().put("text", "First line").put("startSeconds", 1.5)),
+                    )
             )
         val notification =
             parseNotificationPage(
-                JSONObject().put(
-                    "items",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("id", "notification-1")
-                            .put("kind", "new_release")
-                            .put("itemId", "album-1")
-                            .put("artistId", "artist-1")
-                            .put("createdAt", "2026-08-21T00:00:00Z"),
-                    ),
-                ),
+                JSONObject()
+                    .put(
+                        "items",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "notification-1")
+                                    .put("kind", "new_release")
+                                    .put("itemId", "album-1")
+                                    .put("artistId", "artist-1")
+                                    .put("createdAt", "2026-08-21T00:00:00Z")
+                            ),
+                    )
             )
 
         assertEquals("embedded", lyrics?.source)

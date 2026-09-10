@@ -6,14 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,11 +38,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.composables.icons.lucide.R as LucideR
-import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.artistCreditSeparator
 import com.zenstream.zenstreammobile.data.artistCreditsForAlbum
 import com.zenstream.zenstreammobile.data.artistCreditsForTrack
-import com.zenstream.zenstreammobile.data.artistCreditSeparator
-import com.zenstream.zenstreammobile.data.formatArtistCredits
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -68,7 +64,7 @@ fun AudioCard(
                     role = Role.Button
                     contentDescription = "Open ${item.name}"
                 }
-                .clickable { onClick(item) },
+                .clickable { onClick(item) }
     ) {
         MusicArtwork(
             item = item,
@@ -228,7 +224,9 @@ fun AudioTrackRow(
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color =
+                    if (isCurrent) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -243,30 +241,32 @@ fun AudioTrackRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
-                                if (credit.id != null) Modifier.clickable { onArtistClick(credit.id) }
+                                if (credit.id != null)
+                                    Modifier.clickable { onArtistClick(credit.id) }
                                 else Modifier,
                         )
-                        artistCreditSeparator(credits, index)
-                            .takeIf(String::isNotEmpty)
-                            ?.let { separator ->
-                                Text(
-                                    separator,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
+                        artistCreditSeparator(credits, index).takeIf(String::isNotEmpty)?.let {
+                            separator ->
+                            Text(
+                                separator,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
             }
         }
-        item.playCount?.takeIf { it > 0 }?.let {
-            Text(
-                text = it.toString(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-        }
+        item.playCount
+            ?.takeIf { it > 0 }
+            ?.let {
+                Text(
+                    text = it.toString(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
         Text(
             text = formatDurationSeconds(item.durationSeconds),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -280,7 +280,9 @@ fun AudioTrackRow(
                 Icon(
                     painter = painterResource(LucideR.drawable.lucide_ic_heart),
                     contentDescription = if (item.favorite) "Remove favorite" else "Add favorite",
-                    tint = if (item.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint =
+                        if (item.favorite) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -305,17 +307,17 @@ fun MusicCreditLine(
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = if (credit.id != null) Modifier.clickable { onArtistClick(credit.id) } else Modifier,
+                modifier =
+                    if (credit.id != null) Modifier.clickable { onArtistClick(credit.id) }
+                    else Modifier,
             )
-            artistCreditSeparator(credits, index)
-                .takeIf(String::isNotEmpty)
-                ?.let { separator ->
-                    Text(
-                        separator,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+            artistCreditSeparator(credits, index).takeIf(String::isNotEmpty)?.let { separator ->
+                Text(
+                    separator,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

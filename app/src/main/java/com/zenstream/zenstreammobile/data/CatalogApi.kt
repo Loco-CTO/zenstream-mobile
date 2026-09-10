@@ -5,9 +5,9 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import com.zenstream.zenstreammobile.BuildConfig
-import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.ArtistCredit
 import com.zenstream.zenstreammobile.model.AudioLyrics
+import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.BazarrEpisodeStatus
 import com.zenstream.zenstreammobile.model.BazarrMovieStatus
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
@@ -24,17 +24,17 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.LyricLine
 import com.zenstream.zenstreammobile.model.MediaChapter
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
-import com.zenstream.zenstreammobile.model.NotificationItem
-import com.zenstream.zenstreammobile.model.NotificationPage
-import com.zenstream.zenstreammobile.model.LyricLine
 import com.zenstream.zenstreammobile.model.MusicAlbumData
 import com.zenstream.zenstreammobile.model.MusicArtistData
+import com.zenstream.zenstreammobile.model.NotificationItem
+import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
@@ -861,19 +861,29 @@ class CatalogApi(
     ): LibraryData =
         withContext(Dispatchers.IO) {
             if (library.collectionType == "music") {
-                val page = fetchLibraryPage(session, library, 0, 18, LibrarySort(LibrarySortBy.Title, SortOrder.Ascending))
+                val page =
+                    fetchLibraryPage(
+                        session,
+                        library,
+                        0,
+                        18,
+                        LibrarySort(LibrarySortBy.Title, SortOrder.Ascending),
+                    )
                 return@withContext LibraryData(
                     library,
-                    page.items.takeIf { it.isNotEmpty() }?.let {
-                        listOf(
-                            MediaRow(
-                                RowTitle.NewlyAdded,
-                                library.name,
-                                it,
-                                variant = RowVariant.Square,
+                    page.items
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
+                            listOf(
+                                MediaRow(
+                                    RowTitle.NewlyAdded,
+                                    library.name,
+                                    it,
+                                    variant = RowVariant.Square,
+                                )
                             )
-                        )
-                    }.orEmpty(),
+                        }
+                        .orEmpty(),
                 )
             }
             val path =
@@ -969,7 +979,7 @@ class CatalogApi(
             val payload =
                 requestJson(
                     session,
-                        musicAlbumPath(albumId),
+                    musicAlbumPath(albumId),
                 )
             MusicAlbumData(
                 album = catalogMediaItem(payload.getJSONObject("album")),
@@ -1509,8 +1519,8 @@ internal fun encodePathSegment(value: String): String = buildString {
                 character == '~' ||
                 character == '*' ||
                 character == '\'' ||
-                character == '('
-                || character == ')'
+                character == '(' ||
+                character == ')'
         ) {
             append(character)
         } else {
@@ -1527,8 +1537,7 @@ internal fun musicAlbumPath(albumId: String): String =
 internal fun musicArtistPath(artistId: String): String =
     "/api/catalog/music/artists/${encodePathSegment(artistId)}"
 
-internal fun musicArtistTracksPath(artistId: String): String =
-    "${musicArtistPath(artistId)}/tracks"
+internal fun musicArtistTracksPath(artistId: String): String = "${musicArtistPath(artistId)}/tracks"
 
 internal fun audioLyricsPath(itemId: String): String =
     "/api/playback/items/${encodePathSegment(itemId)}/lyrics"
@@ -1558,26 +1567,25 @@ private fun jsonArray(root: JSONObject, key: String): List<JSONObject> =
         .orEmpty()
 
 internal fun parseLibraries(root: JSONObject): List<Library> =
-    jsonArray(root, "libraries")
-        .mapNotNull { item ->
-            val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val type = item.optString("type")
-            val collectionType =
-                when (type) {
-                    "tv_series" -> "tvshows"
-                    "movies" -> "movies"
-                    "collection" -> "boxsets"
-                    "music" -> "music"
-                    else -> null
-                }
-            if (collectionType == null) return@mapNotNull null
-            Library(
-                id = id,
-                name = item.optString("name").ifBlank { "Library" },
-                collectionType = collectionType,
-                supportsLastAdded = item.optBoolean("supportsLastAdded", type != "movies"),
-            )
-        }
+    jsonArray(root, "libraries").mapNotNull { item ->
+        val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+        val type = item.optString("type")
+        val collectionType =
+            when (type) {
+                "tv_series" -> "tvshows"
+                "movies" -> "movies"
+                "collection" -> "boxsets"
+                "music" -> "music"
+                else -> null
+            }
+        if (collectionType == null) return@mapNotNull null
+        Library(
+            id = id,
+            name = item.optString("name").ifBlank { "Library" },
+            collectionType = collectionType,
+            supportsLastAdded = item.optBoolean("supportsLastAdded", type != "movies"),
+        )
+    }
 
 internal fun parseNotificationPage(root: JSONObject): NotificationPage {
     val items =
@@ -1611,19 +1619,21 @@ internal fun parseNotificationPage(root: JSONObject): NotificationPage {
 internal fun parseAudioLyrics(value: Any?): AudioLyrics? {
     val root = value as? JSONObject ?: return null
     val lines =
-        root.optJSONArray("lines")?.let { values ->
-            List(values.length()) { index ->
-                    val line = values.optJSONObject(index) ?: return@List null
-                    val text = line.optString("text").trim()
-                    if (text.isBlank()) return@List null
-                    LyricLine(
-                        text = text,
-                        startSeconds = line.optDoubleOrNull("startSeconds")?.coerceAtLeast(0.0),
-                        endSeconds = line.optDoubleOrNull("endSeconds")?.coerceAtLeast(0.0),
-                    )
-                }
-                .filterNotNull()
-        }
+        root
+            .optJSONArray("lines")
+            ?.let { values ->
+                List(values.length()) { index ->
+                        val line = values.optJSONObject(index) ?: return@List null
+                        val text = line.optString("text").trim()
+                        if (text.isBlank()) return@List null
+                        LyricLine(
+                            text = text,
+                            startSeconds = line.optDoubleOrNull("startSeconds")?.coerceAtLeast(0.0),
+                            endSeconds = line.optDoubleOrNull("endSeconds")?.coerceAtLeast(0.0),
+                        )
+                    }
+                    .filterNotNull()
+            }
             .orEmpty()
     if (lines.isEmpty()) return null
     return AudioLyrics(
@@ -1889,30 +1899,32 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
             }
             .orEmpty()
     fun parseArtistCredits(array: JSONArray?): List<ArtistCredit> =
-        array?.let { values ->
-            List(values.length()) { index ->
-                    when (val value = values.opt(index)) {
-                        is JSONObject -> {
-                            val name =
-                                value.optString("name").ifBlank { value.optString("Name") }
-                            ArtistCredit(
-                                id =
-                                    value
-                                        .optString("id")
-                                        .ifBlank { value.optString("Id") }
-                                        .ifBlank { null },
-                                name = name,
-                                joinPhrase =
-                                    if (value.has("joinPhrase")) value.optString("joinPhrase")
-                                    else if (value.has("JoinPhrase")) value.optString("JoinPhrase")
-                                    else null,
-                            )
+        array
+            ?.let { values ->
+                List(values.length()) { index ->
+                        when (val value = values.opt(index)) {
+                            is JSONObject -> {
+                                val name =
+                                    value.optString("name").ifBlank { value.optString("Name") }
+                                ArtistCredit(
+                                    id =
+                                        value
+                                            .optString("id")
+                                            .ifBlank { value.optString("Id") }
+                                            .ifBlank { null },
+                                    name = name,
+                                    joinPhrase =
+                                        if (value.has("joinPhrase")) value.optString("joinPhrase")
+                                        else if (value.has("JoinPhrase"))
+                                            value.optString("JoinPhrase")
+                                        else null,
+                                )
+                            }
+                            else -> ArtistCredit(name = value?.toString().orEmpty())
                         }
-                        else -> ArtistCredit(name = value?.toString().orEmpty())
                     }
-                }
-                .filter { it.name.isNotBlank() }
-        }
+                    .filter { it.name.isNotBlank() }
+            }
             .orEmpty()
     fun names(array: JSONArray?): List<String> =
         parseArtistCredits(array).map { it.name }.filter(String::isNotBlank)
@@ -1933,19 +1945,23 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
         if (metadataArtists.isNotEmpty()) names(metadata.optJSONArray("artists"))
         else names(metadata.optJSONArray("contributingArtists"))
     val releaseDate =
-        item.optString("releaseDate").ifBlank {
-            metadata.optString("date").ifBlank { metadata.optString("releaseDate") }
-        }.ifBlank { null }
+        item
+            .optString("releaseDate")
+            .ifBlank {
+                metadata.optString("date").ifBlank { metadata.optString("releaseDate") }
+            }
+            .ifBlank { null }
     val durationSeconds =
         item.optDoubleOrNull("durationSeconds")
             ?: metadata.optDoubleOrNull("durationSeconds")
             ?: state.optDoubleOrNull("durationSeconds")
-    val albumId = item.optString("albumId").ifBlank { metadata.optString("albumId") }.ifBlank { null }
-    val artistId = item.optString("artistId").ifBlank { metadata.optString("artistId") }.ifBlank { null }
+    val albumId =
+        item.optString("albumId").ifBlank { metadata.optString("albumId") }.ifBlank { null }
+    val artistId =
+        item.optString("artistId").ifBlank { metadata.optString("artistId") }.ifBlank { null }
     val albumArtist = metadata.optString("albumArtist").ifBlank { null }
     val albumType = metadata.optString("albumType").ifBlank { null }
-    val albumSecondaryTypes =
-        names(metadata.optJSONArray("albumSecondaryTypes"))
+    val albumSecondaryTypes = names(metadata.optJSONArray("albumSecondaryTypes"))
     return MediaItem(
         id = item.optString("id"),
         name =
@@ -1963,7 +1979,9 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
         label = metadata.optString("label").ifBlank { null },
         tags =
             (metadata.optJSONArray("tags") ?: metadata.optJSONArray("genres"))
-                ?.let { array -> List(array.length()) { array.optString(it) }.filter(String::isNotBlank) }
+                ?.let { array ->
+                    List(array.length()) { array.optString(it) }.filter(String::isNotBlank)
+                }
                 .orEmpty(),
         releaseDate = releaseDate,
         show = metadata.optString("show").ifBlank { null },
@@ -1987,8 +2005,7 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
             metadata.optString("overview").ifBlank {
                 metadata.optString("description").ifBlank { null }
             },
-        premiereDate =
-            releaseDate,
+        premiereDate = releaseDate,
         productionYear = metadata.optIntOrNull("year"),
         collectionYearRange = item.optString("collectionYearRange").ifBlank { null },
         officialRating =

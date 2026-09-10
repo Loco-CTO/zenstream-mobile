@@ -61,14 +61,18 @@ import java.util.Locale
 
 sealed interface NotificationDestination {
     data class Video(val itemId: String) : NotificationDestination
+
     data class Album(val albumId: String) : NotificationDestination
 }
 
 internal fun notificationDestination(item: NotificationItem): NotificationDestination? =
     when (item.kind.lowercase(Locale.ROOT)) {
-        "new_release" -> item.itemId?.takeIf(String::isNotBlank)?.let(NotificationDestination::Album)
+        "new_release" ->
+            item.itemId?.takeIf(String::isNotBlank)?.let(NotificationDestination::Album)
         "new_episode" ->
-            (item.seriesId ?: item.itemId)?.takeIf(String::isNotBlank)?.let(NotificationDestination::Video)
+            (item.seriesId ?: item.itemId)
+                ?.takeIf(String::isNotBlank)
+                ?.let(NotificationDestination::Video)
         "new_movie" -> item.itemId?.takeIf(String::isNotBlank)?.let(NotificationDestination::Video)
         else -> null
     }

@@ -5,7 +5,6 @@ package com.zenstream.zenstreammobile.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -126,7 +124,11 @@ fun MusicAlbumScreen(
                     CircularProgressIndicator()
                 }
             state.error && state.data == null ->
-                MusicErrorState(Modifier.fillMaxSize().padding(padding), "Could not load this album", vm::load)
+                MusicErrorState(
+                    Modifier.fillMaxSize().padding(padding),
+                    "Could not load this album",
+                    vm::load,
+                )
             state.data != null ->
                 AlbumContent(
                     data = state.data!!,
@@ -177,9 +179,10 @@ private fun AlbumContent(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
     )
-    val selectedListIndex = remember(selectedTrackId, tracks) {
-        albumTrackListIndex(grouped, selectedTrackId)
-    }
+    val selectedListIndex =
+        remember(selectedTrackId, tracks) {
+            albumTrackListIndex(grouped, selectedTrackId)
+        }
     LaunchedEffect(selectedTrackId, selectedListIndex) {
         if (selectedListIndex >= 0) listState.animateScrollToItem(selectedListIndex)
     }
@@ -444,7 +447,10 @@ fun MusicArtistScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), contentDescription = "Back")
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                            contentDescription = "Back",
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),

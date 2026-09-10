@@ -137,14 +137,17 @@ data class DerivedHomeData(
             myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) }
         ) +
             listOfNotNull(
-                favoriteMusic.takeIf { it.isNotEmpty() }?.let {
-                    MediaRow(
-                        RowTitle.FavoriteMusic,
-                        items = it,
-                        variant = RowVariant.Square,
-                    )
-                }
-            ) + genreRows.filter { it.items.isNotEmpty() }
+                favoriteMusic
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        MediaRow(
+                            RowTitle.FavoriteMusic,
+                            items = it,
+                            variant = RowVariant.Square,
+                        )
+                    }
+            ) +
+            genreRows.filter { it.items.isNotEmpty() }
 }
 
 fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row ->
@@ -257,11 +260,12 @@ enum class AudioRepeatMode {
     Queue,
     Track;
 
-    fun next(): AudioRepeatMode = when (this) {
-        Off -> Queue
-        Queue -> Track
-        Track -> Off
-    }
+    fun next(): AudioRepeatMode =
+        when (this) {
+            Off -> Queue
+            Queue -> Track
+            Track -> Off
+        }
 }
 
 data class AudioQueueEntry(
