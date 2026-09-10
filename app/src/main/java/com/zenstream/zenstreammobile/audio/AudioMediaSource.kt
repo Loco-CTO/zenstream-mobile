@@ -23,9 +23,8 @@ internal data class NormalizedAudioSource(
 )
 
 /**
- * Media3 does not reliably infer HLS from a server's vendor MIME string. Keep
- * the classification explicit so a playlist can never reach a progressive
- * extractor by accident.
+ * Media3 does not reliably infer HLS from a server's vendor MIME string. Keep the classification
+ * explicit so a playlist can never reach a progressive extractor by accident.
  */
 internal fun normalizeAudioSource(
     url: String,
@@ -76,13 +75,11 @@ internal fun normalizeAudioSource(
 }
 
 /**
- * The same source selection is used by the service's player and by MediaSession
- * clients such as Android Auto. In particular, never let an HLS playlist fall
- * through to a progressive extractor.
+ * The same source selection is used by the service's player and by MediaSession clients such as
+ * Android Auto. In particular, never let an HLS playlist fall through to a progressive extractor.
  */
-internal class AudioMediaSourceFactory(
-    private val dataSourceFactory: DataSource.Factory,
-) : MediaSource.Factory {
+internal class AudioMediaSourceFactory(private val dataSourceFactory: DataSource.Factory) :
+    MediaSource.Factory {
     private val progressiveFactory = DefaultMediaSourceFactory(dataSourceFactory)
     private val hlsFactory = HlsMediaSource.Factory(dataSourceFactory)
 
@@ -96,14 +93,16 @@ internal class AudioMediaSourceFactory(
             )
         return when (source.kind) {
             AudioSourceKind.Hls -> hlsFactory.createMediaSource(mediaItem)
-            AudioSourceKind.Progressive ->
-                progressiveFactory.createMediaSource(mediaItem)
+            AudioSourceKind.Progressive -> progressiveFactory.createMediaSource(mediaItem)
         }
     }
 
-    override fun getSupportedTypes(): IntArray = intArrayOf(C.CONTENT_TYPE_HLS, C.CONTENT_TYPE_OTHER)
+    override fun getSupportedTypes(): IntArray =
+        intArrayOf(C.CONTENT_TYPE_HLS, C.CONTENT_TYPE_OTHER)
 
-    override fun setDrmSessionManagerProvider(provider: DrmSessionManagerProvider): MediaSource.Factory {
+    override fun setDrmSessionManagerProvider(
+        provider: DrmSessionManagerProvider
+    ): MediaSource.Factory {
         progressiveFactory.setDrmSessionManagerProvider(provider)
         hlsFactory.setDrmSessionManagerProvider(provider)
         return this
@@ -122,7 +121,8 @@ internal fun buildAudioMediaSource(
     source: NormalizedAudioSource,
 ): MediaSource =
     when (source.kind) {
-        AudioSourceKind.Hls -> HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+        AudioSourceKind.Hls ->
+            HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
         AudioSourceKind.Progressive ->
             DefaultMediaSourceFactory(dataSourceFactory).createMediaSource(mediaItem)
     }
