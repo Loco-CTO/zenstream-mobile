@@ -94,7 +94,7 @@ fun AudioMiniPlayer(
                 .padding(horizontal = 12.dp, vertical = 5.dp)
                 .clickable(onClick = onOpenNowPlaying),
             shape = RoundedCornerShape(14.dp),
-            color = musicBackdropColor(entry.track).copy(alpha = .62f),
+            color = musicBackdropColor(entry.track),
             tonalElevation = 0.dp,
         ) {
             Column {
