@@ -247,7 +247,7 @@ class CatalogApiHttpTest {
                 .setBody(
                     JSONObject()
                         .put(
-                        "user",
+                            "user",
                             JSONObject()
                                 .put("id", "user-1")
                                 .put("username", "Updated")

@@ -52,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -89,15 +88,16 @@ fun AudioMiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val entry = state.currentEntry ?: return
-    val palette = remember(entry.track.id, entry.track.imageBlurHashes["Primary"]) {
-        musicArtworkPalette(entry.track)
-    }
+    val palette =
+        remember(entry.track.id, entry.track.imageBlurHashes["Primary"]) {
+            musicArtworkPalette(entry.track)
+        }
     Box(modifier = modifier.fillMaxWidth()) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 5.dp)
-                .clickable(onClick = onOpenNowPlaying),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+                    .clickable(onClick = onOpenNowPlaying),
             shape = RoundedCornerShape(14.dp),
             color = palette.surface,
             tonalElevation = 0.dp,
@@ -106,7 +106,10 @@ fun AudioMiniPlayer(
                 LinearProgressIndicator(
                     progress = {
                         if (state.durationSeconds > 0) {
-                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(0f, 1f)
+                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
+                                0f,
+                                1f,
+                            )
                         } else 0f
                     },
                     modifier = Modifier.fillMaxWidth().height(2.dp),
@@ -114,7 +117,8 @@ fun AudioMiniPlayer(
                     trackColor = Color.White.copy(alpha = .16f),
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
+                    modifier =
+                        Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -133,28 +137,45 @@ fun AudioMiniPlayer(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            entry.track.albumArtist ?: entry.track.artists.firstOrNull() ?: "Unknown artist",
+                            entry.track.albumArtist
+                                ?: entry.track.artists.firstOrNull()
+                                ?: "Unknown artist",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    IconButton(onClick = { onFavorite(entry.track) }, modifier = Modifier.size(40.dp)) {
+                    IconButton(
+                        onClick = { onFavorite(entry.track) },
+                        modifier = Modifier.size(40.dp),
+                    ) {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_heart),
-                            contentDescription = if (entry.track.favorite) "Remove favorite" else "Add favorite",
-                            tint = if (entry.track.favorite) palette.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription =
+                                if (entry.track.favorite) "Remove favorite" else "Add favorite",
+                            tint =
+                                if (entry.track.favorite) palette.accent
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(40.dp)) {
+                    IconButton(
+                        onClick = coordinator::togglePlayback,
+                        modifier = Modifier.size(40.dp),
+                    ) {
                         Icon(
-                            painterResource(if (state.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
+                            painterResource(
+                                if (state.isPlaying) LucideR.drawable.lucide_ic_pause
+                                else LucideR.drawable.lucide_ic_play
+                            ),
                             contentDescription = if (state.isPlaying) "Pause" else "Play",
                         )
                     }
                     IconButton(onClick = coordinator::next, modifier = Modifier.size(40.dp)) {
-                        Icon(painterResource(LucideR.drawable.lucide_ic_skip_forward), contentDescription = "Next track")
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_skip_forward),
+                            contentDescription = "Next track",
+                        )
                     }
                 }
             }
@@ -208,20 +229,22 @@ fun NowPlayingScreen(
         }
     }
 
-    val artworkPalette = remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
-        current?.let(::musicArtworkPalette) ?: ArtworkPalette.fallback
-    }
+    val artworkPalette =
+        remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
+            current?.let(::musicArtworkPalette) ?: ArtworkPalette.fallback
+        }
     Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                listOf(
-                    artworkPalette.background.copy(alpha = .96f),
-                    artworkPalette.surface.copy(alpha = .72f),
-                    MaterialTheme.colorScheme.background.copy(alpha = .98f),
-                    MaterialTheme.colorScheme.background,
-                ),
-            ),
-        ),
+        Modifier.fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        artworkPalette.background.copy(alpha = .96f),
+                        artworkPalette.surface.copy(alpha = .72f),
+                        MaterialTheme.colorScheme.background.copy(alpha = .98f),
+                        MaterialTheme.colorScheme.background,
+                    )
+                )
+            )
     ) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -250,15 +273,22 @@ fun NowPlayingScreen(
                     navigationIcon = {
                         IconButton(
                             onClick = onBack,
-                            modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = .2f), CircleShape),
+                            modifier =
+                                Modifier.size(48.dp)
+                                    .background(Color.Black.copy(alpha = .2f), CircleShape),
                         ) {
-                            Icon(painterResource(LucideR.drawable.lucide_ic_chevron_down), contentDescription = "Close now playing")
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_chevron_down),
+                                contentDescription = "Close now playing",
+                            )
                         }
                     },
                     actions = {
                         IconButton(
                             onClick = { tab = 0 },
-                            modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = .2f), CircleShape),
+                            modifier =
+                                Modifier.size(48.dp)
+                                    .background(Color.Black.copy(alpha = .2f), CircleShape),
                         ) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
@@ -276,7 +306,10 @@ fun NowPlayingScreen(
                     Modifier.fillMaxSize().padding(padding).navigationBarsPadding(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("Your audio queue is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Your audio queue is empty",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             } else {
                 LazyColumn(
@@ -292,7 +325,9 @@ fun NowPlayingScreen(
                             timerMode = timerMode,
                             palette = artworkPalette,
                             onToggleTimer = {
-                                scope.launch { store.savePlaybackTimeDisplayMode(timerMode.toggled()) }
+                                scope.launch {
+                                    store.savePlaybackTimeDisplayMode(timerMode.toggled())
+                                }
                             },
                             onOpenAlbum = onOpenAlbum,
                             onOpenArtist = onOpenArtist,
@@ -309,7 +344,8 @@ fun NowPlayingScreen(
                                 shape = RoundedCornerShape(16.dp),
                             ) {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                    Modifier.fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
@@ -430,15 +466,19 @@ private fun NowPlayingMain(
         }
         Spacer(Modifier.height(18.dp))
         Slider(
-            value = state.positionSeconds.toFloat().coerceIn(0f, state.durationSeconds.coerceAtLeast(1L).toFloat()),
+            value =
+                state.positionSeconds
+                    .toFloat()
+                    .coerceIn(0f, state.durationSeconds.coerceAtLeast(1L).toFloat()),
             onValueChange = { coordinator.seekTo(it.toLong()) },
             valueRange = 0f..state.durationSeconds.coerceAtLeast(1L).toFloat(),
             modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor = accent,
-                activeTrackColor = accent,
-                inactiveTrackColor = Color.White.copy(alpha = .20f),
-            ),
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = accent,
+                    inactiveTrackColor = Color.White.copy(alpha = .20f),
+                ),
         )
         Row(
             Modifier.fillMaxWidth().clickable(onClick = onToggleTimer),
@@ -457,13 +497,15 @@ private fun NowPlayingMain(
                 formatDurationSeconds(state.durationSeconds.toDouble()),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.semantics {
-                    contentDescription = if (timerMode == PlaybackTimeDisplayMode.Remaining) {
-                        "Show elapsed time"
-                    } else {
-                        "Show remaining time"
-                    }
-                },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription =
+                            if (timerMode == PlaybackTimeDisplayMode.Remaining) {
+                                "Show elapsed time"
+                            } else {
+                                "Show remaining time"
+                            }
+                    },
             )
         }
         Row(
@@ -474,17 +516,25 @@ private fun NowPlayingMain(
             IconButton(onClick = coordinator::toggleShuffle, modifier = Modifier.size(52.dp)) {
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_shuffle),
-                    contentDescription = if (state.shuffle) "Turn off shuffle" else "Turn on shuffle",
-                    tint = if (state.shuffle) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription =
+                        if (state.shuffle) "Turn off shuffle" else "Turn on shuffle",
+                    tint =
+                        if (state.shuffle) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = coordinator::previous, modifier = Modifier.size(52.dp)) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_skip_back), contentDescription = "Previous track")
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_skip_back),
+                    contentDescription = "Previous track",
+                )
             }
             IconButton(onClick = coordinator::togglePlayback, modifier = Modifier.size(76.dp)) {
                 Surface(shape = CircleShape, color = accent, contentColor = palette.onAccent) {
                     Icon(
-                        painterResource(if (state.isPlaying) LucideR.drawable.lucide_ic_pause else LucideR.drawable.lucide_ic_play),
+                        painterResource(
+                            if (state.isPlaying) LucideR.drawable.lucide_ic_pause
+                            else LucideR.drawable.lucide_ic_play
+                        ),
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
                         modifier = Modifier.padding(22.dp),
                         tint = palette.onAccent,
@@ -492,20 +542,27 @@ private fun NowPlayingMain(
                 }
             }
             IconButton(onClick = coordinator::next, modifier = Modifier.size(52.dp)) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_skip_forward), contentDescription = "Next track")
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_skip_forward),
+                    contentDescription = "Next track",
+                )
             }
             IconButton(onClick = coordinator::toggleRepeat, modifier = Modifier.size(52.dp)) {
                 Icon(
                     painterResource(
-                        if (state.repeatMode == AudioRepeatMode.Track) LucideR.drawable.lucide_ic_repeat_1
-                        else LucideR.drawable.lucide_ic_repeat,
+                        if (state.repeatMode == AudioRepeatMode.Track)
+                            LucideR.drawable.lucide_ic_repeat_1
+                        else LucideR.drawable.lucide_ic_repeat
                     ),
-                    contentDescription = when (state.repeatMode) {
-                        AudioRepeatMode.Off -> "Turn on repeat"
-                        AudioRepeatMode.Queue -> "Repeat queue"
-                        AudioRepeatMode.Track -> "Repeat track"
-                    },
-                    tint = if (state.repeatMode != AudioRepeatMode.Off) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription =
+                        when (state.repeatMode) {
+                            AudioRepeatMode.Off -> "Turn on repeat"
+                            AudioRepeatMode.Queue -> "Repeat queue"
+                            AudioRepeatMode.Track -> "Repeat track"
+                        },
+                    tint =
+                        if (state.repeatMode != AudioRepeatMode.Off) accent
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -518,7 +575,9 @@ private fun NowPlayingMain(
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_list_filter),
                     contentDescription = "Open queue",
-                    tint = if (state.queue.isNotEmpty()) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint =
+                        if (state.queue.isNotEmpty()) accent
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onOpenLyrics, modifier = Modifier.size(52.dp)) {
@@ -531,8 +590,11 @@ private fun NowPlayingMain(
             IconButton(onClick = { onFavorite(current) }, modifier = Modifier.size(52.dp)) {
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_heart),
-                    contentDescription = if (current.favorite) "Remove favorite" else "Add favorite",
-                    tint = if (current.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription =
+                        if (current.favorite) "Remove favorite" else "Add favorite",
+                    tint =
+                        if (current.favorite) accent
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -556,18 +618,25 @@ private fun QueuePanel(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = if (index == state.currentIndex) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = .12f)
-                } else Color.Transparent,
+                color =
+                    if (index == state.currentIndex) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = .12f)
+                    } else Color.Transparent,
             ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("${index + 1}", modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(Modifier.weight(1f).clickable {
-                        entry.track.albumId?.let(onOpenAlbum)
-                    }) {
+                    Text(
+                        "${index + 1}",
+                        modifier = Modifier.width(28.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column(
+                        Modifier.weight(1f).clickable {
+                            entry.track.albumId?.let(onOpenAlbum)
+                        }
+                    ) {
                         Text(entry.track.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             entry.track.albumArtist ?: "Unknown artist",
@@ -575,7 +644,8 @@ private fun QueuePanel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clickable { entry.track.artistId?.let(onOpenArtist) },
+                            modifier =
+                                Modifier.clickable { entry.track.artistId?.let(onOpenArtist) },
                         )
                     }
                     IconButton(
@@ -583,16 +653,25 @@ private fun QueuePanel(
                         enabled = index > 0,
                         modifier = Modifier.size(40.dp),
                     ) {
-                        Icon(painterResource(LucideR.drawable.lucide_ic_arrow_up), contentDescription = "Move up")
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_arrow_up),
+                            contentDescription = "Move up",
+                        )
                     }
                     IconButton(
                         onClick = { coordinator.reorderQueue(index, index + 1) },
                         enabled = index < list.lastIndex,
                         modifier = Modifier.size(40.dp),
                     ) {
-                        Icon(painterResource(LucideR.drawable.lucide_ic_arrow_down), contentDescription = "Move down")
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_arrow_down),
+                            contentDescription = "Move down",
+                        )
                     }
-                    IconButton(onClick = { coordinator.removeQueueEntry(entry.entryId) }, modifier = Modifier.size(40.dp)) {
+                    IconButton(
+                        onClick = { coordinator.removeQueueEntry(entry.entryId) },
+                        modifier = Modifier.size(40.dp),
+                    ) {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_x),
                             contentDescription = "Remove from queue",
@@ -646,7 +725,9 @@ private fun LyricsPanel(
             var automaticScroll by remember { mutableStateOf(false) }
             val currentIndex =
                 if (lyrics.timed) {
-                    lyrics.lines.indexOfLast { it.startSeconds != null && it.startSeconds <= positionSeconds }
+                    lyrics.lines.indexOfLast {
+                        it.startSeconds != null && it.startSeconds <= positionSeconds
+                    }
                 } else -1
             LaunchedEffect(listState) {
                 snapshotFlow { listState.isScrollInProgress }
@@ -676,12 +757,20 @@ private fun LyricsPanel(
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    itemsIndexed(lyrics.lines, key = { index, _ -> "lyric-$index" }) { index, line ->
+                    itemsIndexed(lyrics.lines, key = { index, _ -> "lyric-$index" }) { index, line
+                        ->
                         Text(
                             line.text,
-                            style = if (index == currentIndex) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
-                            color = if (index == currentIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().clickable { line.startSeconds?.toLong()?.let(onSeek) },
+                            style =
+                                if (index == currentIndex) MaterialTheme.typography.titleLarge
+                                else MaterialTheme.typography.bodyLarge,
+                            color =
+                                if (index == currentIndex) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier =
+                                Modifier.fillMaxWidth().clickable {
+                                    line.startSeconds?.toLong()?.let(onSeek)
+                                },
                         )
                     }
                 }

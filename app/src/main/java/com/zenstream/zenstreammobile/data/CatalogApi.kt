@@ -151,8 +151,9 @@ class CatalogApi(
 
     suspend fun refreshAccount(session: AuthSession): AuthSession =
         withContext(Dispatchers.IO) {
-            val response = authBootstrap(session.serverUrl, session.token)
-                ?: requestJson(session, "/api/auth/me")
+            val response =
+                authBootstrap(session.serverUrl, session.token)
+                    ?: requestJson(session, "/api/auth/me")
             val user =
                 response.optJSONObject("user")
                     ?: error("Server did not return the authenticated user")
@@ -164,12 +165,10 @@ class CatalogApi(
                 username = user.optString("username").ifBlank { session.username },
                 avatarVersion = user.optNullableString("avatarVersion"),
                 resourceTicket =
-                    response.optString("resourceTicket")
-                        .takeIf { it.isNotBlank() }
+                    response.optString("resourceTicket").takeIf { it.isNotBlank() }
                         ?: session.resourceTicket,
                 artworkTicket =
-                    response.optString("artworkTicket")
-                        .takeIf { it.isNotBlank() }
+                    response.optString("artworkTicket").takeIf { it.isNotBlank() }
                         ?: session.artworkTicket,
             )
         }

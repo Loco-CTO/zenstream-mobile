@@ -8,9 +8,9 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import kotlin.math.roundToInt
 
 /**
- * The small palette used by music surfaces. It is intentionally derived from the
- * same Primary blur hash that is shown while authenticated artwork is loading, so
- * the artwork, backdrop, controls, and mini-player remain visually related.
+ * The small palette used by music surfaces. It is intentionally derived from the same Primary blur
+ * hash that is shown while authenticated artwork is loading, so the artwork, backdrop, controls,
+ * and mini-player remain visually related.
  */
 data class ArtworkPalette(
     val accent: Color,
@@ -19,12 +19,13 @@ data class ArtworkPalette(
     val onAccent: Color,
 ) {
     companion object {
-        val fallback = ArtworkPalette(
-            accent = Color(0xFFB69CFF),
-            background = Color(0xFF17131F),
-            surface = Color(0xFF282130),
-            onAccent = Color.Black,
-        )
+        val fallback =
+            ArtworkPalette(
+                accent = Color(0xFFB69CFF),
+                background = Color(0xFF17131F),
+                surface = Color(0xFF282130),
+                onAccent = Color.Black,
+            )
     }
 }
 
@@ -62,10 +63,7 @@ private fun artworkPalette(bitmap: Bitmap?): ArtworkPalette {
                 hsv,
             )
 
-            val luminance =
-                .2126f * sampleRed +
-                    .7152f * sampleGreen +
-                    .0722f * sampleBlue
+            val luminance = .2126f * sampleRed + .7152f * sampleGreen + .0722f * sampleBlue
             val edgeWeight = if (luminance < .035f || luminance > .965f) .24f else 1f
             val weight = (.4f + hsv[1] * 1.8f) * edgeWeight
             red += sampleRed * weight
@@ -80,11 +78,12 @@ private fun artworkPalette(bitmap: Bitmap?): ArtworkPalette {
     val averageRed = (red / weightTotal).coerceIn(0f, 1f)
     val averageGreen = (green / weightTotal).coerceIn(0f, 1f)
     val averageBlue = (blue / weightTotal).coerceIn(0f, 1f)
-    val averagePixel = AndroidColor.rgb(
-        (averageRed * 255f).roundToInt(),
-        (averageGreen * 255f).roundToInt(),
-        (averageBlue * 255f).roundToInt(),
-    )
+    val averagePixel =
+        AndroidColor.rgb(
+            (averageRed * 255f).roundToInt(),
+            (averageGreen * 255f).roundToInt(),
+            (averageBlue * 255f).roundToInt(),
+        )
     AndroidColor.colorToHSV(averagePixel, hsv)
 
     val sourceSaturation = hsv[1]
@@ -92,20 +91,19 @@ private fun artworkPalette(bitmap: Bitmap?): ArtworkPalette {
     val accentSaturation = sourceSaturation.coerceIn(.12f, .74f)
     val accentValue = sourceValue.coerceIn(.52f, .92f)
     val accent = Color.hsv(hsv[0], accentSaturation, accentValue)
-    val background = Color.hsv(
-        hsv[0],
-        sourceSaturation.coerceIn(.10f, .54f),
-        (sourceValue * .34f).coerceIn(.12f, .25f),
-    )
-    val surface = Color.hsv(
-        hsv[0],
-        sourceSaturation.coerceIn(.10f, .48f),
-        (sourceValue * .48f).coerceIn(.18f, .34f),
-    )
-    val accentLuminance =
-        .2126f * accent.red +
-            .7152f * accent.green +
-            .0722f * accent.blue
+    val background =
+        Color.hsv(
+            hsv[0],
+            sourceSaturation.coerceIn(.10f, .54f),
+            (sourceValue * .34f).coerceIn(.12f, .25f),
+        )
+    val surface =
+        Color.hsv(
+            hsv[0],
+            sourceSaturation.coerceIn(.10f, .48f),
+            (sourceValue * .48f).coerceIn(.18f, .34f),
+        )
+    val accentLuminance = .2126f * accent.red + .7152f * accent.green + .0722f * accent.blue
 
     return ArtworkPalette(
         accent = accent,

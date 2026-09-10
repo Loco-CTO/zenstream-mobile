@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,10 +18,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -32,11 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.data.artistCreditSeparator
 import com.zenstream.zenstreammobile.data.artistCreditsForAlbum
@@ -54,9 +54,7 @@ fun AudioCard(
     modifier: Modifier = Modifier,
     width: Dp? = 148.dp,
 ) {
-    val cardModifier =
-        if (width == null) modifier.fillMaxWidth()
-        else modifier.width(width)
+    val cardModifier = if (width == null) modifier.fillMaxWidth() else modifier.width(width)
     Column(
         modifier =
             cardModifier
@@ -107,9 +105,7 @@ fun MusicArtwork(
     val blurHash = imageBlurHash(item, "Primary")
     var imageFailed by remember(url) { mutableStateOf(url == null) }
     Box(
-        modifier = modifier
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
         BlurHashAsyncImage(
@@ -140,13 +136,14 @@ fun MusicArtistCard(
     size: Dp = 112.dp,
 ) {
     Column(
-        modifier = modifier
-            .width(size)
-            .semantics {
-                role = Role.Button
-                contentDescription = "Open ${item.name}"
-            }
-            .clickable { onClick(item) },
+        modifier =
+            modifier
+                .width(size)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = "Open ${item.name}"
+                }
+                .clickable { onClick(item) },
         horizontalAlignment = Alignment.Start,
     ) {
         MusicArtwork(

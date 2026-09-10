@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
-import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
@@ -15,14 +14,10 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -397,7 +392,9 @@ class AudioPlaybackService : MediaLibraryService() {
             // Keep ExoPlayer at unity gain and let the device media stream
             // volume control the audible level.
             player.volume = 1f
-            player.setMediaSource(buildAudioMediaSource(dataSourceFactory, mediaItem, normalizedSource))
+            player.setMediaSource(
+                buildAudioMediaSource(dataSourceFactory, mediaItem, normalizedSource)
+            )
             player.prepare()
             retryEntryId = null
             suppressEnded = false
@@ -903,23 +900,23 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Restore is issued when the app starts, before there is necessarily a current
-     * MediaItem for Media3's own notification provider. Starting foreground work
-     * immediately prevents Android's foreground-service timeout from turning a
-     * normal cold start into an ANR. Media3 updates its session notification once
-     * the player has queue metadata.
+     * Restore is issued when the app starts, before there is necessarily a current MediaItem for
+     * Media3's own notification provider. Starting foreground work immediately prevents Android's
+     * foreground-service timeout from turning a normal cold start into an ANR. Media3 updates its
+     * session notification once the player has queue metadata.
      */
     private fun startServiceForeground() {
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.createNotificationChannel(
             NotificationChannel(
-                AUDIO_NOTIFICATION_CHANNEL,
-                getString(R.string.app_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Audio playback controls"
-                setShowBadge(false)
-            },
+                    AUDIO_NOTIFICATION_CHANNEL,
+                    getString(R.string.app_name),
+                    NotificationManager.IMPORTANCE_LOW,
+                )
+                .apply {
+                    description = "Audio playback controls"
+                    setShowBadge(false)
+                }
         )
         val contentIntent =
             PendingIntent.getActivity(
@@ -1074,13 +1071,15 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun autoPlaybackItem(request: MediaItem): MediaItem {
-        val trackId = request.mediaId
-            .takeIf { it.startsWith("zenstream:track:") }
-            ?.removePrefix("zenstream:track:")
-            ?.takeIf(String::isNotBlank)
-            ?: error("Android Auto requested an unsupported media id")
-        val track = catalogTracks.values.asSequence().flatten().firstOrNull { it.id == trackId }
-            ?: error("Music track is no longer available")
+        val trackId =
+            request.mediaId
+                .takeIf { it.startsWith("zenstream:track:") }
+                ?.removePrefix("zenstream:track:")
+                ?.takeIf(String::isNotBlank)
+                ?: error("Android Auto requested an unsupported media id")
+        val track =
+            catalogTracks.values.asSequence().flatten().firstOrNull { it.id == trackId }
+                ?: error("Music track is no longer available")
         val account = authenticatedAccount() ?: error("Sign in to play music")
         httpFactory.setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${account.token}"))
         val data =
