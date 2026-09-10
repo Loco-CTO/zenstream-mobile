@@ -12,8 +12,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -70,6 +70,7 @@ import org.json.JSONObject
 class AudioPlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var httpFactory: DefaultHttpDataSource.Factory
+    private lateinit var dataSourceFactory: DataSource.Factory
     private lateinit var librarySession: MediaLibrarySession
     private lateinit var repository: CatalogRepository
     private lateinit var sessionStore: SessionStore
@@ -100,7 +101,7 @@ class AudioPlaybackService : MediaLibraryService() {
         sessionStore = SessionStore(applicationContext)
         repository = CatalogRepository(CatalogApi(), sessionStore)
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
-        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
+        dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
         player =
             ExoPlayer.Builder(this)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
@@ -166,6 +167,7 @@ class AudioPlaybackService : MediaLibraryService() {
                 serviceScope.launch { setVolume(value) }
             }
             AudioServiceBridge.ACTION_TOGGLE_MUTE -> serviceScope.launch { toggleMute() }
+            AudioServiceBridge.ACTION_RETRY -> serviceScope.launch { retryCurrent() }
             AudioServiceBridge.ACTION_SEEK -> {
                 val position = intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L)
                 serviceScope.launch { seekTo(position) }
@@ -331,9 +333,17 @@ class AudioPlaybackService : MediaLibraryService() {
         }
     }
 
+    private suspend fun retryCurrent() {
+        if (currentState.currentEntry == null) return
+        retryEntryId = null
+        suppressEnded = true
+        player.stop()
+        loadCurrent(autoPlay = true)
+    }
+
     private suspend fun loadCurrent(autoPlay: Boolean) {
         val entry = currentState.currentEntry ?: return
-        val account = sessionStore.session.first()
+        val account = authenticatedAccount()
         if (account == null || !snapshotBelongsTo(currentState.toSnapshot(account), account)) {
             currentState = currentState.copy(isLoading = false, error = "Sign in to play music")
             AudioServiceBridge.publish(currentState)
@@ -356,11 +366,12 @@ class AudioPlaybackService : MediaLibraryService() {
                 )
             val candidateUrl = data.url ?: data.source.url ?: error("Server did not return an audio URL")
             val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
+            val normalizedSource = normalizeAudioSource(url, data.mimeType, data.mode)
             val mediaItem =
                 MediaItem.Builder()
                     .setMediaId("zenstream:queue:${entry.entryId}")
                     .setUri(Uri.parse(url))
-                    .setMimeType(data.mimeType ?: inferMimeType(url, data.mode))
+                    .apply { normalizedSource.mimeType?.let(::setMimeType) }
                     .setMediaMetadata(
                         MediaMetadata.Builder()
                             .setTitle(entry.track.name)
@@ -373,8 +384,9 @@ class AudioPlaybackService : MediaLibraryService() {
                             .build()
                     )
                     .build()
-            player.setMediaItem(mediaItem)
+            player.setMediaSource(buildAudioMediaSource(dataSourceFactory, mediaItem, normalizedSource))
             player.prepare()
+            retryEntryId = null
             suppressEnded = false
             val position = (currentState.positionSeconds * 1_000L).coerceAtLeast(0L)
             if (position > 0) player.seekTo(position)
@@ -642,7 +654,7 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private suspend fun loadAutoCatalog() {
         autoCatalogMutex.withLock {
-            val account = sessionStore.session.first()
+            val account = authenticatedAccount()
             if (account == null) {
                 catalogScope = null
                 catalogSession = null
@@ -776,6 +788,25 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun accountScope(account: AuthSession): String =
         audioQueueScope(account.serverUrl, account.userId)
+
+    /**
+     * MediaSession artwork is fetched outside the normal Coil request path, so it needs the
+     * short-lived artwork capability from the latest authenticated account response. Existing
+     * sessions created before that capability was added are refreshed once on demand; if the
+     * refresh is unavailable, the bearer-authenticated request path still remains usable.
+     */
+    private suspend fun authenticatedAccount(): AuthSession? {
+        val account = sessionStore.session.first() ?: return null
+        if (!account.artworkTicket.isNullOrBlank()) return account
+        return try {
+            repository.refreshCurrentAccount()
+            sessionStore.session.first() ?: account
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            account
+        }
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         serviceScope.launch { reportProgress(); persistSnapshot() }
@@ -932,22 +963,23 @@ class AudioPlaybackService : MediaLibraryService() {
             ?: error("Android Auto requested an unsupported media id")
         val track = catalogTracks.values.asSequence().flatten().firstOrNull { it.id == trackId }
             ?: error("Music track is no longer available")
-        val account = sessionStore.session.first() ?: error("Sign in to play music")
+        val account = authenticatedAccount() ?: error("Sign in to play music")
         httpFactory.setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${account.token}"))
         val data = repository.playback(account, track.id, PlaybackOptions(engine = PlayerEngine.MEDIA3))
         val candidateUrl = data.url ?: data.source.url ?: error("Server did not return an audio URL")
         val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
+        val normalizedSource = normalizeAudioSource(url, data.mimeType, data.mode)
         val metadata =
             MediaMetadata.Builder()
                 .setTitle(track.name)
                 .setArtist(primaryArtist(track))
                 .setAlbumTitle(track.album)
-                .apply { authenticatedArtworkUri(track)?.let { setArtworkUri(it) } }
+                .apply { authenticatedArtworkUri(track, account)?.let { setArtworkUri(it) } }
                 .build()
         return MediaItem.Builder()
             .setMediaId(request.mediaId)
             .setUri(Uri.parse(url))
-            .setMimeType(data.mimeType ?: inferMimeType(url, data.mode))
+            .apply { normalizedSource.mimeType?.let(::setMimeType) }
             .setMediaMetadata(metadata)
             .build()
     }
@@ -1005,7 +1037,9 @@ class AudioPlaybackService : MediaLibraryService() {
         account: AuthSession? = catalogSession,
     ): Uri? {
         account ?: return null
-        val ticket = account.resourceTicket?.takeIf(String::isNotBlank) ?: return null
+        val ticket =
+            (account.artworkTicket ?: account.resourceTicket)?.takeIf(String::isNotBlank)
+                ?: return null
         val path = item?.imageTags?.get("Primary")?.takeIf { it.startsWith("/api/") } ?: return null
         return runCatching {
             val absolute = resolveSameOriginUrl(account.serverUrl, path)
@@ -1097,20 +1131,6 @@ class AudioPlaybackService : MediaLibraryService() {
                 ?: item.albumArtist
                 ?: item.artists.firstOrNull()
                 ?: "Unknown artist"
-
-        private fun inferMimeType(url: String, mode: String?): String? {
-            if (mode == "audio-transcode" || mode == "video-transcode") return "application/vnd.apple.mpegurl"
-            val path = runCatching { Uri.parse(url).path.orEmpty().lowercase() }.getOrDefault("")
-            return when {
-                path.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
-                path.endsWith(".mp3") -> "audio/mpeg"
-                path.endsWith(".m4a") || path.endsWith(".aac") -> "audio/mp4"
-                path.endsWith(".flac") -> "audio/flac"
-                path.endsWith(".ogg") || path.endsWith(".opus") -> "audio/ogg"
-                path.endsWith(".wav") -> "audio/wav"
-                else -> null
-            }
-        }
 
         private fun resolveSameOriginUrl(server: String, candidate: String): String {
             val base = server.toHttpUrl()

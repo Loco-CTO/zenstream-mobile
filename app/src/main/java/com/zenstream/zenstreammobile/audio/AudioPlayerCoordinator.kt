@@ -116,6 +116,8 @@ class AudioPlayerCoordinator(
 
     fun toggleMute() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_MUTE)
 
+    fun retry() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_RETRY)
+
     fun seekTo(positionSeconds: Long) {
         val position = positionSeconds.coerceAtLeast(0L)
         mediaController?.takeIf { it.currentMediaItem != null }?.seekTo(position * 1_000L)

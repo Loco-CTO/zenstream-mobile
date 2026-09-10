@@ -122,7 +122,20 @@ class CatalogApiHttpTest {
                 )
         )
         server.enqueue(
-            MockResponse().setBody(JSONObject().put("ticket", "resource-ticket").toString())
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put(
+                            "user",
+                            JSONObject()
+                                .put("id", "user-1")
+                                .put("username", "Test")
+                                .put("avatarVersion", "v-login"),
+                        )
+                        .put("resourceTicket", "resource-ticket")
+                        .put("artworkTicket", "artwork-ticket")
+                        .toString()
+                )
         )
 
         val session =
@@ -134,10 +147,14 @@ class CatalogApiHttpTest {
                 )
 
         assertEquals("v-login", session.avatarVersion)
+        assertEquals("resource-ticket", session.resourceTicket)
+        assertEquals("artwork-ticket", session.artworkTicket)
         val loginRequest = server.takeRequest()
         assertEquals("POST", loginRequest.method)
         assertEquals("/api/auth/login", loginRequest.path)
-        assertEquals("GET", server.takeRequest().method)
+        val bootstrapRequest = server.takeRequest()
+        assertEquals("GET", bootstrapRequest.method)
+        assertEquals("/api/auth/bootstrap", bootstrapRequest.path)
     }
 
     @Test
@@ -230,7 +247,7 @@ class CatalogApiHttpTest {
                 .setBody(
                     JSONObject()
                         .put(
-                            "user",
+                        "user",
                             JSONObject()
                                 .put("id", "user-1")
                                 .put("username", "Updated")
@@ -248,7 +265,7 @@ class CatalogApiHttpTest {
         assertEquals("v-3", refreshed.avatarVersion)
         val request = server.takeRequest()
         assertEquals("GET", request.method)
-        assertEquals("/api/auth/me", request.path)
+        assertEquals("/api/auth/bootstrap", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
     }
 

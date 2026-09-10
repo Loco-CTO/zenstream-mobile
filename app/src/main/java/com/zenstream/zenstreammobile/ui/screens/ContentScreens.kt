@@ -1459,7 +1459,12 @@ private fun LibraryPosterCard(
     onItemClick: (MediaItem) -> Unit,
 ) {
     if (item.type in setOf("MusicAlbum", "MusicArtist", "Audio")) {
-        AudioCard(item = item, session = session, onClick = onItemClick)
+        AudioCard(
+            item = item,
+            session = session,
+            onClick = onItemClick,
+            width = null,
+        )
     } else {
         com.zenstream.zenstreammobile.ui.components.MediaCard(
             item = item,

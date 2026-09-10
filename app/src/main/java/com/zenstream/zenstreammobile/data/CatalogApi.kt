@@ -131,24 +131,30 @@ class CatalogApi(
             val userId =
                 user?.optString("id").orEmpty().takeIf { it.isNotBlank() }
                     ?: error("Server did not return a user ID")
+            val bootstrap = authBootstrap(server, token)
+            val account = bootstrap?.optJSONObject("user") ?: user
             val ticket =
-                requestJson(server, "/api/auth/resource-ticket", token = token)
-                    .optString("ticket")
-                    .takeIf { it.isNotBlank() }
+                bootstrap?.optString("resourceTicket")?.takeIf { it.isNotBlank() }
+                    ?: requestJson(server, "/api/auth/resource-ticket", token = token)
+                        .optString("ticket")
+                        .takeIf { it.isNotBlank() }
             AuthSession(
                 server,
                 token,
                 userId,
-                user?.optString("username").orEmpty().ifBlank { username.trim() },
-                ticket,
-                user?.optNullableString("avatarVersion"),
+                account?.optString("username").orEmpty().ifBlank { username.trim() },
+                resourceTicket = ticket,
+                avatarVersion = account?.optNullableString("avatarVersion"),
+                artworkTicket = bootstrap?.optString("artworkTicket")?.takeIf { it.isNotBlank() },
             )
         }
 
     suspend fun refreshAccount(session: AuthSession): AuthSession =
         withContext(Dispatchers.IO) {
+            val response = authBootstrap(session.serverUrl, session.token)
+                ?: requestJson(session, "/api/auth/me")
             val user =
-                requestJson(session, "/api/auth/me").optJSONObject("user")
+                response.optJSONObject("user")
                     ?: error("Server did not return the authenticated user")
             val userId =
                 user.optString("id").takeIf { it.isNotBlank() }
@@ -157,7 +163,22 @@ class CatalogApi(
             session.copy(
                 username = user.optString("username").ifBlank { session.username },
                 avatarVersion = user.optNullableString("avatarVersion"),
+                resourceTicket =
+                    response.optString("resourceTicket")
+                        .takeIf { it.isNotBlank() }
+                        ?: session.resourceTicket,
+                artworkTicket =
+                    response.optString("artworkTicket")
+                        .takeIf { it.isNotBlank() }
+                        ?: session.artworkTicket,
             )
+        }
+
+    private suspend fun authBootstrap(server: String, token: String): JSONObject? =
+        try {
+            requestJson(server, "/api/auth/bootstrap", token = token)
+        } catch (error: CatalogException) {
+            if (error.statusCode == 404 || error.statusCode == 405) null else throw error
         }
 
     suspend fun uploadAvatar(

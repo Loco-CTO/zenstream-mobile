@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,7 +32,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.artistCreditsForAlbum
@@ -49,11 +55,14 @@ fun AudioCard(
     session: AuthSession,
     onClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
+    width: Dp? = 148.dp,
 ) {
+    val cardModifier =
+        if (width == null) modifier.fillMaxWidth()
+        else modifier.width(width)
     Column(
         modifier =
-            modifier
-                .width(148.dp)
+            cardModifier
                 .semantics {
                     role = Role.Button
                     contentDescription = "Open ${item.name}"
@@ -63,6 +72,7 @@ fun AudioCard(
         MusicArtwork(
             item = item,
             session = session,
+            requestedSize = 360,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         )
         Text(
@@ -90,17 +100,36 @@ fun MusicArtwork(
     session: AuthSession,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
+    requestedSize: Int = 640,
 ) {
-    val url = imageUrl(session.serverUrl, item, "Primary", 640, 640)
+    val safeSize = requestedSize.coerceIn(160, 1_024)
+    val url = imageUrl(session.serverUrl, item, "Primary", safeSize, safeSize)
     val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
-    BlurHashAsyncImage(
-        model = request,
-        imageKey = url,
-        blurHash = imageBlurHash(item, "Primary"),
-        contentDescription = contentDescription ?: item.name,
-        contentScale = ContentScale.Crop,
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-    )
+    val blurHash = imageBlurHash(item, "Primary")
+    var imageFailed by remember(url) { mutableStateOf(url == null) }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        BlurHashAsyncImage(
+            model = request,
+            imageKey = url,
+            blurHash = blurHash,
+            contentDescription = contentDescription ?: item.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+            onError = { imageFailed = true },
+        )
+        if (imageFailed && blurHash.isNullOrBlank()) {
+            Text(
+                text = "♪",
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .72f),
+            )
+        }
+    }
 }
 
 @Composable

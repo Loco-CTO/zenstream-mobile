@@ -7,6 +7,7 @@ data class AuthSession(
     val username: String,
     val resourceTicket: String? = null,
     val avatarVersion: String? = null,
+    val artworkTicket: String? = null,
 )
 
 data class MediaChapter(

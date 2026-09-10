@@ -61,6 +61,7 @@ class SessionStore(
         val serverUrl = stringPreferencesKey("server_url")
         val token = stringPreferencesKey("encrypted_token")
         val resourceTicket = stringPreferencesKey("encrypted_resource_ticket")
+        val artworkTicket = stringPreferencesKey("encrypted_artwork_ticket")
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val avatarVersion = stringPreferencesKey("avatar_version")
@@ -170,6 +171,7 @@ class SessionStore(
                     prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
                     prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
                     prefs[Keys.avatarVersion],
+                    prefs[Keys.artworkTicket]?.let { cipher.decrypt(it) },
                 )
             }
             // Android Keystore can be briefly unavailable while the device is
@@ -211,6 +213,9 @@ class SessionStore(
             session.resourceTicket?.let { ticket ->
                 it[Keys.resourceTicket] = cipher.encrypt(ticket)
             } ?: it.remove(Keys.resourceTicket)
+            session.artworkTicket?.let { ticket ->
+                it[Keys.artworkTicket] = cipher.encrypt(ticket)
+            } ?: it.remove(Keys.artworkTicket)
             it[Keys.userId] = session.userId
             it[Keys.username] = session.username
             session.avatarVersion?.let { version ->
@@ -366,6 +371,7 @@ class SessionStore(
         dataStore.edit {
             it.remove(Keys.token)
             it.remove(Keys.resourceTicket)
+            it.remove(Keys.artworkTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.avatarVersion)
@@ -386,6 +392,7 @@ class SessionStore(
             it.remove(Keys.serverUrl)
             it.remove(Keys.token)
             it.remove(Keys.resourceTicket)
+            it.remove(Keys.artworkTicket)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.avatarVersion)

@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -509,7 +510,9 @@ private fun MainScaffold(
                     NotificationsScreen(
                         repository = repository,
                         session = session,
-                        outerPadding = padding,
+                        // The nested Material top bar owns status-bar insets.
+                        // Only carry the root mini-player slot into detail content.
+                        outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                         onBack = { navController.popBackStack() },
                         onOpenDestination = { destination ->
                             when (destination) {
@@ -541,7 +544,7 @@ private fun MainScaffold(
                         albumId = albumId,
                         selectedTrackId = trackId,
                         currentTrackId = audioState.currentEntry?.track?.id,
-                        outerPadding = padding,
+                        outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                         onBack = { navController.popBackStack() },
                         onOpenArtist = { artistId -> navigateToArtist(navController, artistId) },
                         onOpenAlbum = { relatedId -> navigateToAlbum(navController, relatedId) },
