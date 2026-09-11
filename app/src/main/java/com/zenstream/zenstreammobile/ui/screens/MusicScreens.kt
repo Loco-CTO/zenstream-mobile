@@ -165,6 +165,10 @@ private fun AlbumContent(
     onScrollabilityChanged: (Boolean) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val accent =
+        remember(data.album.id, data.album.imageBlurHashes["Primary"]) {
+            musicArtworkPalette(data.album).accent
+        }
     val tracks =
         remember(data.tracks) {
             data.tracks
@@ -218,7 +222,6 @@ private fun AlbumContent(
             itemsIndexed(discTracks, key = { _, track -> "track-${track.id}" }) { index, track ->
                 AudioTrackRow(
                     item = track,
-                    session = session,
                     position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = {
@@ -230,7 +233,7 @@ private fun AlbumContent(
                     },
                     onFavorite = onFavoriteTrack,
                     onArtistClick = onArtistClick,
-                    artworkItem = data.album,
+                    accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -521,7 +524,6 @@ private fun ArtistContent(
     val artist = data.artist
     val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
     val albums = remember(data.albums) { data.albums.distinctBy { it.id } }
-    val albumsById = remember(albums) { albums.associateBy { it.id } }
     val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
     val accent = palette.accent
     val listState = rememberLazyListState()
@@ -674,7 +676,6 @@ private fun ArtistContent(
                 track ->
                 AudioTrackRow(
                     item = track,
-                    session = session,
                     position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = {
@@ -684,7 +685,7 @@ private fun ArtistContent(
                         )
                     },
                     onArtistClick = onArtistClick,
-                    artworkItem = albumsById[track.albumId],
+                    accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -733,12 +734,11 @@ private fun ArtistContent(
             itemsIndexed(tracks, key = { _, track -> "artist-track-${track.id}" }) { index, track ->
                 AudioTrackRow(
                     item = track,
-                    session = session,
                     position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, index) },
                     onArtistClick = onArtistClick,
-                    artworkItem = albumsById[track.albumId],
+                    accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }

@@ -181,13 +181,12 @@ fun MusicArtistCard(
 @Composable
 fun AudioTrackRow(
     item: MediaItem,
-    session: AuthSession,
     position: Int,
     isCurrent: Boolean = false,
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
     onArtistClick: (String) -> Unit = {},
-    artworkItem: MediaItem? = null,
+    accentColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
     val credits = artistCreditsForTrack(item)
@@ -197,7 +196,7 @@ fun AudioTrackRow(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(
-                    if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
+                    if (isCurrent) accentColor.copy(alpha = .14f)
                     else Color.Transparent
                 )
                 .clickable { onClick(item) }
@@ -212,7 +211,7 @@ fun AudioTrackRow(
                 Icon(
                     painter = painterResource(LucideR.drawable.lucide_ic_play),
                     contentDescription = "Currently playing",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = accentColor,
                     modifier = Modifier.size(16.dp),
                 )
             } else {
@@ -223,20 +222,11 @@ fun AudioTrackRow(
                 )
             }
         }
-        MusicArtwork(
-            item = item,
-            session = session,
-            fallbackItem = artworkItem,
-            requestedSize = 256,
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.size(44.dp),
-            contentDescription = "${item.name} artwork",
-        )
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,
                 color =
-                    if (isCurrent) MaterialTheme.colorScheme.primary
+                    if (isCurrent) accentColor
                     else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
@@ -247,7 +237,9 @@ fun AudioTrackRow(
                     credits.forEachIndexed { index, credit ->
                         Text(
                             text = credit.name,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color =
+                                if (isCurrent) accentColor.copy(alpha = .78f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -260,7 +252,9 @@ fun AudioTrackRow(
                             separator ->
                             Text(
                                 separator,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color =
+                                    if (isCurrent) accentColor.copy(alpha = .78f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -280,7 +274,9 @@ fun AudioTrackRow(
             }
         Text(
             text = formatDurationSeconds(item.durationSeconds),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color =
+                if (isCurrent) accentColor.copy(alpha = .86f)
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
         )
         if (onFavorite != null) {
@@ -292,7 +288,7 @@ fun AudioTrackRow(
                     painter = painterResource(LucideR.drawable.lucide_ic_heart),
                     contentDescription = if (item.favorite) "Remove favorite" else "Add favorite",
                     tint =
-                        if (item.favorite) MaterialTheme.colorScheme.primary
+                        if (item.favorite) accentColor
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
