@@ -118,6 +118,7 @@ fun DetailScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val title = state.data?.item?.name.orEmpty()
     val parentSeries = state.data?.takeIf { it.item.type == "Episode" }?.parentSeries
+    val isEpisode = state.data?.item?.type == "Episode"
     var detailScrolled by remember(itemId) { mutableStateOf(false) }
 
     Box(
@@ -177,6 +178,7 @@ fun DetailScreen(
             parentSeries = parentSeries,
             visible = true,
             scrolled = detailScrolled,
+            showTitleWithoutScroll = isEpisode,
             backOnly = state.data == null,
             onBack = onBack,
             onOpenItem = onOpenItem,
@@ -766,6 +768,7 @@ internal fun DetailOverlayTopBar(
     parentSeries: MediaItem? = null,
     visible: Boolean = true,
     scrolled: Boolean = false,
+    showTitleWithoutScroll: Boolean = false,
     backOnly: Boolean = false,
     onBack: () -> Unit,
     onOpenItem: (MediaItem) -> Unit = {},
@@ -812,7 +815,12 @@ internal fun DetailOverlayTopBar(
                         stringResource(R.string.back),
                     )
                 }
-                if (!backOnly) {
+                AnimatedVisibility(
+                    visible = !backOnly && (showTitleWithoutScroll || scrolled),
+                    modifier = Modifier.weight(1f),
+                    enter = fadeIn(animationSpec = tween(durationMillis = 180)),
+                    exit = fadeOut(animationSpec = tween(durationMillis = 120)),
+                ) {
                     if (parentSeries == null) {
                         Text(
                             title,
@@ -822,14 +830,13 @@ internal fun DetailOverlayTopBar(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
-                                Modifier.weight(1f)
-                                    .testTag("detail_overlay_title")
+                                Modifier.testTag("detail_overlay_title")
                                     .semantics { contentDescription = title },
                         )
                     } else {
                         TextButton(
                             onClick = { onOpenItem(parentSeries) },
-                            modifier = Modifier.weight(1f).testTag("detail_overlay_title"),
+                            modifier = Modifier.testTag("detail_overlay_title"),
                             contentPadding = PaddingValues(0.dp),
                         ) {
                             Text(

@@ -13,10 +13,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTopPositionInRootIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -388,6 +390,7 @@ class DetailScreensTest {
                     parentSeries = series,
                     visible = true,
                     scrolled = false,
+                    showTitleWithoutScroll = true,
                     onBack = {},
                     onOpenItem = { opened = it },
                 )
@@ -407,7 +410,7 @@ class DetailScreensTest {
     }
 
     @Test
-    fun catalogDetailOverlayStaysVisibleAndScrimFollowsScrolling() {
+    fun catalogDetailOverlayKeepsBackVisibleAndRevealsTitleAfterScrolling() {
         var scrolledAtLeastOnce = false
         composeRule.setContent {
             ZenStreamTheme {
@@ -437,10 +440,13 @@ class DetailScreensTest {
         }
 
         composeRule.onNodeWithTag("detail_overlay_top_bar").assertIsDisplayed()
+        composeRule.onNodeWithTag("detail_overlay_back").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Movie").assertCountEquals(0)
         composeRule.onNodeWithTag("overlay_scroll_content").performTouchInput { swipeUp() }
         composeRule.waitForIdle()
         assertTrue(scrolledAtLeastOnce)
         composeRule.onNodeWithTag("detail_overlay_top_bar").assertIsDisplayed()
+        composeRule.onNodeWithText("Movie").assertIsDisplayed()
     }
 
     @Test
