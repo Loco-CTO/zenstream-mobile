@@ -4,6 +4,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,9 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -76,6 +77,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.ui.components.ArtworkPalette
+import com.zenstream.zenstreammobile.ui.components.decodeBlurHashBitmap
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
@@ -245,19 +247,24 @@ fun NowPlayingScreen(
         remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
             current?.let(::musicArtworkPalette) ?: ArtworkPalette.fallback
         }
+    val backgroundBlurHash =
+        remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
+            current?.imageBlurHashes?.get("Primary")
+                ?.takeIf(String::isNotBlank)
+                ?.let(::decodeBlurHashBitmap)
+        }
     Box(
-        Modifier.fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        artworkPalette.background.copy(alpha = .96f),
-                        artworkPalette.surface.copy(alpha = .72f),
-                        MaterialTheme.colorScheme.background.copy(alpha = .98f),
-                        MaterialTheme.colorScheme.background,
-                    )
-                )
-            )
+        Modifier.fillMaxSize().background(artworkPalette.background)
     ) {
+        backgroundBlurHash?.let { bitmap ->
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .58f)))
+        }
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
@@ -285,9 +292,7 @@ fun NowPlayingScreen(
                     navigationIcon = {
                         IconButton(
                             onClick = onBack,
-                            modifier =
-                                Modifier.size(48.dp)
-                                    .background(Color.Black.copy(alpha = .2f), CircleShape),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_chevron_down),
@@ -298,9 +303,7 @@ fun NowPlayingScreen(
                     actions = {
                         IconButton(
                             onClick = { tab = 0 },
-                            modifier =
-                                Modifier.size(48.dp)
-                                    .background(Color.Black.copy(alpha = .2f), CircleShape),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
@@ -637,7 +640,7 @@ private fun AudioProgressScrubber(
             )
             if (fraction > 0f) {
                 drawLine(
-                    brush = Brush.horizontalGradient(listOf(accent.copy(alpha = .72f), accent)),
+                    color = accent,
                     start = Offset(startX, centerY),
                     end = Offset(thumbX, centerY),
                     strokeWidth = trackStroke,

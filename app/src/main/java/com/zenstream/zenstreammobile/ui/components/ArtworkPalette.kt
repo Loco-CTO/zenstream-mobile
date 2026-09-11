@@ -7,6 +7,8 @@ import com.vanniktech.blurhash.BlurHash
 import com.zenstream.zenstreammobile.model.MediaItem
 import kotlin.math.roundToInt
 
+private const val MUSIC_ACCENT_VALUE = .82f
+
 /**
  * The small palette used by music surfaces. It is intentionally derived from the same Primary blur
  * hash that is shown while authenticated artwork is loading, so the artwork, backdrop, controls,
@@ -21,10 +23,10 @@ data class ArtworkPalette(
     companion object {
         val fallback =
             ArtworkPalette(
-                accent = Color(0xFFB69CFF),
+                accent = Color.hsv(255f, .38f, MUSIC_ACCENT_VALUE),
                 background = Color(0xFF17131F),
                 surface = Color(0xFF282130),
-                onAccent = Color.Black,
+                onAccent = Color.White,
             )
     }
 }
@@ -89,8 +91,10 @@ private fun artworkPalette(bitmap: Bitmap?): ArtworkPalette {
     val sourceSaturation = hsv[1]
     val sourceValue = hsv[2]
     val accentSaturation = sourceSaturation.coerceIn(.12f, .74f)
-    val accentValue = sourceValue.coerceIn(.52f, .92f)
-    val accent = Color.hsv(hsv[0], accentSaturation, accentValue)
+    // Keep hue and image-derived saturation, but give every music surface the same visual
+    // brightness. Using the source value here made accents from dark covers look muddy and
+    // accents from bright covers look harsh.
+    val accent = Color.hsv(hsv[0], accentSaturation, MUSIC_ACCENT_VALUE)
     val background =
         Color.hsv(
             hsv[0],
