@@ -219,10 +219,9 @@ private fun AlbumContent(
                     )
                 }
             }
-            itemsIndexed(discTracks, key = { _, track -> "track-${track.id}" }) { index, track ->
+            itemsIndexed(discTracks, key = { _, track -> "track-${track.id}" }) { _, track ->
                 AudioTrackRow(
                     item = track,
-                    position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = {
                         onPlayTracks(
@@ -672,11 +671,10 @@ private fun ArtistContent(
                 )
             }
             itemsIndexed(tracks.take(5), key = { _, track -> "artist-top-track-${track.id}" }) {
-                index,
+                _,
                 track ->
                 AudioTrackRow(
                     item = track,
-                    position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = {
                         onTrackClick(
@@ -734,7 +732,6 @@ private fun ArtistContent(
             itemsIndexed(tracks, key = { _, track -> "artist-track-${track.id}" }) { index, track ->
                 AudioTrackRow(
                     item = track,
-                    position = track.trackNumber ?: index + 1,
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, index) },
                     onArtistClick = onArtistClick,

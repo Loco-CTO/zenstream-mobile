@@ -181,7 +181,6 @@ fun MusicArtistCard(
 @Composable
 fun AudioTrackRow(
     item: MediaItem,
-    position: Int,
     isCurrent: Boolean = false,
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
@@ -203,25 +202,6 @@ fun AudioTrackRow(
                 .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.width(30.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isCurrent) {
-                Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_play),
-                    contentDescription = "Currently playing",
-                    tint = accentColor,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                Text(
-                    text = position.toString(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,
@@ -262,23 +242,6 @@ fun AudioTrackRow(
                 }
             }
         }
-        item.playCount
-            ?.takeIf { it > 0 }
-            ?.let {
-                Text(
-                    text = it.toString(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
-            }
-        Text(
-            text = formatDurationSeconds(item.durationSeconds),
-            color =
-                if (isCurrent) accentColor.copy(alpha = .86f)
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-        )
         if (onFavorite != null) {
             IconButton(
                 onClick = { onFavorite(item) },
