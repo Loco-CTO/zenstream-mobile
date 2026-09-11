@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,7 +70,6 @@ import com.zenstream.zenstreammobile.ui.components.AudioTrackRow
 import com.zenstream.zenstreammobile.ui.components.MusicArtistCard
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
-import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 
 @Composable
@@ -180,6 +180,7 @@ private fun AlbumContent(
                 )
         }
     val grouped = remember(tracks) { tracks.groupBy { it.discNumber ?: 1 }.toSortedMap() }
+    val duration = remember(tracks) { tracks.sumOf { it.durationSeconds ?: 0.0 } }
     ObserveScrollability(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
@@ -242,6 +243,13 @@ private fun AlbumContent(
                 AlbumDetails(data.album)
             }
         }
+        item(key = "album-footer") {
+            AlbumFooter(
+                album = data.album,
+                trackCount = tracks.size,
+                durationSeconds = duration,
+            )
+        }
         if (data.relatedAlbums.isNotEmpty()) {
             item(key = "related-albums") {
                 MusicSection(
@@ -268,8 +276,6 @@ private fun AlbumHeader(
     val album = data.album
     val year =
         album.releaseDate?.take(4)?.takeIf { it.length == 4 } ?: album.productionYear?.toString()
-    val uniqueTracks = data.tracks.distinctBy { it.id }
-    val duration = uniqueTracks.sumOf { it.durationSeconds ?: 0.0 }
     val palette =
         remember(album.id, album.imageBlurHashes["Primary"]) { musicArtworkPalette(album) }
     val accent = palette.accent
@@ -312,13 +318,11 @@ private fun AlbumHeader(
             verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Text(
-                album.albumType?.uppercase() ?: "ALBUM",
-                color = accent,
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text(
                 album.name,
-                style = MaterialTheme.typography.headlineLarge,
+                style =
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },
@@ -333,9 +337,7 @@ private fun AlbumHeader(
             Text(
                 listOfNotNull(
                         year,
-                        album.label,
-                        "${uniqueTracks.size} tracks",
-                        formatDurationSeconds(duration),
+                        album.albumType?.takeIf(String::isNotBlank) ?: "Album",
                     )
                     .joinToString(" · "),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -388,6 +390,53 @@ private fun AlbumHeader(
             }
         }
     }
+}
+
+@Composable
+private fun AlbumFooter(
+    album: MediaItem,
+    trackCount: Int,
+    durationSeconds: Double,
+) {
+    val summary =
+        buildList {
+            if (trackCount > 0) add("$trackCount songs")
+            formatAlbumDuration(durationSeconds)?.let { add(it) }
+        }
+    val label = album.label?.trim()?.takeIf(String::isNotBlank)
+    if (summary.isEmpty() && label == null) return
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (summary.isNotEmpty()) {
+            Text(
+                summary.joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        label?.let {
+            Text(
+                "© $it",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun formatAlbumDuration(seconds: Double): String? {
+    if (!seconds.isFinite() || seconds <= 0.0) return null
+    val totalMinutes = (seconds / 60.0).toInt()
+    if (totalMinutes <= 0) return "1 minute"
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return buildList {
+        if (hours > 0) add("$hours ${if (hours == 1) "hour" else "hours"}")
+        if (minutes > 0) add("$minutes ${if (minutes == 1) "minute" else "minutes"}")
+    }.joinToString(" ")
 }
 
 @Composable
