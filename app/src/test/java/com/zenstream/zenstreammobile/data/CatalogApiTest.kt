@@ -327,6 +327,7 @@ class CatalogApiTest {
         assertTrue("wav" in capabilities.containers)
         assertTrue("h265" in capabilities.videoCodecs)
         assertTrue("eac3" in capabilities.audioCodecs)
+        assertTrue("flac" in capabilities.audioCodecs)
         assertTrue("pcm_s16le" in capabilities.audioCodecs)
     }
 
