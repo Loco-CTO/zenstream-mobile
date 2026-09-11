@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,12 +18,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -34,12 +45,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,6 +73,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
@@ -91,7 +100,6 @@ import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     repository: CatalogRepository,
@@ -110,24 +118,19 @@ fun DetailScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val title = state.data?.item?.name.orEmpty()
     val parentSeries = state.data?.takeIf { it.item.type == "Episode" }?.parentSeries
+    var detailScrolled by remember(itemId) { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.padding(outerPadding),
-        topBar = {
-            DetailTopBar(
-                title = if (parentSeries != null) parentSeries.name else title,
-                parentSeries = parentSeries,
-                onBack = onBack,
-                onOpenItem = onOpenItem,
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { innerPadding ->
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(outerPadding)
+    ) {
         when {
-            state.loading && state.data == null -> CenterLoading(innerPadding)
+            state.loading && state.data == null -> CenterLoading(PaddingValues())
             state.error && state.data == null ->
                 ErrorState(
-                    innerPadding,
+                    PaddingValues(),
                     R.string.detail_load_failed,
                     vm::load,
                 )
@@ -136,7 +139,7 @@ fun DetailScreen(
                 DetailContent(
                     data = state.data!!,
                     session = session,
-                    padding = innerPadding,
+                    padding = PaddingValues(),
                     loading = state.seasonLoading,
                     isRefreshing =
                         shouldShowDetailRefresh(
@@ -165,8 +168,19 @@ fun DetailScreen(
                     bazarrError = state.bazarrError,
                     onSearchBazarr = vm::searchBazarrSubtitles,
                     onDownloadBazarr = vm::downloadBazarrSubtitle,
+                    onDetailScrolled = { detailScrolled = it },
                 )
         }
+
+        DetailOverlayTopBar(
+            title = if (parentSeries != null) parentSeries.name else title.ifBlank { "Detail" },
+            parentSeries = parentSeries,
+            visible = true,
+            scrolled = detailScrolled,
+            backOnly = state.data == null,
+            onBack = onBack,
+            onOpenItem = onOpenItem,
+        )
     }
 }
 
@@ -198,12 +212,15 @@ internal fun DetailContent(
     bazarrError: Boolean = false,
     onSearchBazarr: () -> Unit = {},
     onDownloadBazarr: (String) -> Unit = {},
+    onDetailScrolled: (Boolean) -> Unit = {},
 ) {
     val mediaItem = data.item
     val listState = rememberLazyListState()
     LaunchedEffect(mediaItem.id) {
+        onDetailScrolled(false)
         listState.scrollToItem(0)
     }
+    ObserveDetailScroll(listState, onDetailScrolled)
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -743,46 +760,95 @@ private fun ExpandableOverview(overview: String) {
 private const val OVERVIEW_COLLAPSED_LINES = 4
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
-internal fun DetailTopBar(
+@OptIn(ExperimentalLayoutApi::class)
+internal fun DetailOverlayTopBar(
     title: String,
-    parentSeries: MediaItem?,
+    parentSeries: MediaItem? = null,
+    visible: Boolean = true,
+    scrolled: Boolean = false,
+    backOnly: Boolean = false,
     onBack: () -> Unit,
-    onOpenItem: (MediaItem) -> Unit,
+    onOpenItem: (MediaItem) -> Unit = {},
 ) {
-    TopAppBar(
-        title = {
-            if (parentSeries == null) {
-                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            } else {
-                TextButton(
-                    onClick = { onOpenItem(parentSeries) },
-                    contentPadding = PaddingValues(0.dp),
+    val scrimAlpha by
+        animateFloatAsState(
+            targetValue = if (scrolled) 1f else 0f,
+            animationSpec = tween(durationMillis = 260),
+            label = "detail overlay scrim",
+        )
+    AnimatedVisibility(
+        visible = visible,
+        modifier = Modifier.fillMaxWidth().zIndex(1f),
+        enter =
+            fadeIn(animationSpec = tween(durationMillis = 160)) +
+                slideInVertically(
+                    initialOffsetY = { -it / 3 },
+                    animationSpec = tween(durationMillis = 220),
+                ),
+        exit =
+            fadeOut(animationSpec = tween(durationMillis = 120)) +
+                slideOutVertically(
+                    targetOffsetY = { -it / 3 },
+                    animationSpec = tween(durationMillis = 180),
+                ),
+    ) {
+        Column(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .background(Color.Black.copy(alpha = scrimAlpha))
+                    .testTag("detail_overlay_top_bar")
+                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.testTag("detail_overlay_back"),
                 ) {
-                    Text(
-                        parentSeries.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White,
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_arrow_left),
+                        stringResource(R.string.back),
                     )
                 }
+                if (!backOnly) {
+                    if (parentSeries == null) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier =
+                                Modifier.weight(1f)
+                                    .testTag("detail_overlay_title")
+                                    .semantics { contentDescription = title },
+                        )
+                    } else {
+                        TextButton(
+                            onClick = { onOpenItem(parentSeries) },
+                            modifier = Modifier.weight(1f).testTag("detail_overlay_title"),
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Text(
+                                parentSeries.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                                modifier = Modifier.semantics {
+                                    contentDescription = parentSeries.name
+                                },
+                            )
+                        }
+                    }
+                }
             }
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                    stringResource(R.string.back),
-                )
-            }
-        },
-        colors =
-            TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
-            ),
-    )
+        }
+    }
 }
 
 @Composable

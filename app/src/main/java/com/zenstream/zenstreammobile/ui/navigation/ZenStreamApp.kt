@@ -539,7 +539,7 @@ private fun MainScaffold(
                             repository = repository,
                             session = session,
                             artistId = artistId,
-                            // The nested detail scaffold owns the status-bar inset;
+                            // The detail route owns its transparent overlay and status-bar inset;
                             // carry only the root mini-player/navigation slot into it.
                             outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                             currentTrackId = audioState.currentEntry?.track?.id,
@@ -580,9 +580,8 @@ private fun MainScaffold(
                             repository = repository,
                             session = session,
                             itemId = itemId,
-                            // DetailScreen owns its Material top app bar and therefore
-                            // applies the status-bar inset itself. Only carry the
-                            // root mini-player/navigation slot into the detail route.
+                            // DetailScreen owns its transparent overlay and status-bar inset;
+                            // carry only the root mini-player/navigation slot into the route.
                             outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                             onBack = { navController.popBackStack() },
                             onOpenItem = { item -> navigateToDetail(navController, item.id) },

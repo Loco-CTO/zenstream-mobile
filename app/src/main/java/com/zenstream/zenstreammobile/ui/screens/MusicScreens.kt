@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,20 +34,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -72,6 +69,8 @@ import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 
+private val MUSIC_DETAIL_TOP_CONTENT_PADDING = 96.dp
+
 @Composable
 fun MusicAlbumScreen(
     repository: MusicDataSource,
@@ -94,39 +93,21 @@ fun MusicAlbumScreen(
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
-    Scaffold(
-        modifier = Modifier.fillMaxSize().padding(outerPadding),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        state.data?.album?.name ?: "Album",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                            contentDescription = "Back",
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
+    var detailScrolled by remember(albumId) { mutableStateOf(false) }
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(outerPadding)
+    ) {
         when {
             state.loading && state.data == null ->
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             state.error && state.data == null ->
                 MusicErrorState(
-                    Modifier.fillMaxSize().padding(padding),
+                    Modifier.fillMaxSize(),
                     "Could not load this album",
                     vm::load,
                 )
@@ -135,7 +116,7 @@ fun MusicAlbumScreen(
                     data = state.data!!,
                     session = session,
                     selectedTrackId = selectedTrackId,
-                    padding = padding,
+                    padding = PaddingValues(),
                     onArtistClick = onOpenArtist,
                     onAlbumClick = onOpenAlbum,
                     onPlayTracks = onPlayTracks,
@@ -144,8 +125,17 @@ fun MusicAlbumScreen(
                     onFavoriteTrack = { vm.toggleTrackFavorite(it.id) },
                     currentTrackId = currentTrackId,
                     onScrollabilityChanged = onScrollabilityChanged,
+                    onDetailScrolled = { detailScrolled = it },
                 )
         }
+
+        DetailOverlayTopBar(
+            title = state.data?.album?.name ?: "Album",
+            visible = true,
+            scrolled = detailScrolled,
+            backOnly = state.data == null,
+            onBack = onBack,
+        )
     }
 }
 
@@ -163,8 +153,14 @@ private fun AlbumContent(
     onFavoriteTrack: (MediaItem) -> Unit,
     currentTrackId: String?,
     onScrollabilityChanged: (Boolean) -> Unit,
+    onDetailScrolled: (Boolean) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
+    LaunchedEffect(data.album.id) {
+        onDetailScrolled(false)
+        listState.scrollToItem(0)
+    }
+    ObserveDetailScroll(listState, onDetailScrolled)
     val accent =
         remember(data.album.id, data.album.imageBlurHashes["Primary"]) {
             musicArtworkPalette(data.album).accent
@@ -281,8 +277,7 @@ private fun AlbumHeader(
     val accent = palette.accent
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().height(320.dp),
-            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING),
         ) {
             Box(
                 Modifier.fillMaxSize()
@@ -298,19 +293,24 @@ private fun AlbumHeader(
                     )
             )
             val artworkSize = (maxWidth - 32.dp).coerceAtMost(272.dp).coerceAtLeast(0.dp)
-            Surface(
-                modifier = Modifier.size(artworkSize),
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+            Box(
+                modifier = Modifier.fillMaxSize().padding(top = MUSIC_DETAIL_TOP_CONTENT_PADDING),
+                contentAlignment = Alignment.Center,
             ) {
-                MusicArtwork(
-                    album,
-                    session,
-                    modifier = Modifier.fillMaxSize(),
-                    contentDescription = album.name,
-                    requestedSize = 560,
+                Surface(
+                    modifier = Modifier.size(artworkSize),
                     shape = RoundedCornerShape(18.dp),
-                )
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    MusicArtwork(
+                        album,
+                        session,
+                        modifier = Modifier.fillMaxSize(),
+                        contentDescription = album.name,
+                        requestedSize = 560,
+                        shape = RoundedCornerShape(18.dp),
+                    )
+                }
             }
         }
         Column(
@@ -493,39 +493,21 @@ fun MusicArtistScreen(
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
-    Scaffold(
-        modifier = Modifier.fillMaxSize().padding(outerPadding),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        state.data?.artist?.name ?: "Artist",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                            contentDescription = "Back",
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
+    var detailScrolled by remember(artistId) { mutableStateOf(false) }
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(outerPadding)
+    ) {
         when {
             state.loading && state.data == null ->
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             state.error && state.data == null ->
                 MusicErrorState(
-                    Modifier.fillMaxSize().padding(padding),
+                    Modifier.fillMaxSize(),
                     "Could not load this artist",
                     vm::load,
                 )
@@ -533,7 +515,7 @@ fun MusicArtistScreen(
                 ArtistContent(
                     data = state.data!!,
                     session = session,
-                    padding = padding,
+                    padding = PaddingValues(),
                     tracksLoading = state.tracksLoading,
                     tracksError = state.tracksError,
                     onFollow = vm::toggleFollowing,
@@ -546,8 +528,17 @@ fun MusicArtistScreen(
                     onAddToQueue = onAddToQueue,
                     currentTrackId = currentTrackId,
                     onScrollabilityChanged = onScrollabilityChanged,
+                    onDetailScrolled = { detailScrolled = it },
                 )
         }
+
+        DetailOverlayTopBar(
+            title = state.data?.artist?.name ?: "Artist",
+            visible = true,
+            scrolled = detailScrolled,
+            backOnly = state.data == null,
+            onBack = onBack,
+        )
     }
 }
 
@@ -568,6 +559,7 @@ private fun ArtistContent(
     onAddToQueue: (List<MediaItem>) -> Unit,
     currentTrackId: String?,
     onScrollabilityChanged: (Boolean) -> Unit,
+    onDetailScrolled: (Boolean) -> Unit = {},
 ) {
     val artist = data.artist
     val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
@@ -575,6 +567,11 @@ private fun ArtistContent(
     val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
     val accent = palette.accent
     val listState = rememberLazyListState()
+    LaunchedEffect(artist.id) {
+        onDetailScrolled(false)
+        listState.scrollToItem(0)
+    }
+    ObserveDetailScroll(listState, onDetailScrolled)
     ObserveScrollability(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
@@ -588,8 +585,7 @@ private fun ArtistContent(
         item(key = "artist-header") {
             Column(Modifier.fillMaxWidth()) {
                 BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth().height(320.dp),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING),
                 ) {
                     Box(
                         Modifier.fillMaxSize()
@@ -602,23 +598,28 @@ private fun ArtistContent(
                                         MaterialTheme.colorScheme.background,
                                     )
                                 )
-                            )
+                        )
                     )
                     val artworkSize = (maxWidth - 32.dp).coerceAtMost(272.dp).coerceAtLeast(0.dp)
-                    Surface(
-                        modifier = Modifier.size(artworkSize),
-                        shape = RoundedCornerShape(22.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(top = MUSIC_DETAIL_TOP_CONTENT_PADDING),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        MusicArtwork(
-                            artist,
-                            session,
-                            modifier = Modifier.fillMaxSize(),
-                            contentDescription = artist.name,
-                            requestedSize = 560,
+                        Surface(
+                            modifier = Modifier.size(artworkSize),
                             shape = RoundedCornerShape(22.dp),
-                            fallbackGlyph = "★",
-                        )
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            MusicArtwork(
+                                artist,
+                                session,
+                                modifier = Modifier.fillMaxSize(),
+                                contentDescription = artist.name,
+                                requestedSize = 560,
+                                shape = RoundedCornerShape(22.dp),
+                                fallbackGlyph = "★",
+                            )
+                        }
                     }
                 }
                 Column(
