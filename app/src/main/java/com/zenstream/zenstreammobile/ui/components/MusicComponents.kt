@@ -194,10 +194,6 @@ fun AudioTrackRow(
             modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(
-                    if (isCurrent) accentColor.copy(alpha = .14f)
-                    else Color.Transparent
-                )
                 .clickable { onClick(item) }
                 .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -208,7 +204,7 @@ fun AudioTrackRow(
                 color =
                     if (isCurrent) accentColor
                     else MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -217,10 +213,8 @@ fun AudioTrackRow(
                     credits.forEachIndexed { index, credit ->
                         Text(
                             text = credit.name,
-                            color =
-                                if (isCurrent) accentColor.copy(alpha = .78f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
@@ -232,10 +226,8 @@ fun AudioTrackRow(
                             separator ->
                             Text(
                                 separator,
-                                color =
-                                    if (isCurrent) accentColor.copy(alpha = .78f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
@@ -250,6 +242,7 @@ fun AudioTrackRow(
                 Icon(
                     painter = painterResource(LucideR.drawable.lucide_ic_heart),
                     contentDescription = if (item.favorite) "Remove favorite" else "Add favorite",
+                    modifier = Modifier.size(20.dp),
                     tint =
                         if (item.favorite) accentColor
                         else MaterialTheme.colorScheme.onSurfaceVariant,
