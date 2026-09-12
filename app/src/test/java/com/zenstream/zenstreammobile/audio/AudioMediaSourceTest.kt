@@ -42,6 +42,31 @@ class AudioMediaSourceTest {
     }
 
     @Test
+    fun vendorFlacMimeNormalizesToMedia3FlacMimeType() {
+        val source = normalizeAudioSource("https://server.example/audio", "audio/x-flac", "direct")
+
+        assertEquals(AudioSourceKind.Progressive, source.kind)
+        assertEquals(MimeTypes.AUDIO_FLAC, source.mimeType)
+    }
+
+    @Test
+    fun negotiatedSourceMetadataIsKeptWithTheNormalizedSource() {
+        val source =
+            normalizeAudioSource(
+                url = "https://server.example/audio.flac",
+                mimeType = "audio/flac",
+                mode = "direct",
+                sessionId = "session-id",
+                durationSeconds = 183.5,
+                expiresAt = "2026-09-11T18:00:00Z",
+            )
+
+        assertEquals("session-id", source.sessionId)
+        assertEquals(183.5, source.durationSeconds!!, 0.0)
+        assertEquals("2026-09-11T18:00:00Z", source.expiresAt)
+    }
+
+    @Test
     fun unknownProgressiveSourcesDoNotInventAContainer() {
         val source = normalizeAudioSource("https://server.example/audio", null, "direct")
 

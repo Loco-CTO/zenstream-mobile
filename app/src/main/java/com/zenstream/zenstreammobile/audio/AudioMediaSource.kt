@@ -20,6 +20,9 @@ internal data class NormalizedAudioSource(
     val kind: AudioSourceKind,
     val mimeType: String?,
     val mode: String?,
+    val sessionId: String? = null,
+    val durationSeconds: Double? = null,
+    val expiresAt: String? = null,
 )
 
 /**
@@ -30,9 +33,17 @@ internal fun normalizeAudioSource(
     url: String,
     mimeType: String?,
     mode: String?,
+    sessionId: String? = null,
+    durationSeconds: Double? = null,
+    expiresAt: String? = null,
 ): NormalizedAudioSource {
     val path = url.substringBefore('?').substringBefore('#').lowercase()
-    val normalizedMime = mimeType?.trim()?.lowercase()?.takeIf(String::isNotBlank)
+    val normalizedMime =
+        mimeType
+            ?.substringBefore(';')
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf(String::isNotBlank)
     val hlsMimeTypes =
         setOf(
             MimeTypes.APPLICATION_M3U8.lowercase(),
@@ -53,11 +64,15 @@ internal fun normalizeAudioSource(
             kind = AudioSourceKind.Hls,
             mimeType = MimeTypes.APPLICATION_M3U8,
             mode = normalizedMode,
+            sessionId = sessionId,
+            durationSeconds = durationSeconds,
+            expiresAt = expiresAt,
         )
     }
 
+    val canonicalMime = canonicalAudioMimeType(normalizedMime)
     val inferredMime =
-        normalizedMime
+        canonicalMime
             ?: when {
                 path.endsWith(".mp3") -> MimeTypes.AUDIO_MPEG
                 path.endsWith(".m4a") || path.endsWith(".aac") -> MimeTypes.AUDIO_MP4
@@ -71,8 +86,29 @@ internal fun normalizeAudioSource(
         kind = AudioSourceKind.Progressive,
         mimeType = inferredMime,
         mode = normalizedMode,
+        sessionId = sessionId,
+        durationSeconds = durationSeconds,
+        expiresAt = expiresAt,
     )
 }
+
+private fun canonicalAudioMimeType(mimeType: String?): String? =
+    when (mimeType) {
+        "audio/mp3",
+        "audio/x-mp3",
+        "audio/mpeg3" -> MimeTypes.AUDIO_MPEG
+        "audio/x-m4a",
+        "audio/m4a" -> MimeTypes.AUDIO_MP4
+        "audio/aac",
+        "audio/aacp" -> MimeTypes.AUDIO_AAC
+        "audio/x-flac" -> MimeTypes.AUDIO_FLAC
+        "application/ogg",
+        "audio/x-ogg" -> MimeTypes.AUDIO_OGG
+        "audio/x-opus" -> MimeTypes.AUDIO_OPUS
+        "audio/x-wav",
+        "audio/wave" -> MimeTypes.AUDIO_WAV
+        else -> mimeType
+    }
 
 /**
  * The same source selection is used by the service's player and by MediaSession clients such as
@@ -114,15 +150,3 @@ internal class AudioMediaSourceFactory(private val dataSourceFactory: DataSource
         return this
     }
 }
-
-internal fun buildAudioMediaSource(
-    dataSourceFactory: DataSource.Factory,
-    mediaItem: MediaItem,
-    source: NormalizedAudioSource,
-): MediaSource =
-    when (source.kind) {
-        AudioSourceKind.Hls ->
-            HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
-        AudioSourceKind.Progressive ->
-            DefaultMediaSourceFactory(dataSourceFactory).createMediaSource(mediaItem)
-    }

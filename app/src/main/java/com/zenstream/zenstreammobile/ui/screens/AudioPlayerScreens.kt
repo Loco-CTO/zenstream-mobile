@@ -481,6 +481,7 @@ private fun NowPlayingMain(
         }
         Spacer(Modifier.height(18.dp))
         AudioProgressScrubber(
+            trackKey = state.currentEntry?.entryId ?: current.id,
             positionSeconds = state.positionSeconds,
             durationSeconds = state.durationSeconds,
             accent = accent,
@@ -610,13 +611,15 @@ private fun NowPlayingMain(
 /** Artwork-led seek control with a slim rail and an intentional, easy-to-grab handle. */
 @Composable
 private fun AudioProgressScrubber(
+    trackKey: String,
     positionSeconds: Long,
     durationSeconds: Long,
     accent: Color,
     onSeek: (Long) -> Unit,
 ) {
     val duration = durationSeconds.coerceAtLeast(1L)
-    val position = positionSeconds.coerceIn(0L, duration)
+    var pendingPositionSeconds by remember(trackKey) { mutableStateOf<Long?>(null) }
+    val position = (pendingPositionSeconds ?: positionSeconds).coerceIn(0L, duration)
     val fraction = position.toFloat() / duration.toFloat()
     Box(
         modifier = Modifier.fillMaxWidth().height(38.dp),
@@ -658,7 +661,17 @@ private fun AudioProgressScrubber(
         // Keep the standard semantics and drag/tap behavior while the canvas owns the visual.
         Slider(
             value = position.toFloat(),
-            onValueChange = { onSeek(it.toLong().coerceIn(0L, duration)) },
+            onValueChange = {
+                // Keep the gesture entirely local. Sending a seek command for every pointer
+                // update makes the service rebuild/persist state repeatedly and causes visible
+                // scrub lag.
+                pendingPositionSeconds = it.toLong().coerceIn(0L, duration)
+            },
+            onValueChangeFinished = {
+                val target = pendingPositionSeconds
+                pendingPositionSeconds = null
+                if (target != null && target != positionSeconds) onSeek(target)
+            },
             valueRange = 0f..duration.toFloat(),
             enabled = durationSeconds > 0,
             modifier = Modifier.fillMaxWidth().height(38.dp),

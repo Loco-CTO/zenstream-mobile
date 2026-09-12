@@ -188,6 +188,8 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
+    // Official Media3 decoder_flac extension, built against the pinned Media3 version.
+    implementation(files("libs/media3-decoder-flac-1.11.1.aar"))
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation(libs.junit)

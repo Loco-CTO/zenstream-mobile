@@ -74,6 +74,7 @@ class AudioPlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var httpFactory: DefaultHttpDataSource.Factory
     private lateinit var dataSourceFactory: DataSource.Factory
+    private lateinit var mediaSourceFactory: AudioMediaSourceFactory
     private lateinit var librarySession: MediaLibrarySession
     private lateinit var repository: CatalogRepository
     private lateinit var sessionStore: SessionStore
@@ -90,10 +91,47 @@ class AudioPlaybackService : MediaLibraryService() {
     private var lastAutoplay = false
     private var suppressEnded = false
     private var playerScope: String? = null
+    private var activeAudioSource: NormalizedAudioSource? = null
+    private var lastKnownPositionEntryId: String? = null
+    private var lastKnownPositionMs = 0L
+    private val audioDiagnostics = AudioPlaybackDiagnostics { activeAudioSource }
 
     private fun cancelRecovery() {
         recoveryJob?.cancel()
         recoveryJob = null
+    }
+
+    private fun rememberPosition(entryId: String?, positionMs: Long) {
+        lastKnownPositionEntryId = entryId
+        lastKnownPositionMs = positionMs.coerceAtLeast(0L)
+    }
+
+    private fun observedPlayerPositionMs(): Long {
+        val entryId = currentState.currentEntry?.entryId
+        val playerPositionMs = player.currentPosition.coerceAtLeast(0L)
+        if (entryId != lastKnownPositionEntryId) {
+            rememberPosition(entryId, playerPositionMs)
+        } else if (playerPositionMs > 0L) {
+            // Do not replace a useful position with Media3's transient zero while an error,
+            // stop(), or a new prepare() is tearing down the failed period.
+            lastKnownPositionMs = playerPositionMs
+        }
+        val transientReset =
+            playerPositionMs == 0L &&
+                entryId != null &&
+                entryId == lastKnownPositionEntryId &&
+                (player.playerError != null || recoveryJob?.isActive == true || loadingCurrent)
+        return if (transientReset) lastKnownPositionMs else playerPositionMs
+    }
+
+    private fun recoveryPositionMs(entryId: String): Long {
+        val lastKnown =
+            lastKnownPositionMs.takeIf { lastKnownPositionEntryId == entryId } ?: 0L
+        return selectRecoveryPositionMs(
+            playerPositionMs = player.currentPosition,
+            lastKnownPositionMs = lastKnown,
+            publishedPositionSeconds = currentState.positionSeconds,
+        )
     }
 
     private val catalogLibraries = mutableListOf<Library>()
@@ -112,9 +150,10 @@ class AudioPlaybackService : MediaLibraryService() {
         repository = CatalogRepository(CatalogApi(), sessionStore)
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
         dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
+        mediaSourceFactory = AudioMediaSourceFactory(dataSourceFactory)
         player =
-            ExoPlayer.Builder(this)
-                .setMediaSourceFactory(AudioMediaSourceFactory(dataSourceFactory))
+            ExoPlayer.Builder(this, preferredAudioRenderersFactory(this))
+                .setMediaSourceFactory(mediaSourceFactory)
                 .setAudioAttributes(
                     androidx.media3.common.AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -125,6 +164,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 .setHandleAudioBecomingNoisy(true)
                 .build()
         player.addListener(playerListener)
+        player.addAnalyticsListener(audioDiagnostics)
+        audioDiagnostics.rendererConfigurationCreated()
         val sessionActivity =
             PendingIntent.getActivity(
                 this,
@@ -229,9 +270,11 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         persistJob?.cancel()
         suppressEnded = true
+        activeAudioSource = null
         player.stop()
         retryEntryId = null
         currentState = AudioPlayerState()
+        rememberPosition(null, 0L)
         playerScope = scope
         AudioServiceBridge.publish(currentState)
         if (account != null) {
@@ -307,14 +350,24 @@ class AudioPlaybackService : MediaLibraryService() {
         cancelRecovery()
         sessionStore.saveAudioShuffle(snapshot.shuffle)
         sessionStore.saveAudioRepeatMode(snapshot.repeatMode)
-        currentState = snapshot.toPlayerState().copy(isLoading = true, error = null)
+        // PLAY_QUEUE is an explicit user selection, not queue restoration. Never carry a
+        // position from the previously playing item (or from a stale caller snapshot) into the
+        // newly selected track.
+        currentState =
+            snapshot.toPlayerState().copy(
+                positionSeconds = 0L,
+                durationSeconds = 0L,
+                isLoading = true,
+                error = null,
+            )
+        rememberPosition(currentState.currentEntry?.entryId, 0L)
         AudioServiceBridge.publish(currentState)
         suppressEnded = true
         player.stop()
         retryEntryId = null
         lastAutoplay = true
         persistSnapshot()
-        loadCurrent(autoPlay = true)
+        loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
     private suspend fun addQueue(encoded: String) {
@@ -345,7 +398,11 @@ class AudioPlaybackService : MediaLibraryService() {
         } else {
             lastAutoplay = true
             if (player.currentMediaItem == null || player.playerError != null) {
-                loadCurrent(autoPlay = true)
+                val entryId = currentState.currentEntry?.entryId
+                loadCurrent(
+                    autoPlay = true,
+                    resumePositionMs = entryId?.let(::recoveryPositionMs),
+                )
             } else {
                 player.play()
             }
@@ -353,18 +410,20 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun retryCurrent() {
-        if (currentState.currentEntry == null) return
+        val entryId = currentState.currentEntry?.entryId ?: return
+        val resumePositionMs = recoveryPositionMs(entryId)
         cancelRecovery()
         retryEntryId = null
         suppressEnded = true
         player.stop()
-        loadCurrent(autoPlay = true)
+        loadCurrent(autoPlay = true, resumePositionMs = resumePositionMs)
     }
 
     private suspend fun loadCurrent(
         autoPlay: Boolean,
         resetRetry: Boolean = true,
         expectedEntryId: String? = null,
+        resumePositionMs: Long? = null,
     ) {
         val entry =
             currentState.currentEntry?.takeIf {
@@ -382,14 +441,21 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         loadingCurrent = true
         lastAutoplay = autoPlay
+        activeAudioSource = null
         httpFactory.setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${account.token}"))
         currentState = currentState.copy(isLoading = true, error = null)
         AudioServiceBridge.publish(currentState)
         try {
+            val requestedPositionMs =
+                resumePositionMs
+                    ?.coerceAtLeast(0L)
+                    ?: currentState.positionSeconds.coerceAtLeast(0L).coerceAtMost(
+                        Long.MAX_VALUE / 1_000L
+                    ) * 1_000L
             val playbackOptions =
                 PlaybackOptions(
                     engine = PlayerEngine.MEDIA3,
-                    startPositionSeconds = currentState.positionSeconds.toDouble(),
+                    startPositionSeconds = requestedPositionMs / 1_000.0,
                 )
             val data =
                 repository.playback(
@@ -400,8 +466,20 @@ class AudioPlaybackService : MediaLibraryService() {
             val candidateUrl =
                 data.url ?: data.source.url ?: error("Server did not return an audio URL")
             val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
-            val normalizedSource = normalizeAudioSource(url, data.mimeType, data.mode)
+            val durationSeconds =
+                data.durationSeconds ?: data.source.durationSeconds ?: entry.track.durationSeconds
+            val normalizedSource =
+                normalizeAudioSource(
+                    url = url,
+                    mimeType = data.mimeType,
+                    mode = data.mode,
+                    sessionId = data.sessionId,
+                    durationSeconds = durationSeconds,
+                    expiresAt = data.expiresAt,
+                )
             if (currentState.currentEntry?.entryId != entry.entryId) return
+            activeAudioSource = normalizedSource
+            audioDiagnostics.sourceSelected(normalizedSource)
             val mediaItem =
                 MediaItem.Builder()
                     .setMediaId("zenstream:queue:${entry.entryId}")
@@ -424,24 +502,21 @@ class AudioPlaybackService : MediaLibraryService() {
             // Keep ExoPlayer at unity gain and let the device media stream
             // volume control the audible level.
             player.volume = 1f
-            player.setMediaSource(
-                buildAudioMediaSource(dataSourceFactory, mediaItem, normalizedSource)
-            )
+            player.setMediaSource(mediaSourceFactory.createMediaSource(mediaItem))
             player.prepare()
             suppressEnded = false
-            val position = (currentState.positionSeconds * 1_000L).coerceAtLeast(0L)
-            if (position > 0) player.seekTo(position)
+            val position = requestedPositionMs
+            // Explicitly apply the requested start for every prepare, including zero. This keeps
+            // a reused ExoPlayer instance from retaining the previous item's period position.
+            player.seekTo(position)
+            rememberPosition(entry.entryId, position)
             recordPlayStart(account, entry)
             currentState =
                 currentState.copy(
+                    positionSeconds = position / 1_000L,
                     isLoading = false,
                     error = null,
-                    durationSeconds =
-                        (data.durationSeconds
-                                ?: data.source.durationSeconds
-                                ?: entry.track.durationSeconds)
-                            ?.toLong()
-                            ?.coerceAtLeast(0L) ?: 0L,
+                    durationSeconds = durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
                 )
             AudioServiceBridge.publish(currentState)
             if (autoPlay) player.play()
@@ -497,13 +572,15 @@ class AudioPlaybackService : MediaLibraryService() {
                 force
         ) {
             currentState = currentState.copy(positionSeconds = 0L)
-            loadCurrent(autoPlay = true)
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
+            loadCurrent(autoPlay = true, resumePositionMs = 0L)
             return
         }
         if (nextIndex == null) {
             lastAutoplay = false
             player.pause()
             player.seekTo(0L)
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
             currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
             publishPlayerState()
             reportProgress()
@@ -515,18 +592,22 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
         suppressEnded = true
         player.stop()
-        loadCurrent(autoPlay = true)
+        // Queue navigation is a new-track selection. Pass zero explicitly because stop() can
+        // publish the old player's position before the replacement source is prepared.
+        loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
     private suspend fun previous() {
         cancelRecovery()
         if (player.currentPosition > 5_000L) {
             player.seekTo(0L)
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
             return
         }
         val previous = previousQueueIndex(currentState.queue.size, currentState.currentIndex)
         if (previous == null) {
             player.seekTo(0L)
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
             return
         }
         reportProgress()
@@ -535,7 +616,7 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
         suppressEnded = true
         player.stop()
-        loadCurrent(autoPlay = true)
+        loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
     private suspend fun toggleShuffle() {
@@ -572,8 +653,11 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun seekTo(positionSeconds: Long) {
-        player.seekTo(positionSeconds.coerceAtLeast(0L) * 1_000L)
-        currentState = currentState.copy(positionSeconds = positionSeconds.coerceAtLeast(0L))
+        val position =
+            positionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L)
+        player.seekTo(position * 1_000L)
+        rememberPosition(currentState.currentEntry?.entryId, position * 1_000L)
+        currentState = currentState.copy(positionSeconds = position)
         publishPlayerState()
         persistSnapshot()
     }
@@ -587,12 +671,18 @@ class AudioPlaybackService : MediaLibraryService() {
         val wasPlaying = player.isPlaying
         if (removal.entries.isEmpty()) return clearQueue()
         currentState =
-            currentState.copy(queue = removal.entries, currentIndex = removal.currentIndex)
+            currentState.copy(
+                queue = removal.entries,
+                currentIndex = removal.currentIndex,
+                positionSeconds = if (wasCurrent) 0L else currentState.positionSeconds,
+                durationSeconds = if (wasCurrent) 0L else currentState.durationSeconds,
+            )
         if (wasCurrent) {
             cancelRecovery()
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
             suppressEnded = true
             player.stop()
-            loadCurrent(autoPlay = wasPlaying)
+            loadCurrent(autoPlay = wasPlaying, resumePositionMs = 0L)
         }
         publishPlayerState()
         persistSnapshot()
@@ -682,7 +772,7 @@ class AudioPlaybackService : MediaLibraryService() {
         val duration =
             player.duration.takeIf { it != C.TIME_UNSET && it >= 0 }?.div(1_000L)
                 ?: currentState.durationSeconds
-        val position = player.currentPosition.coerceAtLeast(0L).div(1_000L)
+        val position = observedPlayerPositionMs().div(1_000L)
         currentState =
             currentState.copy(
                 positionSeconds = position,
@@ -719,11 +809,14 @@ class AudioPlaybackService : MediaLibraryService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                audioDiagnostics.playerError(error)
                 val entryId = currentState.currentEntry?.entryId
                 if (recoveryJob?.isActive == true) return
                 if (entryId != null && retryEntryId != entryId) {
+                    val resumePositionMs = recoveryPositionMs(entryId)
                     retryEntryId = entryId
                     val autoplay = lastAutoplay
+                    audioDiagnostics.recoveryScheduled(resumePositionMs)
                     recoveryJob = serviceScope.launch {
                         if (currentState.currentEntry?.entryId != entryId) return@launch
                         player.stop()
@@ -732,6 +825,7 @@ class AudioPlaybackService : MediaLibraryService() {
                             autoPlay = autoplay,
                             resetRetry = false,
                             expectedEntryId = entryId,
+                            resumePositionMs = resumePositionMs,
                         )
                     }
                 } else {
@@ -966,6 +1060,7 @@ class AudioPlaybackService : MediaLibraryService() {
         cancelRecovery()
         librarySession.release()
         player.removeListener(playerListener)
+        player.removeAnalyticsListener(audioDiagnostics)
         player.release()
         serviceScope.coroutineContext.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -1160,7 +1255,15 @@ class AudioPlaybackService : MediaLibraryService() {
         val candidateUrl =
             data.url ?: data.source.url ?: error("Server did not return an audio URL")
         val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
-        val normalizedSource = normalizeAudioSource(url, data.mimeType, data.mode)
+        val normalizedSource =
+            normalizeAudioSource(
+                url = url,
+                mimeType = data.mimeType,
+                mode = data.mode,
+                sessionId = data.sessionId,
+                durationSeconds = data.durationSeconds ?: data.source.durationSeconds,
+                expiresAt = data.expiresAt,
+            )
         val metadata =
             MediaMetadata.Builder()
                 .setTitle(track.name)
