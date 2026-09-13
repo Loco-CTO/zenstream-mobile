@@ -222,7 +222,9 @@ class AudioPlaybackService : MediaLibraryService() {
             AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY ->
                 playQueueEntryInternal(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
             AudioServiceBridge.ACTION_ADD_QUEUE ->
-                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { addQueueInternal(it) }
+                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
+                    addQueueInternal(it)
+                }
             AudioServiceBridge.ACTION_TOGGLE_PLAYBACK -> togglePlayback()
             AudioServiceBridge.ACTION_NEXT -> advanceInternal(force = false)
             AudioServiceBridge.ACTION_PREVIOUS -> previousInternal()
@@ -607,10 +609,7 @@ class AudioPlaybackService : MediaLibraryService() {
     private fun prefetchLyrics(account: AuthSession, entry: AudioQueueEntry) {
         lyricsPrefetchJob?.cancel()
         val nextEntry = currentState.queue.getOrNull(currentState.currentIndex + 1)
-        val candidates =
-            listOf(entry, nextEntry)
-                .filterNotNull()
-                .distinctBy { it.track.id }
+        val candidates = listOf(entry, nextEntry).filterNotNull().distinctBy { it.track.id }
         lyricsPrefetchJob = serviceScope.launch {
             for (candidate in candidates) {
                 repository.prefetchAudioLyrics(account, candidate.track.id)
@@ -1156,8 +1155,9 @@ class AudioPlaybackService : MediaLibraryService() {
     private fun parseSnapshot(encoded: String): AudioQueueSnapshot? =
         runCatching { audioQueueSnapshotFromJson(JSONObject(encoded)) }.getOrNull()
 
-    private suspend fun adoptAutoTrack(trackId: String) =
-        queueCommandMutex.withLock { adoptAutoTrackInternal(trackId) }
+    private suspend fun adoptAutoTrack(trackId: String) = queueCommandMutex.withLock {
+        adoptAutoTrackInternal(trackId)
+    }
 
     private suspend fun adoptAutoTrackInternal(trackId: String) {
         val account = sessionStore.session.first() ?: return
