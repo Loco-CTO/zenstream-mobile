@@ -105,6 +105,7 @@ import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
 import com.zenstream.zenstreammobile.ui.SearchUiState
 import com.zenstream.zenstreammobile.ui.SearchViewModel
+import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
@@ -587,16 +588,31 @@ private fun SearchResultsContent(
                     )
 
                 else ->
-                    SearchResultsGrid(
-                        items = state.results,
-                        gridState = gridState,
-                        session = session,
-                        loadingMore = state.loadingMore,
-                        loadMoreError = state.loadMoreError,
-                        onLoadMore = onLoadMore,
-                        onItemClick = onItemClick,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (
+                        state.results.any { it.type in setOf("MusicArtist", "MusicAlbum", "Audio") }
+                    ) {
+                        SearchResultSections(
+                            items = state.results,
+                            session = session,
+                            loadingMore = state.loadingMore,
+                            loadMoreError = state.loadMoreError,
+                            onLoadMore = onLoadMore,
+                            onItemClick = onItemClick,
+                            onScrollabilityChanged = onScrollabilityChanged,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        SearchResultsGrid(
+                            items = state.results,
+                            gridState = gridState,
+                            session = session,
+                            loadingMore = state.loadingMore,
+                            loadMoreError = state.loadMoreError,
+                            onLoadMore = onLoadMore,
+                            onItemClick = onItemClick,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
             }
         }
     }
@@ -764,6 +780,9 @@ fun FavoritesScreen(
     val episodes = state.items.filter { it.type.equals("Episode", ignoreCase = true) }
     val movies = state.items.filter { it.type.equals("Movie", ignoreCase = true) }
     val series = state.items.filter { it.type.equals("Series", ignoreCase = true) }
+    val favoriteArtists = state.items.filter { it.type == "MusicArtist" }
+    val favoriteAlbums = state.items.filter { it.type == "MusicAlbum" }
+    val favoriteTracks = state.items.filter { it.type == "Audio" }
     val listState = rememberLazyListState()
     ObserveScrollability(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
@@ -790,6 +809,36 @@ fun FavoritesScreen(
                         state = listState,
                         contentPadding = PaddingValues(bottom = 20.dp),
                     ) {
+                        if (favoriteArtists.isNotEmpty()) {
+                            item(key = "favorite-artists") {
+                                FavoriteMusicSection(
+                                    title = stringResource(R.string.favorite_artists),
+                                    items = favoriteArtists,
+                                    session = session,
+                                    onItemClick = onItemClick,
+                                )
+                            }
+                        }
+                        if (favoriteAlbums.isNotEmpty()) {
+                            item(key = "favorite-albums") {
+                                FavoriteMusicSection(
+                                    title = stringResource(R.string.favorite_albums),
+                                    items = favoriteAlbums,
+                                    session = session,
+                                    onItemClick = onItemClick,
+                                )
+                            }
+                        }
+                        if (favoriteTracks.isNotEmpty()) {
+                            item(key = "favorite-tracks") {
+                                FavoriteMusicSection(
+                                    title = stringResource(R.string.favorite_tracks),
+                                    items = favoriteTracks,
+                                    session = session,
+                                    onItemClick = onItemClick,
+                                )
+                            }
+                        }
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
                                 FavoriteSection(
@@ -958,6 +1007,118 @@ private fun FavoriteSection(
                     onClick = onItemClick,
                     gridCard = false,
                 )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SearchResultSections(
+    items: List<MediaItem>,
+    session: AuthSession,
+    loadingMore: Boolean,
+    loadMoreError: Boolean,
+    onLoadMore: () -> Unit,
+    onItemClick: (MediaItem) -> Unit,
+    onScrollabilityChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    ObserveScrollability(
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
+        onScrollabilityChanged = onScrollabilityChanged,
+    )
+    val sections =
+        listOf(
+                "Artists" to items.filter { it.type == "MusicArtist" }.distinctBy { it.id },
+                "Albums" to items.filter { it.type == "MusicAlbum" }.distinctBy { it.id },
+                "Tracks" to items.filter { it.type == "Audio" }.distinctBy { it.id },
+                "Video" to
+                    items
+                        .filter { it.type !in setOf("MusicArtist", "MusicAlbum", "Audio") }
+                        .distinctBy { it.id },
+            )
+            .filter { it.second.isNotEmpty() }
+    LazyColumn(
+        state = listState,
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        sections.forEach { (title, sectionItems) ->
+            item(key = "search-section-$title") {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .78f),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            item(key = "search-items-$title") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    sectionItems.forEach { item ->
+                        item(key = "search-${title.lowercase()}-${item.id}") {
+                            if (item.type in setOf("MusicArtist", "MusicAlbum", "Audio")) {
+                                AudioCard(item, session, onItemClick)
+                            } else {
+                                com.zenstream.zenstreammobile.ui.components.MediaCard(
+                                    item,
+                                    session,
+                                    wide = false,
+                                    onClick = onItemClick,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (loadingMore) {
+            item(key = "search-sections-loading-more") {
+                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+            }
+        }
+        if (loadMoreError) {
+            item(key = "search-sections-load-more-error") { InlineLoadMoreError(onLoadMore) }
+        }
+    }
+    LaunchedEffect(listState, items.size, loadingMore, loadMoreError) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .collect { lastVisible ->
+                if (lastVisible >= sections.size * 2 - 2 && !loadingMore && !loadMoreError)
+                    onLoadMore()
+            }
+    }
+}
+
+@Composable
+private fun FavoriteMusicSection(
+    title: String,
+    items: List<MediaItem>,
+    session: AuthSession,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    val uniqueItems = items.distinctBy { it.id }
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(uniqueItems, key = { it.id }) { item ->
+                AudioCard(item = item, session = session, onClick = onItemClick)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -1218,28 +1379,33 @@ private fun LibraryHeader(
                 )
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                LibrarySortBy.entries
-                    .filter {
-                        it != LibrarySortBy.LastAdded || state.selected?.supportsLastAdded == true
+                val sortOptions =
+                    if (state.selected?.collectionType == "music") {
+                        listOf(LibrarySortBy.Title, LibrarySortBy.Year, LibrarySortBy.Added)
+                    } else {
+                        LibrarySortBy.entries.filter {
+                            it != LibrarySortBy.LastAdded ||
+                                state.selected?.supportsLastAdded == true
+                        }
                     }
-                    .forEach { sortBy ->
-                        DropdownMenuItem(
-                            text = { Text(sortLabel(sortBy)) },
-                            onClick = {
-                                menuExpanded = false
-                                onSortChanged(state.sort.copy(sortBy = sortBy))
-                            },
-                            leadingIcon =
-                                if (sortBy == state.sort.sortBy) {
-                                    {
-                                        Icon(
-                                            painterResource(LucideR.drawable.lucide_ic_check),
-                                            contentDescription = null,
-                                        )
-                                    }
-                                } else null,
-                        )
-                    }
+                sortOptions.forEach { sortBy ->
+                    DropdownMenuItem(
+                        text = { Text(sortLabel(sortBy)) },
+                        onClick = {
+                            menuExpanded = false
+                            onSortChanged(state.sort.copy(sortBy = sortBy))
+                        },
+                        leadingIcon =
+                            if (sortBy == state.sort.sortBy) {
+                                {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_check),
+                                        contentDescription = null,
+                                    )
+                                }
+                            } else null,
+                    )
+                }
             }
         }
     }
@@ -1254,6 +1420,7 @@ private fun sortLabel(sortBy: LibrarySortBy): String =
         LibrarySortBy.LastAdded -> stringResource(R.string.sort_last_added)
         LibrarySortBy.Release -> stringResource(R.string.sort_release_date)
         LibrarySortBy.Runtime -> stringResource(R.string.sort_runtime)
+        LibrarySortBy.Year -> stringResource(R.string.sort_year)
     }
 
 @Composable
@@ -1299,14 +1466,23 @@ private fun LibraryPosterCard(
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
 ) {
-    com.zenstream.zenstreammobile.ui.components.MediaCard(
-        item = item,
-        session = session,
-        wide = false,
-        onClick = onItemClick,
-        showRating = true,
-        gridCard = true,
-    )
+    if (item.type in setOf("MusicAlbum", "MusicArtist", "Audio")) {
+        AudioCard(
+            item = item,
+            session = session,
+            onClick = onItemClick,
+            width = null,
+        )
+    } else {
+        com.zenstream.zenstreammobile.ui.components.MediaCard(
+            item = item,
+            session = session,
+            wide = false,
+            onClick = onItemClick,
+            showRating = true,
+            gridCard = true,
+        )
+    }
 }
 
 private fun snapshotFlowLastVisibleIndex(gridState: LazyGridState) = snapshotFlow {

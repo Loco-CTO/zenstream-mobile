@@ -67,7 +67,7 @@ fun UserAvatar(
                         .data(
                             authenticatedImageUrl(
                                 resolveImageUrl(session.serverUrl, requestUrl.orEmpty()),
-                                session.resourceTicket,
+                                session.artworkTicket ?: session.resourceTicket,
                             )
                         )
                         .httpHeaders(

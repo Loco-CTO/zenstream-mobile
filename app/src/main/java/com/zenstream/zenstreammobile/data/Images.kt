@@ -47,6 +47,25 @@ fun imageBlurHash(item: MediaItem, type: String): String? =
         else -> item.imageBlurHashes[type]
     }
 
+/**
+ * Track projections normally include their release artwork. Older or compact responses may omit it,
+ * so use the resolved album only when the track has no Primary image of its own. This keeps the
+ * image identity and blur hash paired.
+ */
+fun MediaItem.withPrimaryArtworkFallback(album: MediaItem?): MediaItem {
+    val primaryTag = imageTags["Primary"]?.takeIf(String::isNotBlank)
+    if (primaryTag != null || album == null) return this
+
+    val albumTag = album.imageTags["Primary"]?.takeIf(String::isNotBlank) ?: return this
+    val albumBlurHash = album.imageBlurHashes["Primary"]
+    return copy(
+        imageTags = imageTags + ("Primary" to albumTag),
+        imageBlurHashes =
+            if (albumBlurHash.isNullOrBlank()) imageBlurHashes
+            else imageBlurHashes + ("Primary" to albumBlurHash),
+    )
+}
+
 /** Authenticated avatar route. A version is intentionally part of the URL cache key. */
 fun userAvatarUrl(serverUrl: String, userId: String, avatarVersion: String? = null): String {
     val builder =

@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -9,6 +10,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal fun shouldShowPullToRefresh(isLoading: Boolean, hasContent: Boolean): Boolean =
     isLoading && hasContent
@@ -27,6 +31,23 @@ internal fun ObserveScrollability(
     val currentCallback = rememberUpdatedState(onScrollabilityChanged)
     LaunchedEffect(Unit) {
         snapshotFlow { canScroll() }.collect { currentCallback.value(it) }
+    }
+}
+
+@Composable
+internal fun ObserveDetailScroll(
+    listState: LazyListState,
+    onScrolled: (Boolean) -> Unit,
+) {
+    val currentCallback = rememberUpdatedState(onScrolled)
+    val thresholdPx = with(LocalDensity.current) { 24.dp.toPx() }
+    LaunchedEffect(listState, thresholdPx) {
+        snapshotFlow {
+                listState.firstVisibleItemIndex > 0 ||
+                    listState.firstVisibleItemScrollOffset > thresholdPx
+            }
+            .distinctUntilChanged()
+            .collect { currentCallback.value(it) }
     }
 }
 

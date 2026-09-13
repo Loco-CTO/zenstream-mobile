@@ -16,7 +16,10 @@ fun authenticatedImageRequest(
     session: AuthSession,
 ): ImageRequest {
     val requestUrl =
-        authenticatedImageUrl(resolveImageUrl(session.serverUrl, url), session.resourceTicket)
+        authenticatedImageUrl(
+            resolveImageUrl(session.serverUrl, url),
+            session.artworkTicket ?: session.resourceTicket,
+        )
     return ImageRequest.Builder(context)
         .data(requestUrl)
         .httpHeaders(

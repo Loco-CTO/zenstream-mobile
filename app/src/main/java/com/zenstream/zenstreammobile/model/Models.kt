@@ -7,6 +7,7 @@ data class AuthSession(
     val username: String,
     val resourceTicket: String? = null,
     val avatarVersion: String? = null,
+    val artworkTicket: String? = null,
 )
 
 data class MediaChapter(
@@ -14,10 +15,35 @@ data class MediaChapter(
     val name: String? = null,
 )
 
+data class ArtistCredit(
+    val id: String? = null,
+    val name: String,
+    val joinPhrase: String? = null,
+)
+
 data class MediaItem(
     val id: String,
     val name: String,
     val type: String? = null,
+    val albumId: String? = null,
+    val artistId: String? = null,
+    val album: String? = null,
+    val albumArtist: String? = null,
+    val albumType: String? = null,
+    val albumSecondaryTypes: List<String> = emptyList(),
+    val artists: List<String> = emptyList(),
+    val contributingArtists: List<String> = emptyList(),
+    val artistCredits: List<ArtistCredit> = emptyList(),
+    val label: String? = null,
+    val tags: List<String> = emptyList(),
+    val releaseDate: String? = null,
+    val show: String? = null,
+    val discNumber: Int? = null,
+    val trackNumber: Int? = null,
+    val durationSeconds: Double? = null,
+    val playCount: Int? = null,
+    val lastPlayedAt: String? = null,
+    val dateCreated: String? = null,
     val seriesName: String? = null,
     val seriesId: String? = null,
     val seasonId: String? = null,
@@ -44,7 +70,7 @@ data class MediaItem(
     val seriesPrimaryImageBlurHash: String? = null,
     val played: Boolean = false,
     val favorite: Boolean = false,
-    /** Follow is only populated for movie and series catalog entities. */
+    /** Follow is populated for movies, series, and music artists only. */
     val following: Boolean? = null,
     val unplayedItemCount: Int? = null,
     val playedPercentage: Double? = null,
@@ -76,8 +102,14 @@ data class MediaRow(
     val wide: Boolean = false,
     val stackEpisodes: Boolean = false,
     val label: String? = null,
+    val variant: RowVariant = RowVariant.Poster,
     val key: String = "${title.name}:${libraryName.orEmpty()}:${label.orEmpty()}",
 )
+
+enum class RowVariant {
+    Poster,
+    Square,
+}
 
 enum class RowTitle {
     ContinueWatching,
@@ -86,6 +118,7 @@ enum class RowTitle {
     Genre,
     NewlyAdded,
     TopRated,
+    FavoriteMusic,
 }
 
 data class HomeData(
@@ -95,13 +128,26 @@ data class HomeData(
 
 data class DerivedHomeData(
     val myList: List<MediaItem> = emptyList(),
+    val favoriteMusic: List<MediaItem> = emptyList(),
     val recentlyPlayed: List<MediaItem> = emptyList(),
     val genreRows: List<MediaRow> = emptyList(),
 ) {
     fun rows(): List<MediaRow> =
         listOfNotNull(
             myList.takeIf { it.isNotEmpty() }?.let { MediaRow(RowTitle.MyList, items = it) }
-        ) + genreRows.filter { it.items.isNotEmpty() }
+        ) +
+            listOfNotNull(
+                favoriteMusic
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        MediaRow(
+                            RowTitle.FavoriteMusic,
+                            items = it,
+                            variant = RowVariant.Square,
+                        )
+                    }
+            ) +
+            genreRows.filter { it.items.isNotEmpty() }
 }
 
 fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row ->
@@ -111,7 +157,8 @@ fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row 
         row.title == RowTitle.NewlyAdded -> 2
         row.title == RowTitle.TopRated -> 3
         row.title == RowTitle.MyList -> 4
-        row.title == RowTitle.Genre -> 5
+        row.title == RowTitle.FavoriteMusic -> 5
+        row.title == RowTitle.Genre -> 6
         else -> 6
     }
 }
@@ -128,6 +175,7 @@ enum class LibrarySortBy(val apiValue: String) {
     LastAdded("lastAdded"),
     Release("release"),
     Runtime("runtime"),
+    Year("year"),
 }
 
 enum class SortOrder(val apiValue: String) {
@@ -176,6 +224,100 @@ data class DetailData(
     val selectedSeasonId: String? = null,
 )
 
+data class MusicAlbumData(
+    val album: MediaItem,
+    val artist: MediaItem? = null,
+    val tracks: List<MediaItem> = emptyList(),
+    val relatedAlbums: List<MediaItem> = emptyList(),
+    val catalogGeneration: Long? = null,
+)
+
+data class MusicArtistData(
+    val artist: MediaItem,
+    val albums: List<MediaItem> = emptyList(),
+    val tracks: List<MediaItem> = emptyList(),
+    val trackCount: Int = tracks.size,
+    val appearsIn: List<MediaItem> = emptyList(),
+    val relatedArtists: List<MediaItem> = emptyList(),
+    val catalogGeneration: Long? = null,
+)
+
+data class LyricLine(
+    val text: String,
+    val startSeconds: Double? = null,
+    val endSeconds: Double? = null,
+)
+
+data class AudioLyrics(
+    val source: String,
+    val timed: Boolean,
+    val language: String? = null,
+    val lines: List<LyricLine> = emptyList(),
+)
+
+enum class AudioRepeatMode {
+    Off,
+    Queue,
+    Track;
+
+    fun next(): AudioRepeatMode =
+        when (this) {
+            Off -> Queue
+            Queue -> Track
+            Track -> Off
+        }
+}
+
+data class AudioQueueEntry(
+    val entryId: String,
+    val track: MediaItem,
+    val playbackInstanceId: String? = null,
+)
+
+data class AudioQueueSnapshot(
+    val schemaVersion: Int = 1,
+    val serverUrl: String,
+    val userId: String,
+    val entries: List<AudioQueueEntry> = emptyList(),
+    val currentIndex: Int = 0,
+    val positionSeconds: Double = 0.0,
+    val shuffle: Boolean = false,
+    val repeatMode: AudioRepeatMode = AudioRepeatMode.Off,
+    val updatedAt: Long = System.currentTimeMillis(),
+    val playedEntryIds: Set<String> = emptySet(),
+    val durationSeconds: Double? = null,
+    val sourceEntryId: String? = null,
+    val sourceFormat: String? = null,
+    val sourceBitrate: Int? = null,
+    val sourceSampleRate: Int? = null,
+    val playbackMode: String? = null,
+)
+
+data class AudioPlayerState(
+    val queue: List<AudioQueueEntry> = emptyList(),
+    val currentIndex: Int = -1,
+    val positionSeconds: Long = 0L,
+    /** Exact player position at [positionUpdatedAtElapsedRealtime], for latency-sensitive UI. */
+    val positionMillis: Long = 0L,
+    val positionUpdatedAtElapsedRealtime: Long = 0L,
+    val durationSeconds: Long = 0L,
+    val isPlaying: Boolean = false,
+    val isLoading: Boolean = false,
+    val shuffle: Boolean = false,
+    val repeatMode: AudioRepeatMode = AudioRepeatMode.Off,
+    val volume: Float = 1f,
+    val muted: Boolean = false,
+    val error: String? = null,
+    val sourceFormat: String? = null,
+    val sourceBitrate: Int? = null,
+    val sourceSampleRate: Int? = null,
+    val playbackMode: String? = null,
+    val playedEntryIds: Set<String> = emptySet(),
+) {
+    val currentEntry: AudioQueueEntry?
+        get() = queue.getOrNull(currentIndex)
+}
+
 data class NotificationItem(
     val id: String,
     val kind: String,
@@ -183,6 +325,7 @@ data class NotificationItem(
     val subtitle: String? = null,
     val itemId: String? = null,
     val seriesId: String? = null,
+    val artistId: String? = null,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val createdAt: String,

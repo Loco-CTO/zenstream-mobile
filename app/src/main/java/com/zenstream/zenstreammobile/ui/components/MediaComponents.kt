@@ -64,12 +64,19 @@ fun MediaRowView(
     modifier: Modifier = Modifier,
 ) {
     val uniqueItems = row.items.distinctBy { it.id }
-    if (uniqueItems.isEmpty()) return
+    val visibleItems =
+        if (row.title == RowTitle.MyList) {
+            uniqueItems.filterNot { it.type in setOf("MusicArtist", "MusicAlbum", "Audio") }
+        } else {
+            uniqueItems
+        }
+    if (visibleItems.isEmpty()) return
     val title =
         when (row.title) {
             RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
             RowTitle.NextUp -> stringResource(R.string.next_up)
-            RowTitle.MyList -> stringResource(R.string.my_list)
+            RowTitle.MyList -> stringResource(R.string.favorites)
+            RowTitle.FavoriteMusic -> stringResource(R.string.favorite_music)
             RowTitle.Genre -> row.label.orEmpty()
             RowTitle.NewlyAdded ->
                 row.libraryName?.let {
@@ -103,7 +110,7 @@ fun MediaRowView(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (row.stackEpisodes) {
-                items(stackNewlyAdded(uniqueItems), key = { it.items.first().id }) { stack ->
+                items(stackNewlyAdded(visibleItems), key = { it.items.first().id }) { stack ->
                     if (stack.items.size > 1) {
                         StackedEpisodeCard(stack, session, onItemClick)
                     } else {
@@ -117,13 +124,20 @@ fun MediaRowView(
                     }
                 }
             } else {
-                items(uniqueItems, key = { it.id }) { item ->
-                    MediaCard(
-                        item,
-                        session,
-                        row.wide,
-                        onItemClick,
-                    )
+                items(visibleItems, key = { it.id }) { item ->
+                    if (
+                        row.variant == com.zenstream.zenstreammobile.model.RowVariant.Square ||
+                            item.type in setOf("MusicArtist", "MusicAlbum", "Audio")
+                    ) {
+                        AudioCard(item, session, onItemClick)
+                    } else {
+                        MediaCard(
+                            item,
+                            session,
+                            row.wide,
+                            onItemClick,
+                        )
+                    }
                 }
             }
         }
