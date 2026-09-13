@@ -284,12 +284,22 @@ data class AudioQueueSnapshot(
     val shuffle: Boolean = false,
     val repeatMode: AudioRepeatMode = AudioRepeatMode.Off,
     val updatedAt: Long = System.currentTimeMillis(),
+    val playedEntryIds: Set<String> = emptySet(),
+    val durationSeconds: Double? = null,
+    val sourceEntryId: String? = null,
+    val sourceFormat: String? = null,
+    val sourceBitrate: Int? = null,
+    val sourceSampleRate: Int? = null,
+    val playbackMode: String? = null,
 )
 
 data class AudioPlayerState(
     val queue: List<AudioQueueEntry> = emptyList(),
     val currentIndex: Int = -1,
     val positionSeconds: Long = 0L,
+    /** Exact player position at [positionUpdatedAtElapsedRealtime], for latency-sensitive UI. */
+    val positionMillis: Long = 0L,
+    val positionUpdatedAtElapsedRealtime: Long = 0L,
     val durationSeconds: Long = 0L,
     val isPlaying: Boolean = false,
     val isLoading: Boolean = false,
@@ -298,6 +308,11 @@ data class AudioPlayerState(
     val volume: Float = 1f,
     val muted: Boolean = false,
     val error: String? = null,
+    val sourceFormat: String? = null,
+    val sourceBitrate: Int? = null,
+    val sourceSampleRate: Int? = null,
+    val playbackMode: String? = null,
+    val playedEntryIds: Set<String> = emptySet(),
 ) {
     val currentEntry: AudioQueueEntry?
         get() = queue.getOrNull(currentIndex)

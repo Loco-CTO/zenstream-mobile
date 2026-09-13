@@ -47,6 +47,13 @@ class AudioQueueStorageTest {
                 shuffle = true,
                 repeatMode = AudioRepeatMode.Queue,
                 updatedAt = 123L,
+                playedEntryIds = setOf("entry-b"),
+                durationSeconds = 216.0,
+                sourceEntryId = "entry-b",
+                sourceFormat = "flac",
+                sourceBitrate = 1_835_000,
+                sourceSampleRate = 48_000,
+                playbackMode = "direct",
             )
 
         val encoded = snapshot.toJson().toString()
@@ -65,6 +72,13 @@ class AudioQueueStorageTest {
         )
         assertEquals("instance-a", restored?.entries?.first()?.playbackInstanceId)
         assertEquals(AudioRepeatMode.Queue, restored?.repeatMode)
+        assertEquals(setOf("entry-b"), restored?.playedEntryIds)
+        assertEquals(216.0, restored?.durationSeconds ?: -1.0, 0.0)
+        assertEquals("entry-b", restored?.sourceEntryId)
+        assertEquals("flac", restored?.sourceFormat)
+        assertEquals(1_835_000, restored?.sourceBitrate)
+        assertEquals(48_000, restored?.sourceSampleRate)
+        assertEquals("direct", restored?.playbackMode)
         assertFalse(encoded.contains("access"))
         assertFalse(encoded.contains("token"))
         assertFalse(encoded.contains("url"))

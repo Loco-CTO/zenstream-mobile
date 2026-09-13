@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
@@ -80,10 +81,12 @@ class AudioPlaybackService : MediaLibraryService() {
     private lateinit var sessionStore: SessionStore
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val progressMutex = Mutex()
+    private val queueCommandMutex = Mutex()
     private val autoCatalogMutex = Mutex()
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var persistJob: Job? = null
+    private var lyricsPrefetchJob: Job? = null
     private var currentState = AudioPlayerState()
     private var retryEntryId: String? = null
     private var recoveryJob: Job? = null
@@ -108,6 +111,9 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun observedPlayerPositionMs(): Long {
         val entryId = currentState.currentEntry?.entryId
+        if (!playerOwnsCurrentQueueEntry()) {
+            return if (entryId == lastKnownPositionEntryId) lastKnownPositionMs else 0L
+        }
         val playerPositionMs = player.currentPosition.coerceAtLeast(0L)
         if (entryId != lastKnownPositionEntryId) {
             rememberPosition(entryId, playerPositionMs)
@@ -122,6 +128,11 @@ class AudioPlaybackService : MediaLibraryService() {
                 entryId == lastKnownPositionEntryId &&
                 (player.playerError != null || recoveryJob?.isActive == true || loadingCurrent)
         return if (transientReset) lastKnownPositionMs else playerPositionMs
+    }
+
+    private fun playerOwnsCurrentQueueEntry(): Boolean {
+        val entryId = currentState.currentEntry?.entryId ?: return false
+        return player.currentMediaItem?.mediaId == "zenstream:queue:$entryId"
     }
 
     private fun recoveryPositionMs(entryId: String): Long {
@@ -202,6 +213,10 @@ class AudioPlaybackService : MediaLibraryService() {
                 intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { encoded ->
                     serviceScope.launch { replaceQueue(encoded) }
                 }
+            AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY ->
+                serviceScope.launch {
+                    playQueueEntry(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
+                }
             AudioServiceBridge.ACTION_ADD_QUEUE ->
                 intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { encoded ->
                     serviceScope.launch { addQueue(encoded) }
@@ -252,10 +267,17 @@ class AudioPlaybackService : MediaLibraryService() {
             sessionStore.clearAudioQueueSnapshot(account.serverUrl, account.userId)
             return
         }
-        if (validated.entries.size != snapshot.entries.size) {
+        if (
+            validated.entries.size != snapshot.entries.size ||
+                validated.playedEntryIds != snapshot.playedEntryIds
+        ) {
             sessionStore.saveAudioQueueSnapshot(validated)
         }
         currentState = validated.toPlayerState()
+        rememberPosition(
+            currentState.currentEntry?.entryId,
+            currentState.positionSeconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L,
+        )
         AudioServiceBridge.publish(currentState)
         // Restoration is intentionally paused. The user must press play.
     }
@@ -340,10 +362,18 @@ class AudioPlaybackService : MediaLibraryService() {
                 .let { index ->
                     if (index >= 0) index else snapshot.currentIndex.coerceIn(0, retained.lastIndex)
                 }
-        return snapshot.copy(entries = retained, currentIndex = currentIndex)
+        val retainedIds = retained.mapTo(mutableSetOf()) { it.entryId }
+        return snapshot.copy(
+            entries = retained,
+            currentIndex = currentIndex,
+            playedEntryIds = snapshot.playedEntryIds.intersect(retainedIds),
+        )
     }
 
-    private suspend fun replaceQueue(encoded: String) {
+    private suspend fun replaceQueue(encoded: String) =
+        queueCommandMutex.withLock { replaceQueueInternal(encoded) }
+
+    private suspend fun replaceQueueInternal(encoded: String) {
         val snapshot = parseSnapshot(encoded) ?: return
         val account = sessionStore.session.first() ?: return
         if (!snapshotBelongsTo(snapshot, account)) return
@@ -356,6 +386,8 @@ class AudioPlaybackService : MediaLibraryService() {
         currentState =
             snapshot.toPlayerState().copy(
                 positionSeconds = 0L,
+                positionMillis = 0L,
+                positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 durationSeconds = 0L,
                 isLoading = true,
                 error = null,
@@ -370,7 +402,10 @@ class AudioPlaybackService : MediaLibraryService() {
         loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
-    private suspend fun addQueue(encoded: String) {
+    private suspend fun addQueue(encoded: String) =
+        queueCommandMutex.withLock { addQueueInternal(encoded) }
+
+    private suspend fun addQueueInternal(encoded: String) {
         val snapshot = parseSnapshot(encoded) ?: return
         val additions = snapshot.entries
         if (additions.isEmpty()) return
@@ -383,6 +418,7 @@ class AudioPlaybackService : MediaLibraryService() {
                 queue = merged,
                 currentIndex =
                     if (wasEmpty) 0 else currentState.currentIndex.coerceIn(0, merged.lastIndex),
+                playedEntryIds = currentState.playedEntryIds.intersect(merged.map { it.entryId }.toSet()),
                 error = null,
             )
         publishPlayerState()
@@ -443,7 +479,17 @@ class AudioPlaybackService : MediaLibraryService() {
         lastAutoplay = autoPlay
         activeAudioSource = null
         httpFactory.setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${account.token}"))
-        currentState = currentState.copy(isLoading = true, error = null)
+        currentState =
+            currentState.copy(
+                isLoading = true,
+                error = null,
+                // Do not let the lyrics UI extrapolate an old track position while a new source
+                // is being prepared. The exact anchor is restored below once Media3 is ready.
+                positionUpdatedAtElapsedRealtime = 0L,
+            )
+        // Keep the current entry's last-known duration/source details visible while a recovery
+        // or a paused restore negotiates a fresh, short-lived playback URL. New queue entries
+        // clear these fields at their selection boundary before reaching this method.
         AudioServiceBridge.publish(currentState)
         try {
             val requestedPositionMs =
@@ -468,6 +514,16 @@ class AudioPlaybackService : MediaLibraryService() {
             val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
             val durationSeconds =
                 data.durationSeconds ?: data.source.durationSeconds ?: entry.track.durationSeconds
+            val audioStream =
+                (data.audioTracks + data.source.mediaStreams).firstOrNull {
+                    it.type.equals("audio", ignoreCase = true)
+                }
+            val sourceFormat =
+                (data.source.container ?: data.mimeType)
+                    ?.substringBefore(',')
+                    ?.substringBefore(';')
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
             val normalizedSource =
                 normalizeAudioSource(
                     url = url,
@@ -510,15 +566,27 @@ class AudioPlaybackService : MediaLibraryService() {
             // a reused ExoPlayer instance from retaining the previous item's period position.
             player.seekTo(position)
             rememberPosition(entry.entryId, position)
-            recordPlayStart(account, entry)
+            val positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime()
+            currentState = markQueueEntryPlayed(currentState, entry.entryId) ?: currentState
             currentState =
                 currentState.copy(
                     positionSeconds = position / 1_000L,
+                    positionMillis = position,
+                    positionUpdatedAtElapsedRealtime = positionUpdatedAtElapsedRealtime,
                     isLoading = false,
                     error = null,
                     durationSeconds = durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
+                    sourceFormat = sourceFormat,
+                    sourceBitrate = audioStream?.bitrate ?: data.source.bitrate,
+                    sourceSampleRate = audioStream?.sampleRate,
+                    playbackMode = data.mode,
                 )
             AudioServiceBridge.publish(currentState)
+            persistSnapshot()
+            prefetchLyrics(account, entry)
+            // Publish and persist the negotiated metadata before the network-backed play-start
+            // event so a process restart cannot restore a queue with an empty quality line.
+            recordPlayStart(account, entry)
             if (autoPlay) player.play()
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
@@ -534,6 +602,14 @@ class AudioPlaybackService : MediaLibraryService() {
         } finally {
             loadingCurrent = false
         }
+    }
+
+    private fun prefetchLyrics(account: AuthSession, entry: AudioQueueEntry) {
+        lyricsPrefetchJob?.cancel()
+        lyricsPrefetchJob =
+            serviceScope.launch {
+                repository.prefetchAudioLyrics(account, entry.track.id)
+            }
     }
 
     private suspend fun recordPlayStart(account: AuthSession, oldEntry: AudioQueueEntry) {
@@ -560,12 +636,68 @@ class AudioPlaybackService : MediaLibraryService() {
             }
     }
 
-    private suspend fun advance(force: Boolean) {
+    private suspend fun playQueueEntry(entryId: String?) =
+        queueCommandMutex.withLock { playQueueEntryInternal(entryId) }
+
+    private suspend fun playQueueEntryInternal(entryId: String?) {
+        if (entryId.isNullOrBlank()) return
+        val targetIndex = queueIndexForEntry(currentState.queue, entryId) ?: return
+        val target = currentState.queue[targetIndex]
+        if (target.entryId == currentState.currentEntry?.entryId) {
+            cancelRecovery()
+            lastAutoplay = true
+            if (
+                player.currentMediaItem == null ||
+                    player.playerError != null ||
+                    player.playbackState == Player.STATE_ENDED
+            ) {
+                val resumePositionMs =
+                    if (player.playbackState == Player.STATE_ENDED) 0L
+                    else recoveryPositionMs(target.entryId)
+                loadCurrent(autoPlay = true, resumePositionMs = resumePositionMs)
+            } else {
+                player.play()
+            }
+            return
+        }
+
+        cancelRecovery()
+        reportProgress()
+        currentState = selectQueueEntryForPlayback(currentState, target.entryId) ?: return
+        rememberPosition(target.entryId, 0L)
+        currentState =
+            currentState.copy(
+                positionSeconds = 0L,
+                positionMillis = 0L,
+                positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+            )
+        AudioServiceBridge.publish(currentState)
+        suppressEnded = true
+        player.stop()
+        retryEntryId = null
+        lastAutoplay = true
+        persistSnapshot()
+        loadCurrent(autoPlay = true, resumePositionMs = 0L)
+    }
+
+    private suspend fun advance(force: Boolean) =
+        queueCommandMutex.withLock { advanceInternal(force) }
+
+    private suspend fun advanceInternal(force: Boolean) {
         val queue = currentState.queue
         if (queue.isEmpty()) return
         cancelRecovery()
-        val nextIndex =
-            nextQueueIndex(queue.size, currentState.currentIndex, currentState.repeatMode, force)
+        val selection = nextQueueSelection(currentState, force) ?: run {
+            lastAutoplay = false
+            player.pause()
+            player.seekTo(0L)
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
+            currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
+            publishPlayerState()
+            reportProgress()
+            return
+        }
+        val nextIndex = selection.index
         if (
             nextIndex == currentState.currentIndex &&
                 currentState.repeatMode == AudioRepeatMode.Track &&
@@ -576,19 +708,18 @@ class AudioPlaybackService : MediaLibraryService() {
             loadCurrent(autoPlay = true, resumePositionMs = 0L)
             return
         }
-        if (nextIndex == null) {
-            lastAutoplay = false
-            player.pause()
-            player.seekTo(0L)
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
-            publishPlayerState()
-            reportProgress()
-            return
-        }
         reportProgress()
         currentState =
-            currentState.copy(currentIndex = nextIndex, positionSeconds = 0L, error = null)
+            currentState.copy(
+                currentIndex = nextIndex,
+                playedEntryIds = selection.playedEntryIds,
+                positionSeconds = 0L,
+                error = null,
+                sourceFormat = null,
+                sourceBitrate = null,
+                sourceSampleRate = null,
+                playbackMode = null,
+            )
         persistSnapshot()
         suppressEnded = true
         player.stop()
@@ -597,7 +728,9 @@ class AudioPlaybackService : MediaLibraryService() {
         loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
-    private suspend fun previous() {
+    private suspend fun previous() = queueCommandMutex.withLock { previousInternal() }
+
+    private suspend fun previousInternal() {
         cancelRecovery()
         if (player.currentPosition > 5_000L) {
             player.seekTo(0L)
@@ -612,7 +745,15 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         reportProgress()
         currentState =
-            currentState.copy(currentIndex = previous, positionSeconds = 0L, error = null)
+            currentState.copy(
+                currentIndex = previous,
+                positionSeconds = 0L,
+                error = null,
+                sourceFormat = null,
+                sourceBitrate = null,
+                sourceSampleRate = null,
+                playbackMode = null,
+            )
         persistSnapshot()
         suppressEnded = true
         player.stop()
@@ -674,8 +815,14 @@ class AudioPlaybackService : MediaLibraryService() {
             currentState.copy(
                 queue = removal.entries,
                 currentIndex = removal.currentIndex,
+                playedEntryIds =
+                    currentState.playedEntryIds.intersect(removal.entries.map { it.entryId }.toSet()),
                 positionSeconds = if (wasCurrent) 0L else currentState.positionSeconds,
                 durationSeconds = if (wasCurrent) 0L else currentState.durationSeconds,
+                sourceFormat = if (wasCurrent) null else currentState.sourceFormat,
+                sourceBitrate = if (wasCurrent) null else currentState.sourceBitrate,
+                sourceSampleRate = if (wasCurrent) null else currentState.sourceSampleRate,
+                playbackMode = if (wasCurrent) null else currentState.playbackMode,
             )
         if (wasCurrent) {
             cancelRecovery()
@@ -770,12 +917,18 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun publishPlayerState() {
         val duration =
-            player.duration.takeIf { it != C.TIME_UNSET && it >= 0 }?.div(1_000L)
+            player
+                .duration
+                .takeIf { playerOwnsCurrentQueueEntry() && it != C.TIME_UNSET && it > 0 }
+                ?.div(1_000L)
                 ?: currentState.durationSeconds
-        val position = observedPlayerPositionMs().div(1_000L)
+        val positionMillis = observedPlayerPositionMs()
+        val position = positionMillis.div(1_000L)
         currentState =
             currentState.copy(
                 positionSeconds = position,
+                positionMillis = positionMillis,
+                positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 durationSeconds = duration,
                 isPlaying = player.isPlaying,
                 isLoading = loadingCurrent,
@@ -1010,6 +1163,9 @@ class AudioPlaybackService : MediaLibraryService() {
         playerScope = accountScope(account)
         publishPlayerState()
         currentState.currentEntry?.let { recordPlayStart(account, it) }
+        currentState.currentEntry?.let {
+            currentState = markQueueEntryPlayed(currentState, it.entryId) ?: currentState
+        }
         persistSnapshot()
     }
 
@@ -1057,6 +1213,7 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         positionJob?.cancel()
         progressJob?.cancel()
+        lyricsPrefetchJob?.cancel()
         cancelRecovery()
         librarySession.release()
         player.removeListener(playerListener)
@@ -1441,8 +1598,22 @@ class AudioPlaybackService : MediaLibraryService() {
             currentIndex =
                 if (entries.isEmpty()) -1 else currentIndex.coerceIn(0, entries.lastIndex),
             positionSeconds = positionSeconds.toLong(),
+            durationSeconds =
+                (durationSeconds
+                    ?: entries
+                        .getOrNull(currentIndex.coerceIn(0, entries.lastIndex.coerceAtLeast(0)))
+                        ?.track
+                        ?.durationSeconds)
+                    ?.takeIf { it.isFinite() && it >= 0.0 }
+                    ?.toLong()
+                    ?: 0L,
             shuffle = shuffle,
             repeatMode = repeatMode,
+            sourceFormat = sourceFormat.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            sourceBitrate = sourceBitrate.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            sourceSampleRate = sourceSampleRate.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            playbackMode = playbackMode.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            playedEntryIds = playedEntryIds,
         )
 
     private fun AudioPlayerState.toSnapshot(account: AuthSession): AudioQueueSnapshot =
@@ -1454,6 +1625,13 @@ class AudioPlaybackService : MediaLibraryService() {
             positionSeconds = positionSeconds.toDouble(),
             shuffle = shuffle,
             repeatMode = repeatMode,
+            playedEntryIds = playedEntryIds,
+            durationSeconds = durationSeconds.toDouble().takeIf { it > 0L },
+            sourceEntryId = currentEntry?.entryId,
+            sourceFormat = sourceFormat,
+            sourceBitrate = sourceBitrate,
+            sourceSampleRate = sourceSampleRate,
+            playbackMode = playbackMode,
         )
 
     companion object {

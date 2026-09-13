@@ -12,13 +12,15 @@ import java.net.URI
 internal const val AUDIO_QUEUE_SCHEMA_VERSION = 1
 private const val AUDIO_QUEUE_MAX_ENTRIES = 500
 private const val AUDIO_QUEUE_MAX_TEXT_LENGTH = 2_048
+private const val AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH = 64
 private const val AUDIO_QUEUE_MAX_POSITION_SECONDS = 7 * 24 * 60 * 60.0
 
 internal fun audioQueueScope(serverUrl: String, userId: String): String =
     "${normalizeServerUrl(serverUrl)}\u0000$userId"
 
-internal fun AudioQueueSnapshot.toJson(): JSONObject =
-    JSONObject()
+internal fun AudioQueueSnapshot.toJson(): JSONObject {
+    val persistedEntryIds = entries.take(AUDIO_QUEUE_MAX_ENTRIES).mapTo(mutableSetOf()) { it.entryId }
+    return JSONObject()
         .put("schemaVersion", AUDIO_QUEUE_SCHEMA_VERSION)
         .put("serverUrl", normalizeServerUrl(serverUrl).take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
         .put("userId", userId.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
@@ -38,11 +40,35 @@ internal fun AudioQueueSnapshot.toJson(): JSONObject =
                 }
             },
         )
+        .put(
+            "playedEntryIds",
+            JSONArray().apply {
+                playedEntryIds
+                    .asSequence()
+                    .filter { it in persistedEntryIds }
+                    .map { it.take(AUDIO_QUEUE_MAX_TEXT_LENGTH) }
+                    .sorted()
+                    .take(AUDIO_QUEUE_MAX_ENTRIES)
+                    .forEach(::put)
+            },
+        )
         .put("currentIndex", currentIndex)
         .put("positionSeconds", positionSeconds.coerceIn(0.0, AUDIO_QUEUE_MAX_POSITION_SECONDS))
         .put("shuffle", shuffle)
         .put("repeatMode", repeatMode.name)
+        .put(
+            "durationSeconds",
+            durationSeconds
+                ?.takeIf { it.isFinite() && it >= 0.0 }
+                ?.coerceAtMost(AUDIO_QUEUE_MAX_POSITION_SECONDS),
+        )
+        .put("sourceEntryId", sourceEntryId?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
+        .put("sourceFormat", sourceFormat?.take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH))
+        .put("sourceBitrate", sourceBitrate?.takeIf { it > 0 })
+        .put("sourceSampleRate", sourceSampleRate?.takeIf { it > 0 })
+        .put("playbackMode", playbackMode?.take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH))
         .put("updatedAt", updatedAt)
+}
 
 private fun MediaItem.toAudioQueueJson(): JSONObject =
     JSONObject()
@@ -117,6 +143,27 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
     val repeatMode =
         runCatching { AudioRepeatMode.valueOf(value.optString("repeatMode")) }
             .getOrDefault(AudioRepeatMode.Off)
+    val entryIds = entries.mapTo(mutableSetOf()) { it.entryId }
+    val playedEntryIds =
+        value.optJSONArray("playedEntryIds")?.let { array ->
+            mutableSetOf<String>().apply {
+                repeat(minOf(array.length(), AUDIO_QUEUE_MAX_ENTRIES)) { index ->
+                    val entryId =
+                        array
+                            .optString(index)
+                            .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+                            .takeIf(String::isNotBlank)
+                    if (entryId != null && entryId in entryIds) add(entryId)
+                }
+            }
+        }.orEmpty()
+    val sourceEntryId =
+        value
+            .optString("sourceEntryId")
+            .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+            .takeIf { it.isNotBlank() && it in entryIds }
+    val sourceMetadataMatchesCurrent =
+        sourceEntryId == entries.getOrNull(value.optInt("currentIndex", 0).coerceIn(0, entries.lastIndex))?.entryId
     return AudioQueueSnapshot(
         schemaVersion = AUDIO_QUEUE_SCHEMA_VERSION,
         serverUrl = normalizedServerUrl,
@@ -131,6 +178,31 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
         shuffle = value.optBoolean("shuffle", false),
         repeatMode = repeatMode,
         updatedAt = value.optLong("updatedAt", 0L).coerceAtLeast(0L),
+        playedEntryIds = playedEntryIds,
+        durationSeconds =
+            value
+                .optDoubleOrNull("durationSeconds")
+                ?.takeIf { sourceMetadataMatchesCurrent }
+                ?.coerceIn(0.0, AUDIO_QUEUE_MAX_POSITION_SECONDS),
+        sourceEntryId = sourceEntryId,
+        sourceFormat =
+            value
+                .optString("sourceFormat")
+                .take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH)
+                .takeIf { sourceMetadataMatchesCurrent && it.isNotBlank() },
+        sourceBitrate =
+            value
+                .optIntOrNull("sourceBitrate")
+                ?.takeIf { sourceMetadataMatchesCurrent && it > 0 },
+        sourceSampleRate =
+            value
+                .optIntOrNull("sourceSampleRate")
+                ?.takeIf { sourceMetadataMatchesCurrent && it > 0 },
+        playbackMode =
+            value
+                .optString("playbackMode")
+                .take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH)
+                .takeIf { sourceMetadataMatchesCurrent && it.isNotBlank() },
     )
 }
 

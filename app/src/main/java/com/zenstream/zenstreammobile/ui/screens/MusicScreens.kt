@@ -46,7 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.MusicDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -108,7 +111,7 @@ fun MusicAlbumScreen(
             state.error && state.data == null ->
                 MusicErrorState(
                     Modifier.fillMaxSize(),
-                    "Could not load this album",
+                    stringResource(R.string.music_album_load_failed),
                     vm::load,
                 )
             state.data != null ->
@@ -130,7 +133,7 @@ fun MusicAlbumScreen(
         }
 
         DetailOverlayTopBar(
-            title = state.data?.album?.name ?: "Album",
+            title = state.data?.album?.name ?: stringResource(R.string.music_album),
             visible = true,
             scrolled = detailScrolled,
             backOnly = state.data == null,
@@ -209,7 +212,7 @@ private fun AlbumContent(
             if (grouped.size > 1) {
                 item(key = "disc-$disc") {
                     Text(
-                        "Disc $disc",
+                        stringResource(R.string.music_disc, disc),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -228,7 +231,6 @@ private fun AlbumContent(
                         )
                     },
                     onFavorite = onFavoriteTrack,
-                    onArtistClick = onArtistClick,
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -249,7 +251,7 @@ private fun AlbumContent(
         if (data.relatedAlbums.isNotEmpty()) {
             item(key = "related-albums") {
                 MusicSection(
-                    title = "Related albums",
+                    title = stringResource(R.string.music_related_albums),
                     items = data.relatedAlbums,
                     session = session,
                     onClick = onAlbumClick,
@@ -337,7 +339,8 @@ private fun AlbumHeader(
             Text(
                 listOfNotNull(
                         year,
-                        album.albumType?.takeIf(String::isNotBlank) ?: "Album",
+                        album.albumType?.takeIf(String::isNotBlank)
+                            ?: stringResource(R.string.music_album),
                     )
                     .joinToString(" · "),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -352,27 +355,31 @@ private fun AlbumHeader(
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_heart),
                         contentDescription =
-                            if (album.favorite) "Remove favorite" else "Add favorite",
+                            stringResource(
+                                if (album.favorite) R.string.remove_favorite
+                                else R.string.add_favorite
+                            ),
                         tint =
                             if (album.favorite) accent
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        painterResource(LucideR.drawable.lucide_ic_list_filter),
-                        contentDescription = "Add album to queue",
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onShuffle, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_shuffle),
-                        contentDescription = "Shuffle album",
+                        painterResource(LucideR.drawable.lucide_ic_list_plus),
+                        contentDescription = stringResource(R.string.music_add_album_to_queue),
                         tint = accent,
                     )
                 }
-                IconButton(onClick = onPlay, modifier = Modifier.size(60.dp)) {
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_shuffle),
+                        contentDescription = stringResource(R.string.music_shuffle_album),
+                        tint = accent,
+                    )
+                }
+                IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         shape = CircleShape,
@@ -381,8 +388,8 @@ private fun AlbumHeader(
                     ) {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_play),
-                            contentDescription = "Play album",
-                            modifier = Modifier.padding(17.dp),
+                            contentDescription = stringResource(R.string.music_play_album),
+                            modifier = Modifier.padding(15.dp),
                             tint = palette.onAccent,
                         )
                     }
@@ -400,7 +407,9 @@ private fun AlbumFooter(
 ) {
     val summary =
         buildList {
-            if (trackCount > 0) add("$trackCount songs")
+            if (trackCount > 0) {
+                add(stringResource(R.string.music_album_track_count, trackCount))
+            }
             formatAlbumDuration(durationSeconds)?.let { add(it) }
         }
     val label = album.label?.trim()?.takeIf(String::isNotBlank)
@@ -427,16 +436,19 @@ private fun AlbumFooter(
     }
 }
 
+@Composable
 private fun formatAlbumDuration(seconds: Double): String? {
     if (!seconds.isFinite() || seconds <= 0.0) return null
     val totalMinutes = (seconds / 60.0).toInt()
-    if (totalMinutes <= 0) return "1 minute"
+    if (totalMinutes <= 0) return stringResource(R.string.music_album_duration_one_minute)
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
-    return buildList {
-        if (hours > 0) add("$hours ${if (hours == 1) "hour" else "hours"}")
-        if (minutes > 0) add("$minutes ${if (minutes == 1) "minute" else "minutes"}")
-    }.joinToString(" ")
+    return when {
+        hours > 0 && minutes > 0 ->
+            stringResource(R.string.music_album_duration_hours_minutes, hours, minutes)
+        hours > 0 -> pluralStringResource(R.plurals.music_album_duration_hours, hours, hours)
+        else -> pluralStringResource(R.plurals.music_album_duration_minutes, minutes, minutes)
+    }
 }
 
 @Composable
@@ -508,7 +520,7 @@ fun MusicArtistScreen(
             state.error && state.data == null ->
                 MusicErrorState(
                     Modifier.fillMaxSize(),
-                    "Could not load this artist",
+                    stringResource(R.string.music_artist_load_failed),
                     vm::load,
                 )
             state.data != null ->
@@ -533,7 +545,7 @@ fun MusicArtistScreen(
         }
 
         DetailOverlayTopBar(
-            title = state.data?.artist?.name ?: "Artist",
+            title = state.data?.artist?.name ?: stringResource(R.string.music_artist),
             visible = true,
             scrolled = detailScrolled,
             backOnly = state.data == null,
@@ -634,7 +646,7 @@ private fun ArtistContent(
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        "${albums.size} releases · ${data.trackCount} tracks",
+                        stringResource(R.string.music_artist_summary, albums.size, data.trackCount),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -647,10 +659,13 @@ private fun ArtistContent(
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_heart),
                                 contentDescription =
-                                    if (artist.favorite) "Remove favorite" else "Add favorite",
+                                    stringResource(
+                                        if (artist.favorite) R.string.remove_favorite
+                                        else R.string.add_favorite
+                                    ),
                                 tint =
                                     if (artist.favorite) accent
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    else MaterialTheme.colorScheme.onSurface,
                             )
                         }
                         OutlinedButton(
@@ -661,7 +676,11 @@ private fun ArtistContent(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                         ) {
                             Text(
-                                if (artist.following == true) "Following" else "Follow",
+                                if (artist.following == true) {
+                                    stringResource(R.string.music_following)
+                                } else {
+                                    stringResource(R.string.follow)
+                                },
                                 maxLines = 1,
                             )
                         }
@@ -669,11 +688,12 @@ private fun ArtistContent(
                         IconButton(
                             onClick = onShuffleAll,
                             enabled = !tracksLoading,
-                            modifier = Modifier.size(48.dp),
+                            modifier = Modifier.size(44.dp),
                         ) {
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_shuffle),
-                                contentDescription = "Shuffle artist tracks",
+                                contentDescription =
+                                    stringResource(R.string.music_shuffle_artist_tracks),
                                 tint =
                                     if (!tracksLoading) accent
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -682,7 +702,7 @@ private fun ArtistContent(
                         IconButton(
                             onClick = onPlayAll,
                             enabled = !tracksLoading,
-                            modifier = Modifier.size(60.dp),
+                            modifier = Modifier.size(54.dp),
                         ) {
                             Surface(
                                 modifier = Modifier.fillMaxSize(),
@@ -692,15 +712,16 @@ private fun ArtistContent(
                             ) {
                                 if (tracksLoading) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.padding(18.dp),
+                                        modifier = Modifier.padding(15.dp),
                                         strokeWidth = 2.dp,
                                         color = palette.onAccent,
                                     )
                                 } else {
                                     Icon(
                                         painterResource(LucideR.drawable.lucide_ic_play),
-                                        contentDescription = "Play all artist tracks",
-                                        modifier = Modifier.padding(17.dp),
+                                        contentDescription =
+                                            stringResource(R.string.music_play_all_artist_tracks),
+                                        modifier = Modifier.padding(15.dp),
                                         tint = palette.onAccent,
                                     )
                                 }
@@ -708,14 +729,17 @@ private fun ArtistContent(
                         }
                     }
                     if (tracksError)
-                        Text("Could not load tracks", color = MaterialTheme.colorScheme.error)
+                        Text(
+                            stringResource(R.string.music_tracks_load_failed),
+                            color = MaterialTheme.colorScheme.error,
+                        )
                 }
             }
         }
         if (tracks.isNotEmpty()) {
             item(key = "artist-top-tracks-header") {
                 Text(
-                    "Top tracks",
+                    stringResource(R.string.music_top_tracks),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
                 )
@@ -732,7 +756,6 @@ private fun ArtistContent(
                             tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
                         )
                     },
-                    onArtistClick = onArtistClick,
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -746,18 +769,28 @@ private fun ArtistContent(
         val releaseGroups = albums.groupBy { releaseLabel(it) }
         releaseGroups.forEach { (label, groupedAlbums) ->
             item(key = "artist-release-$label") {
-                MusicSection(label, groupedAlbums, session, onAlbumClick)
+                MusicSection(
+                    label.ifBlank { stringResource(R.string.music_albums) },
+                    groupedAlbums,
+                    session,
+                    onAlbumClick,
+                )
             }
         }
         if (data.appearsIn.isNotEmpty()) {
             item(key = "artist-appears-in") {
-                MusicSection("Appears in", data.appearsIn, session, onAlbumClick)
+                MusicSection(
+                    stringResource(R.string.music_appears_in),
+                    data.appearsIn,
+                    session,
+                    onAlbumClick,
+                )
             }
         }
         if (data.relatedArtists.isNotEmpty()) {
             item(key = "artist-related") {
                 MusicSection(
-                    "Similar artists",
+                    stringResource(R.string.music_similar_artists),
                     data.relatedArtists,
                     session,
                     onArtistClick,
@@ -772,11 +805,13 @@ private fun ArtistContent(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Tracks",
+                        stringResource(R.string.music_tracks),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { onAddToQueue(tracks) }) { Text("Add to queue") }
+                    TextButton(onClick = { onAddToQueue(tracks) }) {
+                        Text(stringResource(R.string.music_add_to_queue))
+                    }
                 }
             }
             itemsIndexed(tracks, key = { _, track -> "artist-track-${track.id}" }) { index, track ->
@@ -784,7 +819,6 @@ private fun ArtistContent(
                     item = track,
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, index) },
-                    onArtistClick = onArtistClick,
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -827,7 +861,7 @@ private fun ArtistDetails(artist: MediaItem) {
 
 private fun releaseLabel(item: MediaItem): String {
     val secondary = item.albumSecondaryTypes.firstOrNull()?.trim().orEmpty()
-    return secondary.ifBlank { item.albumType?.ifBlank { null } ?: "Albums" }
+    return secondary.ifBlank { item.albumType?.trim().orEmpty() }
 }
 
 private fun albumTrackListIndex(
@@ -891,6 +925,6 @@ private fun MusicErrorState(modifier: Modifier, message: String, onRetry: () -> 
     ) {
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }

@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.audio
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.compose.runtime.Stable
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -16,6 +17,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.StateFlow
 
 /** UI-facing commands. All playback state and actual media loading live in AudioPlaybackService. */
+@Stable
 @UnstableApi
 class AudioPlayerCoordinator(
     context: Context,
@@ -50,17 +52,15 @@ class AudioPlayerCoordinator(
                 .filter { it.id.isNotBlank() }
                 .map { track ->
                     AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
-                }
+        }
         if (entries.isEmpty()) return
-        val selectedEntry = entries.getOrNull(selectedIndex.coerceIn(0, entries.lastIndex))
-        val ordered = if (shuffle) entries.shuffled() else entries
-        val index = ordered.indexOfFirst { it.entryId == selectedEntry?.entryId }.coerceAtLeast(0)
+        val playbackOrder = queuePlaybackOrder(entries, selectedIndex, shuffle)
         val snapshot =
             AudioQueueSnapshot(
                 serverUrl = session.serverUrl,
                 userId = session.userId,
-                entries = ordered,
-                currentIndex = index,
+                entries = playbackOrder.entries,
+                currentIndex = playbackOrder.currentIndex,
                 shuffle = shuffle,
             )
         AudioServiceBridge.start(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE, snapshot)
@@ -86,6 +86,11 @@ class AudioPlayerCoordinator(
         }
     }
 
+    fun playQueueEntry(entryId: String) =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY) {
+            putExtra(AudioServiceBridge.EXTRA_ENTRY_ID, entryId)
+        }
+
     fun togglePlayback() {
         mediaController?.let { controller ->
             if (controller.currentMediaItem == null) {
@@ -99,21 +104,11 @@ class AudioPlayerCoordinator(
     }
 
     fun next() {
-        val controller = mediaController
-        if (controller != null && controller.currentMediaItem != null) {
-            controller.seekToNextMediaItem()
-        } else {
-            AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_NEXT)
-        }
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_NEXT)
     }
 
     fun previous() {
-        val controller = mediaController
-        if (controller != null && controller.currentMediaItem != null) {
-            controller.seekToPreviousMediaItem()
-        } else {
-            AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PREVIOUS)
-        }
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PREVIOUS)
     }
 
     fun toggleShuffle() =

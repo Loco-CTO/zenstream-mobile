@@ -174,7 +174,9 @@ fun DetailScreen(
         }
 
         DetailOverlayTopBar(
-            title = if (parentSeries != null) parentSeries.name else title.ifBlank { "Detail" },
+            title =
+                if (parentSeries != null) parentSeries.name
+                else title.ifBlank { stringResource(R.string.detail_title) },
             parentSeries = parentSeries,
             visible = true,
             scrolled = detailScrolled,

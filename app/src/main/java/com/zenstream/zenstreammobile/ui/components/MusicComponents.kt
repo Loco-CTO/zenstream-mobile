@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.artistCreditSeparator
 import com.zenstream.zenstreammobile.data.artistCreditsForAlbum
 import com.zenstream.zenstreammobile.data.artistCreditsForTrack
@@ -55,13 +57,19 @@ fun AudioCard(
     modifier: Modifier = Modifier,
     width: Dp? = 148.dp,
 ) {
+    val isMusicAlbum = item.type.equals("MusicAlbum", ignoreCase = true)
+    val releaseYear = musicReleaseYear(item)
+    val albumArtist = musicAlbumArtist(item)
+    val albumType = item.albumType?.takeIf(String::isNotBlank) ?: stringResource(R.string.music_album)
+    val albumMetadata = listOfNotNull(releaseYear, albumType).joinToString(" · ")
+    val openItemDescription = stringResource(R.string.music_open_item, item.name)
     val cardModifier = if (width == null) modifier.fillMaxWidth() else modifier.width(width)
     Column(
         modifier =
             cardModifier
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Open ${item.name}"
+                    contentDescription = openItemDescription
                 }
                 .clickable { onClick(item) }
     ) {
@@ -79,14 +87,37 @@ fun AudioCard(
             color = Color.White.copy(alpha = .86f),
             modifier = Modifier.padding(top = 8.dp),
         )
-        Text(
-            text = musicSubtitle(item),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        if (isMusicAlbum) {
+            if (albumMetadata.isNotBlank()) {
+                Text(
+                    text = albumMetadata,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            albumArtist?.let {
+                Text(
+                    text = it,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
+        } else {
+            Text(
+                text = musicSubtitle(item),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
@@ -139,13 +170,14 @@ fun MusicArtistCard(
     modifier: Modifier = Modifier,
     size: Dp = 112.dp,
 ) {
+    val openItemDescription = stringResource(R.string.music_open_item, item.name)
     Column(
         modifier =
             modifier
                 .width(size)
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Open ${item.name}"
+                    contentDescription = openItemDescription
                 }
                 .clickable { onClick(item) },
         horizontalAlignment = Alignment.Start,
@@ -168,7 +200,7 @@ fun MusicArtistCard(
             modifier = Modifier.padding(top = 9.dp),
         )
         Text(
-            text = "Artist",
+            text = stringResource(R.string.music_artist),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall,
@@ -184,7 +216,7 @@ fun AudioTrackRow(
     isCurrent: Boolean = false,
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
-    onArtistClick: (String) -> Unit = {},
+    onArtistClick: ((String) -> Unit)? = null,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
@@ -211,6 +243,7 @@ fun AudioTrackRow(
             if (credits.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                     credits.forEachIndexed { index, credit ->
+                        val artistId = credit.id
                         Text(
                             text = credit.name,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -218,8 +251,8 @@ fun AudioTrackRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
-                                if (credit.id != null)
-                                    Modifier.clickable { onArtistClick(credit.id) }
+                                if (artistId != null && onArtistClick != null)
+                                    Modifier.clickable { onArtistClick(artistId) }
                                 else Modifier,
                         )
                         artistCreditSeparator(credits, index).takeIf(String::isNotEmpty)?.let {
@@ -241,11 +274,14 @@ fun AudioTrackRow(
             ) {
                 Icon(
                     painter = painterResource(LucideR.drawable.lucide_ic_heart),
-                    contentDescription = if (item.favorite) "Remove favorite" else "Add favorite",
+                    contentDescription =
+                        stringResource(
+                            if (item.favorite) R.string.remove_favorite else R.string.add_favorite
+                        ),
                     modifier = Modifier.size(20.dp),
                     tint =
                         if (item.favorite) accentColor
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -285,12 +321,21 @@ fun MusicCreditLine(
     }
 }
 
+@Composable
 fun musicSubtitle(item: MediaItem): String =
     when {
-        item.type == "MusicArtist" -> item.albumArtist.orEmpty().ifBlank { "Artist" }
+        item.type == "MusicArtist" ->
+            item.albumArtist.orEmpty().ifBlank { stringResource(R.string.music_artist) }
         item.type == "Audio" -> item.albumArtist.orEmpty().ifBlank { item.album.orEmpty() }
         else -> listOfNotNull(item.productionYear?.toString(), item.albumType).joinToString(" · ")
     }
+
+fun musicReleaseYear(item: MediaItem): String? =
+    item.releaseDate?.take(4)?.takeIf { it.length == 4 } ?: item.productionYear?.toString()
+
+fun musicAlbumArtist(item: MediaItem): String? =
+    item.albumArtist?.takeIf(String::isNotBlank)
+        ?: item.artists.firstOrNull()?.takeIf(String::isNotBlank)
 
 fun formatDurationSeconds(value: Double?): String {
     if (value == null || !value.isFinite() || value < 0) return "—"

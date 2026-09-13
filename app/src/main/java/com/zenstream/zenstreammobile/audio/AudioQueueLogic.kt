@@ -11,6 +11,120 @@ internal data class QueueRemoval(
     val removedCurrent: Boolean,
 )
 
+internal data class QueueAdvanceSelection(
+    val index: Int,
+    val playedEntryIds: Set<String>,
+    val resetPlayed: Boolean = false,
+)
+
+internal data class QueuePlaybackOrder(
+    val entries: List<AudioQueueEntry>,
+    val currentIndex: Int,
+)
+
+internal fun queuePlaybackOrder(
+    entries: List<AudioQueueEntry>,
+    selectedIndex: Int,
+    shuffle: Boolean,
+    random: Random = Random.Default,
+): QueuePlaybackOrder {
+    if (entries.isEmpty()) return QueuePlaybackOrder(emptyList(), -1)
+    if (shuffle) return QueuePlaybackOrder(entries.shuffled(random), currentIndex = 0)
+
+    val selectedEntryId = entries[selectedIndex.coerceIn(0, entries.lastIndex)].entryId
+    return QueuePlaybackOrder(
+        entries = entries,
+        currentIndex = entries.indexOfFirst { it.entryId == selectedEntryId }.coerceAtLeast(0),
+    )
+}
+
+internal fun queueIndexForEntry(
+    queue: List<AudioQueueEntry>,
+    entryId: String,
+): Int? = queue.indexOfFirst { it.entryId == entryId }.takeIf { it >= 0 }
+
+internal fun selectQueueEntryForPlayback(
+    state: AudioPlayerState,
+    entryId: String,
+): AudioPlayerState? {
+    val targetIndex = queueIndexForEntry(state.queue, entryId) ?: return null
+    return state.copy(
+        currentIndex = targetIndex,
+        positionSeconds = 0L,
+        durationSeconds = 0L,
+        isPlaying = false,
+        isLoading = true,
+        error = null,
+        sourceFormat = null,
+        sourceBitrate = null,
+        sourceSampleRate = null,
+        playbackMode = null,
+    )
+}
+
+internal fun markQueueEntryPlayed(
+    state: AudioPlayerState,
+    entryId: String,
+): AudioPlayerState? {
+    if (queueIndexForEntry(state.queue, entryId) == null) return null
+    val queueEntryIds = state.queue.mapTo(mutableSetOf()) { it.entryId }
+    return state.copy(
+        playedEntryIds = state.playedEntryIds.intersect(queueEntryIds) + entryId,
+    )
+}
+
+internal fun nextQueueSelection(
+    state: AudioPlayerState,
+    force: Boolean,
+    random: Random = Random.Default,
+): QueueAdvanceSelection? {
+    if (state.queue.isEmpty()) return null
+    val currentIndex = state.currentIndex.coerceIn(0, state.queue.lastIndex)
+    val queueEntryIds = state.queue.mapTo(mutableSetOf()) { it.entryId }
+    val playedEntryIds = state.playedEntryIds.intersect(queueEntryIds)
+    if (state.repeatMode == AudioRepeatMode.Track && force) {
+        return QueueAdvanceSelection(currentIndex, playedEntryIds)
+    }
+
+    val unplayed = state.queue.indices.filter { state.queue[it].entryId !in playedEntryIds }
+    if (state.shuffle) {
+        val candidates = unplayed.filterNot { it == currentIndex }.ifEmpty { unplayed }
+        if (candidates.isNotEmpty()) {
+            return QueueAdvanceSelection(candidates[random.nextInt(candidates.size)], playedEntryIds)
+        }
+        if (state.queue[currentIndex].entryId !in playedEntryIds) {
+            return QueueAdvanceSelection(currentIndex, playedEntryIds)
+        }
+        if (state.repeatMode == AudioRepeatMode.Queue) {
+            val resetCandidates = state.queue.indices.filterNot { it == currentIndex }.ifEmpty {
+                state.queue.indices.toList()
+            }
+            return QueueAdvanceSelection(
+                index = resetCandidates[random.nextInt(resetCandidates.size)],
+                playedEntryIds = emptySet(),
+                resetPlayed = true,
+            )
+        }
+        return null
+    }
+
+    val orderedAfterCurrent =
+        ((currentIndex + 1)..state.queue.lastIndex).toList() + (0 until currentIndex).toList()
+    val nextUnplayed = orderedAfterCurrent.firstOrNull { it in unplayed }
+    if (nextUnplayed != null) return QueueAdvanceSelection(nextUnplayed, playedEntryIds)
+    if (state.queue[currentIndex].entryId !in playedEntryIds) {
+        return QueueAdvanceSelection(currentIndex, playedEntryIds)
+    }
+    if (state.repeatMode == AudioRepeatMode.Queue) {
+        return QueueAdvanceSelection(
+            index = orderedAfterCurrent.firstOrNull() ?: currentIndex,
+            playedEntryIds = emptySet(),
+            resetPlayed = true,
+        )
+    }
+    return null
+}
+
 internal fun nextQueueIndex(
     queueSize: Int,
     currentIndex: Int,

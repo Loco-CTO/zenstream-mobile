@@ -2145,6 +2145,12 @@ internal fun parseMediaSource(source: JSONObject): MediaSource {
                         width = stream.optIntOrNull("width"),
                         height = stream.optIntOrNull("height"),
                         channels = stream.optIntOrNull("channels"),
+                        bitrate =
+                            stream.optIntOrNull("bit_rate")
+                                ?: stream.optIntOrNull("bitrate"),
+                        sampleRate =
+                            stream.optIntOrNull("sample_rate")
+                                ?: stream.optIntOrNull("sampleRate"),
                     )
                 }
                 .filter { it.index >= 0 }

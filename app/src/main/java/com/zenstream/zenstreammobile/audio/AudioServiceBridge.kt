@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 object AudioServiceBridge {
     const val ACTION_RESTORE = "com.zenstream.zenstreammobile.audio.RESTORE"
     const val ACTION_PLAY_QUEUE = "com.zenstream.zenstreammobile.audio.PLAY_QUEUE"
+    const val ACTION_PLAY_QUEUE_ENTRY = "com.zenstream.zenstreammobile.audio.PLAY_QUEUE_ENTRY"
     const val ACTION_TOGGLE_PLAYBACK = "com.zenstream.zenstreammobile.audio.TOGGLE_PLAYBACK"
     const val ACTION_NEXT = "com.zenstream.zenstreammobile.audio.NEXT"
     const val ACTION_PREVIOUS = "com.zenstream.zenstreammobile.audio.PREVIOUS"

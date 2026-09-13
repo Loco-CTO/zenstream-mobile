@@ -36,6 +36,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,6 +64,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -243,6 +246,7 @@ private fun MainScaffold(
         )
     val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
     val toast = rememberToastHostState()
+    val queueSnackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val onAudioFavorite: (MediaItem) -> Unit = { item ->
         val favorite = !item.favorite
@@ -526,7 +530,14 @@ private fun MainScaffold(
                             onPlayTracks = { tracks, index, shuffle ->
                                 audio.playTracks(tracks, index, shuffle)
                             },
-                            onAddToQueue = audio::addToQueue,
+                            onAddToQueue = { tracks ->
+                                audio.addToQueue(tracks)
+                                scope.launch {
+                                    queueSnackbarHostState.showSnackbar(
+                                        queueAddedMessage(context, tracks.size),
+                                    )
+                                }
+                            },
                             onScrollabilityChanged = onContentScrollabilityChanged,
                         )
                     }
@@ -553,7 +564,14 @@ private fun MainScaffold(
                             onPlayTracks = { tracks, index, shuffle ->
                                 audio.playTracks(tracks, index, shuffle)
                             },
-                            onAddToQueue = audio::addToQueue,
+                            onAddToQueue = { tracks ->
+                                audio.addToQueue(tracks)
+                                scope.launch {
+                                    queueSnackbarHostState.showSnackbar(
+                                        queueAddedMessage(context, tracks.size),
+                                    )
+                                }
+                            },
                             onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
                             onScrollabilityChanged = onContentScrollabilityChanged,
                         )
@@ -564,7 +582,6 @@ private fun MainScaffold(
                             session = session,
                             coordinator = audio,
                             onBack = { navController.popBackStack() },
-                            onOpenAlbum = { albumId -> navigateToAlbum(navController, albumId) },
                             onOpenArtist = { artistId ->
                                 navigateToArtist(navController, artistId)
                             },
@@ -673,8 +690,24 @@ private fun MainScaffold(
                 }
             }
         }
+        SnackbarHost(
+            hostState = queueSnackbarHostState,
+            modifier =
+                Modifier.align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = if (detailRoute) 88.dp else 176.dp)
+                    .zIndex(10f),
+        )
     }
 }
+
+private fun queueAddedMessage(context: Context, trackCount: Int): String =
+    context.resources.getQuantityString(
+        R.plurals.queue_added_tracks,
+        trackCount,
+        trackCount,
+    )
 
 private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
     navController.navigate("detail/${Uri.encode(itemId)}") {

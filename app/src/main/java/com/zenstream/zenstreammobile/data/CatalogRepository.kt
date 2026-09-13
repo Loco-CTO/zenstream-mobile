@@ -28,12 +28,89 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import java.time.Instant
+import java.util.LinkedHashMap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+private data class AudioLyricsCacheKey(
+    val serverUrl: String,
+    val userId: String,
+    val itemId: String,
+)
+
+private sealed interface AudioLyricsLookup {
+    data class Cached(val value: AudioLyrics) : AudioLyricsLookup
+
+    data class InFlight(val request: Deferred<AudioLyrics?>) : AudioLyricsLookup
+}
+
+/** Shares one lyrics request between the playback service and the foreground UI. */
+private object AudioLyricsCache {
+    private const val MAX_ENTRIES = 48
+
+    private val mutex = Mutex()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val values = LinkedHashMap<AudioLyricsCacheKey, AudioLyrics>(
+        MAX_ENTRIES,
+        .75f,
+        true,
+    )
+    private val inFlight = mutableMapOf<AudioLyricsCacheKey, Deferred<AudioLyrics?>>()
+
+    suspend fun getOrLoad(
+        key: AudioLyricsCacheKey,
+        loader: suspend () -> AudioLyrics?,
+    ): AudioLyrics? {
+        val lookup =
+            mutex.withLock {
+                values[key]?.let { AudioLyricsLookup.Cached(it) }
+                    ?: AudioLyricsLookup.InFlight(
+                        inFlight.getOrPut(key) { scope.async { loader() } }
+                    )
+            }
+        return when (lookup) {
+            is AudioLyricsLookup.Cached -> lookup.value
+            is AudioLyricsLookup.InFlight ->
+                try {
+                    lookup.request.await()?.also { value ->
+                        mutex.withLock {
+                            values[key] = value
+                            while (values.size > MAX_ENTRIES) {
+                                val iterator = values.entries.iterator()
+                                iterator.next()
+                                iterator.remove()
+                            }
+                        }
+                    }
+                } finally {
+                    mutex.withLock {
+                        if (inFlight[key] === lookup.request) inFlight.remove(key)
+                    }
+                }
+        }
+    }
+
+    suspend fun clear() {
+        val requests =
+            mutex.withLock {
+                values.clear()
+                val pending = inFlight.values.toList()
+                inFlight.clear()
+                pending
+            }
+        requests.forEach { it.cancel() }
+    }
+}
 
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
@@ -394,6 +471,7 @@ class CatalogRepository(
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
+        AudioLyricsCache.clear()
         sessionStore.clearSession()
     }
 
@@ -406,6 +484,7 @@ class CatalogRepository(
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
+        AudioLyricsCache.clear()
         sessionStore.clearAll()
     }
 
@@ -461,7 +540,21 @@ class CatalogRepository(
     ): List<MediaItem> = api.musicArtistTracks(session, artistId)
 
     override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
-        api.audioLyrics(session, itemId)
+        AudioLyricsCache.getOrLoad(
+            AudioLyricsCacheKey(session.serverUrl, session.userId, itemId),
+        ) {
+            api.audioLyrics(session, itemId)
+        }
+
+    suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
+        try {
+            audioLyrics(session, itemId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            // Prefetch is best-effort. The foreground lyrics page will retry on demand.
+        }
+    }
 
     override suspend fun recordAudioPlayStart(
         session: AuthSession,

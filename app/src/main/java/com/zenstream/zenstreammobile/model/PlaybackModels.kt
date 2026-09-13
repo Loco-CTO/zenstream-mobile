@@ -39,6 +39,8 @@ data class MediaStream(
     val width: Int? = null,
     val height: Int? = null,
     val channels: Int? = null,
+    val bitrate: Int? = null,
+    val sampleRate: Int? = null,
 )
 
 data class BazarrSubtitleSummary(
