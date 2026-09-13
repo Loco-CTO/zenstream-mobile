@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.audio
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -110,6 +111,7 @@ private fun canonicalAudioMimeType(mimeType: String?): String? =
  * The same source selection is used by the service's player and by MediaSession clients such as
  * Android Auto. In particular, never let an HLS playlist fall through to a progressive extractor.
  */
+@androidx.annotation.OptIn(UnstableApi::class)
 internal class AudioMediaSourceFactory(private val dataSourceFactory: DataSource.Factory) :
     MediaSource.Factory {
     private val progressiveFactory = DefaultMediaSourceFactory(dataSourceFactory)
