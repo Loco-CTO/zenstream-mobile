@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -1255,17 +1256,19 @@ class AudioPlaybackService : MediaLibraryService() {
      */
     private fun startServiceForeground() {
         val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                    AUDIO_NOTIFICATION_CHANNEL,
-                    getString(R.string.app_name),
-                    NotificationManager.IMPORTANCE_LOW,
-                )
-                .apply {
-                    description = "Audio playback controls"
-                    setShowBadge(false)
-                }
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationManager.createNotificationChannel(
+                NotificationChannel(
+                        AUDIO_NOTIFICATION_CHANNEL,
+                        getString(R.string.app_name),
+                        NotificationManager.IMPORTANCE_LOW,
+                    )
+                    .apply {
+                        description = "Audio playback controls"
+                        setShowBadge(false)
+                    }
+            )
+        }
         val contentIntent =
             PendingIntent.getActivity(
                 this,
