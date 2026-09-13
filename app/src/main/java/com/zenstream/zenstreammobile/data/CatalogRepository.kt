@@ -60,24 +60,22 @@ private object AudioLyricsCache {
 
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val values = LinkedHashMap<AudioLyricsCacheKey, AudioLyrics>(
-        MAX_ENTRIES,
-        .75f,
-        true,
-    )
+    private val values =
+        LinkedHashMap<AudioLyricsCacheKey, AudioLyrics>(
+            MAX_ENTRIES,
+            .75f,
+            true,
+        )
     private val inFlight = mutableMapOf<AudioLyricsCacheKey, Deferred<AudioLyrics?>>()
 
     suspend fun getOrLoad(
         key: AudioLyricsCacheKey,
         loader: suspend () -> AudioLyrics?,
     ): AudioLyrics? {
-        val lookup =
-            mutex.withLock {
-                values[key]?.let { AudioLyricsLookup.Cached(it) }
-                    ?: AudioLyricsLookup.InFlight(
-                        inFlight.getOrPut(key) { scope.async { loader() } }
-                    )
-            }
+        val lookup = mutex.withLock {
+            values[key]?.let { AudioLyricsLookup.Cached(it) }
+                ?: AudioLyricsLookup.InFlight(inFlight.getOrPut(key) { scope.async { loader() } })
+        }
         return when (lookup) {
             is AudioLyricsLookup.Cached -> lookup.value
             is AudioLyricsLookup.InFlight ->
@@ -101,13 +99,12 @@ private object AudioLyricsCache {
     }
 
     suspend fun clear() {
-        val requests =
-            mutex.withLock {
-                values.clear()
-                val pending = inFlight.values.toList()
-                inFlight.clear()
-                pending
-            }
+        val requests = mutex.withLock {
+            values.clear()
+            val pending = inFlight.values.toList()
+            inFlight.clear()
+            pending
+        }
         requests.forEach { it.cancel() }
     }
 }
@@ -540,9 +537,7 @@ class CatalogRepository(
     ): List<MediaItem> = api.musicArtistTracks(session, artistId)
 
     override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
-        AudioLyricsCache.getOrLoad(
-            AudioLyricsCacheKey(session.serverUrl, session.userId, itemId),
-        ) {
+        AudioLyricsCache.getOrLoad(AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)) {
             api.audioLyrics(session, itemId)
         }
 

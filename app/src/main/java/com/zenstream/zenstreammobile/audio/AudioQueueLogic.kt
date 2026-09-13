@@ -68,9 +68,7 @@ internal fun markQueueEntryPlayed(
 ): AudioPlayerState? {
     if (queueIndexForEntry(state.queue, entryId) == null) return null
     val queueEntryIds = state.queue.mapTo(mutableSetOf()) { it.entryId }
-    return state.copy(
-        playedEntryIds = state.playedEntryIds.intersect(queueEntryIds) + entryId,
-    )
+    return state.copy(playedEntryIds = state.playedEntryIds.intersect(queueEntryIds) + entryId)
 }
 
 internal fun nextQueueSelection(
@@ -90,15 +88,21 @@ internal fun nextQueueSelection(
     if (state.shuffle) {
         val candidates = unplayed.filterNot { it == currentIndex }.ifEmpty { unplayed }
         if (candidates.isNotEmpty()) {
-            return QueueAdvanceSelection(candidates[random.nextInt(candidates.size)], playedEntryIds)
+            return QueueAdvanceSelection(
+                candidates[random.nextInt(candidates.size)],
+                playedEntryIds,
+            )
         }
         if (state.queue[currentIndex].entryId !in playedEntryIds) {
             return QueueAdvanceSelection(currentIndex, playedEntryIds)
         }
         if (state.repeatMode == AudioRepeatMode.Queue) {
-            val resetCandidates = state.queue.indices.filterNot { it == currentIndex }.ifEmpty {
-                state.queue.indices.toList()
-            }
+            val resetCandidates =
+                state.queue.indices
+                    .filterNot { it == currentIndex }
+                    .ifEmpty {
+                        state.queue.indices.toList()
+                    }
             return QueueAdvanceSelection(
                 index = resetCandidates[random.nextInt(resetCandidates.size)],
                 playedEntryIds = emptySet(),

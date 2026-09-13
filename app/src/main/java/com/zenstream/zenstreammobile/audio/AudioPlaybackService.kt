@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
-import android.os.Bundle
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -20,11 +19,11 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
@@ -136,8 +135,7 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private fun recoveryPositionMs(entryId: String): Long {
-        val lastKnown =
-            lastKnownPositionMs.takeIf { lastKnownPositionEntryId == entryId } ?: 0L
+        val lastKnown = lastKnownPositionMs.takeIf { lastKnownPositionEntryId == entryId } ?: 0L
         return selectRecoveryPositionMs(
             playerPositionMs = player.currentPosition,
             lastKnownPositionMs = lastKnown,
@@ -370,8 +368,9 @@ class AudioPlaybackService : MediaLibraryService() {
         )
     }
 
-    private suspend fun replaceQueue(encoded: String) =
-        queueCommandMutex.withLock { replaceQueueInternal(encoded) }
+    private suspend fun replaceQueue(encoded: String) = queueCommandMutex.withLock {
+        replaceQueueInternal(encoded)
+    }
 
     private suspend fun replaceQueueInternal(encoded: String) {
         val snapshot = parseSnapshot(encoded) ?: return
@@ -384,14 +383,16 @@ class AudioPlaybackService : MediaLibraryService() {
         // position from the previously playing item (or from a stale caller snapshot) into the
         // newly selected track.
         currentState =
-            snapshot.toPlayerState().copy(
-                positionSeconds = 0L,
-                positionMillis = 0L,
-                positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
-                durationSeconds = 0L,
-                isLoading = true,
-                error = null,
-            )
+            snapshot
+                .toPlayerState()
+                .copy(
+                    positionSeconds = 0L,
+                    positionMillis = 0L,
+                    positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                    durationSeconds = 0L,
+                    isLoading = true,
+                    error = null,
+                )
         rememberPosition(currentState.currentEntry?.entryId, 0L)
         AudioServiceBridge.publish(currentState)
         suppressEnded = true
@@ -402,8 +403,9 @@ class AudioPlaybackService : MediaLibraryService() {
         loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
-    private suspend fun addQueue(encoded: String) =
-        queueCommandMutex.withLock { addQueueInternal(encoded) }
+    private suspend fun addQueue(encoded: String) = queueCommandMutex.withLock {
+        addQueueInternal(encoded)
+    }
 
     private suspend fun addQueueInternal(encoded: String) {
         val snapshot = parseSnapshot(encoded) ?: return
@@ -418,7 +420,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 queue = merged,
                 currentIndex =
                     if (wasEmpty) 0 else currentState.currentIndex.coerceIn(0, merged.lastIndex),
-                playedEntryIds = currentState.playedEntryIds.intersect(merged.map { it.entryId }.toSet()),
+                playedEntryIds =
+                    currentState.playedEntryIds.intersect(merged.map { it.entryId }.toSet()),
                 error = null,
             )
         publishPlayerState()
@@ -493,11 +496,10 @@ class AudioPlaybackService : MediaLibraryService() {
         AudioServiceBridge.publish(currentState)
         try {
             val requestedPositionMs =
-                resumePositionMs
-                    ?.coerceAtLeast(0L)
-                    ?: currentState.positionSeconds.coerceAtLeast(0L).coerceAtMost(
-                        Long.MAX_VALUE / 1_000L
-                    ) * 1_000L
+                resumePositionMs?.coerceAtLeast(0L)
+                    ?: currentState.positionSeconds
+                        .coerceAtLeast(0L)
+                        .coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L
             val playbackOptions =
                 PlaybackOptions(
                     engine = PlayerEngine.MEDIA3,
@@ -606,10 +608,9 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun prefetchLyrics(account: AuthSession, entry: AudioQueueEntry) {
         lyricsPrefetchJob?.cancel()
-        lyricsPrefetchJob =
-            serviceScope.launch {
-                repository.prefetchAudioLyrics(account, entry.track.id)
-            }
+        lyricsPrefetchJob = serviceScope.launch {
+            repository.prefetchAudioLyrics(account, entry.track.id)
+        }
     }
 
     private suspend fun recordPlayStart(account: AuthSession, oldEntry: AudioQueueEntry) {
@@ -636,8 +637,9 @@ class AudioPlaybackService : MediaLibraryService() {
             }
     }
 
-    private suspend fun playQueueEntry(entryId: String?) =
-        queueCommandMutex.withLock { playQueueEntryInternal(entryId) }
+    private suspend fun playQueueEntry(entryId: String?) = queueCommandMutex.withLock {
+        playQueueEntryInternal(entryId)
+    }
 
     private suspend fun playQueueEntryInternal(entryId: String?) {
         if (entryId.isNullOrBlank()) return
@@ -680,23 +682,26 @@ class AudioPlaybackService : MediaLibraryService() {
         loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
-    private suspend fun advance(force: Boolean) =
-        queueCommandMutex.withLock { advanceInternal(force) }
+    private suspend fun advance(force: Boolean) = queueCommandMutex.withLock {
+        advanceInternal(force)
+    }
 
     private suspend fun advanceInternal(force: Boolean) {
         val queue = currentState.queue
         if (queue.isEmpty()) return
         cancelRecovery()
-        val selection = nextQueueSelection(currentState, force) ?: run {
-            lastAutoplay = false
-            player.pause()
-            player.seekTo(0L)
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
-            publishPlayerState()
-            reportProgress()
-            return
-        }
+        val selection =
+            nextQueueSelection(currentState, force)
+                ?: run {
+                    lastAutoplay = false
+                    player.pause()
+                    player.seekTo(0L)
+                    rememberPosition(currentState.currentEntry?.entryId, 0L)
+                    currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
+                    publishPlayerState()
+                    reportProgress()
+                    return
+                }
         val nextIndex = selection.index
         if (
             nextIndex == currentState.currentIndex &&
@@ -794,8 +799,7 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun seekTo(positionSeconds: Long) {
-        val position =
-            positionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L)
+        val position = positionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L)
         player.seekTo(position * 1_000L)
         rememberPosition(currentState.currentEntry?.entryId, position * 1_000L)
         currentState = currentState.copy(positionSeconds = position)
@@ -816,7 +820,9 @@ class AudioPlaybackService : MediaLibraryService() {
                 queue = removal.entries,
                 currentIndex = removal.currentIndex,
                 playedEntryIds =
-                    currentState.playedEntryIds.intersect(removal.entries.map { it.entryId }.toSet()),
+                    currentState.playedEntryIds.intersect(
+                        removal.entries.map { it.entryId }.toSet()
+                    ),
                 positionSeconds = if (wasCurrent) 0L else currentState.positionSeconds,
                 durationSeconds = if (wasCurrent) 0L else currentState.durationSeconds,
                 sourceFormat = if (wasCurrent) null else currentState.sourceFormat,
@@ -917,11 +923,9 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun publishPlayerState() {
         val duration =
-            player
-                .duration
+            player.duration
                 .takeIf { playerOwnsCurrentQueueEntry() && it != C.TIME_UNSET && it > 0 }
-                ?.div(1_000L)
-                ?: currentState.durationSeconds
+                ?.div(1_000L) ?: currentState.durationSeconds
         val positionMillis = observedPlayerPositionMs()
         val position = positionMillis.div(1_000L)
         currentState =
@@ -1112,19 +1116,15 @@ class AudioPlaybackService : MediaLibraryService() {
     private suspend fun applyQueueArtworkFallbacks() {
         if (currentState.queue.isEmpty()) return
         val albumsById =
-            catalogAlbums.values
-                .asSequence()
-                .flatten()
-                .distinctBy { it.id }
-                .associateBy { it.id }
+            catalogAlbums.values.asSequence().flatten().distinctBy { it.id }.associateBy { it.id }
         if (albumsById.isEmpty()) return
         val updated =
             currentState.queue.map { entry ->
                 entry.copy(
                     track =
                         entry.track.withPrimaryArtworkFallback(
-                            entry.track.albumId?.let(albumsById::get),
-                        ),
+                            entry.track.albumId?.let(albumsById::get)
+                        )
                 )
             }
         if (updated == currentState.queue) return
@@ -1511,10 +1511,10 @@ class AudioPlaybackService : MediaLibraryService() {
             item?.withPrimaryArtworkFallback(
                 item.albumId?.let { albumId ->
                     catalogAlbums.values.asSequence().flatten().firstOrNull { it.id == albumId }
-                },
+                }
             )
-        val path = artworkItem?.imageTags?.get("Primary")?.takeIf { it.startsWith("/api/") }
-            ?: return null
+        val path =
+            artworkItem?.imageTags?.get("Primary")?.takeIf { it.startsWith("/api/") } ?: return null
         return runCatching {
                 val absolute = resolveSameOriginUrl(account.serverUrl, path)
                 Uri.parse(
@@ -1600,19 +1600,24 @@ class AudioPlaybackService : MediaLibraryService() {
             positionSeconds = positionSeconds.toLong(),
             durationSeconds =
                 (durationSeconds
-                    ?: entries
-                        .getOrNull(currentIndex.coerceIn(0, entries.lastIndex.coerceAtLeast(0)))
-                        ?.track
-                        ?.durationSeconds)
+                        ?: entries
+                            .getOrNull(currentIndex.coerceIn(0, entries.lastIndex.coerceAtLeast(0)))
+                            ?.track
+                            ?.durationSeconds)
                     ?.takeIf { it.isFinite() && it >= 0.0 }
-                    ?.toLong()
-                    ?: 0L,
+                    ?.toLong() ?: 0L,
             shuffle = shuffle,
             repeatMode = repeatMode,
-            sourceFormat = sourceFormat.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
-            sourceBitrate = sourceBitrate.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
-            sourceSampleRate = sourceSampleRate.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
-            playbackMode = playbackMode.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            sourceFormat =
+                sourceFormat.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            sourceBitrate =
+                sourceBitrate.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
+            sourceSampleRate =
+                sourceSampleRate.takeIf {
+                    sourceEntryId == entries.getOrNull(currentIndex)?.entryId
+                },
+            playbackMode =
+                playbackMode.takeIf { sourceEntryId == entries.getOrNull(currentIndex)?.entryId },
             playedEntryIds = playedEntryIds,
         )
 

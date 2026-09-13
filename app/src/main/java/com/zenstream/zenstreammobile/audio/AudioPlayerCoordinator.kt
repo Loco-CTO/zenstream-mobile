@@ -52,7 +52,7 @@ class AudioPlayerCoordinator(
                 .filter { it.id.isNotBlank() }
                 .map { track ->
                     AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
-        }
+                }
         if (entries.isEmpty()) return
         val playbackOrder = queuePlaybackOrder(entries, selectedIndex, shuffle)
         val snapshot =

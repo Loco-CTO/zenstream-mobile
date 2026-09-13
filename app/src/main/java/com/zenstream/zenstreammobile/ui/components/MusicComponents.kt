@@ -60,7 +60,8 @@ fun AudioCard(
     val isMusicAlbum = item.type.equals("MusicAlbum", ignoreCase = true)
     val releaseYear = musicReleaseYear(item)
     val albumArtist = musicAlbumArtist(item)
-    val albumType = item.albumType?.takeIf(String::isNotBlank) ?: stringResource(R.string.music_album)
+    val albumType =
+        item.albumType?.takeIf(String::isNotBlank) ?: stringResource(R.string.music_album)
     val albumMetadata = listOfNotNull(releaseYear, albumType).joinToString(" · ")
     val openItemDescription = stringResource(R.string.music_open_item, item.name)
     val cardModifier = if (width == null) modifier.fillMaxWidth() else modifier.width(width)
@@ -133,8 +134,7 @@ fun MusicArtwork(
     fallbackGlyph: String = "♪",
 ) {
     val safeSize = requestedSize.coerceIn(160, 1_024)
-    val sourceItem =
-        if (item.imageTags["Primary"].isNullOrBlank()) fallbackItem ?: item else item
+    val sourceItem = if (item.imageTags["Primary"].isNullOrBlank()) fallbackItem ?: item else item
     val url = imageUrl(session.serverUrl, sourceItem, "Primary", safeSize, safeSize)
     val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
     val blurHash = imageBlurHash(sourceItem, "Primary")
@@ -233,9 +233,7 @@ fun AudioTrackRow(
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,
-                color =
-                    if (isCurrent) accentColor
-                    else MaterialTheme.colorScheme.onSurface,
+                color = if (isCurrent) accentColor else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -279,9 +277,7 @@ fun AudioTrackRow(
                             if (item.favorite) R.string.remove_favorite else R.string.add_favorite
                         ),
                     modifier = Modifier.size(20.dp),
-                    tint =
-                        if (item.favorite) accentColor
-                        else MaterialTheme.colorScheme.onSurface,
+                    tint = if (item.favorite) accentColor else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

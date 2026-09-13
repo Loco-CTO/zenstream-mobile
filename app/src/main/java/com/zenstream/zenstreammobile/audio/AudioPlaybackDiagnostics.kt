@@ -3,8 +3,8 @@ package com.zenstream.zenstreammobile.audio
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.Format
-import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.decoder.flac.FlacLibrary
 import androidx.media3.exoplayer.DecoderReuseEvaluation
@@ -18,16 +18,12 @@ import java.util.Locale
 
 /** Debug-only playback evidence that never includes bearer credentials or negotiated URLs. */
 @UnstableApi
-internal class AudioPlaybackDiagnostics(
-    private val sourceProvider: () -> NormalizedAudioSource?,
-) : AnalyticsListener {
+internal class AudioPlaybackDiagnostics(private val sourceProvider: () -> NormalizedAudioSource?) :
+    AnalyticsListener {
     fun rendererConfigurationCreated() {
         if (!enabled) return
         val flacAvailable = runCatching { FlacLibrary.isAvailable() }.getOrDefault(false)
-        debug(
-            "renderer configuration extension=libflac mode=prefer " +
-                "available=$flacAvailable"
-        )
+        debug("renderer configuration extension=libflac mode=prefer " + "available=$flacAvailable")
     }
 
     fun sourceSelected(source: NormalizedAudioSource) {
@@ -212,8 +208,7 @@ internal class AudioPlaybackDiagnostics(
             .firstOrNull { (key, _) -> key.equals(name, ignoreCase = true) }
             ?.value
             ?.firstOrNull()
-            ?.take(120)
-            ?: "unknown"
+            ?.take(120) ?: "unknown"
 
     private fun debug(message: String) {
         if (enabled) Log.d(TAG, message)

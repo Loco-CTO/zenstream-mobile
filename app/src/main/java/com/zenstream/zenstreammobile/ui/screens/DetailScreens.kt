@@ -1,5 +1,12 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +18,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -27,13 +34,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -802,7 +802,7 @@ internal fun DetailOverlayTopBar(
                 Modifier.fillMaxWidth()
                     .background(Color.Black.copy(alpha = scrimAlpha))
                     .testTag("detail_overlay_top_bar")
-                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
+                    .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
@@ -832,8 +832,9 @@ internal fun DetailOverlayTopBar(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
-                                Modifier.testTag("detail_overlay_title")
-                                    .semantics { contentDescription = title },
+                                Modifier.testTag("detail_overlay_title").semantics {
+                                    contentDescription = title
+                                },
                         )
                     } else {
                         TextButton(
@@ -848,9 +849,10 @@ internal fun DetailOverlayTopBar(
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White,
-                                modifier = Modifier.semantics {
-                                    contentDescription = parentSeries.name
-                                },
+                                modifier =
+                                    Modifier.semantics {
+                                        contentDescription = parentSeries.name
+                                    },
                             )
                         }
                     }

@@ -39,11 +39,7 @@ internal fun normalizeAudioSource(
 ): NormalizedAudioSource {
     val path = url.substringBefore('?').substringBefore('#').lowercase()
     val normalizedMime =
-        mimeType
-            ?.substringBefore(';')
-            ?.trim()
-            ?.lowercase()
-            ?.takeIf(String::isNotBlank)
+        mimeType?.substringBefore(';')?.trim()?.lowercase()?.takeIf(String::isNotBlank)
     val hlsMimeTypes =
         setOf(
             MimeTypes.APPLICATION_M3U8.lowercase(),

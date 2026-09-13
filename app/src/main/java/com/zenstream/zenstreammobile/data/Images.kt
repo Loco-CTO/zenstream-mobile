@@ -48,9 +48,9 @@ fun imageBlurHash(item: MediaItem, type: String): String? =
     }
 
 /**
- * Track projections normally include their release artwork. Older or compact
- * responses may omit it, so use the resolved album only when the track has no
- * Primary image of its own. This keeps the image identity and blur hash paired.
+ * Track projections normally include their release artwork. Older or compact responses may omit it,
+ * so use the resolved album only when the track has no Primary image of its own. This keeps the
+ * image identity and blur hash paired.
  */
 fun MediaItem.withPrimaryArtworkFallback(album: MediaItem?): MediaItem {
     val primaryTag = imageTags["Primary"]?.takeIf(String::isNotBlank)

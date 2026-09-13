@@ -46,8 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -279,7 +279,7 @@ private fun AlbumHeader(
     val accent = palette.accent
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING),
+            modifier = Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING)
         ) {
             Box(
                 Modifier.fillMaxSize()
@@ -321,10 +321,7 @@ private fun AlbumHeader(
         ) {
             Text(
                 album.name,
-                style =
-                    MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },
@@ -359,9 +356,7 @@ private fun AlbumHeader(
                                 if (album.favorite) R.string.remove_favorite
                                 else R.string.add_favorite
                             ),
-                        tint =
-                            if (album.favorite) accent
-                            else MaterialTheme.colorScheme.onSurface,
+                        tint = if (album.favorite) accent else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
@@ -405,13 +400,12 @@ private fun AlbumFooter(
     trackCount: Int,
     durationSeconds: Double,
 ) {
-    val summary =
-        buildList {
-            if (trackCount > 0) {
-                add(stringResource(R.string.music_album_track_count, trackCount))
-            }
-            formatAlbumDuration(durationSeconds)?.let { add(it) }
+    val summary = buildList {
+        if (trackCount > 0) {
+            add(stringResource(R.string.music_album_track_count, trackCount))
         }
+        formatAlbumDuration(durationSeconds)?.let { add(it) }
+    }
     val label = album.label?.trim()?.takeIf(String::isNotBlank)
     if (summary.isEmpty() && label == null) return
 
@@ -576,7 +570,8 @@ private fun ArtistContent(
     val artist = data.artist
     val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
     val albums = remember(data.albums) { data.albums.distinctBy { it.id } }
-    val palette = remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
+    val palette =
+        remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
     val accent = palette.accent
     val listState = rememberLazyListState()
     LaunchedEffect(artist.id) {
@@ -597,7 +592,8 @@ private fun ArtistContent(
         item(key = "artist-header") {
             Column(Modifier.fillMaxWidth()) {
                 BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING),
+                    modifier =
+                        Modifier.fillMaxWidth().height(320.dp + MUSIC_DETAIL_TOP_CONTENT_PADDING)
                 ) {
                     Box(
                         Modifier.fillMaxSize()
@@ -610,11 +606,12 @@ private fun ArtistContent(
                                         MaterialTheme.colorScheme.background,
                                     )
                                 )
-                        )
+                            )
                     )
                     val artworkSize = (maxWidth - 32.dp).coerceAtMost(272.dp).coerceAtLeast(0.dp)
                     Box(
-                        modifier = Modifier.fillMaxSize().padding(top = MUSIC_DETAIL_TOP_CONTENT_PADDING),
+                        modifier =
+                            Modifier.fillMaxSize().padding(top = MUSIC_DETAIL_TOP_CONTENT_PADDING),
                         contentAlignment = Alignment.Center,
                     ) {
                         Surface(

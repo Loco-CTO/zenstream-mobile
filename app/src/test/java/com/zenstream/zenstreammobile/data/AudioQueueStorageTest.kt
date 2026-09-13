@@ -27,10 +27,7 @@ class AudioQueueStorageTest {
                 artistCredits = listOf(ArtistCredit("artist-1", "Artist", "")),
                 durationSeconds = 123.5,
                 imageTags =
-                    mapOf(
-                        "Primary" to
-                            "/api/catalog/items/track-1/images/Primary?language=ja",
-                    ),
+                    mapOf("Primary" to "/api/catalog/items/track-1/images/Primary?language=ja"),
                 imageBlurHashes = mapOf("Primary" to "LNGb[3Me_2D+4moGIVt800xvRjs,"),
             )
         val snapshot =

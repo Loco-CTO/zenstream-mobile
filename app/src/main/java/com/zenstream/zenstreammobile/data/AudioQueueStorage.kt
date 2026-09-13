@@ -5,9 +5,9 @@ import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioQueueSnapshot
 import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.MediaItem
+import java.net.URI
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URI
 
 internal const val AUDIO_QUEUE_SCHEMA_VERSION = 1
 private const val AUDIO_QUEUE_MAX_ENTRIES = 500
@@ -19,7 +19,8 @@ internal fun audioQueueScope(serverUrl: String, userId: String): String =
     "${normalizeServerUrl(serverUrl)}\u0000$userId"
 
 internal fun AudioQueueSnapshot.toJson(): JSONObject {
-    val persistedEntryIds = entries.take(AUDIO_QUEUE_MAX_ENTRIES).mapTo(mutableSetOf()) { it.entryId }
+    val persistedEntryIds =
+        entries.take(AUDIO_QUEUE_MAX_ENTRIES).mapTo(mutableSetOf()) { it.entryId }
     return JSONObject()
         .put("schemaVersion", AUDIO_QUEUE_SCHEMA_VERSION)
         .put("serverUrl", normalizeServerUrl(serverUrl).take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
@@ -145,25 +146,30 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
             .getOrDefault(AudioRepeatMode.Off)
     val entryIds = entries.mapTo(mutableSetOf()) { it.entryId }
     val playedEntryIds =
-        value.optJSONArray("playedEntryIds")?.let { array ->
-            mutableSetOf<String>().apply {
-                repeat(minOf(array.length(), AUDIO_QUEUE_MAX_ENTRIES)) { index ->
-                    val entryId =
-                        array
-                            .optString(index)
-                            .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
-                            .takeIf(String::isNotBlank)
-                    if (entryId != null && entryId in entryIds) add(entryId)
+        value
+            .optJSONArray("playedEntryIds")
+            ?.let { array ->
+                mutableSetOf<String>().apply {
+                    repeat(minOf(array.length(), AUDIO_QUEUE_MAX_ENTRIES)) { index ->
+                        val entryId =
+                            array
+                                .optString(index)
+                                .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+                                .takeIf(String::isNotBlank)
+                        if (entryId != null && entryId in entryIds) add(entryId)
+                    }
                 }
             }
-        }.orEmpty()
+            .orEmpty()
     val sourceEntryId =
-        value
-            .optString("sourceEntryId")
-            .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
-            .takeIf { it.isNotBlank() && it in entryIds }
+        value.optString("sourceEntryId").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).takeIf {
+            it.isNotBlank() && it in entryIds
+        }
     val sourceMetadataMatchesCurrent =
-        sourceEntryId == entries.getOrNull(value.optInt("currentIndex", 0).coerceIn(0, entries.lastIndex))?.entryId
+        sourceEntryId ==
+            entries
+                .getOrNull(value.optInt("currentIndex", 0).coerceIn(0, entries.lastIndex))
+                ?.entryId
     return AudioQueueSnapshot(
         schemaVersion = AUDIO_QUEUE_SCHEMA_VERSION,
         serverUrl = normalizedServerUrl,
@@ -186,23 +192,19 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
                 ?.coerceIn(0.0, AUDIO_QUEUE_MAX_POSITION_SECONDS),
         sourceEntryId = sourceEntryId,
         sourceFormat =
-            value
-                .optString("sourceFormat")
-                .take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH)
-                .takeIf { sourceMetadataMatchesCurrent && it.isNotBlank() },
+            value.optString("sourceFormat").take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH).takeIf {
+                sourceMetadataMatchesCurrent && it.isNotBlank()
+            },
         sourceBitrate =
-            value
-                .optIntOrNull("sourceBitrate")
-                ?.takeIf { sourceMetadataMatchesCurrent && it > 0 },
+            value.optIntOrNull("sourceBitrate")?.takeIf { sourceMetadataMatchesCurrent && it > 0 },
         sourceSampleRate =
-            value
-                .optIntOrNull("sourceSampleRate")
-                ?.takeIf { sourceMetadataMatchesCurrent && it > 0 },
+            value.optIntOrNull("sourceSampleRate")?.takeIf {
+                sourceMetadataMatchesCurrent && it > 0
+            },
         playbackMode =
-            value
-                .optString("playbackMode")
-                .take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH)
-                .takeIf { sourceMetadataMatchesCurrent && it.isNotBlank() },
+            value.optString("playbackMode").take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH).takeIf {
+                sourceMetadataMatchesCurrent && it.isNotBlank()
+            },
     )
 }
 
@@ -270,11 +272,12 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
 /** Queue snapshots may keep catalog artwork metadata, but never access-bearing URLs. */
 private fun safeQueueArtworkTag(value: String?): String? {
     val tag = value?.trim()?.takeIf(String::isNotBlank) ?: return null
-    val uri = try {
-        URI(tag)
-    } catch (_: IllegalArgumentException) {
-        return null
-    }
+    val uri =
+        try {
+            URI(tag)
+        } catch (_: IllegalArgumentException) {
+            return null
+        }
     val path = uri.path ?: return null
     if (uri.isAbsolute || uri.host != null) return null
     if (!path.matches(Regex("/api/catalog/items/[^/]+/images/Primary"))) return null

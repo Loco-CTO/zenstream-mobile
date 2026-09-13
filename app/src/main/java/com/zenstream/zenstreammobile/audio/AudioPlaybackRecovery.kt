@@ -11,9 +11,7 @@ internal fun selectRecoveryPositionMs(
     publishedPositionSeconds: Long,
 ): Long {
     val publishedPositionMs =
-        publishedPositionSeconds
-            .coerceAtLeast(0L)
-            .coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L
+        publishedPositionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L
     return maxOf(
         playerPositionMs.coerceAtLeast(0L),
         lastKnownPositionMs.coerceAtLeast(0L),

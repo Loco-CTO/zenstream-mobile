@@ -11,8 +11,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
  */
 @UnstableApi
 internal fun preferredAudioRenderersFactory(context: Context): DefaultRenderersFactory =
-    DefaultRenderersFactory(context)
-        .setExtensionRendererMode(audioExtensionRendererMode())
+    DefaultRenderersFactory(context).setExtensionRendererMode(audioExtensionRendererMode())
 
 @UnstableApi
 internal fun audioExtensionRendererMode(): Int =

@@ -25,9 +25,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -40,8 +40,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,8 +67,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -76,8 +76,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -101,24 +101,24 @@ import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.model.AudioLyrics
-import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioPlayerState
+import com.zenstream.zenstreammobile.model.AudioQueueEntry
 import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LyricLine
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.ui.components.ArtworkPalette
-import com.zenstream.zenstreammobile.ui.components.decodeBlurHashBitmap
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
+import com.zenstream.zenstreammobile.ui.components.decodeBlurHashBitmap
 import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import java.util.Locale
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 private fun repeatIconResource(mode: AudioRepeatMode): Int =
     when (mode) {
@@ -164,16 +164,13 @@ fun AudioMiniPlayer(
                             onDragEnd = {
                                 val horizontalDominant = abs(totalDrag.x) > abs(totalDrag.y)
                                 when {
-                                    horizontalDominant &&
-                                        abs(totalDrag.x) >= gestureThresholdPx ->
+                                    horizontalDominant && abs(totalDrag.x) >= gestureThresholdPx ->
                                         onOpenNowPlaying()
-                                    !horizontalDominant &&
-                                        totalDrag.y <= -gestureThresholdPx ->
+                                    !horizontalDominant && totalDrag.y <= -gestureThresholdPx ->
                                         onOpenNowPlaying()
-                                    !horizontalDominant &&
-                                        totalDrag.y >= gestureThresholdPx ->
+                                    !horizontalDominant && totalDrag.y >= gestureThresholdPx ->
                                         coordinator.stopAndClear()
-                                    }
+                                }
                                 totalDrag = Offset.Zero
                             },
                         )
@@ -204,7 +201,7 @@ fun AudioMiniPlayer(
                             overflow = TextOverflow.Ellipsis,
                             style =
                                 MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.Bold
                                 ),
                         )
                         Text(
@@ -252,7 +249,9 @@ fun AudioMiniPlayer(
                                 else LucideR.drawable.lucide_ic_play
                             ),
                             contentDescription =
-                                stringResource(if (state.isPlaying) R.string.pause else R.string.play),
+                                stringResource(
+                                    if (state.isPlaying) R.string.pause else R.string.play
+                                ),
                         )
                     }
                 }
@@ -334,13 +333,13 @@ fun NowPlayingScreen(
         }
     val backgroundBlurHash =
         remember(current?.id, current?.imageBlurHashes?.get("Primary")) {
-            current?.imageBlurHashes?.get("Primary")
+            current
+                ?.imageBlurHashes
+                ?.get("Primary")
                 ?.takeIf(String::isNotBlank)
                 ?.let(::decodeBlurHashBitmap)
         }
-    Box(
-        Modifier.fillMaxSize().background(artworkPalette.background)
-    ) {
+    Box(Modifier.fillMaxSize().background(artworkPalette.background)) {
         backgroundBlurHash?.let { bitmap ->
             Image(
                 bitmap = bitmap,
@@ -353,7 +352,9 @@ fun NowPlayingScreen(
         val queuePage = innerPage == 1
         val pageTitle =
             if (queuePage) stringResource(R.string.audio_queue)
-            else current?.album?.takeIf(String::isNotBlank) ?: stringResource(R.string.audio_now_playing)
+            else
+                current?.album?.takeIf(String::isNotBlank)
+                    ?: stringResource(R.string.audio_now_playing)
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
@@ -364,9 +365,7 @@ fun NowPlayingScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             if (!queuePage) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         stringResource(R.string.audio_playing_from_album),
                                         style = MaterialTheme.typography.labelSmall,
@@ -414,16 +413,12 @@ fun NowPlayingScreen(
                         }
                     },
                     actions = { Spacer(Modifier.size(48.dp)) },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent
-                        ),
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 )
             },
             containerColor = Color.Transparent,
         ) { padding ->
-            val bodyModifier =
-                Modifier.fillMaxSize().padding(padding).navigationBarsPadding()
+            val bodyModifier = Modifier.fillMaxSize().padding(padding).navigationBarsPadding()
             Column(bodyModifier) {
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     when {
@@ -501,8 +496,7 @@ fun NowPlayingScreen(
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = .9f),
                         shape = RoundedCornerShape(14.dp),
                         modifier =
-                            Modifier.fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                     ) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -519,7 +513,7 @@ fun NowPlayingScreen(
                                 onClick = coordinator::retry,
                                 colors =
                                     ButtonDefaults.textButtonColors(
-                                        contentColor = artworkPalette.accent,
+                                        contentColor = artworkPalette.accent
                                     ),
                             ) {
                                 Text(stringResource(R.string.retry))
@@ -596,236 +590,239 @@ private fun NowPlayingMain(
                     }
                 )
             Column(
-                Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = if (compact) 2.dp else 8.dp),
+                Modifier.fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = if (compact) 2.dp else 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                val maxArtworkWidth = maxWidth
-                // Keep the metadata-to-progress relationship fixed. Only the artwork is allowed
-                // to absorb extra vertical space, while this whole block is centered above the
-                // bottom controls.
-                val fixedBlockHeight = if (compact) 124.dp else 158.dp
-                val availableArtworkHeight = (maxHeight - fixedBlockHeight).coerceAtLeast(1.dp)
-                val artworkMax = if (compact) 260.dp else 360.dp
-                val artworkSize =
-                    minOf(availableArtworkHeight, maxArtworkWidth, artworkMax).coerceAtLeast(1.dp)
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (showLyrics) {
-                        LyricsPanel(
-                            modifier = Modifier.size(artworkSize).padding(8.dp),
-                            trackKey = current.id,
-                            lyrics = lyrics,
-                            loading = lyricsLoading,
-                            error = lyricsError,
-                            positionSeconds = state.positionSeconds,
-                            positionMillis = state.positionMillis,
-                            positionUpdatedAtElapsedRealtime =
-                                state.positionUpdatedAtElapsedRealtime,
-                            isPlaying = state.isPlaying,
-                            accent = accent,
-                            onSeek = coordinator::seekTo,
-                            onRetry = onRetryLyrics,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(artworkSize),
-                            shape = RoundedCornerShape(18.dp),
-                            color = palette.surface,
-                        ) {
-                            MusicArtwork(
-                                current,
-                                session,
-                                modifier = Modifier.fillMaxSize(),
-                                contentDescription = current.name,
-                                requestedSize = 512,
+                    val maxArtworkWidth = maxWidth
+                    // Keep the metadata-to-progress relationship fixed. Only the artwork is allowed
+                    // to absorb extra vertical space, while this whole block is centered above the
+                    // bottom controls.
+                    val fixedBlockHeight = if (compact) 124.dp else 158.dp
+                    val availableArtworkHeight = (maxHeight - fixedBlockHeight).coerceAtLeast(1.dp)
+                    val artworkMax = if (compact) 260.dp else 360.dp
+                    val artworkSize =
+                        minOf(availableArtworkHeight, maxArtworkWidth, artworkMax)
+                            .coerceAtLeast(1.dp)
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (showLyrics) {
+                            LyricsPanel(
+                                modifier = Modifier.size(artworkSize).padding(8.dp),
+                                trackKey = current.id,
+                                lyrics = lyrics,
+                                loading = lyricsLoading,
+                                error = lyricsError,
+                                positionSeconds = state.positionSeconds,
+                                positionMillis = state.positionMillis,
+                                positionUpdatedAtElapsedRealtime =
+                                    state.positionUpdatedAtElapsedRealtime,
+                                isPlaying = state.isPlaying,
+                                accent = accent,
+                                onSeek = coordinator::seekTo,
+                                onRetry = onRetryLyrics,
+                            )
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(artworkSize),
                                 shape = RoundedCornerShape(18.dp),
+                                color = palette.surface,
+                            ) {
+                                MusicArtwork(
+                                    current,
+                                    session,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentDescription = current.name,
+                                    requestedSize = 512,
+                                    shape = RoundedCornerShape(18.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                                    Text(
+                                        current.name,
+                                        style =
+                                            MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.fillMaxWidth().semantics { heading() },
+                                    )
+                                    Text(
+                                        current.albumArtist
+                                            ?: current.artists.firstOrNull()
+                                            ?: stringResource(R.string.audio_unknown_artist),
+                                        color = accent,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier =
+                                            Modifier.fillMaxWidth().clickable {
+                                                current.artistId?.let(onOpenArtist)
+                                            },
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onFavorite(current) },
+                                    modifier = Modifier.size(controlSize),
+                                ) {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_heart),
+                                        contentDescription =
+                                            stringResource(
+                                                if (current.favorite) R.string.remove_favorite
+                                                else R.string.add_favorite
+                                            ),
+                                        tint =
+                                            if (current.favorite) accent
+                                            else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                            AudioQualityLine(state = state, accent = accent)
+                        }
+                        // This is intentionally a fixed gap: the info block always stays directly
+                        // above the progress bar regardless of the device height.
+                        Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+                        AudioProgressScrubber(
+                            trackKey = state.currentEntry?.entryId ?: current.id,
+                            positionSeconds = displayPositionSeconds,
+                            durationSeconds = displayDurationSeconds,
+                            accent = accent,
+                            onSeek = { coordinator.seekTo(it) },
+                        )
+                        Row(
+                            Modifier.fillMaxWidth().clickable(onClick = onToggleTimer),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                if (timerMode == PlaybackTimeDisplayMode.Remaining) {
+                                    "-${formatDurationSeconds((displayDurationSeconds - displayPositionSeconds).coerceAtLeast(0L).toDouble())}"
+                                } else {
+                                    formatDurationSeconds(displayPositionSeconds.toDouble())
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                formatDurationSeconds(displayDurationSeconds.toDouble()),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier =
+                                    Modifier.semantics {
+                                        contentDescription = timerDescription
+                                    },
                             )
                         }
                     }
-                    Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    current.name,
-                                    style =
-                                        MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                        ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth().semantics { heading() },
-                                )
-                                Text(
-                                    current.albumArtist
-                                        ?: current.artists.firstOrNull()
-                                        ?: stringResource(R.string.audio_unknown_artist),
-                                    color = accent,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier =
-                                        Modifier.fillMaxWidth().clickable {
-                                            current.artistId?.let(onOpenArtist)
-                                        },
-                                )
-                            }
-                    IconButton(
-                        onClick = { onFavorite(current) },
-                        modifier = Modifier.size(controlSize),
-                    ) {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_heart),
-                                    contentDescription =
-                                        stringResource(
-                                            if (current.favorite) R.string.remove_favorite
-                                            else R.string.add_favorite
-                                        ),
-                                    tint =
-                                        if (current.favorite) accent
-                                        else MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                        }
-                        AudioQualityLine(state = state, accent = accent)
-                    }
-                    // This is intentionally a fixed gap: the info block always stays directly
-                    // above the progress bar regardless of the device height.
-                    Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
-                    AudioProgressScrubber(
-                        trackKey = state.currentEntry?.entryId ?: current.id,
-                        positionSeconds = displayPositionSeconds,
-                        durationSeconds = displayDurationSeconds,
-                        accent = accent,
-                        onSeek = { coordinator.seekTo(it) },
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().clickable(onClick = onToggleTimer),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            if (timerMode == PlaybackTimeDisplayMode.Remaining) {
-                                "-${formatDurationSeconds((displayDurationSeconds - displayPositionSeconds).coerceAtLeast(0L).toDouble())}"
-                            } else {
-                                formatDurationSeconds(displayPositionSeconds.toDouble())
-                            },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Text(
-                            formatDurationSeconds(displayDurationSeconds.toDouble()),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier =
-                                Modifier.semantics {
-                                    contentDescription = timerDescription
-                                },
-                        )
-                    }
                 }
-            }
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = if (compact) 4.dp else 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        onClick = coordinator::toggleShuffle,
-                        modifier = Modifier.size(controlSize).testTag("audio-control-shuffle"),
+                Column(Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = if (compact) 4.dp else 10.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_shuffle),
-                            contentDescription =
-                                stringResource(
-                                    if (state.shuffle) R.string.audio_turn_off_shuffle
-                                    else R.string.audio_turn_on_shuffle
-                                ),
-                            tint =
-                                if (state.shuffle) accent
-                                else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    IconButton(
-                        onClick = coordinator::previous,
-                        modifier = Modifier.size(controlSize).testTag("audio-control-previous"),
-                    ) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_skip_back),
-                            contentDescription = stringResource(R.string.audio_previous_track),
-                            tint = accent,
-                        )
-                    }
-                    IconButton(
-                        onClick = coordinator::togglePlayback,
-                        modifier = Modifier.size(playButtonSize).testTag("audio-control-play"),
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = CircleShape,
-                            color = accent,
-                            contentColor = palette.onAccent,
+                        IconButton(
+                            onClick = coordinator::toggleShuffle,
+                            modifier = Modifier.size(controlSize).testTag("audio-control-shuffle"),
                         ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(
-                                    painterResource(
-                                        if (state.isPlaying) LucideR.drawable.lucide_ic_pause
-                                        else LucideR.drawable.lucide_ic_play
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_shuffle),
+                                contentDescription =
+                                    stringResource(
+                                        if (state.shuffle) R.string.audio_turn_off_shuffle
+                                        else R.string.audio_turn_on_shuffle
                                     ),
-                                    contentDescription =
-                                        stringResource(
-                                            if (state.isPlaying) R.string.pause else R.string.play
+                                tint =
+                                    if (state.shuffle) accent
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        IconButton(
+                            onClick = coordinator::previous,
+                            modifier = Modifier.size(controlSize).testTag("audio-control-previous"),
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_skip_back),
+                                contentDescription = stringResource(R.string.audio_previous_track),
+                                tint = accent,
+                            )
+                        }
+                        IconButton(
+                            onClick = coordinator::togglePlayback,
+                            modifier = Modifier.size(playButtonSize).testTag("audio-control-play"),
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = CircleShape,
+                                color = accent,
+                                contentColor = palette.onAccent,
+                            ) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painterResource(
+                                            if (state.isPlaying) LucideR.drawable.lucide_ic_pause
+                                            else LucideR.drawable.lucide_ic_play
                                         ),
-                                    modifier = Modifier.size(if (compact) 26.dp else 32.dp),
-                                    tint = palette.onAccent,
-                                )
+                                        contentDescription =
+                                            stringResource(
+                                                if (state.isPlaying) R.string.pause
+                                                else R.string.play
+                                            ),
+                                        modifier = Modifier.size(if (compact) 26.dp else 32.dp),
+                                        tint = palette.onAccent,
+                                    )
+                                }
                             }
                         }
-                    }
-                    IconButton(
-                        onClick = coordinator::next,
-                        modifier = Modifier.size(controlSize).testTag("audio-control-next"),
-                    ) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_skip_forward),
-                            contentDescription = stringResource(R.string.audio_next_track),
-                            tint = accent,
-                        )
-                    }
-                    IconButton(
-                        onClick = coordinator::toggleRepeat,
-                        modifier = Modifier.size(controlSize).testTag("audio-control-repeat"),
-                    ) {
-                        Icon(
-                            painterResource(repeatIconResource(state.repeatMode)),
-                            contentDescription =
-                                when (state.repeatMode) {
-                                    AudioRepeatMode.Off ->
-                                        stringResource(R.string.audio_turn_on_repeat)
-                                    AudioRepeatMode.Queue ->
-                                        stringResource(R.string.audio_repeat_queue)
-                                    AudioRepeatMode.Track ->
-                                        stringResource(R.string.audio_repeat_track)
-                                },
-                            tint =
-                                if (state.repeatMode != AudioRepeatMode.Off) accent
-                                else MaterialTheme.colorScheme.onSurface,
-                        )
+                        IconButton(
+                            onClick = coordinator::next,
+                            modifier = Modifier.size(controlSize).testTag("audio-control-next"),
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_skip_forward),
+                                contentDescription = stringResource(R.string.audio_next_track),
+                                tint = accent,
+                            )
+                        }
+                        IconButton(
+                            onClick = coordinator::toggleRepeat,
+                            modifier = Modifier.size(controlSize).testTag("audio-control-repeat"),
+                        ) {
+                            Icon(
+                                painterResource(repeatIconResource(state.repeatMode)),
+                                contentDescription =
+                                    when (state.repeatMode) {
+                                        AudioRepeatMode.Off ->
+                                            stringResource(R.string.audio_turn_on_repeat)
+                                        AudioRepeatMode.Queue ->
+                                            stringResource(R.string.audio_repeat_queue)
+                                        AudioRepeatMode.Track ->
+                                            stringResource(R.string.audio_repeat_track)
+                                    },
+                                tint =
+                                    if (state.repeatMode != AudioRepeatMode.Off) accent
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
@@ -858,8 +855,7 @@ private fun NowPlayingInnerTabs(
                 contentDescription = queueDescription,
                 modifier = Modifier.size(28.dp),
                 tint =
-                    if (selectedPage == 1) accent
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (selectedPage == 1) accent else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(
@@ -877,8 +873,7 @@ private fun NowPlayingInnerTabs(
                 contentDescription = lyricsDescription,
                 modifier = Modifier.size(28.dp),
                 tint =
-                    if (selectedPage == 2) accent
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (selectedPage == 2) accent else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -922,9 +917,7 @@ private fun NowPlayingLandscape(
         val controlSize = if (compact) 46.dp else 56.dp
         val playButtonSize = if (compact) 70.dp else 96.dp
         val horizontalPadding = if (maxWidth < 700.dp) 20.dp else 36.dp
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 8.dp),
-        ) {
+        Column(Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 8.dp)) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center,
@@ -993,7 +986,7 @@ private fun NowPlayingLandscape(
                                     current.name,
                                     style =
                                         MaterialTheme.typography.headlineSmall.copy(
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.Bold
                                         ),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -1091,7 +1084,8 @@ private fun NowPlayingLandscape(
                             ) {
                                 Icon(
                                     painterResource(LucideR.drawable.lucide_ic_skip_back),
-                                    contentDescription = stringResource(R.string.audio_previous_track),
+                                    contentDescription =
+                                        stringResource(R.string.audio_previous_track),
                                     tint = accent,
                                 )
                             }
@@ -1106,10 +1100,14 @@ private fun NowPlayingLandscape(
                                     color = accent,
                                     contentColor = palette.onAccent,
                                 ) {
-                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Box(
+                                        Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
                                         Icon(
                                             painterResource(
-                                                if (state.isPlaying) LucideR.drawable.lucide_ic_pause
+                                                if (state.isPlaying)
+                                                    LucideR.drawable.lucide_ic_pause
                                                 else LucideR.drawable.lucide_ic_play
                                             ),
                                             contentDescription =
@@ -1135,7 +1133,8 @@ private fun NowPlayingLandscape(
                             }
                             IconButton(
                                 onClick = coordinator::toggleRepeat,
-                                modifier = Modifier.size(controlSize).testTag("audio-control-repeat"),
+                                modifier =
+                                    Modifier.size(controlSize).testTag("audio-control-repeat"),
                             ) {
                                 Icon(
                                     painterResource(repeatIconResource(state.repeatMode)),
@@ -1166,9 +1165,7 @@ private fun AudioQualityLine(state: AudioPlayerState, accent: Color) {
     val details =
         listOfNotNull(
             state.sourceFormat?.let(::audioFormatLabel),
-            state.sourceBitrate
-                ?.takeIf { it > 0 }
-                ?.let { "${((it + 500) / 1_000)}kbps" },
+            state.sourceBitrate?.takeIf { it > 0 }?.let { "${((it + 500) / 1_000)}kbps" },
             state.sourceSampleRate?.takeIf { it > 0 }?.let(::sampleRateLabel),
         )
     val playbackLabel = playbackTypeLabel(state.playbackMode)
@@ -1211,16 +1208,16 @@ private fun audioFormatLabel(value: String): String {
             .uppercase(Locale.ROOT)
     return when (normalized) {
         "MPEG" -> "MP3"
-        "X-MPEGURL", "VND.APPLE.MPEGURL", "M3U8" -> "HLS"
+        "X-MPEGURL",
+        "VND.APPLE.MPEGURL",
+        "M3U8" -> "HLS"
         else -> normalized
     }
 }
 
 private fun sampleRateLabel(value: Int): String {
     val khz = value / 1_000.0
-    val formatted =
-        if (value % 1_000 == 0) value / 1_000
-        else String.format(Locale.US, "%.1f", khz)
+    val formatted = if (value % 1_000 == 0) value / 1_000 else String.format(Locale.US, "%.1f", khz)
     return "${formatted}kHz"
 }
 
@@ -1229,7 +1226,8 @@ private fun playbackTypeLabel(mode: String?): String? =
     when (mode?.trim()?.lowercase(Locale.ROOT)) {
         "direct" -> stringResource(R.string.audio_original)
         "remux" -> stringResource(R.string.audio_remuxed)
-        "audio-transcode", "video-transcode" -> stringResource(R.string.audio_transcoded)
+        "audio-transcode",
+        "video-transcode" -> stringResource(R.string.audio_transcoded)
         else -> null
     }
 
@@ -1388,192 +1386,200 @@ private fun QueuePanel(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             itemsIndexed(list, key = { _, entry -> entry.entryId }) { index, entry ->
-            val isDragged = draggedEntryId == entry.entryId
-            val rowStepPx = (rowBounds[entry.entryId]?.height ?: 0f) + rowGapPx
-            val targetOffsetPx =
-                when {
-                    isDragged -> 0f
-                    draggedFrom >= 0 && insertionIndex > draggedFrom &&
-                        index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
-                    draggedFrom >= 0 && insertionIndex in 0 until draggedFrom &&
-                        index in insertionIndex until draggedFrom -> rowStepPx
-                    else -> 0f
-                }
-            val liftProgress by
-                animateFloatAsState(
-                    targetValue = if (isDragged) 1f else 0f,
-                    animationSpec =
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    label = "queue drag lift",
-                )
-            val previewAlpha by
-                animateFloatAsState(
-                    targetValue = if (isDragged) .96f else 1f,
-                    animationSpec =
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    label = "queue drag alpha",
-                )
-            val shadowElevation by
-                animateDpAsState(
-                    targetValue = if (isDragged) 10.dp else 0.dp,
-                    animationSpec =
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    label = "queue drag shadow",
-                )
-            val tonalElevation by
-                animateDpAsState(
-                    targetValue = if (isDragged) 4.dp else 0.dp,
-                    animationSpec =
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    label = "queue drag elevation",
-                )
-            val animatedOffsetPx by
-                animateFloatAsState(
-                    targetValue = targetOffsetPx,
-                    animationSpec =
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    label = "queue row movement",
-                )
-            val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
-            Surface(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
-                        .zIndex(if (isDragged) 1f else 0f)
-                        .shadow(
-                            elevation = shadowElevation,
-                            shape = RoundedCornerShape(14.dp),
-                        )
-                        .graphicsLayer {
-                            val scale = 1f + (liftProgress * .02f)
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                        .onGloballyPositioned { coordinates ->
-                            rowBounds[entry.entryId] = coordinates.boundsInRoot()
-                        }
-                        .pointerInput(entry.entryId) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    val centers =
-                                        list.mapNotNull { candidate ->
+                val isDragged = draggedEntryId == entry.entryId
+                val rowStepPx = (rowBounds[entry.entryId]?.height ?: 0f) + rowGapPx
+                val targetOffsetPx =
+                    when {
+                        isDragged -> 0f
+                        draggedFrom >= 0 &&
+                            insertionIndex > draggedFrom &&
+                            index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
+                        draggedFrom >= 0 &&
+                            insertionIndex in 0 until draggedFrom &&
+                            index in insertionIndex until draggedFrom -> rowStepPx
+                        else -> 0f
+                    }
+                val liftProgress by
+                    animateFloatAsState(
+                        targetValue = if (isDragged) 1f else 0f,
+                        animationSpec =
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        label = "queue drag lift",
+                    )
+                val previewAlpha by
+                    animateFloatAsState(
+                        targetValue = if (isDragged) .96f else 1f,
+                        animationSpec =
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        label = "queue drag alpha",
+                    )
+                val shadowElevation by
+                    animateDpAsState(
+                        targetValue = if (isDragged) 10.dp else 0.dp,
+                        animationSpec =
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        label = "queue drag shadow",
+                    )
+                val tonalElevation by
+                    animateDpAsState(
+                        targetValue = if (isDragged) 4.dp else 0.dp,
+                        animationSpec =
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        label = "queue drag elevation",
+                    )
+                val animatedOffsetPx by
+                    animateFloatAsState(
+                        targetValue = targetOffsetPx,
+                        animationSpec =
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        label = "queue row movement",
+                    )
+                val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
+                Surface(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
+                            .zIndex(if (isDragged) 1f else 0f)
+                            .shadow(
+                                elevation = shadowElevation,
+                                shape = RoundedCornerShape(14.dp),
+                            )
+                            .graphicsLayer {
+                                val scale = 1f + (liftProgress * .02f)
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .onGloballyPositioned { coordinates ->
+                                rowBounds[entry.entryId] = coordinates.boundsInRoot()
+                            }
+                            .pointerInput(entry.entryId) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        val centers = list.mapNotNull { candidate ->
                                             rowBounds[candidate.entryId]?.let {
                                                 candidate.entryId to it.center.y
                                             }
                                         }
-                                    dragStartCenters = centers.toMap()
-                                    draggedEntryId = entry.entryId
-                                    draggedFrom = index
-                                    insertionIndex = index
-                                    dragOffsetPx = 0f
-                                    dragStartCenterY =
-                                        dragStartCenters[entry.entryId]
-                                            ?: rowBounds[entry.entryId]?.center?.y
-                                            ?: 0f
-                                },
-                                onDragCancel = ::clearDrag,
-                                onDragEnd = {
-                                    val from = draggedFrom
-                                    val target = insertionIndex
-                                    clearDrag()
-                                    if (from in list.indices && target in list.indices && target != from) {
-                                        coordinator.reorderQueue(from, target)
-                                    }
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffsetPx += dragAmount.y
-                                    val draggedCenterY = dragStartCenterY + dragOffsetPx
-                                    val target =
-                                        list.indices
-                                            .filter { it != draggedFrom }
-                                            .count { candidateIndex ->
-                                                val candidate = list[candidateIndex]
-                                                val centerY =
-                                                    dragStartCenters[candidate.entryId]
-                                                        ?: rowBounds[candidate.entryId]?.center?.y
-                                                        ?: Float.MAX_VALUE
-                                                centerY < draggedCenterY
-                                            }
-                                    insertionIndex =
-                                        target.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                                },
-                            )
-                        }
-                        .alpha(previewAlpha),
-                shape = RoundedCornerShape(14.dp),
-                color =
-                    if (isDragged) {
-                        MaterialTheme.colorScheme.surface.copy(alpha = .98f)
-                    } else if (entry.entryId == snapshot.currentEntryId) {
-                        accent.copy(alpha = .1f)
-                    } else Color.Transparent,
-                tonalElevation = tonalElevation,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                                        dragStartCenters = centers.toMap()
+                                        draggedEntryId = entry.entryId
+                                        draggedFrom = index
+                                        insertionIndex = index
+                                        dragOffsetPx = 0f
+                                        dragStartCenterY =
+                                            dragStartCenters[entry.entryId]
+                                                ?: rowBounds[entry.entryId]?.center?.y
+                                                ?: 0f
+                                    },
+                                    onDragCancel = ::clearDrag,
+                                    onDragEnd = {
+                                        val from = draggedFrom
+                                        val target = insertionIndex
+                                        clearDrag()
+                                        if (
+                                            from in list.indices &&
+                                                target in list.indices &&
+                                                target != from
+                                        ) {
+                                            coordinator.reorderQueue(from, target)
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetPx += dragAmount.y
+                                        val draggedCenterY = dragStartCenterY + dragOffsetPx
+                                        val target =
+                                            list.indices
+                                                .filter { it != draggedFrom }
+                                                .count { candidateIndex ->
+                                                    val candidate = list[candidateIndex]
+                                                    val centerY =
+                                                        dragStartCenters[candidate.entryId]
+                                                            ?: rowBounds[candidate.entryId]
+                                                                ?.center
+                                                                ?.y
+                                                            ?: Float.MAX_VALUE
+                                                    centerY < draggedCenterY
+                                                }
+                                        insertionIndex =
+                                            target.coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                                    },
+                                )
+                            }
+                            .alpha(previewAlpha),
+                    shape = RoundedCornerShape(14.dp),
+                    color =
+                        if (isDragged) {
+                            MaterialTheme.colorScheme.surface.copy(alpha = .98f)
+                        } else if (entry.entryId == snapshot.currentEntryId) {
+                            accent.copy(alpha = .1f)
+                        } else Color.Transparent,
+                    tonalElevation = tonalElevation,
                 ) {
                     Row(
-                        Modifier.weight(1f)
-                            .clickable { coordinator.playQueueEntry(entry.entryId) }
-                            .testTag("audio-queue-entry-${entry.entryId}"),
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MusicArtwork(
-                            item = entry.track,
-                            session = session,
-                            modifier = Modifier.size(56.dp),
-                            contentDescription = entry.track.name,
-                            requestedSize = 256,
-                            shape = RoundedCornerShape(10.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                entry.track.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                        Row(
+                            Modifier.weight(1f)
+                                .clickable { coordinator.playQueueEntry(entry.entryId) }
+                                .testTag("audio-queue-entry-${entry.entryId}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            MusicArtwork(
+                                item = entry.track,
+                                session = session,
+                                modifier = Modifier.size(56.dp),
+                                contentDescription = entry.track.name,
+                                requestedSize = 256,
+                                shape = RoundedCornerShape(10.dp),
                             )
-                            Text(
-                                entry.track.albumArtist
-                                    ?: entry.track.artists.firstOrNull()
-                                    ?: stringResource(R.string.audio_unknown_artist),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    entry.track.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    entry.track.albumArtist
+                                        ?: entry.track.artists.firstOrNull()
+                                        ?: stringResource(R.string.audio_unknown_artist),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { coordinator.removeQueueEntry(entry.entryId) },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_x),
+                                contentDescription =
+                                    stringResource(R.string.audio_remove_from_queue),
+                                tint = accent,
                             )
                         }
                     }
-                    IconButton(
-                        onClick = { coordinator.removeQueueEntry(entry.entryId) },
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_x),
-                            contentDescription = stringResource(R.string.audio_remove_from_queue),
-                            tint = accent,
-                        )
-                    }
                 }
-            }
             }
         }
     }
@@ -1624,8 +1630,7 @@ private fun LyricsPanel(
             val listState = rememberLazyListState()
             var followCurrentLine by remember { mutableStateOf(true) }
             var automaticScroll by remember { mutableStateOf(false) }
-            var positionedCurrentLine by
-                remember(trackKey, lyrics.timed) { mutableStateOf(false) }
+            var positionedCurrentLine by remember(trackKey, lyrics.timed) { mutableStateOf(false) }
             var currentIndex by
                 remember(trackKey) {
                     mutableIntStateOf(
@@ -1634,8 +1639,7 @@ private fun LyricsPanel(
                             lyricPositionSeconds(
                                 positionSeconds = positionSeconds,
                                 positionMillis = positionMillis,
-                                positionUpdatedAtElapsedRealtime =
-                                    positionUpdatedAtElapsedRealtime,
+                                positionUpdatedAtElapsedRealtime = positionUpdatedAtElapsedRealtime,
                                 isPlaying = isPlaying,
                             ),
                         )
@@ -1660,13 +1664,14 @@ private fun LyricsPanel(
                     val playing = latestIsPlaying
                     val precisePosition =
                         lyricPositionSeconds(
-                            positionSeconds = latestPositionSeconds,
-                            positionMillis = latestPositionMillis,
-                            positionUpdatedAtElapsedRealtime =
-                                latestPositionUpdatedAtElapsedRealtime,
-                            isPlaying = playing,
-                            nowElapsedRealtime = now,
-                        ).takeIf { latestPositionUpdatedAtElapsedRealtime > 0L }
+                                positionSeconds = latestPositionSeconds,
+                                positionMillis = latestPositionMillis,
+                                positionUpdatedAtElapsedRealtime =
+                                    latestPositionUpdatedAtElapsedRealtime,
+                                isPlaying = playing,
+                                nowElapsedRealtime = now,
+                            )
+                            .takeIf { latestPositionUpdatedAtElapsedRealtime > 0L }
                     val reportedPosition =
                         precisePosition ?: latestPositionSeconds.toDouble().coerceAtLeast(0.0)
                     val estimatedPosition =
@@ -1705,8 +1710,7 @@ private fun LyricsPanel(
                     val waitMillis =
                         nextStart
                             ?.let { ((it - displayPosition) * 1_000.0).toLong() }
-                            ?.coerceIn(32L, 500L)
-                            ?: 500L
+                            ?.coerceIn(32L, 500L) ?: 500L
                     lastReportedPosition = reportedPosition
                     wasPlaying = playing
                     delay(if (playing) waitMillis else 100L)
@@ -1807,11 +1811,9 @@ private fun LyricsPanel(
                                 ),
                             color = animatedColor,
                             modifier =
-                                Modifier.fillMaxWidth()
-                                    .alpha(animatedAlpha)
-                                    .clickable {
-                                        line.startSeconds?.toLong()?.let(onSeek)
-                                    },
+                                Modifier.fillMaxWidth().alpha(animatedAlpha).clickable {
+                                    line.startSeconds?.toLong()?.let(onSeek)
+                                },
                         )
                     }
                 }
