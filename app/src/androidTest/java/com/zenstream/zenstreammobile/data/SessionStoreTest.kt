@@ -34,10 +34,12 @@ class SessionStoreTest {
                 "user-1",
                 "User",
                 avatarVersion = "avatar-v1",
+                artworkTicket = "artwork-ticket",
             )
         )
         assertEquals("secret-token", store.session.first()!!.token)
         assertEquals("avatar-v1", store.session.first()!!.avatarVersion)
+        assertEquals("artwork-ticket", store.session.first()!!.artworkTicket)
         store.clearSession()
         assertNull(store.session.first())
         assertEquals("https://orchestrator.example", store.serverUrl.first())

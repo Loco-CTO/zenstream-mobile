@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.data
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.zenstream.zenstreammobile.model.AudioLyrics
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
@@ -13,6 +14,8 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MusicAlbumData
+import com.zenstream.zenstreammobile.model.MusicArtistData
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
@@ -20,17 +23,92 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import java.time.Instant
+import java.util.LinkedHashMap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+private data class AudioLyricsCacheKey(
+    val serverUrl: String,
+    val userId: String,
+    val itemId: String,
+)
+
+private sealed interface AudioLyricsLookup {
+    data class Cached(val value: AudioLyrics) : AudioLyricsLookup
+
+    data class InFlight(val request: Deferred<AudioLyrics?>) : AudioLyricsLookup
+}
+
+/** Shares one lyrics request between the playback service and the foreground UI. */
+private object AudioLyricsCache {
+    private const val MAX_ENTRIES = 48
+
+    private val mutex = Mutex()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val values =
+        LinkedHashMap<AudioLyricsCacheKey, AudioLyrics>(
+            MAX_ENTRIES,
+            .75f,
+            true,
+        )
+    private val inFlight = mutableMapOf<AudioLyricsCacheKey, Deferred<AudioLyrics?>>()
+
+    suspend fun getOrLoad(
+        key: AudioLyricsCacheKey,
+        loader: suspend () -> AudioLyrics?,
+    ): AudioLyrics? {
+        val lookup = mutex.withLock {
+            values[key]?.let { AudioLyricsLookup.Cached(it) }
+                ?: AudioLyricsLookup.InFlight(inFlight.getOrPut(key) { scope.async { loader() } })
+        }
+        return when (lookup) {
+            is AudioLyricsLookup.Cached -> lookup.value
+            is AudioLyricsLookup.InFlight ->
+                try {
+                    lookup.request.await()?.also { value ->
+                        mutex.withLock {
+                            values[key] = value
+                            while (values.size > MAX_ENTRIES) {
+                                val iterator = values.entries.iterator()
+                                iterator.next()
+                                iterator.remove()
+                            }
+                        }
+                    }
+                } finally {
+                    mutex.withLock {
+                        if (inFlight[key] === lookup.request) inFlight.remove(key)
+                    }
+                }
+        }
+    }
+
+    suspend fun clear() {
+        val requests = mutex.withLock {
+            values.clear()
+            val pending = inFlight.values.toList()
+            inFlight.clear()
+            pending
+        }
+        requests.forEach { it.cancel() }
+    }
+}
 
 interface CatalogRefreshSource {
     val catalogRefreshRevision: Flow<Long>
@@ -83,6 +161,13 @@ interface SearchDataSource : CatalogRefreshSource {
     override suspend fun clearSession()
 
     suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch
+
+    suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ): PagedSearch = search(session, query, page)
 }
 
 interface FavoritesDataSource : CatalogRefreshSource {
@@ -98,6 +183,26 @@ interface FavoritesDataSource : CatalogRefreshSource {
     suspend fun cachedFavoriteSort(userId: String): FavoriteSort?
 
     suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort)
+}
+
+interface MusicDataSource : CatalogRefreshSource {
+    override suspend fun clearSession()
+
+    suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData
+
+    suspend fun musicArtist(session: AuthSession, artistId: String): MusicArtistData
+
+    suspend fun musicArtistTracks(session: AuthSession, artistId: String): List<MediaItem>
+
+    suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics?
+
+    suspend fun recordAudioPlayStart(
+        session: AuthSession,
+        itemId: String,
+        playbackInstanceId: String,
+    )
+
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean)
 }
 
 interface CalendarDataSource : CatalogRefreshSource {
@@ -171,6 +276,7 @@ class CatalogRepository(
     LibraryDataSource,
     SearchDataSource,
     FavoritesDataSource,
+    MusicDataSource,
     CalendarDataSource,
     SettingsDataSource {
 
@@ -370,6 +476,7 @@ class CatalogRepository(
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
+        AudioLyricsCache.clear()
         sessionStore.clearSession()
     }
 
@@ -382,6 +489,7 @@ class CatalogRepository(
         SyncplaySession.clear()
         homeMutex.withLock { homeCache = null }
         playbackPreferenceMutex.withLock { playbackPreferenceCache = null }
+        AudioLyricsCache.clear()
         sessionStore.clearAll()
     }
 
@@ -418,12 +526,54 @@ class CatalogRepository(
     override suspend fun search(session: AuthSession, query: String, page: Int) =
         api.search(session, query, page)
 
+    override suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ) = api.search(session, query, page, filter)
+
     override suspend fun favoritesPage(
         session: AuthSession,
         startIndex: Int,
         limit: Int,
         sort: FavoriteSort,
     ) = api.fetchFavoritesPage(session, startIndex, limit, sort)
+
+    override suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData =
+        api.musicAlbum(session, albumId)
+
+    override suspend fun musicArtist(session: AuthSession, artistId: String): MusicArtistData =
+        api.musicArtist(session, artistId)
+
+    override suspend fun musicArtistTracks(
+        session: AuthSession,
+        artistId: String,
+    ): List<MediaItem> = api.musicArtistTracks(session, artistId)
+
+    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
+        AudioLyricsCache.getOrLoad(AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)) {
+            api.audioLyrics(session, itemId)
+        }
+
+    suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
+        try {
+            audioLyrics(session, itemId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            // Prefetch is best-effort. The foreground lyrics page will retry on demand.
+        }
+    }
+
+    override suspend fun recordAudioPlayStart(
+        session: AuthSession,
+        itemId: String,
+        playbackInstanceId: String,
+    ) {
+        api.recordAudioPlayStart(session, itemId, playbackInstanceId)
+        invalidateCatalogState()
+    }
 
     override suspend fun cachedFavoriteSort(userId: String): FavoriteSort? =
         sessionStore.cachedFavoriteSort(userId)
@@ -440,7 +590,10 @@ class CatalogRepository(
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 
-    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
+    suspend fun catalogItem(session: AuthSession, itemId: String): MediaItem =
+        api.catalogItem(session, itemId)
+
+    override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
         api.setFavorite(session, itemId, favorite)
         invalidateCatalogState()
     }
