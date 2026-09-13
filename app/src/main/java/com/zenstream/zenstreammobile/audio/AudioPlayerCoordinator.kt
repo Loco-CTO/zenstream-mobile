@@ -92,15 +92,9 @@ class AudioPlayerCoordinator(
         }
 
     fun togglePlayback() {
-        mediaController?.let { controller ->
-            if (controller.currentMediaItem == null) {
-                AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_PLAYBACK)
-            } else if (controller.isPlaying) {
-                controller.pause()
-            } else {
-                controller.play()
-            }
-        } ?: AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_PLAYBACK)
+        // Keep play/pause on the same serialized service lane as queue transitions and seeks.
+        // Calling MediaController directly can race a just-selected queue entry.
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_PLAYBACK)
     }
 
     fun next() {
@@ -128,10 +122,9 @@ class AudioPlayerCoordinator(
 
     fun seekTo(positionSeconds: Long) {
         val position = positionSeconds.coerceAtLeast(0L)
-        mediaController?.takeIf { it.currentMediaItem != null }?.seekTo(position * 1_000L)
-            ?: AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SEEK) {
-                putExtra(AudioServiceBridge.EXTRA_POSITION, position)
-            }
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SEEK) {
+            putExtra(AudioServiceBridge.EXTRA_POSITION, position)
+        }
     }
 
     fun removeQueueEntry(entryId: String) =

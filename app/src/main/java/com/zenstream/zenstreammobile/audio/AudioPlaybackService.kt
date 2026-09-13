@@ -186,7 +186,9 @@ class AudioPlaybackService : MediaLibraryService() {
             MediaLibrarySession.Builder(this, player, LibraryCallback())
                 .setSessionActivity(sessionActivity)
                 .build()
-        serviceScope.launch { restoreForCurrentAccount() }
+        serviceScope.launch {
+            queueCommandMutex.withLock { restoreForCurrentAccount() }
+        }
         positionJob = serviceScope.launch {
             while (true) {
                 delay(1_000)
@@ -206,53 +208,49 @@ class AudioPlaybackService : MediaLibraryService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        when (intent?.action) {
+        intent?.let { command -> serviceScope.launch { dispatchCommand(command) } }
+        return START_STICKY
+    }
+
+    /** Serializes every app-originated command so a transition cannot race a seek or queue edit. */
+    private suspend fun dispatchCommand(intent: Intent) = queueCommandMutex.withLock {
+        when (intent.action) {
             AudioServiceBridge.ACTION_PLAY_QUEUE ->
-                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { encoded ->
-                    serviceScope.launch { replaceQueue(encoded) }
+                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
+                    replaceQueueInternal(it)
                 }
             AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY ->
-                serviceScope.launch {
-                    playQueueEntry(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
-                }
+                playQueueEntryInternal(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
             AudioServiceBridge.ACTION_ADD_QUEUE ->
-                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { encoded ->
-                    serviceScope.launch { addQueue(encoded) }
-                }
-            AudioServiceBridge.ACTION_TOGGLE_PLAYBACK -> serviceScope.launch { togglePlayback() }
-            AudioServiceBridge.ACTION_NEXT -> serviceScope.launch { advance(force = false) }
-            AudioServiceBridge.ACTION_PREVIOUS -> serviceScope.launch { previous() }
-            AudioServiceBridge.ACTION_TOGGLE_SHUFFLE -> serviceScope.launch { toggleShuffle() }
-            AudioServiceBridge.ACTION_TOGGLE_REPEAT -> serviceScope.launch { toggleRepeat() }
-            AudioServiceBridge.ACTION_SET_VOLUME -> serviceScope.launch { setVolume() }
-            AudioServiceBridge.ACTION_TOGGLE_MUTE -> serviceScope.launch { toggleMute() }
-            AudioServiceBridge.ACTION_RETRY -> serviceScope.launch { retryCurrent() }
-            AudioServiceBridge.ACTION_SEEK -> {
-                val position = intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L)
-                serviceScope.launch { seekTo(position) }
-            }
+                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let { addQueueInternal(it) }
+            AudioServiceBridge.ACTION_TOGGLE_PLAYBACK -> togglePlayback()
+            AudioServiceBridge.ACTION_NEXT -> advanceInternal(force = false)
+            AudioServiceBridge.ACTION_PREVIOUS -> previousInternal()
+            AudioServiceBridge.ACTION_TOGGLE_SHUFFLE -> toggleShuffle()
+            AudioServiceBridge.ACTION_TOGGLE_REPEAT -> toggleRepeat()
+            AudioServiceBridge.ACTION_SET_VOLUME -> setVolume()
+            AudioServiceBridge.ACTION_TOGGLE_MUTE -> toggleMute()
+            AudioServiceBridge.ACTION_RETRY -> retryCurrent()
+            AudioServiceBridge.ACTION_SEEK ->
+                seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
             AudioServiceBridge.ACTION_REMOVE_QUEUE ->
-                serviceScope.launch {
-                    removeQueue(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
-                }
+                removeQueue(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
             AudioServiceBridge.ACTION_REORDER_QUEUE ->
-                serviceScope.launch {
-                    reorderQueue(
-                        intent.getIntExtra(AudioServiceBridge.EXTRA_FROM, -1),
-                        intent.getIntExtra(AudioServiceBridge.EXTRA_TO, -1),
-                    )
-                }
-            AudioServiceBridge.ACTION_CLEAR_QUEUE -> serviceScope.launch { clearQueue() }
-            AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO -> serviceScope.launch { pauseForVideo() }
-            AudioServiceBridge.ACTION_UPDATE_FAVORITE -> {
-                val itemId = intent.getStringExtra(AudioServiceBridge.EXTRA_ITEM_ID)
-                val favorite = intent.getBooleanExtra(AudioServiceBridge.EXTRA_FAVORITE, false)
-                serviceScope.launch { updateFavorite(itemId, favorite) }
-            }
-            AudioServiceBridge.ACTION_RESTORE -> serviceScope.launch { restoreForCurrentAccount() }
+                reorderQueue(
+                    intent.getIntExtra(AudioServiceBridge.EXTRA_FROM, -1),
+                    intent.getIntExtra(AudioServiceBridge.EXTRA_TO, -1),
+                )
+            AudioServiceBridge.ACTION_CLEAR_QUEUE -> clearQueue()
+            AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO -> pauseForVideo()
+            AudioServiceBridge.ACTION_UPDATE_FAVORITE ->
+                updateFavorite(
+                    intent.getStringExtra(AudioServiceBridge.EXTRA_ITEM_ID),
+                    intent.getBooleanExtra(AudioServiceBridge.EXTRA_FAVORITE, false),
+                )
+            AudioServiceBridge.ACTION_RESTORE -> restoreForCurrentAccount()
             null -> Unit
+            else -> Unit
         }
-        return START_STICKY
     }
 
     private suspend fun restoreQueue() {
@@ -608,8 +606,15 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun prefetchLyrics(account: AuthSession, entry: AudioQueueEntry) {
         lyricsPrefetchJob?.cancel()
+        val nextEntry = currentState.queue.getOrNull(currentState.currentIndex + 1)
+        val candidates =
+            listOf(entry, nextEntry)
+                .filterNotNull()
+                .distinctBy { it.track.id }
         lyricsPrefetchJob = serviceScope.launch {
-            repository.prefetchAudioLyrics(account, entry.track.id)
+            for (candidate in candidates) {
+                repository.prefetchAudioLyrics(account, candidate.track.id)
+            }
         }
     }
 
@@ -958,6 +963,19 @@ class AudioPlaybackService : MediaLibraryService() {
                 }
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                val entryId = currentState.currentEntry?.entryId
+                if (newPosition.mediaItem?.mediaId != "zenstream:queue:$entryId") return
+                val positionMs = newPosition.positionMs.coerceAtLeast(0L)
+                rememberPosition(entryId, positionMs)
+                publishPlayerState()
+                serviceScope.launch { persistSnapshot() }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val mediaId = mediaItem?.mediaId.orEmpty()
                 if (mediaId.startsWith("zenstream:track:")) {
@@ -975,15 +993,17 @@ class AudioPlaybackService : MediaLibraryService() {
                     val autoplay = lastAutoplay
                     audioDiagnostics.recoveryScheduled(resumePositionMs)
                     recoveryJob = serviceScope.launch {
-                        if (currentState.currentEntry?.entryId != entryId) return@launch
-                        player.stop()
-                        if (currentState.currentEntry?.entryId != entryId) return@launch
-                        loadCurrent(
-                            autoPlay = autoplay,
-                            resetRetry = false,
-                            expectedEntryId = entryId,
-                            resumePositionMs = resumePositionMs,
-                        )
+                        queueCommandMutex.withLock {
+                            if (currentState.currentEntry?.entryId != entryId) return@withLock
+                            player.stop()
+                            if (currentState.currentEntry?.entryId != entryId) return@withLock
+                            loadCurrent(
+                                autoPlay = autoplay,
+                                resetRetry = false,
+                                expectedEntryId = entryId,
+                                resumePositionMs = resumePositionMs,
+                            )
+                        }
                     }
                 } else {
                     currentState =
@@ -1136,7 +1156,10 @@ class AudioPlaybackService : MediaLibraryService() {
     private fun parseSnapshot(encoded: String): AudioQueueSnapshot? =
         runCatching { audioQueueSnapshotFromJson(JSONObject(encoded)) }.getOrNull()
 
-    private suspend fun adoptAutoTrack(trackId: String) {
+    private suspend fun adoptAutoTrack(trackId: String) =
+        queueCommandMutex.withLock { adoptAutoTrackInternal(trackId) }
+
+    private suspend fun adoptAutoTrackInternal(trackId: String) {
         val account = sessionStore.session.first() ?: return
         loadAutoCatalog()
         val track =

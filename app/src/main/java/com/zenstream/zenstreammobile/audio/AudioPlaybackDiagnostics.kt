@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.audio
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -65,6 +66,15 @@ internal class AudioPlaybackDiagnostics(private val sourceProvider: () -> Normal
             "audio decoder initialized name=$decoderName initMs=$initializationDurationMs " +
                 "${sourceSummary()}"
         )
+        if (sourceProvider()?.mimeType == MimeTypes.AUDIO_FLAC) {
+            val extensionDecoder =
+                decoderName.contains("libflac", ignoreCase = true) ||
+                    decoderName.contains("flacjni", ignoreCase = true)
+            debug(
+                "flac decoder verification selected=$decoderName " +
+                    "extensionDecoder=$extensionDecoder"
+            )
+        }
     }
 
     override fun onAudioDecoderReleased(
