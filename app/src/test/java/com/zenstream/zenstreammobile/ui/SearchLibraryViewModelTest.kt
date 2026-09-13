@@ -9,6 +9,8 @@ import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
+import com.zenstream.zenstreammobile.model.SearchFacets
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -125,6 +127,28 @@ class SearchLibraryViewModelTest {
         assertEquals("", viewModel.uiState.value.resultQuery)
         assertFalse(viewModel.uiState.value.loading)
         assertFalse(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun selectingFilterStartsFreshFilteredStreamAndRetainsFacetCounts() = runTest {
+        val source = FakeSearchDataSource { _, _ ->
+            PagedSearch(
+                listOf(MediaItem("movie", "Dune", type = "Movie")),
+                1,
+                SearchFacets(all = 2, movie = 1, series = 1),
+            )
+        }
+        val viewModel = SearchViewModel(source, session)
+
+        viewModel.updateQuery("dune")
+        advanceUntilIdle()
+        viewModel.selectFilter(SearchFilter.Movie)
+        advanceUntilIdle()
+
+        assertEquals(listOf(SearchFilter.All, SearchFilter.Movie), source.filters)
+        assertEquals(SearchFilter.Movie, viewModel.uiState.value.selectedFilter)
+        assertEquals(1, viewModel.uiState.value.facets.movie)
+        assertEquals(listOf("movie"), viewModel.uiState.value.results.map { it.id })
     }
 
     @Test
@@ -347,6 +371,7 @@ private class FakeSearchDataSource(private val response: suspend (String, Int) -
     SearchDataSource {
     val queries = mutableListOf<String>()
     val pages = mutableListOf<Int>()
+    val filters = mutableListOf<SearchFilter>()
 
     override suspend fun clearSession() = Unit
 
@@ -354,6 +379,16 @@ private class FakeSearchDataSource(private val response: suspend (String, Int) -
         queries += query
         pages += page
         return response(query, page)
+    }
+
+    override suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ): PagedSearch {
+        filters += filter
+        return search(session, query, page)
     }
 }
 

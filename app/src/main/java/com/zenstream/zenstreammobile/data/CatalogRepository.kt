@@ -23,6 +23,7 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
@@ -160,6 +161,13 @@ interface SearchDataSource : CatalogRefreshSource {
     override suspend fun clearSession()
 
     suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch
+
+    suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ): PagedSearch = search(session, query, page)
 }
 
 interface FavoritesDataSource : CatalogRefreshSource {
@@ -517,6 +525,13 @@ class CatalogRepository(
 
     override suspend fun search(session: AuthSession, query: String, page: Int) =
         api.search(session, query, page)
+
+    override suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ) = api.search(session, query, page, filter)
 
     override suspend fun favoritesPage(
         session: AuthSession,

@@ -47,6 +47,13 @@
     <string name="search_placeholder">映画とシリーズを検索</string>
     <string name="search_load_failed">ライブラリの検索に失敗しました</string>
     <string name="no_search_results">一致するタイトルが見つかりません</string>
+    <string name="search_filter_all">すべて</string>
+    <string name="search_filter_series">シリーズ</string>
+    <string name="search_filter_movie">映画</string>
+    <string name="search_filter_collection">コレクション</string>
+    <string name="search_filter_release">アルバム</string>
+    <string name="search_filter_artist">アーティスト</string>
+    <string name="search_filter_track">トラック</string>
     <string name="library_load_failed">ライブラリを読み込めませんでした。</string>
     <string name="library_load_page_failed">ライブラリページを読み込めませんでした</string>
     <string name="play">再生</string>

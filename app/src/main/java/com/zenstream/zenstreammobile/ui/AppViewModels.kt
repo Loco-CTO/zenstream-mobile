@@ -29,6 +29,8 @@ import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.model.SearchFacets
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import kotlinx.coroutines.CancellationException
@@ -738,6 +740,8 @@ private fun normalizeLibrarySort(library: Library, sort: LibrarySort): LibrarySo
 data class SearchUiState(
     val query: String = "",
     val resultQuery: String = "",
+    val selectedFilter: SearchFilter = SearchFilter.All,
+    val facets: SearchFacets = SearchFacets(),
     val loading: Boolean = false,
     val results: List<MediaItem> = emptyList(),
     val totalRecordCount: Int = 0,
@@ -784,11 +788,38 @@ class SearchViewModel(
                     resultQuery = "",
                     results = emptyList(),
                     totalRecordCount = 0,
+                    facets = SearchFacets(),
                     nextPage = 1,
                 )
             return
         }
-        searchJob = viewModelScope.launch { search(generation, value, page = 1) }
+        searchJob = viewModelScope.launch {
+            search(generation, value, page = 1, filter = _uiState.value.selectedFilter)
+        }
+    }
+
+    fun selectFilter(filter: SearchFilter) {
+        val current = _uiState.value
+        if (current.selectedFilter == filter) return
+
+        val generation = ++requestGeneration
+        val query = current.query
+        searchJob?.cancel()
+        _uiState.value =
+            current.copy(
+                selectedFilter = filter,
+                loading = query.trim().isNotEmpty(),
+                resultQuery = "",
+                results = emptyList(),
+                totalRecordCount = 0,
+                facets = SearchFacets(),
+                nextPage = 1,
+                error = false,
+                loadingMore = false,
+                loadMoreError = false,
+            )
+        if (query.trim().isEmpty()) return
+        searchJob = viewModelScope.launch { search(generation, query, page = 1, filter = filter) }
     }
 
     fun retry() {
@@ -796,6 +827,7 @@ class SearchViewModel(
         if (query.trim().isEmpty()) return
         searchJob?.cancel()
         val generation = ++requestGeneration
+        val filter = _uiState.value.selectedFilter
         _uiState.value =
             _uiState.value.copy(
                 loading = true,
@@ -804,7 +836,7 @@ class SearchViewModel(
                 loadMoreError = false,
                 nextPage = 1,
             )
-        searchJob = viewModelScope.launch { search(generation, query, page = 1) }
+        searchJob = viewModelScope.launch { search(generation, query, page = 1, filter = filter) }
     }
 
     fun loadMore() {
@@ -819,9 +851,10 @@ class SearchViewModel(
             return
         val generation = requestGeneration
         val page = state.nextPage
+        val filter = state.selectedFilter
         _uiState.value = state.copy(loadingMore = true, loadMoreError = false)
         searchJob = viewModelScope.launch {
-            runCatching { repository.search(session, query, page) }
+            runCatching { repository.search(session, query, page, filter) }
                 .onSuccess { result ->
                     if (generation != requestGeneration) return@onSuccess
                     _uiState.update { current ->
@@ -831,6 +864,7 @@ class SearchViewModel(
                                     current.results + rankSearchResults(result.items, query)
                                 ),
                             totalRecordCount = result.totalRecordCount,
+                            facets = result.facets,
                             nextPage = page + 1,
                             loadingMore = false,
                             loadMoreError = false,
@@ -849,16 +883,23 @@ class SearchViewModel(
         }
     }
 
-    private suspend fun search(generation: Long, query: String, page: Int) {
+    private suspend fun search(
+        generation: Long,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ) {
         if (generation != requestGeneration) return
         _uiState.value = _uiState.value.copy(loading = page == 1)
-        runCatching { repository.search(session, query, page) }
+        runCatching { repository.search(session, query, page, filter) }
             .onSuccess { result ->
                 if (generation != requestGeneration) return@onSuccess
                 _uiState.value =
                     _uiState.value.copy(
                         loading = false,
                         resultQuery = query.trim(),
+                        selectedFilter = filter,
+                        facets = result.facets,
                         results = uniqueSearchItems(rankSearchResults(result.items, query)),
                         totalRecordCount = result.totalRecordCount,
                         nextPage = page + 1,

@@ -48,6 +48,13 @@
     <string name="search_load_failed">Could not search your library</string>
     <string name="no_search_results">No matching titles found</string>
     <string name="search_result_count">%1$d results</string>
+    <string name="search_filter_all">All</string>
+    <string name="search_filter_series">Series</string>
+    <string name="search_filter_movie">Movies</string>
+    <string name="search_filter_collection">Collections</string>
+    <string name="search_filter_release">Albums</string>
+    <string name="search_filter_artist">Artists</string>
+    <string name="search_filter_track">Tracks</string>
     <string name="library_load_failed">Could not load your library</string>
     <string name="library_load_page_failed">Could not load Library</string>
     <string name="library_load_more_failed">Could not load more titles.</string>

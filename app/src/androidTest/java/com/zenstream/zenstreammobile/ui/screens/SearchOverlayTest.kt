@@ -11,8 +11,10 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -27,6 +29,8 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PagedSearch
+import com.zenstream.zenstreammobile.model.SearchFacets
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
@@ -211,6 +215,147 @@ class SearchOverlayTest {
         composeRule.onAllNodesWithText("Dune").fetchSemanticsNodes().also { nodes ->
             assertTrue(nodes.isNotEmpty())
         }
+    }
+
+    @Test
+    fun filtersRenderCountsAndSwitchToASeparateRequestStream() {
+        val source = FilterSearchDataSource { _, _, _ ->
+            val items = listOf(MediaItem("movie", "Dune", type = "Movie"))
+            PagedSearch(
+                items,
+                items.size,
+                SearchFacets(all = 2, movie = 1, release = 1),
+            )
+        }
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = source,
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNode(hasSetTextAction()).performTextInput("d")
+        composeRule.waitUntil(5_000) { source.filters.contains(SearchFilter.All) }
+        composeRule.onNodeWithTag("search-filter-row").assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                "${context.getString(R.string.search_filter_movie)} 1",
+                useUnmergedTree = true,
+            )
+            .performClick()
+        composeRule.waitUntil(5_000) { source.filters.contains(SearchFilter.Movie) }
+        assertEquals(listOf(SearchFilter.All, SearchFilter.Movie), source.filters)
+    }
+
+    @Test
+    fun featuredBackdropIsShownOnceAndMusicRowsUseSquareArtwork() {
+        val featured =
+            MediaItem(
+                "featured",
+                "Featured Movie",
+                type = "Movie",
+                imageTags = mapOf("Primary" to "/api/catalog/items/featured/images/Primary"),
+                backdropImageTags = listOf("/api/catalog/items/featured/images/Backdrop"),
+            )
+        val album =
+            MediaItem(
+                "album",
+                "Featured Album",
+                type = "MusicAlbum",
+                imageTags = mapOf("Primary" to "/api/catalog/items/album/images/Primary"),
+            )
+        val source = FilterSearchDataSource { _, _, _ ->
+            PagedSearch(
+                listOf(featured, album),
+                2,
+                SearchFacets(all = 2, movie = 1, release = 1),
+            )
+        }
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = source,
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.onNode(hasSetTextAction()).performTextInput("featured")
+        composeRule.waitUntil(5_000) {
+            composeRule
+                .onAllNodesWithTag("search-featured-panel")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("search-featured-panel").assertIsDisplayed()
+        assertTrue(
+            composeRule
+                .onAllNodesWithTag("search-result-row-featured")
+                .fetchSemanticsNodes()
+                .isEmpty()
+        )
+        composeRule.onNodeWithTag("search-result-row-album").assertIsDisplayed()
+
+        val feature = composeRule.onNodeWithTag("search-featured-panel").getUnclippedBoundsInRoot()
+        val music = composeRule.onNodeWithTag("search-artwork-album").getUnclippedBoundsInRoot()
+        assertEquals(
+            16f / 9f,
+            (feature.right - feature.left) / (feature.bottom - feature.top),
+            0.08f,
+        )
+        assertEquals(1f, (music.right - music.left) / (music.bottom - music.top), 0.05f)
+    }
+
+    @Test
+    fun noBackdropShowsCompactPosterRowsWithoutFeaturedPanel() {
+        val movie =
+            MediaItem(
+                "movie",
+                "No Backdrop Movie",
+                type = "Movie",
+                imageTags = mapOf("Primary" to "/api/catalog/items/movie/images/Primary"),
+            )
+        val source = FilterSearchDataSource { _, _, _ ->
+            PagedSearch(listOf(movie), 1, SearchFacets(all = 1, movie = 1))
+        }
+        composeRule.setContent {
+            ZenStreamTheme {
+                SearchOverlayScreen(
+                    repository = source,
+                    session = session,
+                    currentRoute = "home",
+                    onDestinationClick = {},
+                    onDismiss = {},
+                    onItemClick = {},
+                )
+            }
+        }
+
+        composeRule.onNode(hasSetTextAction()).performTextInput("movie")
+        composeRule.waitUntil(5_000) {
+            composeRule
+                .onAllNodesWithTag("search-result-row-movie")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        assertTrue(
+            composeRule.onAllNodesWithTag("search-featured-panel").fetchSemanticsNodes().isEmpty()
+        )
+        composeRule.onNodeWithTag("search-result-row-movie").assertIsDisplayed()
+
+        val poster = composeRule.onNodeWithTag("search-artwork-movie").getUnclippedBoundsInRoot()
+        assertEquals(2f / 3f, (poster.right - poster.left) / (poster.bottom - poster.top), 0.05f)
     }
 
     @Test
@@ -418,5 +563,26 @@ private class PagedSearchDataSource(private val response: suspend (String, Int) 
     override suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch {
         pages += page
         return response(query, page)
+    }
+}
+
+private class FilterSearchDataSource(
+    private val response: suspend (String, Int, SearchFilter) -> PagedSearch
+) : SearchDataSource {
+    val filters = mutableListOf<SearchFilter>()
+
+    override suspend fun clearSession() = Unit
+
+    override suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch =
+        response(query, page, SearchFilter.All)
+
+    override suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter,
+    ): PagedSearch {
+        filters += filter
+        return response(query, page, filter)
     }
 }

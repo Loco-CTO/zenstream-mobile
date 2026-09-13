@@ -11,14 +11,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -99,6 +102,7 @@ import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.HomeViewModel
@@ -110,7 +114,11 @@ import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
+import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
+import com.zenstream.zenstreammobile.ui.components.musicAlbumArtist
+import com.zenstream.zenstreammobile.ui.components.musicReleaseYear
+import com.zenstream.zenstreammobile.ui.components.musicSubtitle
 import com.zenstream.zenstreammobile.ui.navigation.ChromeVisibilitySlot
 import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
@@ -405,6 +413,7 @@ fun SearchOverlayScreen(
                 session = session,
                 padding = padding,
                 onQueryChange = vm::updateQuery,
+                onFilterChange = vm::selectFilter,
                 onRetry = {
                     focusManager.clearFocus()
                     vm.retry()
@@ -438,6 +447,7 @@ private fun SearchResultsContent(
     session: AuthSession,
     padding: PaddingValues,
     onQueryChange: (String) -> Unit,
+    onFilterChange: (SearchFilter) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     onItemClick: (MediaItem) -> Unit,
@@ -451,7 +461,7 @@ private fun SearchResultsContent(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val listState = rememberLazyListState()
     val topBarVisibility =
         remember(density) {
             ScrollVisibilityController(
@@ -461,14 +471,14 @@ private fun SearchResultsContent(
         }
     var topBarVisibilityFraction by remember { mutableStateOf(1f) }
     val topBarScrollConnection =
-        remember(gridState) {
+        remember(listState) {
             object : NestedScrollConnection {
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
-                    val isScrollable = gridState.canScrollForward || gridState.canScrollBackward
+                    val isScrollable = listState.canScrollForward || listState.canScrollBackward
                     topBarVisibilityFraction =
                         topBarVisibility.onNestedScroll(
                             consumedY = consumed.y,
@@ -484,7 +494,7 @@ private fun SearchResultsContent(
         topBarVisibilityFraction = topBarVisibility.resetForRoute()
     }
     LaunchedEffect(
-        gridState,
+        listState,
         state.results.size,
         state.totalRecordCount,
         state.loading,
@@ -493,7 +503,7 @@ private fun SearchResultsContent(
         state.error,
         onLoadMore,
     ) {
-        snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
+        snapshotFlowLastVisibleIndex(listState).collect { lastVisible ->
             if (
                 lastVisible >= 0 &&
                     lastVisible >= state.results.size - 4 &&
@@ -508,7 +518,7 @@ private fun SearchResultsContent(
         }
     }
     ObserveScrollability(
-        canScroll = { gridState.canScrollForward || gridState.canScrollBackward },
+        canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = { isScrollable -> onScrollabilityChanged(isScrollable) },
     )
     Column(modifier.fillMaxSize().padding(padding)) {
@@ -557,6 +567,7 @@ private fun SearchResultsContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                     )
+                    SearchFilterPills(state = state, onFilterChange = onFilterChange)
                 }
             }
         }
@@ -565,9 +576,9 @@ private fun SearchResultsContent(
                 state.error && state.results.isNotEmpty() ->
                     Column(Modifier.fillMaxSize()) {
                         SearchErrorBanner(onRetry)
-                        SearchResultsGrid(
+                        SearchResultsList(
                             items = state.results,
-                            gridState = gridState,
+                            listState = listState,
                             session = session,
                             loadingMore = state.loadingMore,
                             loadMoreError = state.loadMoreError,
@@ -578,6 +589,9 @@ private fun SearchResultsContent(
                     }
 
                 state.error -> ErrorState(PaddingValues(), R.string.search_load_failed, onRetry)
+                state.loading && state.results.isEmpty() && state.query.trim().isNotEmpty() ->
+                    CenterLoading(PaddingValues())
+
                 state.resultQuery.isEmpty() -> Unit
 
                 state.results.isEmpty() ->
@@ -588,40 +602,67 @@ private fun SearchResultsContent(
                     )
 
                 else ->
-                    if (
-                        state.results.any { it.type in setOf("MusicArtist", "MusicAlbum", "Audio") }
-                    ) {
-                        SearchResultSections(
-                            items = state.results,
-                            session = session,
-                            loadingMore = state.loadingMore,
-                            loadMoreError = state.loadMoreError,
-                            onLoadMore = onLoadMore,
-                            onItemClick = onItemClick,
-                            onScrollabilityChanged = onScrollabilityChanged,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        SearchResultsGrid(
-                            items = state.results,
-                            gridState = gridState,
-                            session = session,
-                            loadingMore = state.loadingMore,
-                            loadMoreError = state.loadMoreError,
-                            onLoadMore = onLoadMore,
-                            onItemClick = onItemClick,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                    SearchResultsList(
+                        items = state.results,
+                        listState = listState,
+                        session = session,
+                        loadingMore = state.loadingMore,
+                        loadMoreError = state.loadMoreError,
+                        onLoadMore = onLoadMore,
+                        onItemClick = onItemClick,
+                        modifier = Modifier.fillMaxSize(),
+                    )
             }
         }
     }
 }
 
 @Composable
-private fun SearchResultsGrid(
+private fun SearchFilterPills(
+    state: SearchUiState,
+    onFilterChange: (SearchFilter) -> Unit,
+) {
+    val filters =
+        listOf(
+                SearchFilter.All,
+                SearchFilter.Series,
+                SearchFilter.Movie,
+                SearchFilter.Release,
+                SearchFilter.Artist,
+                SearchFilter.Track,
+                SearchFilter.Collection,
+            )
+            .filter { filter -> filter == SearchFilter.All || state.facets.count(filter) > 0 }
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().testTag("search-filter-row"),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(filters, key = { it.name }) { filter ->
+            val count =
+                if (filter == SearchFilter.All && state.facets.all == 0) {
+                    state.totalRecordCount
+                } else {
+                    state.facets.count(filter)
+                }
+            FilterChip(
+                selected = state.selectedFilter == filter,
+                onClick = { onFilterChange(filter) },
+                label = {
+                    Text(
+                        text = "${stringResource(searchFilterLabel(filter))} $count",
+                        maxLines = 1,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchResultsList(
     items: List<MediaItem>,
-    gridState: LazyGridState,
+    listState: LazyListState,
     session: AuthSession,
     loadingMore: Boolean,
     loadMoreError: Boolean,
@@ -629,33 +670,35 @@ private fun SearchResultsGrid(
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        modifier = modifier,
+    val featured = items.firstOrNull { item ->
+        item.type in setOf("Movie", "Series", "BoxSet", "Collection") &&
+            item.backdropImageTags.isNotEmpty() &&
+            imageUrl(session.serverUrl, item, "Backdrop", 1_280, 720) != null
+    }
+    val visibleItems = items.distinctBy { it.id }.filterNot { item -> item.id == featured?.id }
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(bottom = 20.dp),
+        modifier = modifier.testTag("search-results-list"),
     ) {
-        items(items.distinctBy { it.id }, key = { it.id }) { item ->
-            Box(
-                Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                MediaCardForSearch(
-                    item,
-                    session,
+        featured?.let { item ->
+            item(key = "search-featured-${item.id}") {
+                SearchFeaturedPanel(
+                    item = item,
+                    session = session,
                     onItemClick = onItemClick,
                 )
             }
         }
+        items(visibleItems, key = { "search-result-${it.id}" }) { item ->
+            SearchResultRow(
+                item = item,
+                session = session,
+                onItemClick = onItemClick,
+            )
+        }
         if (loadingMore) {
-            item(
-                key = "search-loading-more",
-                span = {
-                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
-                },
-            ) {
+            item(key = "search-loading-more") {
                 Box(
                     Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center,
@@ -668,17 +711,248 @@ private fun SearchResultsGrid(
             }
         }
         if (loadMoreError) {
-            item(
-                key = "search-load-more-error",
-                span = {
-                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
-                },
-            ) {
+            item(key = "search-load-more-error") {
                 InlineLoadMoreError(onRetry = onLoadMore)
             }
         }
     }
 }
+
+@Composable
+private fun SearchFeaturedPanel(
+    item: MediaItem,
+    session: AuthSession,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    val url = imageUrl(session.serverUrl, item, "Backdrop", 1_280, 720)
+    val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
+    val actionDescription = searchItemActionDescription(item)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 184.dp).padding(16.dp, 8.dp, 16.dp, 12.dp)
+    ) {
+        val ratio = if (maxWidth >= 600.dp) 3f else 16f / 9f
+        Box(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .aspectRatio(ratio)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button) { onItemClick(item) }
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = actionDescription
+                    }
+                    .testTag("search-featured-panel")
+        ) {
+            BlurHashAsyncImage(
+                model = request,
+                imageKey = url,
+                blurHash = imageUrlBlurHash(item),
+                contentDescription = stringResource(R.string.backdrop_description, item.name),
+                contentScale = ContentScale.Crop,
+            )
+            Box(
+                Modifier.fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = .86f))
+                        )
+                    )
+            )
+            Box(
+                Modifier.fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(alpha = .45f), Color.Transparent)
+                        )
+                    )
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
+                Text(
+                    stringResource(searchFilterLabel(searchFilterForItem(item))),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = .78f),
+                )
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                item.productionYear?.let {
+                    Text(
+                        it.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = .72f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultRow(
+    item: MediaItem,
+    session: AuthSession,
+    onItemClick: (MediaItem) -> Unit,
+) {
+    val isMusic = item.type in setOf("MusicAlbum", "MusicArtist", "Audio")
+    val imageWidth = 64.dp
+    val imageUrl =
+        imageUrl(
+            session.serverUrl,
+            item,
+            "Primary",
+            if (isMusic) 320 else 280,
+            if (isMusic) 320 else 420,
+        )
+    val request = imageUrl?.let { authenticatedImageRequest(LocalContext.current, it, session) }
+    val actionDescription = searchItemActionDescription(item)
+    val typeLabel = stringResource(searchFilterLabel(searchFilterForItem(item)))
+    val secondary = searchItemSecondary(item)
+    val year = if (isMusic) musicReleaseYear(item) else item.productionYear?.toString()
+    val duration =
+        when {
+            item.durationSeconds != null && item.durationSeconds > 0 ->
+                formatDurationSeconds(item.durationSeconds)
+            item.runtimeTicks != null && item.runtimeTicks > 0 ->
+                formatDurationSeconds(item.runtimeTicks / 10_000_000.0)
+            else -> null
+        }
+    val metadata = listOfNotNull(year, duration).joinToString(" · ")
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .clickable(role = Role.Button) { onItemClick(item) }
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = actionDescription
+                }
+    ) {
+        Row(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .heightIn(min = if (isMusic) 80.dp else 112.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("search-result-row-${item.id}"),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier =
+                    Modifier.width(imageWidth)
+                        .aspectRatio(if (isMusic) 1f else 2f / 3f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .testTag("search-artwork-${item.id}")
+            ) {
+                BlurHashAsyncImage(
+                    model = request,
+                    imageKey = imageUrl,
+                    blurHash = imageUrl?.let { imageBlurHashForSearch(item) },
+                    contentDescription = stringResource(R.string.poster_description, item.name),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (secondary.isNotBlank()) {
+                    Text(
+                        secondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        typeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier =
+                            Modifier.clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                    if (metadata.isNotBlank()) {
+                        Text(
+                            metadata,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        Box(
+            Modifier.fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
+        )
+    }
+}
+
+@Composable
+private fun searchItemSecondary(item: MediaItem): String =
+    when (item.type) {
+        "MusicArtist" -> musicSubtitle(item)
+        "MusicAlbum" -> musicAlbumArtist(item) ?: musicSubtitle(item)
+        "Audio" -> listOfNotNull(musicAlbumArtist(item), item.album).joinToString(" · ")
+        "Series",
+        "Movie",
+        "BoxSet",
+        "Collection" -> itemSubtitle(item)
+        else -> itemSubtitle(item)
+    }
+
+private fun searchFilterForItem(item: MediaItem): SearchFilter =
+    when (item.type) {
+        "Series" -> SearchFilter.Series
+        "Movie" -> SearchFilter.Movie
+        "BoxSet",
+        "Collection" -> SearchFilter.Collection
+        "MusicAlbum" -> SearchFilter.Release
+        "MusicArtist" -> SearchFilter.Artist
+        "Audio" -> SearchFilter.Track
+        else -> SearchFilter.All
+    }
+
+private fun searchFilterLabel(filter: SearchFilter): Int =
+    when (filter) {
+        SearchFilter.All -> R.string.search_filter_all
+        SearchFilter.Series -> R.string.search_filter_series
+        SearchFilter.Movie -> R.string.search_filter_movie
+        SearchFilter.Collection -> R.string.search_filter_collection
+        SearchFilter.Release -> R.string.search_filter_release
+        SearchFilter.Artist -> R.string.search_filter_artist
+        SearchFilter.Track -> R.string.search_filter_track
+    }
+
+@Composable
+private fun searchItemActionDescription(item: MediaItem): String =
+    if (item.type in setOf("BoxSet", "Collection", "MusicArtist", "MusicAlbum", "Audio")) {
+        stringResource(R.string.open_details_description, item.name)
+    } else {
+        stringResource(R.string.play_description, item.name)
+    }
+
+private fun imageUrlBlurHash(item: MediaItem): String? = imageBlurHash(item, "Backdrop")
+
+private fun imageBlurHashForSearch(item: MediaItem): String? = imageBlurHash(item, "Primary")
 
 @Composable
 private fun SearchErrorBanner(onRetry: () -> Unit) {
@@ -1014,90 +1288,6 @@ private fun FavoriteSection(
 }
 
 @Composable
-private fun SearchResultSections(
-    items: List<MediaItem>,
-    session: AuthSession,
-    loadingMore: Boolean,
-    loadMoreError: Boolean,
-    onLoadMore: () -> Unit,
-    onItemClick: (MediaItem) -> Unit,
-    onScrollabilityChanged: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val listState = rememberLazyListState()
-    ObserveScrollability(
-        canScroll = { listState.canScrollForward || listState.canScrollBackward },
-        onScrollabilityChanged = onScrollabilityChanged,
-    )
-    val sections =
-        listOf(
-                "Artists" to items.filter { it.type == "MusicArtist" }.distinctBy { it.id },
-                "Albums" to items.filter { it.type == "MusicAlbum" }.distinctBy { it.id },
-                "Tracks" to items.filter { it.type == "Audio" }.distinctBy { it.id },
-                "Video" to
-                    items
-                        .filter { it.type !in setOf("MusicArtist", "MusicAlbum", "Audio") }
-                        .distinctBy { it.id },
-            )
-            .filter { it.second.isNotEmpty() }
-    LazyColumn(
-        state = listState,
-        modifier = modifier,
-        contentPadding = PaddingValues(bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        sections.forEach { (title, sectionItems) ->
-            item(key = "search-section-$title") {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .78f),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-            item(key = "search-items-$title") {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    sectionItems.forEach { item ->
-                        item(key = "search-${title.lowercase()}-${item.id}") {
-                            if (item.type in setOf("MusicArtist", "MusicAlbum", "Audio")) {
-                                AudioCard(item, session, onItemClick)
-                            } else {
-                                com.zenstream.zenstreammobile.ui.components.MediaCard(
-                                    item,
-                                    session,
-                                    wide = false,
-                                    onClick = onItemClick,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (loadingMore) {
-            item(key = "search-sections-loading-more") {
-                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                }
-            }
-        }
-        if (loadMoreError) {
-            item(key = "search-sections-load-more-error") { InlineLoadMoreError(onLoadMore) }
-        }
-    }
-    LaunchedEffect(listState, items.size, loadingMore, loadMoreError) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .collect { lastVisible ->
-                if (lastVisible >= sections.size * 2 - 2 && !loadingMore && !loadMoreError)
-                    onLoadMore()
-            }
-    }
-}
-
-@Composable
 private fun FavoriteMusicSection(
     title: String,
     items: List<MediaItem>,
@@ -1123,21 +1313,6 @@ private fun FavoriteMusicSection(
         }
         Spacer(Modifier.height(24.dp))
     }
-}
-
-@Composable
-private fun MediaCardForSearch(
-    item: MediaItem,
-    session: AuthSession,
-    onItemClick: (MediaItem) -> Unit,
-) {
-    com.zenstream.zenstreammobile.ui.components.MediaCard(
-        item,
-        session,
-        wide = false,
-        onClick = onItemClick,
-        gridCard = true,
-    )
 }
 
 @Composable
@@ -1487,6 +1662,10 @@ private fun LibraryPosterCard(
 
 private fun snapshotFlowLastVisibleIndex(gridState: LazyGridState) = snapshotFlow {
     gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+}
+
+private fun snapshotFlowLastVisibleIndex(listState: LazyListState) = snapshotFlow {
+    listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
 }
 
 @Composable

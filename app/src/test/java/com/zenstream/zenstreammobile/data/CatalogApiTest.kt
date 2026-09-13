@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
@@ -21,6 +22,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatalogApiTest {
+    private val api = CatalogApi()
+
     @Test
     fun includesGrantedMusicLibrariesAlongsideVideoLibraries() {
         val libraries =
@@ -183,6 +186,47 @@ class CatalogApiTest {
                 LibrarySort(LibrarySortBy.Year, SortOrder.Descending),
             ),
         )
+    }
+
+    @Test
+    fun searchQueryOmitsAllTypeAndIncludesSelectedType() {
+        assertFalse(api.searchQuery("user", "dune").containsKey("type"))
+        assertEquals(
+            "series",
+            api.searchQuery("user", "dune", SearchFilter.Series, page = 3)["type"],
+        )
+        assertEquals(
+            "3",
+            api.searchQuery("user", "dune", SearchFilter.Series, page = 3)["page"],
+        )
+    }
+
+    @Test
+    fun parsesSearchFacetsWithSafeDefaults() {
+        val facets =
+            api.parseSearchFacets(
+                JSONObject()
+                    .put(
+                        "facets",
+                        JSONObject()
+                            .put("all", 12)
+                            .put("movie", 3)
+                            .put("series", 4)
+                            .put("collection", 1)
+                            .put("release", 2)
+                            .put("artist", 5)
+                            .put("track", 6),
+                    )
+            )
+
+        assertEquals(12, facets.all)
+        assertEquals(3, facets.movie)
+        assertEquals(4, facets.series)
+        assertEquals(1, facets.collection)
+        assertEquals(2, facets.release)
+        assertEquals(5, facets.artist)
+        assertEquals(6, facets.track)
+        assertEquals(0, api.parseSearchFacets(JSONObject()).all)
     }
 
     @Test

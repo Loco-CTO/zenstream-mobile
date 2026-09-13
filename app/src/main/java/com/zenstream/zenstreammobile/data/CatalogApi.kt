@@ -45,6 +45,8 @@ import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
+import com.zenstream.zenstreammobile.model.SearchFacets
+import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
@@ -1059,21 +1061,21 @@ class CatalogApi(
             )
         }
 
-    suspend fun search(session: AuthSession, query: String, page: Int): PagedSearch =
+    suspend fun search(
+        session: AuthSession,
+        query: String,
+        page: Int,
+        filter: SearchFilter = SearchFilter.All,
+    ): PagedSearch =
         withContext(Dispatchers.IO) {
             if (query.trim().isEmpty()) return@withContext PagedSearch(emptyList(), 0)
             val pageSize = 20
+            val pageNumber = page.coerceAtLeast(1)
             val json =
                 requestJson(
                     session,
                     "/api/catalog/search",
-                    query =
-                        mapOf(
-                            "query" to query.trim(),
-                            "page" to page.coerceAtLeast(1).toString(),
-                            "pageSize" to pageSize.toString(),
-                            "view" to "card",
-                        ),
+                    query = searchQuery(session.userId, query, filter, pageNumber),
                 )
             val parsed = catalogItems(json)
             PagedSearch(
@@ -1081,18 +1083,37 @@ class CatalogApi(
                 totalRecordCount =
                     json.optInt(
                         "total",
-                        ((page.coerceAtLeast(1) - 1) * pageSize) + parsed.size,
+                        ((pageNumber - 1) * pageSize) + parsed.size,
                     ),
+                facets = parseSearchFacets(json),
             )
         }
 
-    internal fun searchQuery(userId: String, query: String): Map<String, String> =
-        mapOf(
-            "query" to query.trim(),
-            "page" to "1",
-            "pageSize" to "20",
-            "view" to "card",
+    internal fun searchQuery(
+        userId: String,
+        query: String,
+        filter: SearchFilter = SearchFilter.All,
+        page: Int = 1,
+    ): Map<String, String> = buildMap {
+        put("query", query.trim())
+        put("page", page.coerceAtLeast(1).toString())
+        put("pageSize", "20")
+        put("view", "card")
+        filter.apiValue?.let { put("type", it) }
+    }
+
+    internal fun parseSearchFacets(json: JSONObject): SearchFacets {
+        val facets = json.optJSONObject("facets") ?: return SearchFacets()
+        return SearchFacets(
+            all = facets.optInt("all", 0),
+            movie = facets.optInt("movie", 0),
+            series = facets.optInt("series", 0),
+            collection = facets.optInt("collection", 0),
+            release = facets.optInt("release", 0),
+            artist = facets.optInt("artist", 0),
+            track = facets.optInt("track", 0),
         )
+    }
 
     internal fun libraryItemsQuery(
         userId: String,

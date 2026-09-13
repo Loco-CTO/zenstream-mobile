@@ -209,9 +209,41 @@ data class PagedLibrary(
     val totalRecordCount: Int,
 )
 
+enum class SearchFilter(val apiValue: String?) {
+    All(null),
+    Series("series"),
+    Movie("movie"),
+    Collection("collection"),
+    Release("release"),
+    Artist("artist"),
+    Track("track"),
+}
+
+data class SearchFacets(
+    val all: Int = 0,
+    val movie: Int = 0,
+    val series: Int = 0,
+    val collection: Int = 0,
+    val release: Int = 0,
+    val artist: Int = 0,
+    val track: Int = 0,
+) {
+    fun count(filter: SearchFilter): Int =
+        when (filter) {
+            SearchFilter.All -> all
+            SearchFilter.Movie -> movie
+            SearchFilter.Series -> series
+            SearchFilter.Collection -> collection
+            SearchFilter.Release -> release
+            SearchFilter.Artist -> artist
+            SearchFilter.Track -> track
+        }
+}
+
 data class PagedSearch(
     val items: List<MediaItem>,
     val totalRecordCount: Int,
+    val facets: SearchFacets = SearchFacets(),
 )
 
 data class DetailData(
