@@ -859,10 +859,7 @@ class SearchViewModel(
                     if (generation != requestGeneration) return@onSuccess
                     _uiState.update { current ->
                         current.copy(
-                            results =
-                                uniqueSearchItems(
-                                    current.results + rankSearchResults(result.items, query)
-                                ),
+                            results = uniqueSearchItems(current.results + result.items),
                             totalRecordCount = result.totalRecordCount,
                             facets = result.facets,
                             nextPage = page + 1,
@@ -900,7 +897,7 @@ class SearchViewModel(
                         resultQuery = query.trim(),
                         selectedFilter = filter,
                         facets = result.facets,
-                        results = uniqueSearchItems(rankSearchResults(result.items, query)),
+                        results = uniqueSearchItems(result.items),
                         totalRecordCount = result.totalRecordCount,
                         nextPage = page + 1,
                         error = false,
@@ -1050,29 +1047,6 @@ class FavoritesViewModel(
 }
 
 private const val FAVORITES_PAGE_SIZE = 100
-
-internal fun rankSearchResults(items: List<MediaItem>, query: String): List<MediaItem> {
-    val terms = query.trim().lowercase().split(Regex("\\s+")).filter(String::isNotBlank)
-    val normalizedQuery = terms.joinToString(" ")
-    return items
-        .mapIndexed { index, item ->
-            val title = item.name.trim().lowercase()
-            val words = title.split(Regex("\\s+"))
-            val score =
-                when {
-                    title == normalizedQuery -> 1000
-                    title.startsWith(normalizedQuery) -> 700
-                    terms.all { term -> words.any { it.startsWith(term) } } -> 500
-                    terms.all(title::contains) -> 300
-                    else -> terms.sumOf { term -> if (title.contains(term)) 1 else 0 } * 50
-                }
-            Triple(index, score, item)
-        }
-        .sortedWith(
-            compareByDescending<Triple<Int, Int, MediaItem>> { it.second }.thenBy { it.first }
-        )
-        .map { it.third }
-}
 
 private fun uniqueSearchItems(items: List<MediaItem>): List<MediaItem> {
     val seen = HashSet<String>()

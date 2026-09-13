@@ -45,18 +45,21 @@ class SearchLibraryViewModelTest {
     }
 
     @Test
-    fun searchRanksExactAndPrefixMatchesBeforeOtherMatches() {
+    fun searchPreservesServerRelevanceOrderForExactPrefixPartialAndWordPrefixMatches() = runTest {
         val items =
             listOf(
-                MediaItem("contains", "The Dune Story"),
-                MediaItem("exact", "Dune"),
-                MediaItem("prefix", "Dune World"),
+                MediaItem("exact", "Dune Story"),
+                MediaItem("prefix", "Dune Storybook"),
+                MediaItem("partial", "Undune Story"),
+                MediaItem("word-prefix", "Dune in the Story"),
             )
+        val source = FakeSearchDataSource { _, _ -> PagedSearch(items, items.size) }
+        val viewModel = SearchViewModel(source, session)
 
-        assertEquals(
-            listOf("exact", "prefix", "contains"),
-            rankSearchResults(items, " dune ").map { it.id },
-        )
+        viewModel.updateQuery("dune story")
+        advanceUntilIdle()
+
+        assertEquals(items.map { it.id }, viewModel.uiState.value.results.map { it.id })
     }
 
     @Test
@@ -181,27 +184,37 @@ class SearchLibraryViewModelTest {
             when (page) {
                 1 ->
                     PagedSearch(
-                        listOf(MediaItem("one", "One"), MediaItem("two", "Two")),
-                        3,
+                        listOf(
+                            MediaItem("partial", "Undune Story"),
+                            MediaItem("exact", "Dune Story"),
+                        ),
+                        4,
                     )
                 2 ->
                     PagedSearch(
-                        listOf(MediaItem("two", "Two"), MediaItem("three", "Three")),
-                        3,
+                        listOf(
+                            MediaItem("prefix", "Dune Storybook"),
+                            MediaItem("word-prefix", "Dune in the Story"),
+                            MediaItem("exact", "Dune Story"),
+                        ),
+                        4,
                     )
                 else -> error("unexpected page $page")
             }
         }
         val viewModel = SearchViewModel(source, session)
 
-        viewModel.updateQuery("item")
+        viewModel.updateQuery("dune story")
         advanceUntilIdle()
         viewModel.loadMore()
         advanceUntilIdle()
 
         assertEquals(listOf(1, 2), source.pages)
-        assertEquals(listOf("one", "two", "three"), viewModel.uiState.value.results.map { it.id })
-        assertEquals(3, viewModel.uiState.value.totalRecordCount)
+        assertEquals(
+            listOf("partial", "exact", "prefix", "word-prefix"),
+            viewModel.uiState.value.results.map { it.id },
+        )
+        assertEquals(4, viewModel.uiState.value.totalRecordCount)
         assertFalse(viewModel.uiState.value.loadingMore)
     }
 
