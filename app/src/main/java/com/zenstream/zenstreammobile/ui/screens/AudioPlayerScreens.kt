@@ -826,7 +826,7 @@ private fun NowPlayingMain(
 }
 
 @Composable
-private fun NowPlayingInnerTabs(
+internal fun NowPlayingInnerTabs(
     selectedPage: Int,
     accent: Color,
     onQueueClick: () -> Unit,
