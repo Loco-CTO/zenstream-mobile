@@ -102,26 +102,35 @@ fun ToastHost(
     modifier: Modifier = Modifier,
     playerContext: Boolean = false,
 ) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter,
-    ) {
-        Column(
-            modifier =
-                Modifier.fillMaxWidth()
-                    .widthIn(max = 384.dp)
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState())
-                    .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    // An empty host must not retain a pointer-input modifier over the bottom of the screen. That
+    // invisible scrollable region would intercept taps intended for controls underneath it.
+    if (state.current.isNotEmpty()) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter,
         ) {
-            state.current.forEach { toast ->
-                ToastCard(
-                    toast = toast,
-                    onDismiss = { state.dismiss(toast.id) },
-                    playerContext = playerContext,
-                )
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .widthIn(max = 384.dp)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 16.dp)
+            ) {
+                Column(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.current.forEach { toast ->
+                        ToastCard(
+                            toast = toast,
+                            onDismiss = { state.dismiss(toast.id) },
+                            playerContext = playerContext,
+                        )
+                    }
+                }
             }
         }
     }
