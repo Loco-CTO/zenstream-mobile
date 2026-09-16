@@ -18,7 +18,7 @@ class ImagesTest {
     fun landscapeUsesBackdropWithoutCrossCategoryFallback() {
         assertEquals("Backdrop", landscapeImageType(item))
         assertEquals(
-            "https://server/api/catalog/items/movie-1/images/Backdrop?language=en",
+            "https://server/api/catalog/items/movie-1/images/Backdrop?language=en&w=320",
             imageUrl("https://server", item, "Backdrop", 448, 252),
         )
         assertNull(landscapeImageType(item.copy(backdropImageTags = emptyList())))
@@ -47,7 +47,7 @@ class ImagesTest {
 
         assertEquals("SeriesPrimary", posterImageType(episode))
         assertEquals(
-            "https://server/api/catalog/items/series-1/images/Primary?language=en",
+            "https://server/api/catalog/items/series-1/images/Primary?language=en&w=320",
             imageUrl("https://server", episode, "SeriesPrimary", 280, 420),
         )
     }
@@ -100,6 +100,14 @@ class ImagesTest {
         assertEquals(
             "https://server/api/users/user-1/avatar",
             userAvatarUrl("https://server", "user-1"),
+        )
+    }
+
+    @Test
+    fun fullSizeArtworkDoesNotRequestAThumbnailVariant() {
+        assertEquals(
+            "https://server/api/catalog/items/movie-1/images/Backdrop?language=en",
+            imageUrl("https://server", item, "Backdrop", 1280, 720),
         )
     }
 }
