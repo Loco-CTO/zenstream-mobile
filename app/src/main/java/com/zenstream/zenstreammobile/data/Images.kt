@@ -37,9 +37,29 @@ fun imageUrl(serverUrl: String, item: MediaItem, type: String, width: Int, heigh
         else if (imageType == "Backdrop") item.backdropImageTags.firstOrNull()
         else item.imageTags[imageType]
     if (id.isNullOrBlank() || tag.isNullOrBlank()) return null
-    if (tag.startsWith("/api/")) return "${serverUrl.trimEnd('/')}$tag"
+    if (tag.startsWith("/api/")) {
+        val baseUrl = "${serverUrl.trimEnd('/')}$tag"
+        val variantWidth = artworkVariantWidth(width)
+        return if (variantWidth == null) {
+            baseUrl
+        } else {
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .setQueryParameter("w", variantWidth.toString())
+                .build()
+                .toString()
+        }
+    }
     return null
 }
+
+private fun artworkVariantWidth(width: Int): Int? =
+    when {
+        width <= 160 -> 160
+        width <= 448 -> 320
+        else -> null
+    }
 
 fun imageBlurHash(item: MediaItem, type: String): String? =
     when (type) {
