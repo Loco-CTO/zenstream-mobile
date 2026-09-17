@@ -12,6 +12,10 @@ on:
           - fix
           - minor
           - major
+      retry_version:
+        description: Existing release version to retry without bumping
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -52,11 +56,41 @@ jobs:
         id: version
         env:
           BUMP: ${{ inputs.bump }}
+          RETRY_VERSION: ${{ inputs.retry_version }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           version=$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)
           [ -n "$version" ] || { echo 'Could not read mobile version.' >&2; exit 1; }
+
+          if [ -n "$RETRY_VERSION" ]; then
+            retry_version="${RETRY_VERSION#v}"
+            [[ "$retry_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "Retry version must be a semantic version such as 1.5.7." >&2
+              exit 1
+            }
+            [ "$retry_version" = "$version" ] || {
+              echo "Retry version $retry_version must match version.properties ($version)." >&2
+              exit 1
+            }
+            tag="v$retry_version"
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 || {
+              echo "Release tag $tag does not exist; retry_version is only for an existing release." >&2
+              exit 1
+            }
+            gh release view "$tag" --json tagName >/dev/null || {
+              echo "GitHub release $tag does not exist; retry_version is only for an existing release." >&2
+              exit 1
+            }
+            echo "Retrying existing release $tag without changing the version."
+            echo "version=$retry_version" >> "$GITHUB_OUTPUT"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "main=0" >> "$GITHUB_OUTPUT"
+            echo "reuse_existing=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           IFS=. read -r major minor fix <<< "$version"
           case "$BUMP" in
             major) major=$((major + 1)); minor=0; fix=0 ;;
@@ -80,6 +114,7 @@ jobs:
           echo "version=$new_version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "main=0" >> "$GITHUB_OUTPUT"
+          echo "reuse_existing=false" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release signing key
         env:
@@ -101,7 +136,14 @@ jobs:
         id: commit
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          REUSE_EXISTING: ${{ steps.version.outputs.reuse_existing }}
         run: |
+          set -euo pipefail
+          if [ "$REUSE_EXISTING" = "true" ]; then
+            echo "Reusing existing release version v$VERSION; no version commit needed."
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add version.properties .main-version.json
@@ -170,12 +212,15 @@ jobs:
           }
 
           asset_name="$(basename "$APK_PATH")"
+          release_view_timeout_seconds=60
+          upload_timeout_seconds=600
           echo "APK path: $APK_PATH"
           echo "APK file size: $(stat -c '%s bytes' "$APK_PATH")"
           ls -lh "$APK_PATH"
           echo "Release tag: $TAG"
+          echo "Upload timeout per attempt: ${upload_timeout_seconds}s"
 
-          if asset_names="$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null)"; then
+          if asset_names="$(timeout --foreground --kill-after=10s "${release_view_timeout_seconds}s" gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null)"; then
             if grep -Fqx "$asset_name" <<< "$asset_names"; then
               echo "Existing release asset $asset_name found; it will be replaced with --clobber."
             else
@@ -187,12 +232,19 @@ jobs:
 
           for attempt in 1 2 3; do
             echo "Uploading $asset_name to release $TAG (attempt $attempt/3)..."
-            if gh release upload "$TAG" "$APK_PATH" --clobber; then
+            if timeout --foreground --kill-after=30s "${upload_timeout_seconds}s" \
+              gh release upload "$TAG" "$APK_PATH" --clobber; then
               echo "Successfully uploaded $asset_name to release $TAG."
               exit 0
+            else
+              upload_status=$?
+              if [ "$upload_status" -eq 124 ]; then
+                echo "Upload attempt $attempt timed out after ${upload_timeout_seconds}s." >&2
+              else
+                echo "Upload attempt $attempt failed with exit code $upload_status." >&2
+              fi
             fi
 
-            echo "Upload attempt $attempt failed." >&2
             if [ "$attempt" -lt 3 ]; then
               delay=$((attempt * 10))
               echo "Retrying in ${delay}s."
