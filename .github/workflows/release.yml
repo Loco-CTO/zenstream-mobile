@@ -128,28 +128,24 @@ jobs:
             -PzenstreamRelease=true
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
 
-      - name: Create GitHub release and upload APK
+      - name: Ensure GitHub release exists
         uses: actions/github-script@v9
         env:
-          APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk
           VERSION: ${{ steps.version.outputs.version }}
           TARGET_SHA: ${{ steps.commit.outputs.sha }}
         with:
           script: |
-            const fs = require('fs');
-            const path = process.env.APK_PATH;
-            const stat = fs.statSync(path);
             const tag = `v${process.env.VERSION}`;
-            let release;
             try {
-              release = await github.rest.repos.getReleaseByTag({
+              await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag,
               });
+              core.info(`GitHub release ${tag} already exists; reusing it.`);
             } catch (error) {
               if (error.status !== 404) throw error;
-              release = await github.rest.repos.createRelease({
+              await github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag_name: tag,
@@ -157,26 +153,52 @@ jobs:
                 generate_release_notes: true,
                 name: tag,
               });
+              core.info(`Created GitHub release ${tag}.`);
             }
 
-            const assetName = `zenstream-mobile-${tag}.apk`;
-            const existingAsset = release.data.assets.find((asset) => asset.name === assetName);
-            if (existingAsset) {
-              await github.rest.repos.deleteReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                asset_id: existingAsset.id,
-              });
-            }
+      - name: Upload APK to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk
+          TAG: v${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$APK_PATH" || {
+            echo "APK not found at $APK_PATH" >&2
+            exit 1
+          }
 
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.data.id,
-              name: assetName,
-              data: fs.readFileSync(path),
-              headers: {
-                'content-type': 'application/vnd.android.package-archive',
-                'content-length': stat.size,
-              },
-            });
+          asset_name="$(basename "$APK_PATH")"
+          echo "APK path: $APK_PATH"
+          echo "APK file size: $(stat -c '%s bytes' "$APK_PATH")"
+          ls -lh "$APK_PATH"
+          echo "Release tag: $TAG"
+
+          if asset_names="$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null)"; then
+            if grep -Fqx "$asset_name" <<< "$asset_names"; then
+              echo "Existing release asset $asset_name found; it will be replaced with --clobber."
+            else
+              echo "No existing release asset named $asset_name; uploading it as new."
+            fi
+          else
+            echo "Could not inspect existing release assets; --clobber will replace a matching asset if present."
+          fi
+
+          for attempt in 1 2 3; do
+            echo "Uploading $asset_name to release $TAG (attempt $attempt/3)..."
+            if gh release upload "$TAG" "$APK_PATH" --clobber; then
+              echo "Successfully uploaded $asset_name to release $TAG."
+              exit 0
+            fi
+
+            echo "Upload attempt $attempt failed." >&2
+            if [ "$attempt" -lt 3 ]; then
+              delay=$((attempt * 10))
+              echo "Retrying in ${delay}s."
+              sleep "$delay"
+            fi
+          done
+
+          echo "Release asset upload failed after 3 attempts." >&2
+          exit 1
