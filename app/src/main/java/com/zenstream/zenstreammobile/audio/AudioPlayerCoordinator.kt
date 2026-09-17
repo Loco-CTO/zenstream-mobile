@@ -94,21 +94,23 @@ class AudioPlayerCoordinator(
                 putExtra(
                     AudioServiceBridge.EXTRA_SNAPSHOT,
                     AudioQueueSnapshot(
-                        serverUrl = session.serverUrl,
-                        userId = session.userId,
-                        entries = current.queue,
-                        currentIndex = current.currentIndex,
-                        positionSeconds = current.positionSeconds.toDouble(),
-                        shuffle = current.shuffle,
-                        repeatMode = current.repeatMode,
-                        playedEntryIds = current.playedEntryIds,
-                        durationSeconds = current.durationSeconds.toDouble().takeIf { it > 0 },
-                        sourceEntryId = current.currentEntry?.entryId,
-                        sourceFormat = current.sourceFormat,
-                        sourceBitrate = current.sourceBitrate,
-                        sourceSampleRate = current.sourceSampleRate,
-                        playbackMode = current.playbackMode,
-                    ).toJson().toString(),
+                            serverUrl = session.serverUrl,
+                            userId = session.userId,
+                            entries = current.queue,
+                            currentIndex = current.currentIndex,
+                            positionSeconds = current.positionSeconds.toDouble(),
+                            shuffle = current.shuffle,
+                            repeatMode = current.repeatMode,
+                            playedEntryIds = current.playedEntryIds,
+                            durationSeconds = current.durationSeconds.toDouble().takeIf { it > 0 },
+                            sourceEntryId = current.currentEntry?.entryId,
+                            sourceFormat = current.sourceFormat,
+                            sourceBitrate = current.sourceBitrate,
+                            sourceSampleRate = current.sourceSampleRate,
+                            playbackMode = current.playbackMode,
+                        )
+                        .toJson()
+                        .toString(),
                 )
             }
         }

@@ -92,9 +92,9 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import com.composables.icons.lucide.R as LucideR
-import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.PlaybackPipAction
 import com.zenstream.zenstreammobile.PlaybackPipActionBus
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager

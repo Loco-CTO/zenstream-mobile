@@ -50,8 +50,7 @@ internal class PlaybackPipActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val EXTRA_INSTANCE_ID =
-            "com.zenstream.zenstreammobile.extra.PIP_INSTANCE_ID"
+        const val EXTRA_INSTANCE_ID = "com.zenstream.zenstreammobile.extra.PIP_INSTANCE_ID"
         const val ACTION_TOGGLE = "com.zenstream.zenstreammobile.pip.TOGGLE"
         const val ACTION_PREVIOUS = "com.zenstream.zenstreammobile.pip.PREVIOUS"
         const val ACTION_NEXT = "com.zenstream.zenstreammobile.pip.NEXT"

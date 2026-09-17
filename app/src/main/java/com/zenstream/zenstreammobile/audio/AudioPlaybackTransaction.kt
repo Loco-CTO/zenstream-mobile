@@ -13,8 +13,8 @@ internal data class PlaybackRequest(
 /**
  * Owns selection identity and cancellation, without owning the Media3 player or queue state.
  *
- * The service uses this from its short state-mutation sections. Network and Media3 preparation
- * jobs use [isCurrent] after every suspension before they publish or mutate the player.
+ * The service uses this from its short state-mutation sections. Network and Media3 preparation jobs
+ * use [isCurrent] after every suspension before they publish or mutate the player.
  */
 internal class AudioPlaybackTransactionController {
     private var nextGeneration = 0L
@@ -22,11 +22,11 @@ internal class AudioPlaybackTransactionController {
 
     var activeLoadJob: Job? = null
         private set
+
     var activeRecoveryJob: Job? = null
         private set
 
-    @Synchronized
-    fun currentGeneration(): Long = nextGeneration
+    @Synchronized fun currentGeneration(): Long = nextGeneration
 
     @Synchronized
     fun acceptsCommand(commandSequence: Long): Boolean =

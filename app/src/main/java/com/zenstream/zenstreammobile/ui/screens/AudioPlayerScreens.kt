@@ -269,11 +269,9 @@ internal fun AudioMiniPlayerContent(
                         if (state.isLoading) {
                             CircularProgressIndicator(
                                 modifier =
-                                    Modifier.size(20.dp)
-                                        .testTag("audio-mini-loading")
-                                        .semantics {
-                                            contentDescription = loadingDescription
-                                        },
+                                    Modifier.size(20.dp).testTag("audio-mini-loading").semantics {
+                                        contentDescription = loadingDescription
+                                    },
                                 color = palette.accent,
                                 strokeWidth = 2.dp,
                             )
@@ -313,8 +311,10 @@ internal fun AudioMiniPlayerContent(
                     LinearProgressIndicator(
                         progress = {
                             if (state.durationSeconds > 0) {
-                                (state.positionSeconds.toFloat() / state.durationSeconds)
-                                    .coerceIn(0f, 1f)
+                                (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
+                                    0f,
+                                    1f,
+                                )
                             } else 0f
                         },
                         modifier =
@@ -1182,7 +1182,9 @@ private fun NowPlayingLandscape(
                                             CircularProgressIndicator(
                                                 modifier =
                                                     Modifier.size(if (compact) 28.dp else 38.dp)
-                                                        .testTag("audio-now-playing-loading-control")
+                                                        .testTag(
+                                                            "audio-now-playing-loading-control"
+                                                        )
                                                         .semantics {
                                                             contentDescription = loadingDescription
                                                         },
@@ -1201,7 +1203,8 @@ private fun NowPlayingLandscape(
                                                         if (state.isPlaying) R.string.pause
                                                         else R.string.play
                                                     ),
-                                                modifier = Modifier.size(if (compact) 28.dp else 38.dp),
+                                                modifier =
+                                                    Modifier.size(if (compact) 28.dp else 38.dp),
                                                 tint = palette.onAccent,
                                             )
                                         }

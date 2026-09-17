@@ -19,7 +19,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 sealed class AudioCommandResult {
     data object Applied : AudioCommandResult()
+
     data class Failed(val message: String) : AudioCommandResult()
+
     data object TimedOut : AudioCommandResult()
 }
 
@@ -60,7 +62,8 @@ object AudioServiceBridge {
     private val _state = MutableStateFlow(AudioPlayerState())
     val state: StateFlow<AudioPlayerState> = _state.asStateFlow()
     private val commandSequence = AtomicLong(0L)
-    private val pendingCommands = ConcurrentHashMap<String, CompletableDeferred<AudioCommandResult>>()
+    private val pendingCommands =
+        ConcurrentHashMap<String, CompletableDeferred<AudioCommandResult>>()
 
     internal fun publish(value: AudioPlayerState) {
         _state.value = value

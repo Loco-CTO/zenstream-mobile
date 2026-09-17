@@ -301,12 +301,9 @@ class PlaybackActivity : ComponentActivity() {
     private fun enterPictureInPicture(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || isInPictureInPictureMode) return false
         enteringPictureInPicture = true
-        return enterPictureInPictureMode(
-                pictureInPictureParams().build()
-            )
-            .also { entered ->
-                if (!entered) enteringPictureInPicture = false
-            }
+        return enterPictureInPictureMode(pictureInPictureParams().build()).also { entered ->
+            if (!entered) enteringPictureInPicture = false
+        }
     }
 
     private fun updatePictureInPictureActions(isPlaying: Boolean) {
@@ -361,7 +358,12 @@ class PlaybackActivity : ComponentActivity() {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or
                     android.app.PendingIntent.FLAG_IMMUTABLE,
             )
-        return RemoteAction(Icon.createWithResource(this, iconResource), label, label, pendingIntent)
+        return RemoteAction(
+            Icon.createWithResource(this, iconResource),
+            label,
+            label,
+            pendingIntent,
+        )
     }
 
     private fun shouldPauseForBackground(): Boolean =
