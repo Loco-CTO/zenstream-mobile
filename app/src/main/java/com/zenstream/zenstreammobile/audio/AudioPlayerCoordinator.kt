@@ -86,10 +86,33 @@ class AudioPlayerCoordinator(
         }
     }
 
-    fun playQueueEntry(entryId: String) =
+    fun playQueueEntry(entryId: String) {
+        val current = state.value
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY) {
             putExtra(AudioServiceBridge.EXTRA_ENTRY_ID, entryId)
+            if (current.queue.isNotEmpty()) {
+                putExtra(
+                    AudioServiceBridge.EXTRA_SNAPSHOT,
+                    AudioQueueSnapshot(
+                        serverUrl = session.serverUrl,
+                        userId = session.userId,
+                        entries = current.queue,
+                        currentIndex = current.currentIndex,
+                        positionSeconds = current.positionSeconds.toDouble(),
+                        shuffle = current.shuffle,
+                        repeatMode = current.repeatMode,
+                        playedEntryIds = current.playedEntryIds,
+                        durationSeconds = current.durationSeconds.toDouble().takeIf { it > 0 },
+                        sourceEntryId = current.currentEntry?.entryId,
+                        sourceFormat = current.sourceFormat,
+                        sourceBitrate = current.sourceBitrate,
+                        sourceSampleRate = current.sourceSampleRate,
+                        playbackMode = current.playbackMode,
+                    ).toJson().toString(),
+                )
+            }
         }
+    }
 
     fun togglePlayback() {
         // Keep play/pause on the same serialized service lane as queue transitions and seeks.
@@ -142,6 +165,9 @@ class AudioPlayerCoordinator(
 
     fun pauseForVideo() =
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO)
+
+    suspend fun pauseForVideoAndDetach(): AudioCommandResult =
+        AudioServiceBridge.commandAndAwait(appContext, AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO)
 
     fun updateFavorite(itemId: String, favorite: Boolean) =
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_UPDATE_FAVORITE) {

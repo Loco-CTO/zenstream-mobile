@@ -590,8 +590,11 @@ class CatalogRepository(
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
         api.detail(session, itemId, seasonId)
 
-    suspend fun catalogItem(session: AuthSession, itemId: String): MediaItem =
-        api.catalogItem(session, itemId)
+    suspend fun catalogItem(
+        session: AuthSession,
+        itemId: String,
+        requestTimeoutMillis: Long? = null,
+    ): MediaItem = api.catalogItem(session, itemId, requestTimeoutMillis)
 
     override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
         api.setFavorite(session, itemId, favorite)
