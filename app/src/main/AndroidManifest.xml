@@ -37,6 +37,9 @@
                 android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
                 android:value="true" />
         </activity>
+        <receiver
+            android:name=".PlaybackPipActionReceiver"
+            android:exported="false" />
         <service
             android:name=".audio.AudioPlaybackService"
             android:foregroundServiceType="mediaPlayback"

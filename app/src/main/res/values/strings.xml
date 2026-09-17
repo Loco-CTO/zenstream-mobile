@@ -36,6 +36,8 @@
     <string name="newly_added">Newly Added</string>
     <string name="play_next">Play next</string>
     <string name="stop_playing">Stop playing</string>
+    <string name="audio_loading">Loading audio</string>
+    <string name="audio_video_handoff_failed">Audio could not be detached. Try opening the video again.</string>
     <string name="newly_added_on">Newly Added on %1$s</string>
     <string name="top_rated">Top Rated</string>
     <string name="top_rated_on">Top Rated on %1$s</string>
@@ -212,6 +214,7 @@
     <string name="player_fit">Fit video to screen</string>
     <string name="player_previous">Previous item</string>
     <string name="player_next">Next item</string>
+    <string name="player_close">Close player</string>
     <string name="pause">Pause</string>
     <string name="player_seek_back">Seek back 10 seconds</string>
     <string name="player_seek_forward">Seek forward 10 seconds</string>

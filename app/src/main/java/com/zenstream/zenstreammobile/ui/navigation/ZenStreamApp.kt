@@ -77,6 +77,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.audio.AudioCommandResult
 import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -248,6 +249,7 @@ private fun MainScaffold(
     val toast = rememberToastHostState()
     val queueSnackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val videoHandoffError = stringResource(R.string.audio_video_handoff_failed)
     val onAudioFavorite: (MediaItem) -> Unit = { item ->
         val favorite = !item.favorite
         audio.updateFavorite(item.id, favorite)
@@ -296,7 +298,12 @@ private fun MainScaffold(
         // Android outside the player, so it can never report itself ready.
         if (itemId != null && member?.watchingTogether == true && key != followedGeneration) {
             followedGeneration = key
-            launchPlayback(context, itemId, "")
+            val handoff = audio.pauseForVideoAndDetach()
+            if (handoff == AudioCommandResult.Applied) {
+                launchPlayback(context, itemId, "")
+            } else {
+                queueSnackbarHostState.showSnackbar(videoHandoffError)
+            }
         } else if (itemId == null || member?.watchingTogether != true) {
             followedGeneration = null
         }
@@ -390,7 +397,18 @@ private fun MainScaffold(
                                 navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
                             },
                             onReturnToView = { group ->
-                                group.mediaItemId()?.let { launchPlayback(context, it, "") }
+                                group.mediaItemId()?.let { itemId ->
+                                    scope.launch {
+                                        if (
+                                            audio.pauseForVideoAndDetach() ==
+                                                AudioCommandResult.Applied
+                                        ) {
+                                            launchPlayback(context, itemId, "")
+                                        } else {
+                                            queueSnackbarHostState.showSnackbar(videoHandoffError)
+                                        }
+                                    }
+                                }
                             },
                         )
                     }
@@ -604,7 +622,11 @@ private fun MainScaffold(
                             onOpenItem = { item -> navigateToDetail(navController, item.id) },
                             onPlay = { item, tracks ->
                                 scope.launch {
-                                    audio.pauseForVideo()
+                                    val handoff = audio.pauseForVideoAndDetach()
+                                    if (handoff != AudioCommandResult.Applied) {
+                                        queueSnackbarHostState.showSnackbar(videoHandoffError)
+                                        return@launch
+                                    }
                                     val active = syncplay.state.value.active
                                     if (
                                         active == null ||
@@ -646,8 +668,8 @@ private fun MainScaffold(
                 exit =
                     slideOutVertically(
                         targetOffsetY = { it },
-                        animationSpec = tween(durationMillis = 220),
-                    ) + fadeOut(animationSpec = tween(durationMillis = 160)),
+                        animationSpec = tween(durationMillis = 150),
+                    ) + fadeOut(animationSpec = tween(durationMillis = 110)),
             ) {
                 AudioMiniPlayer(
                     state = audioState,
