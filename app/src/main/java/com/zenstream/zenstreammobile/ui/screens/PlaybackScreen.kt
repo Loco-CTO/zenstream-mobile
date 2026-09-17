@@ -92,6 +92,8 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import com.composables.icons.lucide.R as LucideR
+import com.zenstream.zenstreammobile.PlaybackPipAction
+import com.zenstream.zenstreammobile.PlaybackPipActionBus
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -118,6 +120,7 @@ import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
 import com.zenstream.zenstreammobile.ui.player.subtitleBottomPadding
 import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 
 internal fun shouldShowPlayerLoading(
@@ -151,6 +154,8 @@ fun PlaybackScreen(
     enterPictureInPicture: () -> Boolean,
     shouldPauseForBackground: () -> Boolean,
     onBack: () -> Unit,
+    pipInstanceId: String? = null,
+    onPictureInPicturePlaybackChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -201,6 +206,21 @@ fun PlaybackScreen(
 
     LaunchedEffect(state.showDebugIcon) {
         if (!state.showDebugIcon) debugOpen = false
+    }
+    LaunchedEffect(state.engine.isPlaying) {
+        onPictureInPicturePlaybackChanged(state.engine.isPlaying)
+    }
+    LaunchedEffect(vm, pipInstanceId) {
+        val instanceId = pipInstanceId ?: return@LaunchedEffect
+        PlaybackPipActionBus.actions.collect { event ->
+            if (event.instanceId != instanceId) return@collect
+            when (event.action) {
+                PlaybackPipAction.Toggle -> vm.syncplayToggle(syncplay)
+                PlaybackPipAction.Previous -> vm.syncplayPrevious(syncplay)
+                PlaybackPipAction.Next -> vm.syncplayNext(syncplay)
+                PlaybackPipAction.Close -> vm.requestClose()
+            }
+        }
     }
     LaunchedEffect(
         syncplayState.active?.id,

@@ -8,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
@@ -76,32 +77,65 @@ class AudioPlaybackService : MediaLibraryService() {
     private lateinit var httpFactory: DefaultHttpDataSource.Factory
     private lateinit var dataSourceFactory: DataSource.Factory
     private lateinit var mediaSourceFactory: AudioMediaSourceFactory
-    private lateinit var librarySession: MediaLibrarySession
+    private var librarySession: MediaLibrarySession? = null
     private lateinit var repository: CatalogRepository
     private lateinit var sessionStore: SessionStore
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val progressMutex = Mutex()
     private val queueCommandMutex = Mutex()
+    private val persistenceMutex = Mutex()
+    private val restoreMutex = Mutex()
     private val autoCatalogMutex = Mutex()
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var persistJob: Job? = null
     private var lyricsPrefetchJob: Job? = null
+    private var autoAdoptionJob: Job? = null
     private var currentState = AudioPlayerState()
     private var retryEntryId: String? = null
-    private var recoveryJob: Job? = null
+    private val transactionController = AudioPlaybackTransactionController()
     private var loadingCurrent = false
     private var lastAutoplay = false
     private var suppressEnded = false
     private var playerScope: String? = null
     private var activeAudioSource: NormalizedAudioSource? = null
+    private var activePlayerGeneration: Long? = null
+    private var firstPlayingGeneration: Long? = null
     private var lastKnownPositionEntryId: String? = null
     private var lastKnownPositionMs = 0L
+    private var persistenceEpoch = 0L
+    private var restoreValidationJob: Job? = null
+    private var sessionDetached = false
     private val audioDiagnostics = AudioPlaybackDiagnostics { activeAudioSource }
 
     private fun cancelRecovery() {
-        recoveryJob?.cancel()
-        recoveryJob = null
+        transactionController.cancelRecovery()
+    }
+
+    /** Accepts a new source identity and cancels work that belongs to the previous queue state. */
+    private fun acceptPlaybackSelection(
+        commandSequence: Long,
+        entryId: String,
+        autoPlay: Boolean,
+        positionMs: Long,
+    ): PlaybackRequest? {
+        val request =
+            transactionController.acceptSelection(
+                commandSequence = commandSequence,
+                entryId = entryId,
+                autoPlay = autoPlay,
+                positionMs = positionMs,
+            )
+        if (request != null) {
+            if (sessionDetached) attachAudioSession()
+            restoreValidationJob?.cancel()
+            restoreValidationJob = null
+            lyricsPrefetchJob?.cancel()
+            lyricsPrefetchJob = null
+            autoAdoptionJob?.cancel()
+            autoAdoptionJob = null
+        }
+        return request
     }
 
     private fun rememberPosition(entryId: String?, positionMs: Long) {
@@ -126,7 +160,9 @@ class AudioPlaybackService : MediaLibraryService() {
             playerPositionMs == 0L &&
                 entryId != null &&
                 entryId == lastKnownPositionEntryId &&
-                (player.playerError != null || recoveryJob?.isActive == true || loadingCurrent)
+                (player.playerError != null ||
+                    transactionController.activeRecoveryJob?.isActive == true ||
+                    loadingCurrent)
         return if (transientReset) lastKnownPositionMs else playerPositionMs
     }
 
@@ -155,7 +191,6 @@ class AudioPlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
-        startServiceForeground()
         sessionStore = SessionStore(applicationContext)
         repository = CatalogRepository(CatalogApi(), sessionStore)
         httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)
@@ -176,20 +211,7 @@ class AudioPlaybackService : MediaLibraryService() {
         player.addListener(playerListener)
         player.addAnalyticsListener(audioDiagnostics)
         audioDiagnostics.rendererConfigurationCreated()
-        val sessionActivity =
-            PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        librarySession =
-            MediaLibrarySession.Builder(this, player, LibraryCallback())
-                .setSessionActivity(sessionActivity)
-                .build()
-        serviceScope.launch {
-            queueCommandMutex.withLock { restoreForCurrentAccount() }
-        }
+        attachAudioSession()
         positionJob = serviceScope.launch {
             while (true) {
                 delay(1_000)
@@ -205,105 +227,199 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
-        librarySession
+        checkNotNull(librarySession)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         intent?.let { command -> serviceScope.launch { dispatchCommand(command) } }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    /** Serializes every app-originated command so a transition cannot race a seek or queue edit. */
-    private suspend fun dispatchCommand(intent: Intent) = queueCommandMutex.withLock {
-        when (intent.action) {
-            AudioServiceBridge.ACTION_PLAY_QUEUE ->
-                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
-                    replaceQueueInternal(it)
-                }
-            AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY ->
-                playQueueEntryInternal(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
-            AudioServiceBridge.ACTION_ADD_QUEUE ->
-                intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
-                    addQueueInternal(it)
-                }
-            AudioServiceBridge.ACTION_TOGGLE_PLAYBACK -> togglePlayback()
-            AudioServiceBridge.ACTION_NEXT -> advanceInternal(force = false)
-            AudioServiceBridge.ACTION_PREVIOUS -> previousInternal()
-            AudioServiceBridge.ACTION_TOGGLE_SHUFFLE -> toggleShuffle()
-            AudioServiceBridge.ACTION_TOGGLE_REPEAT -> toggleRepeat()
-            AudioServiceBridge.ACTION_SET_VOLUME -> setVolume()
-            AudioServiceBridge.ACTION_TOGGLE_MUTE -> toggleMute()
-            AudioServiceBridge.ACTION_RETRY -> retryCurrent()
-            AudioServiceBridge.ACTION_SEEK ->
-                seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
-            AudioServiceBridge.ACTION_REMOVE_QUEUE ->
-                removeQueue(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
-            AudioServiceBridge.ACTION_REORDER_QUEUE ->
-                reorderQueue(
-                    intent.getIntExtra(AudioServiceBridge.EXTRA_FROM, -1),
-                    intent.getIntExtra(AudioServiceBridge.EXTRA_TO, -1),
-                )
-            AudioServiceBridge.ACTION_CLEAR_QUEUE -> clearQueue()
-            AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO -> pauseForVideo()
-            AudioServiceBridge.ACTION_UPDATE_FAVORITE ->
-                updateFavorite(
-                    intent.getStringExtra(AudioServiceBridge.EXTRA_ITEM_ID),
-                    intent.getBooleanExtra(AudioServiceBridge.EXTRA_FAVORITE, false),
-                )
-            AudioServiceBridge.ACTION_RESTORE -> restoreForCurrentAccount()
-            null -> Unit
-            else -> Unit
+    /** Dispatches commands without holding the state mutex across network or Media3 waits. */
+    private suspend fun dispatchCommand(intent: Intent) {
+        try {
+            val commandSequence = intent.getLongExtra(AudioServiceBridge.EXTRA_COMMAND_SEQUENCE, 0L)
+            when (intent.action) {
+                AudioServiceBridge.ACTION_PLAY_QUEUE ->
+                    intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
+                        replaceQueue(it, commandSequence)
+                    }
+                AudioServiceBridge.ACTION_PLAY_QUEUE_ENTRY ->
+                    run {
+                        intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
+                            seedQueueIfEmpty(it)
+                        }
+                        playQueueEntry(
+                            intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID),
+                            commandSequence,
+                        )
+                    }
+                AudioServiceBridge.ACTION_ADD_QUEUE ->
+                    intent.getStringExtra(AudioServiceBridge.EXTRA_SNAPSHOT)?.let {
+                        addQueue(it)
+                    }
+                AudioServiceBridge.ACTION_TOGGLE_PLAYBACK -> togglePlayback()
+                AudioServiceBridge.ACTION_NEXT ->
+                    advance(force = false, commandSequence = commandSequence)
+                AudioServiceBridge.ACTION_PREVIOUS -> previous(commandSequence = commandSequence)
+                AudioServiceBridge.ACTION_TOGGLE_SHUFFLE -> toggleShuffle()
+                AudioServiceBridge.ACTION_TOGGLE_REPEAT -> toggleRepeat()
+                AudioServiceBridge.ACTION_SET_VOLUME -> setVolume()
+                AudioServiceBridge.ACTION_TOGGLE_MUTE -> toggleMute()
+                AudioServiceBridge.ACTION_RETRY -> retryCurrent(commandSequence)
+                AudioServiceBridge.ACTION_SEEK ->
+                    seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
+                AudioServiceBridge.ACTION_REMOVE_QUEUE ->
+                    removeQueue(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
+                AudioServiceBridge.ACTION_REORDER_QUEUE ->
+                    reorderQueue(
+                        intent.getIntExtra(AudioServiceBridge.EXTRA_FROM, -1),
+                        intent.getIntExtra(AudioServiceBridge.EXTRA_TO, -1),
+                    )
+                AudioServiceBridge.ACTION_CLEAR_QUEUE -> clearQueue(commandSequence)
+                AudioServiceBridge.ACTION_PAUSE_FOR_VIDEO ->
+                    pauseForVideoAndDetach(
+                        intent.getStringExtra(AudioServiceBridge.EXTRA_COMMAND_ID),
+                        commandSequence,
+                    )
+                AudioServiceBridge.ACTION_UPDATE_FAVORITE ->
+                    updateFavorite(
+                        intent.getStringExtra(AudioServiceBridge.EXTRA_ITEM_ID),
+                        intent.getBooleanExtra(AudioServiceBridge.EXTRA_FAVORITE, false),
+                    )
+                AudioServiceBridge.ACTION_RESTORE -> ensureRestored(commandSequence)
+                null -> Unit
+                else -> Unit
+            }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            AudioServiceBridge.complete(
+                intent.getStringExtra(AudioServiceBridge.EXTRA_COMMAND_ID),
+                AudioCommandResult.Failed(error.message ?: "Audio command failed"),
+            )
         }
     }
 
-    private suspend fun restoreQueue() {
-        val account = sessionStore.session.first() ?: return
-        val snapshot =
-            sessionStore.loadAudioQueueSnapshot(account.serverUrl, account.userId) ?: return
-        if (!snapshotBelongsTo(snapshot, account)) return
-        val validated = revalidateQueue(account, snapshot)
-        if (validated == null || validated.entries.isEmpty()) {
-            sessionStore.clearAudioQueueSnapshot(account.serverUrl, account.userId)
-            return
-        }
-        if (
-            validated.entries.size != snapshot.entries.size ||
-                validated.playedEntryIds != snapshot.playedEntryIds
-        ) {
-            sessionStore.saveAudioQueueSnapshot(validated)
-        }
-        currentState = validated.toPlayerState()
-        rememberPosition(
-            currentState.currentEntry?.entryId,
-            currentState.positionSeconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L,
-        )
-        AudioServiceBridge.publish(currentState)
-        // Restoration is intentionally paused. The user must press play.
+    private suspend fun ensureRestored(commandSequence: Long) = restoreMutex.withLock {
+        restoreForCurrentAccount(commandSequence)
     }
 
-    private suspend fun restoreForCurrentAccount() {
+    /**
+     * Restores the local queue first. Catalog revalidation is deliberately detached from the
+     * command path so a cold start cannot delay the first explicit album selection.
+     */
+    private suspend fun restoreForCurrentAccount(commandSequence: Long) {
         val account = sessionStore.session.first()
-        val scope = account?.let { accountScope(it) }
-        if (scope == playerScope && account != null) {
-            loadAutoCatalog()
-            applyQueueArtworkFallbacks()
-            return
+        val scope = account?.let(::accountScope)
+        val snapshot = account?.let { value ->
+            sessionStore.loadAudioQueueSnapshot(value.serverUrl, value.userId)?.takeIf { queued ->
+                snapshotBelongsTo(queued, value)
+            }
         }
-        persistJob?.cancel()
-        suppressEnded = true
-        activeAudioSource = null
-        player.stop()
-        retryEntryId = null
-        currentState = AudioPlayerState()
-        rememberPosition(null, 0L)
-        playerScope = scope
-        AudioServiceBridge.publish(currentState)
-        if (account != null) {
-            restoreQueue()
-            restoreAudioPreferences()
+
+        var restoreGeneration: Long? = null
+        val shouldReset = queueCommandMutex.withLock {
+            if (!transactionController.acceptsCommand(commandSequence)) {
+                false
+            } else if (scope == playerScope && account != null && currentState.queue.isNotEmpty()) {
+                false
+            } else {
+                persistenceEpoch += 1L
+                persistJob?.cancel()
+                restoreValidationJob?.cancel()
+                lyricsPrefetchJob?.cancel()
+                lyricsPrefetchJob = null
+                autoAdoptionJob?.cancel()
+                autoAdoptionJob = null
+                transactionController.invalidate()
+                restoreGeneration = transactionController.currentGeneration()
+                suppressEnded = true
+                loadingCurrent = false
+                activeAudioSource = null
+                player.stop()
+                player.clearMediaItems()
+                retryEntryId = null
+                currentState = AudioPlayerState()
+                rememberPosition(null, 0L)
+                playerScope = scope
+                AudioServiceBridge.publish(currentState)
+                true
+            }
         }
-        loadAutoCatalog()
-        applyQueueArtworkFallbacks()
+        if (!shouldReset || account == null) return
+
+        var restoredGeneration: Long? = null
+        if (snapshot != null && snapshot.entries.isNotEmpty()) {
+            queueCommandMutex.withLock {
+                if (
+                    transactionController.currentGeneration() == restoreGeneration &&
+                        currentState.queue.isEmpty() &&
+                        playerScope == scope
+                ) {
+                    currentState = snapshot.toPlayerState()
+                    rememberPosition(
+                        currentState.currentEntry?.entryId,
+                        currentState.positionSeconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L,
+                    )
+                    AudioServiceBridge.publish(currentState)
+                    restoredGeneration = checkNotNull(restoreGeneration)
+                }
+            }
+        }
+        restoreAudioPreferences()
+        val shouldRevalidate =
+            if (snapshot != null && snapshot.entries.isNotEmpty() && restoredGeneration != null) {
+                queueCommandMutex.withLock {
+                    transactionController.currentGeneration() == restoredGeneration &&
+                        currentState.queue.map { it.entryId } == snapshot.entries.map { it.entryId }
+                }
+            } else {
+                false
+            }
+        if (shouldRevalidate) {
+            scheduleQueueRevalidation(
+                account,
+                checkNotNull(snapshot),
+                checkNotNull(restoredGeneration),
+            )
+        }
+    }
+
+    private fun scheduleQueueRevalidation(
+        account: AuthSession,
+        snapshot: AudioQueueSnapshot,
+        restoreGeneration: Long,
+    ) {
+        restoreValidationJob?.cancel()
+        restoreValidationJob = serviceScope.launch {
+            val validated = revalidateQueue(account, snapshot)
+            if (validated == null || validated.entries.isEmpty()) {
+                val shouldClear = queueCommandMutex.withLock {
+                    transactionController.currentGeneration() == restoreGeneration &&
+                        currentState.queue.map { it.entryId } == snapshot.entries.map { it.entryId }
+                }
+                if (shouldClear) clearPersistedSnapshot(account)
+                return@launch
+            }
+            queueCommandMutex.withLock {
+                if (
+                    transactionController.currentGeneration() != restoreGeneration ||
+                        currentState.queue.isEmpty() ||
+                        currentState.queue.map { it.entryId } != snapshot.entries.map { it.entryId }
+                ) {
+                    return@withLock
+                }
+                currentState =
+                    currentState.copy(
+                        queue = validated.entries,
+                        currentIndex = validated.currentIndex,
+                        playedEntryIds = validated.playedEntryIds,
+                    )
+                AudioServiceBridge.publish(currentState)
+                persistSnapshot()
+            }
+        }
     }
 
     private suspend fun restoreAudioPreferences() {
@@ -316,15 +432,17 @@ class AudioPlaybackService : MediaLibraryService() {
         // Android's media stream volume is the only volume authority. Ignore
         // legacy app-local gain/mute values so an old saved mute cannot silence
         // playback after the in-app volume control has been removed.
-        player.volume = 1f
-        currentState =
-            currentState.copy(
-                volume = 1f,
-                muted = false,
-                shuffle = shuffle,
-                repeatMode = repeatMode,
-            )
-        AudioServiceBridge.publish(currentState)
+        queueCommandMutex.withLock {
+            player.volume = 1f
+            currentState =
+                currentState.copy(
+                    volume = 1f,
+                    muted = false,
+                    shuffle = shuffle,
+                    repeatMode = repeatMode,
+                )
+            AudioServiceBridge.publish(currentState)
+        }
     }
 
     private suspend fun revalidateQueue(
@@ -369,149 +487,253 @@ class AudioPlaybackService : MediaLibraryService() {
         )
     }
 
-    private suspend fun replaceQueue(encoded: String) = queueCommandMutex.withLock {
-        replaceQueueInternal(encoded)
-    }
-
-    private suspend fun replaceQueueInternal(encoded: String) {
+    private suspend fun replaceQueue(encoded: String, commandSequence: Long) {
         val snapshot = parseSnapshot(encoded) ?: return
         val account = sessionStore.session.first() ?: return
         if (!snapshotBelongsTo(snapshot, account)) return
-        cancelRecovery()
+        val entryId = snapshot.entries.getOrNull(snapshot.currentIndex)?.entryId ?: return
+        var request: PlaybackRequest? = null
+        queueCommandMutex.withLock {
+            val accepted =
+                acceptPlaybackSelection(
+                    commandSequence = commandSequence,
+                    entryId = entryId,
+                    autoPlay = true,
+                    positionMs = 0L,
+                )
+            if (accepted == null) return@withLock
+            request = accepted
+            sessionDetached = false
+            playerScope = accountScope(account)
+            loadingCurrent = true
+            // PLAY_QUEUE is an explicit user selection, not queue restoration. Never carry a
+            // position from the previously playing item (or from a stale caller snapshot) into
+            // the newly selected track.
+            currentState =
+                snapshot
+                    .toPlayerState()
+                    .copy(
+                        positionSeconds = 0L,
+                        positionMillis = 0L,
+                        positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                        durationSeconds = 0L,
+                        isPlaying = false,
+                        isLoading = true,
+                        error = null,
+                    )
+            rememberPosition(currentState.currentEntry?.entryId, 0L)
+            suppressEnded = true
+            activeAudioSource = null
+            player.stop()
+            player.clearMediaItems()
+            retryEntryId = null
+            lastAutoplay = true
+            Log.i(
+                AUDIO_TAG,
+                "audio selection accepted generation=${accepted.generation} sequence=$commandSequence entry=$entryId",
+            )
+            AudioServiceBridge.publish(currentState)
+        }
+        val accepted = request ?: return
         sessionStore.saveAudioShuffle(snapshot.shuffle)
         sessionStore.saveAudioRepeatMode(snapshot.repeatMode)
-        // PLAY_QUEUE is an explicit user selection, not queue restoration. Never carry a
-        // position from the previously playing item (or from a stale caller snapshot) into the
-        // newly selected track.
-        currentState =
-            snapshot
-                .toPlayerState()
-                .copy(
-                    positionSeconds = 0L,
-                    positionMillis = 0L,
-                    positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
-                    durationSeconds = 0L,
-                    isLoading = true,
-                    error = null,
-                )
-        rememberPosition(currentState.currentEntry?.entryId, 0L)
-        AudioServiceBridge.publish(currentState)
-        suppressEnded = true
-        player.stop()
-        retryEntryId = null
-        lastAutoplay = true
         persistSnapshot()
-        loadCurrent(autoPlay = true, resumePositionMs = 0L)
+        launchLoad(accepted)
     }
 
-    private suspend fun addQueue(encoded: String) = queueCommandMutex.withLock {
-        addQueueInternal(encoded)
-    }
-
-    private suspend fun addQueueInternal(encoded: String) {
+    private suspend fun addQueue(encoded: String) {
         val snapshot = parseSnapshot(encoded) ?: return
         val additions = snapshot.entries
         if (additions.isEmpty()) return
         val account = sessionStore.session.first() ?: return
         if (!snapshotBelongsTo(snapshot, account)) return
-        val wasEmpty = currentState.queue.isEmpty()
-        val merged = (currentState.queue + additions).distinctBy { it.entryId }
-        currentState =
-            currentState.copy(
-                queue = merged,
-                currentIndex =
-                    if (wasEmpty) 0 else currentState.currentIndex.coerceIn(0, merged.lastIndex),
-                playedEntryIds =
-                    currentState.playedEntryIds.intersect(merged.map { it.entryId }.toSet()),
-                error = null,
-            )
-        publishPlayerState()
+        queueCommandMutex.withLock {
+            val wasEmpty = currentState.queue.isEmpty()
+            val merged = (currentState.queue + additions).distinctBy { it.entryId }
+            currentState =
+                currentState.copy(
+                    queue = merged,
+                    currentIndex =
+                        if (wasEmpty) 0
+                        else currentState.currentIndex.coerceIn(0, merged.lastIndex),
+                    playedEntryIds =
+                        currentState.playedEntryIds.intersect(merged.map { it.entryId }.toSet()),
+                    error = null,
+                )
+            publishPlayerState()
+        }
         persistSnapshot()
     }
 
+    private suspend fun seedQueueIfEmpty(encoded: String) {
+        val snapshot = parseSnapshot(encoded) ?: return
+        val account = sessionStore.session.first() ?: return
+        if (!snapshotBelongsTo(snapshot, account) || snapshot.entries.isEmpty()) return
+        queueCommandMutex.withLock {
+            if (currentState.queue.isNotEmpty()) return@withLock
+            playerScope = accountScope(account)
+            currentState = snapshot.toPlayerState()
+            rememberPosition(
+                currentState.currentEntry?.entryId,
+                currentState.positionSeconds.coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L,
+            )
+            AudioServiceBridge.publish(currentState)
+        }
+    }
+
     private suspend fun togglePlayback() {
-        if (currentState.queue.isEmpty()) return
-        if (player.isPlaying) {
-            lastAutoplay = false
-            player.pause()
-            reportProgress()
-        } else {
-            lastAutoplay = true
-            if (player.currentMediaItem == null || player.playerError != null) {
-                val entryId = currentState.currentEntry?.entryId
-                loadCurrent(
-                    autoPlay = true,
-                    resumePositionMs = entryId?.let(::recoveryPositionMs),
-                )
+        var progress: ProgressSample? = null
+        var request: PlaybackRequest? = null
+        var shouldPersist = false
+        queueCommandMutex.withLock {
+            if (currentState.queue.isEmpty() || loadingCurrent) return@withLock
+            if (player.isPlaying) {
+                lastAutoplay = false
+                progress = captureProgressSample(paused = true)
+                player.pause()
+                publishPlayerState()
+                shouldPersist = true
             } else {
-                player.play()
+                lastAutoplay = true
+                val entry = currentState.currentEntry ?: return@withLock
+                if (
+                    player.currentMediaItem == null ||
+                        player.playerError != null ||
+                        player.playbackState == Player.STATE_ENDED
+                ) {
+                    val position =
+                        if (player.playbackState == Player.STATE_ENDED) 0L
+                        else recoveryPositionMs(entry.entryId)
+                    request =
+                        acceptPlaybackSelection(
+                            commandSequence = 0L,
+                            entryId = entry.entryId,
+                            autoPlay = true,
+                            positionMs = position,
+                        )
+                    if (request == null) return@withLock
+                    loadingCurrent = true
+                    activeAudioSource = null
+                    suppressEnded = true
+                    player.stop()
+                    player.clearMediaItems()
+                    currentState =
+                        currentState.copy(isLoading = true, error = null, isPlaying = false)
+                    AudioServiceBridge.publish(currentState)
+                } else {
+                    player.play()
+                    publishPlayerState()
+                }
             }
         }
+        progress?.let(::enqueueProgress)
+        if (shouldPersist) persistSnapshot()
+        request?.let(::launchLoad)
     }
 
-    private suspend fun retryCurrent() {
-        val entryId = currentState.currentEntry?.entryId ?: return
-        val resumePositionMs = recoveryPositionMs(entryId)
-        cancelRecovery()
-        retryEntryId = null
-        suppressEnded = true
-        player.stop()
-        loadCurrent(autoPlay = true, resumePositionMs = resumePositionMs)
-    }
-
-    private suspend fun loadCurrent(
-        autoPlay: Boolean,
-        resetRetry: Boolean = true,
-        expectedEntryId: String? = null,
-        resumePositionMs: Long? = null,
-    ) {
-        val entry =
-            currentState.currentEntry?.takeIf {
-                expectedEntryId == null || it.entryId == expectedEntryId
-            } ?: return
-        val account = authenticatedAccount()
-        if (account == null || !snapshotBelongsTo(currentState.toSnapshot(account), account)) {
-            currentState = currentState.copy(isLoading = false, error = "Sign in to play music")
+    private suspend fun retryCurrent(commandSequence: Long) {
+        var request: PlaybackRequest? = null
+        queueCommandMutex.withLock {
+            val entry = currentState.currentEntry ?: return@withLock
+            val resumePositionMs = recoveryPositionMs(entry.entryId)
+            request =
+                acceptPlaybackSelection(
+                    commandSequence = commandSequence,
+                    entryId = entry.entryId,
+                    autoPlay = true,
+                    positionMs = resumePositionMs,
+                )
+            if (request == null) return@withLock
+            retryEntryId = null
+            suppressEnded = true
+            loadingCurrent = true
+            activeAudioSource = null
+            player.stop()
+            player.clearMediaItems()
+            currentState = currentState.copy(isLoading = true, error = null, isPlaying = false)
             AudioServiceBridge.publish(currentState)
+        }
+        request?.let(::launchLoad)
+    }
+
+    private fun launchLoad(request: PlaybackRequest) {
+        val job =
+            serviceScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                val runningJob = kotlinx.coroutines.currentCoroutineContext()[Job]
+                try {
+                    loadCurrent(request)
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    Log.i(
+                        AUDIO_TAG,
+                        "audio load cancelled generation=${request.generation} entry=${request.entryId}",
+                    )
+                    throw error
+                } finally {
+                    runningJob?.let(transactionController::clearLoad)
+                }
+            }
+        transactionController.registerLoad(job)
+        job.start()
+    }
+
+    private suspend fun loadCurrent(request: PlaybackRequest) {
+        val entry =
+            queueCommandMutex.withLock {
+                currentState.currentEntry?.takeIf {
+                    it.entryId == request.entryId &&
+                        transactionController.isCurrent(request, it.entryId)
+                }
+            } ?: return
+        val account = sessionStore.session.first()
+        if (account == null) {
+            queueCommandMutex.withLock {
+                if (transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    loadingCurrent = false
+                    currentState =
+                        currentState.copy(
+                            isLoading = false,
+                            error = "Sign in to play music",
+                        )
+                    AudioServiceBridge.publish(currentState)
+                }
+            }
             return
         }
-        if (resetRetry) {
-            retryEntryId = null
-            cancelRecovery()
-        }
-        loadingCurrent = true
-        lastAutoplay = autoPlay
-        activeAudioSource = null
         httpFactory.setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${account.token}"))
-        currentState =
-            currentState.copy(
-                isLoading = true,
-                error = null,
-                // Do not let the lyrics UI extrapolate an old track position while a new source
-                // is being prepared. The exact anchor is restored below once Media3 is ready.
-                positionUpdatedAtElapsedRealtime = 0L,
-            )
-        // Keep the current entry's last-known duration/source details visible while a recovery
-        // or a paused restore negotiates a fresh, short-lived playback URL. New queue entries
-        // clear these fields at their selection boundary before reaching this method.
-        AudioServiceBridge.publish(currentState)
+        queueCommandMutex.withLock {
+            if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                return@withLock
+            }
+            loadingCurrent = true
+            lastAutoplay = request.autoPlay
+            currentState =
+                currentState.copy(
+                    isLoading = true,
+                    error = null,
+                    positionUpdatedAtElapsedRealtime = 0L,
+                )
+            AudioServiceBridge.publish(currentState)
+        }
+        if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) return
+
         try {
-            val requestedPositionMs =
-                resumePositionMs?.coerceAtLeast(0L)
-                    ?: currentState.positionSeconds
-                        .coerceAtLeast(0L)
-                        .coerceAtMost(Long.MAX_VALUE / 1_000L) * 1_000L
+            Log.i(
+                AUDIO_TAG,
+                "audio negotiation start generation=${request.generation} entry=${request.entryId}",
+            )
+            val requestedPositionMs = request.positionMs.coerceAtLeast(0L)
             val playbackOptions =
                 PlaybackOptions(
                     engine = PlayerEngine.MEDIA3,
                     startPositionSeconds = requestedPositionMs / 1_000.0,
                 )
-            val data =
-                repository.playback(
-                    account,
-                    entry.track.id,
-                    playbackOptions,
-                )
+            val data = repository.playback(account, entry.track.id, playbackOptions)
+            Log.i(
+                AUDIO_TAG,
+                "audio negotiation end generation=${request.generation} entry=${request.entryId}",
+            )
+            if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId))
+                return
             val candidateUrl =
                 data.url ?: data.source.url ?: error("Server did not return an audio URL")
             val url = resolveSameOriginUrl(account.serverUrl, candidateUrl)
@@ -536,9 +758,6 @@ class AudioPlaybackService : MediaLibraryService() {
                     durationSeconds = durationSeconds,
                     expiresAt = data.expiresAt,
                 )
-            if (currentState.currentEntry?.entryId != entry.entryId) return
-            activeAudioSource = normalizedSource
-            audioDiagnostics.sourceSelected(normalizedSource)
             val mediaItem =
                 MediaItem.Builder()
                     .setMediaId("zenstream:queue:${entry.entryId}")
@@ -558,52 +777,94 @@ class AudioPlaybackService : MediaLibraryService() {
                             .build()
                     )
                     .build()
-            // Keep ExoPlayer at unity gain and let the device media stream
-            // volume control the audible level.
-            player.volume = 1f
-            player.setMediaSource(mediaSourceFactory.createMediaSource(mediaItem))
-            player.prepare()
-            suppressEnded = false
-            val position = requestedPositionMs
-            // Explicitly apply the requested start for every prepare, including zero. This keeps
-            // a reused ExoPlayer instance from retaining the previous item's period position.
-            player.seekTo(position)
-            rememberPosition(entry.entryId, position)
-            val positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime()
-            currentState = markQueueEntryPlayed(currentState, entry.entryId) ?: currentState
-            currentState =
-                currentState.copy(
-                    positionSeconds = position / 1_000L,
-                    positionMillis = position,
-                    positionUpdatedAtElapsedRealtime = positionUpdatedAtElapsedRealtime,
-                    isLoading = false,
-                    error = null,
-                    durationSeconds = durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
-                    sourceFormat = sourceFormat,
-                    sourceBitrate = audioStream?.bitrate ?: data.source.bitrate,
-                    sourceSampleRate = audioStream?.sampleRate,
-                    playbackMode = data.mode,
+
+            var mediaApplied = false
+            queueCommandMutex.withLock {
+                if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    return@withLock
+                }
+                activeAudioSource = normalizedSource
+                activePlayerGeneration = request.generation
+                audioDiagnostics.sourceSelected(normalizedSource)
+                player.volume = 1f
+                player.setMediaSource(mediaSourceFactory.createMediaSource(mediaItem))
+                suppressEnded = false
+                firstPlayingGeneration = null
+                Log.i(
+                    AUDIO_TAG,
+                    "audio media prepare generation=${request.generation} entry=${request.entryId}",
                 )
-            AudioServiceBridge.publish(currentState)
+                // Explicitly apply the requested start for every prepare, including zero. This
+                // prevents a reused ExoPlayer instance from retaining the previous period's
+                // position.
+                player.prepare()
+                // Media3 can report a synchronous prepare error. That callback may invalidate
+                // this generation before prepare() returns, so do not let the stale request
+                // finish mutating state or starting playback.
+                if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    return@withLock
+                }
+                player.seekTo(requestedPositionMs)
+                rememberPosition(entry.entryId, requestedPositionMs)
+                loadingCurrent = player.playbackState != Player.STATE_READY
+                currentState = markQueueEntryPlayed(currentState, entry.entryId) ?: currentState
+                currentState =
+                    currentState.copy(
+                        positionSeconds = requestedPositionMs / 1_000L,
+                        positionMillis = requestedPositionMs,
+                        positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                        // Readiness is authoritative. The listener clears this only at READY.
+                        isLoading = loadingCurrent,
+                        error = null,
+                        durationSeconds = durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
+                        sourceFormat = sourceFormat,
+                        sourceBitrate = audioStream?.bitrate ?: data.source.bitrate,
+                        sourceSampleRate = audioStream?.sampleRate,
+                        playbackMode = data.mode,
+                    )
+                if (request.autoPlay) player.play()
+                if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    return@withLock
+                }
+                mediaApplied = true
+                Log.i(
+                    AUDIO_TAG,
+                    "audio player play generation=${request.generation} entry=${request.entryId} loading=$loadingCurrent",
+                )
+                AudioServiceBridge.publish(currentState)
+            }
+            if (
+                !mediaApplied ||
+                    !transactionController.isCurrent(request, currentState.currentEntry?.entryId)
+            ) {
+                return
+            }
             persistSnapshot()
             prefetchLyrics(account, entry)
-            // Publish and persist the negotiated metadata before the network-backed play-start
-            // event so a process restart cannot restore a queue with an empty quality line.
-            recordPlayStart(account, entry)
-            if (autoPlay) player.play()
+            // Telemetry is deliberately after player.play(). It cannot delay or fail playback.
+            if (request.autoPlay) launchPlayStart(account, entry, request.generation)
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
+            if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId))
+                return
             if ((error as? CatalogException)?.statusCode == 401)
                 repository.clearSessionIfCurrent(account)
-            currentState =
-                currentState.copy(
-                    isLoading = false,
-                    error = error.message ?: "Audio could not be played",
-                )
-            AudioServiceBridge.publish(currentState)
-            player.pause()
-        } finally {
-            loadingCurrent = false
+            queueCommandMutex.withLock {
+                if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    return@withLock
+                }
+                loadingCurrent = false
+                activeAudioSource = null
+                activePlayerGeneration = null
+                currentState =
+                    currentState.copy(
+                        isLoading = false,
+                        error = error.message ?: "Audio could not be played",
+                    )
+                player.pause()
+                player.clearMediaItems()
+                AudioServiceBridge.publish(currentState)
+            }
         }
     }
 
@@ -618,311 +879,628 @@ class AudioPlaybackService : MediaLibraryService() {
         }
     }
 
-    private suspend fun recordPlayStart(account: AuthSession, oldEntry: AudioQueueEntry) {
-        val entry = currentState.currentEntry?.takeIf { it.entryId == oldEntry.entryId } ?: return
+    private fun launchPlayStart(
+        account: AuthSession,
+        entry: AudioQueueEntry,
+        expectedGeneration: Long? = null,
+    ) {
+        serviceScope.launch {
+            recordPlayStart(account, entry, expectedGeneration)
+        }
+    }
+
+    private suspend fun recordPlayStart(
+        account: AuthSession,
+        oldEntry: AudioQueueEntry,
+        expectedGeneration: Long? = null,
+    ) {
+        val entry =
+            queueCommandMutex.withLock {
+                currentState.currentEntry?.takeIf {
+                    it.entryId == oldEntry.entryId &&
+                        (expectedGeneration == null ||
+                            transactionController.currentGeneration() == expectedGeneration)
+                }
+            } ?: return
         // Reuse a persisted idempotency key after a retry or process recreation.
         // The server treats repeated requests with that key as one play-start.
         val instanceId = entry.playbackInstanceId ?: UUID.randomUUID().toString()
         if (entry.playbackInstanceId == null) {
-            currentState =
-                currentState.copy(
-                    queue =
-                        currentState.queue.map { value ->
-                            if (value.entryId == entry.entryId)
-                                value.copy(playbackInstanceId = instanceId)
-                            else value
-                        }
-                )
-            persistSnapshot()
+            var assigned = false
+            queueCommandMutex.withLock {
+                if (
+                    currentState.currentEntry?.entryId != entry.entryId ||
+                        (expectedGeneration != null &&
+                            transactionController.currentGeneration() != expectedGeneration)
+                ) {
+                    return@withLock
+                }
+                currentState =
+                    currentState.copy(
+                        queue =
+                            currentState.queue.map { value ->
+                                if (value.entryId == entry.entryId)
+                                    value.copy(playbackInstanceId = instanceId)
+                                else value
+                            }
+                    )
+                assigned = true
+            }
+            if (assigned) persistSnapshot()
         }
-        runCatching { repository.recordAudioPlayStart(account, entry.track.id, instanceId) }
-            .onFailure {
-                if ((it as? CatalogException)?.statusCode == 401)
+        repeat(PLAY_START_ATTEMPTS) { attempt ->
+            try {
+                repository.recordAudioPlayStart(account, entry.track.id, instanceId)
+                return
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: CatalogException) {
+                if (error.statusCode == 401) {
                     repository.clearSessionIfCurrent(account)
-            }
-    }
-
-    private suspend fun playQueueEntry(entryId: String?) = queueCommandMutex.withLock {
-        playQueueEntryInternal(entryId)
-    }
-
-    private suspend fun playQueueEntryInternal(entryId: String?) {
-        if (entryId.isNullOrBlank()) return
-        val targetIndex = queueIndexForEntry(currentState.queue, entryId) ?: return
-        val target = currentState.queue[targetIndex]
-        if (target.entryId == currentState.currentEntry?.entryId) {
-            cancelRecovery()
-            lastAutoplay = true
-            if (
-                player.currentMediaItem == null ||
-                    player.playerError != null ||
-                    player.playbackState == Player.STATE_ENDED
-            ) {
-                val resumePositionMs =
-                    if (player.playbackState == Player.STATE_ENDED) 0L
-                    else recoveryPositionMs(target.entryId)
-                loadCurrent(autoPlay = true, resumePositionMs = resumePositionMs)
-            } else {
-                player.play()
-            }
-            return
-        }
-
-        cancelRecovery()
-        reportProgress()
-        currentState = selectQueueEntryForPlayback(currentState, target.entryId) ?: return
-        rememberPosition(target.entryId, 0L)
-        currentState =
-            currentState.copy(
-                positionSeconds = 0L,
-                positionMillis = 0L,
-                positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
-            )
-        AudioServiceBridge.publish(currentState)
-        suppressEnded = true
-        player.stop()
-        retryEntryId = null
-        lastAutoplay = true
-        persistSnapshot()
-        loadCurrent(autoPlay = true, resumePositionMs = 0L)
-    }
-
-    private suspend fun advance(force: Boolean) = queueCommandMutex.withLock {
-        advanceInternal(force)
-    }
-
-    private suspend fun advanceInternal(force: Boolean) {
-        val queue = currentState.queue
-        if (queue.isEmpty()) return
-        cancelRecovery()
-        val selection =
-            nextQueueSelection(currentState, force)
-                ?: run {
-                    lastAutoplay = false
-                    player.pause()
-                    player.seekTo(0L)
-                    rememberPosition(currentState.currentEntry?.entryId, 0L)
-                    currentState = currentState.copy(isPlaying = false, positionSeconds = 0L)
-                    publishPlayerState()
-                    reportProgress()
                     return
                 }
-        val nextIndex = selection.index
-        if (
-            nextIndex == currentState.currentIndex &&
-                currentState.repeatMode == AudioRepeatMode.Track &&
-                force
-        ) {
-            currentState = currentState.copy(positionSeconds = 0L)
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            loadCurrent(autoPlay = true, resumePositionMs = 0L)
-            return
+                if (attempt == PLAY_START_ATTEMPTS - 1) {
+                    Log.w(AUDIO_TAG, "Audio play-start telemetry failed", error)
+                    return
+                }
+            } catch (error: Throwable) {
+                if (attempt == PLAY_START_ATTEMPTS - 1) {
+                    Log.w(AUDIO_TAG, "Audio play-start telemetry failed", error)
+                    return
+                }
+            }
+            delay(PLAY_START_RETRY_DELAY_MILLIS * (attempt + 1))
         }
-        reportProgress()
-        currentState =
-            currentState.copy(
-                currentIndex = nextIndex,
-                playedEntryIds = selection.playedEntryIds,
-                positionSeconds = 0L,
-                error = null,
-                sourceFormat = null,
-                sourceBitrate = null,
-                sourceSampleRate = null,
-                playbackMode = null,
-            )
-        persistSnapshot()
-        suppressEnded = true
-        player.stop()
-        // Queue navigation is a new-track selection. Pass zero explicitly because stop() can
-        // publish the old player's position before the replacement source is prepared.
-        loadCurrent(autoPlay = true, resumePositionMs = 0L)
     }
 
-    private suspend fun previous() = queueCommandMutex.withLock { previousInternal() }
+    private suspend fun playQueueEntry(entryId: String?, commandSequence: Long) {
+        if (entryId.isNullOrBlank()) return
+        var request: PlaybackRequest? = null
+        var progress: ProgressSample? = null
+        var shouldPersist = false
+        queueCommandMutex.withLock {
+            val targetIndex = queueIndexForEntry(currentState.queue, entryId) ?: return@withLock
+            val target = currentState.queue[targetIndex]
+            if (target.entryId == currentState.currentEntry?.entryId) {
+                if (loadingCurrent) return@withLock
+                lastAutoplay = true
+                if (
+                    player.currentMediaItem == null ||
+                        player.playerError != null ||
+                        player.playbackState == Player.STATE_ENDED
+                ) {
+                    val position =
+                        if (player.playbackState == Player.STATE_ENDED) 0L
+                        else recoveryPositionMs(target.entryId)
+                    request =
+                        acceptPlaybackSelection(
+                            commandSequence,
+                            target.entryId,
+                            autoPlay = true,
+                            positionMs = position,
+                        )
+                    if (request == null) return@withLock
+                    loadingCurrent = true
+                    activeAudioSource = null
+                    suppressEnded = true
+                    player.stop()
+                    player.clearMediaItems()
+                    currentState =
+                        currentState.copy(isLoading = true, isPlaying = false, error = null)
+                    AudioServiceBridge.publish(currentState)
+                } else {
+                    player.play()
+                    publishPlayerState()
+                }
+                return@withLock
+            }
 
-    private suspend fun previousInternal() {
-        cancelRecovery()
-        if (player.currentPosition > 5_000L) {
-            player.seekTo(0L)
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            return
+            request =
+                acceptPlaybackSelection(
+                    commandSequence,
+                    target.entryId,
+                    autoPlay = true,
+                    positionMs = 0L,
+                )
+            if (request == null) return@withLock
+            progress = captureProgressSample(paused = true)
+            currentState =
+                selectQueueEntryForPlayback(currentState, target.entryId) ?: return@withLock
+            rememberPosition(target.entryId, 0L)
+            currentState =
+                currentState.copy(
+                    positionSeconds = 0L,
+                    positionMillis = 0L,
+                    positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                    durationSeconds = 0L,
+                    isPlaying = false,
+                    isLoading = true,
+                    error = null,
+                    sourceFormat = null,
+                    sourceBitrate = null,
+                    sourceSampleRate = null,
+                    playbackMode = null,
+                )
+            loadingCurrent = true
+            activeAudioSource = null
+            suppressEnded = true
+            player.stop()
+            player.clearMediaItems()
+            retryEntryId = null
+            lastAutoplay = true
+            AudioServiceBridge.publish(currentState)
+            shouldPersist = true
         }
-        val previous = previousQueueIndex(currentState.queue.size, currentState.currentIndex)
-        if (previous == null) {
-            player.seekTo(0L)
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            return
+        progress?.let(::enqueueProgress)
+        if (shouldPersist) persistSnapshot()
+        request?.let(::launchLoad)
+    }
+
+    private suspend fun advance(force: Boolean, commandSequence: Long) {
+        var request: PlaybackRequest? = null
+        var progress: ProgressSample? = null
+        var shouldPersist = false
+        queueCommandMutex.withLock {
+            if (currentState.queue.isEmpty()) return@withLock
+            val selection = nextQueueSelection(currentState, force)
+            if (selection == null) {
+                if (!transactionController.invalidate(commandSequence)) return@withLock
+                progress = captureProgressSample(paused = true)
+                lastAutoplay = false
+                loadingCurrent = false
+                player.pause()
+                player.seekTo(0L)
+                rememberPosition(currentState.currentEntry?.entryId, 0L)
+                currentState =
+                    currentState.copy(isPlaying = false, isLoading = false, positionSeconds = 0L)
+                publishPlayerState()
+                shouldPersist = true
+                return@withLock
+            }
+            val target = currentState.queue[selection.index]
+            request =
+                acceptPlaybackSelection(
+                    commandSequence,
+                    target.entryId,
+                    autoPlay = true,
+                    positionMs = 0L,
+                )
+            if (request == null) return@withLock
+            progress = captureProgressSample(paused = true)
+            currentState =
+                currentState.copy(
+                    currentIndex = selection.index,
+                    playedEntryIds = selection.playedEntryIds,
+                    positionSeconds = 0L,
+                    positionMillis = 0L,
+                    positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                    durationSeconds = 0L,
+                    isPlaying = false,
+                    isLoading = true,
+                    error = null,
+                    sourceFormat = null,
+                    sourceBitrate = null,
+                    sourceSampleRate = null,
+                    playbackMode = null,
+                )
+            rememberPosition(target.entryId, 0L)
+            loadingCurrent = true
+            activeAudioSource = null
+            suppressEnded = true
+            player.stop()
+            player.clearMediaItems()
+            lastAutoplay = true
+            retryEntryId = null
+            AudioServiceBridge.publish(currentState)
+            shouldPersist = true
         }
-        reportProgress()
-        currentState =
-            currentState.copy(
-                currentIndex = previous,
-                positionSeconds = 0L,
-                error = null,
-                sourceFormat = null,
-                sourceBitrate = null,
-                sourceSampleRate = null,
-                playbackMode = null,
-            )
-        persistSnapshot()
-        suppressEnded = true
-        player.stop()
-        loadCurrent(autoPlay = true, resumePositionMs = 0L)
+        progress?.let(::enqueueProgress)
+        if (shouldPersist) persistSnapshot()
+        request?.let(::launchLoad)
+    }
+
+    private suspend fun previous(commandSequence: Long) {
+        var request: PlaybackRequest? = null
+        var progress: ProgressSample? = null
+        var shouldPersist = false
+        queueCommandMutex.withLock {
+            if (currentState.queue.isEmpty()) return@withLock
+            if (player.currentPosition > 5_000L) {
+                player.seekTo(0L)
+                rememberPosition(currentState.currentEntry?.entryId, 0L)
+                return@withLock
+            }
+            val previous = previousQueueIndex(currentState.queue.size, currentState.currentIndex)
+            if (previous == null) {
+                player.seekTo(0L)
+                rememberPosition(currentState.currentEntry?.entryId, 0L)
+                return@withLock
+            }
+            val target = currentState.queue[previous]
+            request =
+                acceptPlaybackSelection(
+                    commandSequence,
+                    target.entryId,
+                    autoPlay = true,
+                    positionMs = 0L,
+                )
+            if (request == null) return@withLock
+            progress = captureProgressSample(paused = true)
+            currentState =
+                currentState.copy(
+                    currentIndex = previous,
+                    positionSeconds = 0L,
+                    positionMillis = 0L,
+                    positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                    durationSeconds = 0L,
+                    isPlaying = false,
+                    isLoading = true,
+                    error = null,
+                    sourceFormat = null,
+                    sourceBitrate = null,
+                    sourceSampleRate = null,
+                    playbackMode = null,
+                )
+            rememberPosition(target.entryId, 0L)
+            loadingCurrent = true
+            activeAudioSource = null
+            suppressEnded = true
+            player.stop()
+            player.clearMediaItems()
+            retryEntryId = null
+            lastAutoplay = true
+            AudioServiceBridge.publish(currentState)
+            shouldPersist = true
+        }
+        progress?.let(::enqueueProgress)
+        if (shouldPersist) persistSnapshot()
+        request?.let(::launchLoad)
     }
 
     private suspend fun toggleShuffle() {
-        val value = !currentState.shuffle
+        val value: Boolean
+        queueCommandMutex.withLock {
+            value = !currentState.shuffle
+            currentState =
+                if (value) shuffleQueueKeepingCurrent(currentState)
+                else currentState.copy(shuffle = false)
+            publishPlayerState()
+        }
         sessionStore.saveAudioShuffle(value)
-        currentState =
-            if (value) shuffleQueueKeepingCurrent(currentState)
-            else currentState.copy(shuffle = false)
-        publishPlayerState()
         persistSnapshot()
     }
 
     private suspend fun toggleRepeat() {
-        val value = currentState.repeatMode.next()
+        val value: AudioRepeatMode
+        queueCommandMutex.withLock {
+            value = currentState.repeatMode.next()
+            currentState = currentState.copy(repeatMode = value)
+            publishPlayerState()
+        }
         sessionStore.saveAudioRepeatMode(value)
-        currentState = currentState.copy(repeatMode = value)
-        publishPlayerState()
         persistSnapshot()
     }
 
     private suspend fun setVolume() {
         // Retain the bridge action for compatibility with older clients, but
         // never apply software gain. Volume belongs to Android's media stream.
-        player.volume = 1f
-        currentState = currentState.copy(volume = 1f, muted = false)
-        publishPlayerState()
+        queueCommandMutex.withLock {
+            player.volume = 1f
+            currentState = currentState.copy(volume = 1f, muted = false)
+            publishPlayerState()
+        }
     }
 
     private suspend fun toggleMute() {
         // There is no app-level mute anymore; use the phone's volume controls.
-        player.volume = 1f
-        currentState = currentState.copy(volume = 1f, muted = false)
-        publishPlayerState()
+        queueCommandMutex.withLock {
+            player.volume = 1f
+            currentState = currentState.copy(volume = 1f, muted = false)
+            publishPlayerState()
+        }
     }
 
     private suspend fun seekTo(positionSeconds: Long) {
         val position = positionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L)
-        player.seekTo(position * 1_000L)
-        rememberPosition(currentState.currentEntry?.entryId, position * 1_000L)
-        currentState = currentState.copy(positionSeconds = position)
-        publishPlayerState()
+        queueCommandMutex.withLock {
+            if (loadingCurrent || currentState.currentEntry == null) return@withLock
+            player.seekTo(position * 1_000L)
+            rememberPosition(currentState.currentEntry?.entryId, position * 1_000L)
+            currentState = currentState.copy(positionSeconds = position)
+            publishPlayerState()
+        }
         persistSnapshot()
     }
 
     private suspend fun removeQueue(entryId: String?) {
         if (entryId.isNullOrBlank()) return
-        val removedIndex = currentState.queue.indexOfFirst { it.entryId == entryId }
-        if (removedIndex < 0) return
-        val removal = removeQueueEntry(currentState, entryId) ?: return
-        val wasCurrent = removal.removedCurrent
-        val wasPlaying = player.isPlaying
-        if (removal.entries.isEmpty()) return clearQueue()
-        currentState =
-            currentState.copy(
-                queue = removal.entries,
-                currentIndex = removal.currentIndex,
-                playedEntryIds =
-                    currentState.playedEntryIds.intersect(
-                        removal.entries.map { it.entryId }.toSet()
-                    ),
-                positionSeconds = if (wasCurrent) 0L else currentState.positionSeconds,
-                durationSeconds = if (wasCurrent) 0L else currentState.durationSeconds,
-                sourceFormat = if (wasCurrent) null else currentState.sourceFormat,
-                sourceBitrate = if (wasCurrent) null else currentState.sourceBitrate,
-                sourceSampleRate = if (wasCurrent) null else currentState.sourceSampleRate,
-                playbackMode = if (wasCurrent) null else currentState.playbackMode,
-            )
-        if (wasCurrent) {
-            cancelRecovery()
-            rememberPosition(currentState.currentEntry?.entryId, 0L)
-            suppressEnded = true
-            player.stop()
-            loadCurrent(autoPlay = wasPlaying, resumePositionMs = 0L)
+        var request: PlaybackRequest? = null
+        var progress: ProgressSample? = null
+        var shouldClear = false
+        var shouldPersist = false
+        queueCommandMutex.withLock {
+            if (currentState.queue.none { it.entryId == entryId }) return@withLock
+            val removal = removeQueueEntry(currentState, entryId) ?: return@withLock
+            if (removal.entries.isEmpty()) {
+                shouldClear = true
+                return@withLock
+            }
+            val wasCurrent = removal.removedCurrent
+            val wasPlaying = player.isPlaying || lastAutoplay
+            if (wasCurrent) progress = captureProgressSample(paused = true)
+            currentState =
+                currentState.copy(
+                    queue = removal.entries,
+                    currentIndex = removal.currentIndex,
+                    playedEntryIds =
+                        currentState.playedEntryIds.intersect(
+                            removal.entries.map { it.entryId }.toSet()
+                        ),
+                    positionSeconds = if (wasCurrent) 0L else currentState.positionSeconds,
+                    durationSeconds = if (wasCurrent) 0L else currentState.durationSeconds,
+                    sourceFormat = if (wasCurrent) null else currentState.sourceFormat,
+                    sourceBitrate = if (wasCurrent) null else currentState.sourceBitrate,
+                    sourceSampleRate = if (wasCurrent) null else currentState.sourceSampleRate,
+                    playbackMode = if (wasCurrent) null else currentState.playbackMode,
+                    isPlaying = if (wasCurrent) false else currentState.isPlaying,
+                    isLoading = if (wasCurrent) true else currentState.isLoading,
+                )
+            if (wasCurrent) {
+                val target = currentState.currentEntry ?: return@withLock
+                request =
+                    acceptPlaybackSelection(
+                        commandSequence = 0L,
+                        entryId = target.entryId,
+                        autoPlay = wasPlaying,
+                        positionMs = 0L,
+                    )
+                if (request == null) return@withLock
+                loadingCurrent = true
+                activeAudioSource = null
+                rememberPosition(target.entryId, 0L)
+                suppressEnded = true
+                player.stop()
+                player.clearMediaItems()
+                retryEntryId = null
+                lastAutoplay = wasPlaying
+            }
+            publishPlayerState()
+            shouldPersist = true
         }
-        publishPlayerState()
-        persistSnapshot()
+        if (shouldClear) {
+            clearQueue(commandSequence = 0L)
+            return
+        }
+        progress?.let(::enqueueProgress)
+        if (shouldPersist) persistSnapshot()
+        request?.let(::launchLoad)
     }
 
     private suspend fun reorderQueue(from: Int, to: Int) {
-        currentState = reorderQueue(currentState, from, to) ?: return
-        publishPlayerState()
+        queueCommandMutex.withLock {
+            currentState = reorderQueue(currentState, from, to) ?: return@withLock
+            publishPlayerState()
+        }
         persistSnapshot()
     }
 
-    private suspend fun clearQueue() {
-        cancelRecovery()
-        reportProgress()
-        suppressEnded = true
-        player.stop()
-        lastAutoplay = false
-        currentState = AudioPlayerState()
-        AudioServiceBridge.publish(currentState)
+    private suspend fun clearQueue(commandSequence: Long) {
+        Log.i(AUDIO_TAG, "audio stop requested sequence=$commandSequence")
         val account = sessionStore.session.first()
-        if (account != null) sessionStore.clearAudioQueueSnapshot(account.serverUrl, account.userId)
+        var progress: ProgressSample? = null
+        var applied = false
+        queueCommandMutex.withLock {
+            if (!transactionController.invalidate(commandSequence)) return@withLock
+            applied = true
+            persistenceEpoch += 1L
+            persistJob?.cancel()
+            restoreValidationJob?.cancel()
+            progress = captureProgressSample(paused = true)
+            suppressEnded = true
+            loadingCurrent = false
+            activeAudioSource = null
+            lastAutoplay = false
+            player.stop()
+            player.clearMediaItems()
+            retryEntryId = null
+            rememberPosition(null, 0L)
+            currentState = AudioPlayerState()
+            AudioServiceBridge.publish(currentState)
+        }
+        if (!applied) return
+        Log.i(AUDIO_TAG, "audio stop applied queue=empty")
+        // This is local persistence only; it is not on the progress/network critical path.
+        if (account != null) clearPersistedSnapshot(account)
+        progress?.let(::enqueueProgress)
+        lyricsPrefetchJob?.cancel()
+        lyricsPrefetchJob = null
+        autoAdoptionJob?.cancel()
+        autoAdoptionJob = null
+        detachAudioSessionAndStopService()
+        stopSelf()
     }
 
-    private suspend fun pauseForVideo() {
-        cancelRecovery()
-        if (player.isPlaying) reportProgress()
-        player.pause()
-        lastAutoplay = false
-        currentState = currentState.copy(isPlaying = false)
-        publishPlayerState()
-        persistSnapshot()
+    private suspend fun pauseForVideoAndDetach(commandId: String?, commandSequence: Long) {
+        Log.i(AUDIO_TAG, "audio video handoff requested sequence=$commandSequence")
+        val account = sessionStore.session.first()
+        var progress: ProgressSample? = null
+        var applied = false
+        queueCommandMutex.withLock {
+            if (!transactionController.invalidate(commandSequence)) return@withLock
+            applied = true
+            persistenceEpoch += 1L
+            persistJob?.cancel()
+            progress = captureProgressSample(paused = true)
+            progress?.let { sample ->
+                val positionMs = (sample.positionSeconds * 1_000.0).toLong().coerceAtLeast(0L)
+                currentState =
+                    currentState.copy(
+                        positionSeconds = positionMs / 1_000L,
+                        positionMillis = positionMs,
+                        positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                    )
+            }
+            suppressEnded = true
+            loadingCurrent = false
+            activeAudioSource = null
+            lastAutoplay = false
+            lyricsPrefetchJob?.cancel()
+            lyricsPrefetchJob = null
+            autoAdoptionJob?.cancel()
+            autoAdoptionJob = null
+            player.pause()
+            player.stop()
+            player.clearMediaItems()
+            currentState = currentState.copy(isPlaying = false, isLoading = false)
+            AudioServiceBridge.publish(currentState)
+        }
+        if (!applied) {
+            AudioServiceBridge.complete(
+                commandId,
+                AudioCommandResult.Failed("A newer audio command is already active"),
+            )
+            return
+        }
+        if (account != null) persistSnapshotNow(account)
+        progress?.let(::enqueueProgress)
+        detachAudioSessionAndStopService()
+        AudioServiceBridge.complete(commandId, AudioCommandResult.Applied)
+        Log.i(AUDIO_TAG, "audio video handoff acknowledged")
+        stopSelf()
+    }
+
+    private fun detachAudioSessionAndStopService() {
+        if (sessionDetached) return
+        sessionDetached = true
+        librarySession?.release()
+        librarySession = null
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        Log.i(AUDIO_TAG, "audio session detached foreground removed")
+    }
+
+    private fun attachAudioSession() {
+        if (librarySession != null && !sessionDetached) return
+        startServiceForeground()
+        val sessionActivity =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        librarySession =
+            MediaLibrarySession.Builder(this, player, LibraryCallback())
+                .setSessionActivity(sessionActivity)
+                .build()
+        sessionDetached = false
     }
 
     private suspend fun updateFavorite(itemId: String?, favorite: Boolean) {
         if (itemId.isNullOrBlank()) return
-        val updated =
-            currentState.queue.map { entry ->
-                if (entry.track.id == itemId)
-                    entry.copy(track = entry.track.copy(favorite = favorite))
-                else entry
-            }
-        if (updated == currentState.queue) return
-        currentState = currentState.copy(queue = updated)
-        publishPlayerState()
-        persistSnapshot()
+        var changed = false
+        queueCommandMutex.withLock {
+            val updated =
+                currentState.queue.map { entry ->
+                    if (entry.track.id == itemId)
+                        entry.copy(track = entry.track.copy(favorite = favorite))
+                    else entry
+                }
+            if (updated == currentState.queue) return@withLock
+            currentState = currentState.copy(queue = updated)
+            publishPlayerState()
+            changed = true
+        }
+        if (changed) persistSnapshot()
     }
 
-    private suspend fun reportProgress(): Unit = progressMutex.withLock {
-        val entry = currentState.currentEntry ?: return
-        val account = sessionStore.session.first() ?: return
-        if (!sessionStore.watchHistoryEnabled.first()) return
-        runCatching {
-                repository.reportPlayback(
-                    account,
-                    entry.track.id,
-                    player.currentPosition.coerceAtLeast(0L) / 1_000.0,
-                    !player.isPlaying,
-                    null,
-                    currentState.durationSeconds.toDouble().takeIf { it > 0 },
-                )
-            }
-            .onFailure {
-                if ((it as? CatalogException)?.statusCode == 401)
-                    serviceScope.launch { repository.clearSessionIfCurrent(account) }
-            }
+    private data class ProgressSample(
+        val itemId: String,
+        val positionSeconds: Double,
+        val durationSeconds: Double?,
+        val paused: Boolean,
+    )
+
+    private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun captureProgressSample(paused: Boolean = !player.isPlaying): ProgressSample? {
+        val entry = currentState.currentEntry ?: return null
+        return ProgressSample(
+            itemId = entry.track.id,
+            positionSeconds = observedPlayerPositionMs().coerceAtLeast(0L) / 1_000.0,
+            durationSeconds = currentState.durationSeconds.toDouble().takeIf { it > 0 },
+            paused = paused,
+        )
     }
 
-    private suspend fun persistSnapshot() {
-        persistJob?.cancel()
-        persistJob = serviceScope.launch {
-            delay(PERSIST_DEBOUNCE_MILLIS)
-            val account = sessionStore.session.first() ?: return@launch
-            sessionStore.saveAudioQueueSnapshot(currentState.toSnapshot(account))
+    private fun enqueueProgress(sample: ProgressSample) {
+        progressReportingScope.launch {
+            progressMutex.withLock { sendProgress(sample) }
         }
     }
 
-    private suspend fun persistSnapshotNow() {
+    private suspend fun reportProgress() {
+        captureProgressSample()?.let { sample ->
+            progressMutex.withLock { sendProgress(sample) }
+        }
+    }
+
+    private suspend fun sendProgress(sample: ProgressSample) {
         val account = sessionStore.session.first() ?: return
-        if (currentState.queue.isEmpty()) {
+        if (!sessionStore.watchHistoryEnabled.first()) return
+        try {
+            repository.reportPlayback(
+                account,
+                sample.itemId,
+                sample.positionSeconds,
+                sample.paused,
+                null,
+                sample.durationSeconds,
+            )
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: CatalogException) {
+            if (error.statusCode == 401) repository.clearSessionIfCurrent(account)
+        } catch (error: Throwable) {
+            Log.w(AUDIO_TAG, "Audio progress reporting failed", error)
+        }
+    }
+
+    private fun persistSnapshot() {
+        val epoch = ++persistenceEpoch
+        persistJob?.cancel()
+        persistJob = serviceScope.launch {
+            delay(PERSIST_DEBOUNCE_MILLIS)
+            if (epoch != persistenceEpoch) return@launch
+            val account = sessionStore.session.first() ?: return@launch
+            if (epoch != persistenceEpoch) return@launch
+            val snapshot = queueCommandMutex.withLock {
+                if (epoch != persistenceEpoch || currentState.queue.isEmpty()) null
+                else currentState.toSnapshot(account)
+            }
+            if (snapshot == null) return@launch
+            persistenceMutex.withLock {
+                if (epoch == persistenceEpoch) sessionStore.saveAudioQueueSnapshot(snapshot)
+            }
+        }
+    }
+
+    private suspend fun persistSnapshotNow(accountOverride: AuthSession? = null) {
+        val account = accountOverride ?: sessionStore.session.first() ?: return
+        val snapshot = queueCommandMutex.withLock {
+            if (currentState.queue.isEmpty()) null else currentState.toSnapshot(account)
+        }
+        persistenceMutex.withLock {
+            if (snapshot == null) {
+                sessionStore.clearAudioQueueSnapshot(account.serverUrl, account.userId)
+            } else {
+                sessionStore.saveAudioQueueSnapshot(snapshot)
+            }
+        }
+    }
+
+    private suspend fun clearPersistedSnapshot(account: AuthSession) {
+        persistenceMutex.withLock {
             sessionStore.clearAudioQueueSnapshot(account.serverUrl, account.userId)
-        } else {
-            sessionStore.saveAudioQueueSnapshot(currentState.toSnapshot(account))
         }
     }
 
@@ -948,6 +1526,13 @@ class AudioPlaybackService : MediaLibraryService() {
     private val playerListener =
         object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying && activePlayerGeneration != firstPlayingGeneration) {
+                    firstPlayingGeneration = activePlayerGeneration
+                    Log.i(
+                        AUDIO_TAG,
+                        "audio first isPlaying generation=${activePlayerGeneration} entry=${currentState.currentEntry?.entryId}",
+                    )
+                }
                 publishPlayerState()
                 if (!isPlaying)
                     serviceScope.launch {
@@ -957,9 +1542,26 @@ class AudioPlaybackService : MediaLibraryService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (activePlayerGeneration == transactionController.currentGeneration()) {
+                    when (playbackState) {
+                        Player.STATE_READY -> {
+                            loadingCurrent = false
+                            Log.i(
+                                AUDIO_TAG,
+                                "audio media ready generation=$activePlayerGeneration entry=${currentState.currentEntry?.entryId}",
+                            )
+                        }
+                        Player.STATE_ENDED -> loadingCurrent = false
+                        Player.STATE_BUFFERING,
+                        Player.STATE_IDLE ->
+                            if (player.currentMediaItem != null) loadingCurrent = true
+                    }
+                }
                 publishPlayerState()
                 if (playbackState == Player.STATE_ENDED && !loadingCurrent && !suppressEnded) {
-                    serviceScope.launch { advance(force = true) }
+                    serviceScope.launch {
+                        advance(force = true, commandSequence = 0L)
+                    }
                 }
             }
 
@@ -979,33 +1581,70 @@ class AudioPlaybackService : MediaLibraryService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val mediaId = mediaItem?.mediaId.orEmpty()
                 if (mediaId.startsWith("zenstream:track:")) {
-                    serviceScope.launch { adoptAutoTrack(mediaId.removePrefix("zenstream:track:")) }
+                    autoAdoptionJob?.cancel()
+                    val generation = transactionController.currentGeneration()
+                    autoAdoptionJob = serviceScope.launch {
+                        adoptAutoTrack(
+                            mediaId.removePrefix("zenstream:track:"),
+                            generation,
+                        )
+                    }
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 audioDiagnostics.playerError(error)
+                if (activePlayerGeneration != transactionController.currentGeneration()) return
                 val entryId = currentState.currentEntry?.entryId
-                if (recoveryJob?.isActive == true) return
+                if (transactionController.activeRecoveryJob?.isActive == true) return
                 if (entryId != null && retryEntryId != entryId) {
                     val resumePositionMs = recoveryPositionMs(entryId)
                     retryEntryId = entryId
                     val autoplay = lastAutoplay
                     audioDiagnostics.recoveryScheduled(resumePositionMs)
-                    recoveryJob = serviceScope.launch {
-                        queueCommandMutex.withLock {
-                            if (currentState.currentEntry?.entryId != entryId) return@withLock
-                            player.stop()
-                            if (currentState.currentEntry?.entryId != entryId) return@withLock
-                            loadCurrent(
-                                autoPlay = autoplay,
-                                resetRetry = false,
-                                expectedEntryId = entryId,
-                                resumePositionMs = resumePositionMs,
+                    val request =
+                        acceptPlaybackSelection(
+                            commandSequence = 0L,
+                            entryId = entryId,
+                            autoPlay = autoplay,
+                            positionMs = resumePositionMs,
+                        ) ?: return
+                    val recovery = serviceScope.launch {
+                        try {
+                            queueCommandMutex.withLock {
+                                if (
+                                    !transactionController.isCurrent(
+                                        request,
+                                        currentState.currentEntry?.entryId,
+                                    )
+                                ) {
+                                    return@withLock
+                                }
+                                loadingCurrent = true
+                                activeAudioSource = null
+                                suppressEnded = true
+                                player.stop()
+                                player.clearMediaItems()
+                                currentState =
+                                    currentState.copy(
+                                        isLoading = true,
+                                        isPlaying = false,
+                                        error = null,
+                                    )
+                                AudioServiceBridge.publish(currentState)
+                            }
+                            launchLoad(request)
+                        } finally {
+                            transactionController.clearRecovery(
+                                kotlinx.coroutines.currentCoroutineContext()[Job]!!
                             )
                         }
                     }
+                    transactionController.registerRecovery(recovery)
                 } else {
+                    loadingCurrent = false
+                    activeAudioSource = null
+                    activePlayerGeneration = null
                     currentState =
                         currentState.copy(
                             isLoading = false,
@@ -1156,13 +1795,22 @@ class AudioPlaybackService : MediaLibraryService() {
     private fun parseSnapshot(encoded: String): AudioQueueSnapshot? =
         runCatching { audioQueueSnapshotFromJson(JSONObject(encoded)) }.getOrNull()
 
-    private suspend fun adoptAutoTrack(trackId: String) = queueCommandMutex.withLock {
-        adoptAutoTrackInternal(trackId)
-    }
-
-    private suspend fun adoptAutoTrackInternal(trackId: String) {
+    private suspend fun adoptAutoTrack(trackId: String, expectedGeneration: Long) {
+        val mediaId = "zenstream:track:$trackId"
+        if (
+            transactionController.currentGeneration() != expectedGeneration ||
+                player.currentMediaItem?.mediaId != mediaId
+        ) {
+            return
+        }
         val account = sessionStore.session.first() ?: return
         loadAutoCatalog()
+        if (
+            transactionController.currentGeneration() != expectedGeneration ||
+                player.currentMediaItem?.mediaId != mediaId
+        ) {
+            return
+        }
         val track =
             catalogTracks.values.asSequence().flatten().firstOrNull { it.id == trackId } ?: return
         val albumTracks =
@@ -1173,24 +1821,35 @@ class AudioPlaybackService : MediaLibraryService() {
                 .distinctBy { it.id }
         val entries = albumTracks.map { AudioQueueEntry(UUID.randomUUID().toString(), it) }
         val currentIndex = entries.indexOfFirst { it.track.id == track.id }.coerceAtLeast(0)
-        currentState =
-            AudioPlayerState(
-                queue = entries,
-                currentIndex = currentIndex,
-                durationSeconds = track.durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
-                isPlaying = player.isPlaying,
-                volume = currentState.volume,
-                muted = currentState.muted,
-                shuffle = currentState.shuffle,
-                repeatMode = currentState.repeatMode,
-            )
-        playerScope = accountScope(account)
-        publishPlayerState()
-        currentState.currentEntry?.let { recordPlayStart(account, it) }
-        currentState.currentEntry?.let {
-            currentState = markQueueEntryPlayed(currentState, it.entryId) ?: currentState
+        var telemetryEntry: AudioQueueEntry? = null
+        queueCommandMutex.withLock {
+            if (
+                transactionController.currentGeneration() != expectedGeneration ||
+                    player.currentMediaItem?.mediaId != mediaId
+            ) {
+                return@withLock
+            }
+            transactionController.invalidate()
+            currentState =
+                AudioPlayerState(
+                    queue = entries,
+                    currentIndex = currentIndex,
+                    durationSeconds = track.durationSeconds?.toLong()?.coerceAtLeast(0L) ?: 0L,
+                    isPlaying = player.isPlaying,
+                    volume = currentState.volume,
+                    muted = currentState.muted,
+                    shuffle = currentState.shuffle,
+                    repeatMode = currentState.repeatMode,
+                )
+            playerScope = accountScope(account)
+            telemetryEntry = currentState.currentEntry
+            currentState.currentEntry?.let {
+                currentState = markQueueEntryPlayed(currentState, it.entryId) ?: currentState
+            }
+            publishPlayerState()
         }
         persistSnapshot()
+        telemetryEntry?.let { launchPlayStart(account, it) }
     }
 
     private fun snapshotBelongsTo(snapshot: AudioQueueSnapshot, account: AuthSession): Boolean =
@@ -1229,19 +1888,25 @@ class AudioPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         persistJob?.cancel()
-        runBlocking {
-            withTimeoutOrNull(SHUTDOWN_FLUSH_TIMEOUT_MILLIS) {
-                reportProgress()
-                persistSnapshotNow()
+        if (!sessionDetached) {
+            runBlocking {
+                withTimeoutOrNull(SHUTDOWN_FLUSH_TIMEOUT_MILLIS) {
+                    reportProgress()
+                    persistSnapshotNow()
+                }
             }
         }
         positionJob?.cancel()
         progressJob?.cancel()
         lyricsPrefetchJob?.cancel()
+        autoAdoptionJob?.cancel()
         cancelRecovery()
-        librarySession.release()
+        restoreValidationJob?.cancel()
+        transactionController.activeLoadJob?.cancel()
+        if (!sessionDetached) librarySession?.release()
         player.removeListener(playerListener)
         player.removeAnalyticsListener(audioDiagnostics)
+        player.clearMediaItems()
         player.release()
         serviceScope.coroutineContext.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -1302,12 +1967,16 @@ class AudioPlaybackService : MediaLibraryService() {
             playerCommand: Int,
         ): Int =
             when (playerCommand) {
+                Player.COMMAND_PLAY_PAUSE -> {
+                    serviceScope.launch { togglePlayback() }
+                    Player.COMMAND_INVALID
+                }
                 Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
-                    serviceScope.launch { advance(force = false) }
+                    serviceScope.launch { advance(force = false, commandSequence = 0L) }
                     Player.COMMAND_INVALID
                 }
                 Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
-                    serviceScope.launch { previous() }
+                    serviceScope.launch { previous(commandSequence = 0L) }
                     Player.COMMAND_INVALID
                 }
                 else -> super.onPlayerCommandRequest(session, controller, playerCommand)
@@ -1666,9 +2335,12 @@ class AudioPlaybackService : MediaLibraryService() {
         )
 
     companion object {
+        private const val AUDIO_TAG = "ZenStreamAudio"
         private const val PROGRESS_INTERVAL_MILLIS = 10_000L
         private const val PERSIST_DEBOUNCE_MILLIS = 250L
         private const val SHUTDOWN_FLUSH_TIMEOUT_MILLIS = 2_000L
+        private const val PLAY_START_ATTEMPTS = 3
+        private const val PLAY_START_RETRY_DELAY_MILLIS = 250L
         private const val AUTO_PAGE_SIZE = 100
         private const val AUTO_MAX_ALBUMS = 1_000
         private const val AUTO_ARTIST_LIMIT = 100

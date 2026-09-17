@@ -85,6 +85,8 @@ data class EpisodeNeighbors(
 
 internal const val HOME_FEATURED_LIST_LIMIT = 25
 internal const val HOME_FEATURED_ITEM_LIMIT = 5
+internal const val AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS = 15_000L
+internal const val AUDIO_TELEMETRY_REQUEST_TIMEOUT_MILLIS = 3_000L
 
 class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
@@ -275,7 +277,7 @@ class CatalogApi(
         options: PlaybackOptions = PlaybackOptions(),
     ): PlaybackData =
         withContext(Dispatchers.IO) {
-            val item = getItem(session, itemId)
+            val item = getItem(session, itemId, AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS)
             val resumePositionSeconds =
                 item.playbackPositionTicks?.div(10_000_000.0)?.takeIf { it.isFinite() && it > 0.0 }
                     ?: 0.0
@@ -305,6 +307,7 @@ class CatalogApi(
                             .put("startPositionSeconds", negotiatedOptions.startPositionSeconds)
                             .put("audioStreamId", negotiatedOptions.audioStreamId)
                             .toString(),
+                    requestTimeoutMillis = AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS,
                 )
             val sourcePayload =
                 json.optJSONObject("source") ?: error("Server did not return a media source")
@@ -667,6 +670,7 @@ class CatalogApi(
                 catalogProgressPath(itemId),
                 method = "PATCH",
                 body = body.toString(),
+                requestTimeoutMillis = AUDIO_TELEMETRY_REQUEST_TIMEOUT_MILLIS,
             )
         }
 
@@ -681,6 +685,7 @@ class CatalogApi(
                 audioPlayStartPath(itemId),
                 method = "POST",
                 body = JSONObject().put("playbackInstanceId", playbackInstanceId).toString(),
+                requestTimeoutMillis = AUDIO_TELEMETRY_REQUEST_TIMEOUT_MILLIS,
             )
         }
 
@@ -1338,18 +1343,26 @@ class CatalogApi(
             requestJson(session, "/api/notifications/read-all", method = "POST")
         }
 
-    suspend fun catalogItem(session: AuthSession, itemId: String): MediaItem =
+    suspend fun catalogItem(
+        session: AuthSession,
+        itemId: String,
+        requestTimeoutMillis: Long? = null,
+    ): MediaItem =
         withContext(Dispatchers.IO) {
             catalogMediaItem(
                 requestJson(
                     session,
                     "/api/catalog/items/${encodePathSegment(itemId)}",
+                    requestTimeoutMillis = requestTimeoutMillis,
                 )
             )
         }
 
-    private suspend fun getItem(session: AuthSession, itemId: String): MediaItem =
-        catalogItem(session, itemId)
+    private suspend fun getItem(
+        session: AuthSession,
+        itemId: String,
+        requestTimeoutMillis: Long? = null,
+    ): MediaItem = catalogItem(session, itemId, requestTimeoutMillis)
 
     private suspend fun getChildren(
         session: AuthSession,

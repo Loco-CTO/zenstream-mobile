@@ -2,19 +2,23 @@ package com.zenstream.zenstreammobile
 
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
@@ -24,6 +28,7 @@ import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -175,6 +180,8 @@ class PlaybackActivity : ComponentActivity() {
     private var immersiveModeApplied = false
     private var enteringPictureInPicture = false
     private var ownsPlaybackLaunch = false
+    private val pipInstanceId = UUID.randomUUID().toString()
+    private var pipPlaybackIsPlaying = false
 
     private val repository by lazy {
         val dataStoreName =
@@ -248,6 +255,8 @@ class PlaybackActivity : ComponentActivity() {
                             initialSubtitleStreamIndex = args.subtitleStreamIndex,
                             hasInitialSubtitleSelection = args.hasSubtitleSelection,
                             enterPictureInPicture = ::enterPictureInPicture,
+                            pipInstanceId = pipInstanceId,
+                            onPictureInPicturePlaybackChanged = ::updatePictureInPictureActions,
                             shouldPauseForBackground = ::shouldPauseForBackground,
                             onBack = ::finish,
                         )
@@ -292,12 +301,69 @@ class PlaybackActivity : ComponentActivity() {
     private fun enterPictureInPicture(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || isInPictureInPictureMode) return false
         enteringPictureInPicture = true
-        return enterPictureInPictureMode(
-                PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+        return enterPictureInPictureMode(pictureInPictureParams().build()).also { entered ->
+            if (!entered) enteringPictureInPicture = false
+        }
+    }
+
+    private fun updatePictureInPictureActions(isPlaying: Boolean) {
+        pipPlaybackIsPlaying = isPlaying
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        setPictureInPictureParams(pictureInPictureParams().build())
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun pictureInPictureParams(): PictureInPictureParams.Builder =
+        PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .setActions(
+                listOf(
+                    pipAction(
+                        PlaybackPipActionReceiver.ACTION_PREVIOUS,
+                        LucideR.drawable.lucide_ic_skip_back,
+                        getString(R.string.player_previous),
+                    ),
+                    pipAction(
+                        PlaybackPipActionReceiver.ACTION_TOGGLE,
+                        if (pipPlaybackIsPlaying) LucideR.drawable.lucide_ic_pause
+                        else LucideR.drawable.lucide_ic_play,
+                        if (pipPlaybackIsPlaying) getString(R.string.pause)
+                        else getString(R.string.play),
+                    ),
+                    pipAction(
+                        PlaybackPipActionReceiver.ACTION_NEXT,
+                        LucideR.drawable.lucide_ic_skip_forward,
+                        getString(R.string.player_next),
+                    ),
+                    pipAction(
+                        PlaybackPipActionReceiver.ACTION_CLOSE,
+                        LucideR.drawable.lucide_ic_x,
+                        getString(R.string.player_close),
+                    ),
+                )
             )
-            .also { entered ->
-                if (!entered) enteringPictureInPicture = false
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun pipAction(action: String, iconResource: Int, label: String): RemoteAction {
+        val intent =
+            Intent(this, PlaybackPipActionReceiver::class.java).apply {
+                this.action = action
+                putExtra(PlaybackPipActionReceiver.EXTRA_INSTANCE_ID, pipInstanceId)
             }
+        val pendingIntent =
+            android.app.PendingIntent.getBroadcast(
+                this,
+                action.hashCode(),
+                intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                    android.app.PendingIntent.FLAG_IMMUTABLE,
+            )
+        return RemoteAction(
+            Icon.createWithResource(this, iconResource),
+            label,
+            label,
+            pendingIntent,
+        )
     }
 
     private fun shouldPauseForBackground(): Boolean =

@@ -136,6 +136,27 @@ fun AudioMiniPlayer(
     onFavorite: (MediaItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    AudioMiniPlayerContent(
+        state = state,
+        session = session,
+        onOpenNowPlaying = onOpenNowPlaying,
+        onFavorite = onFavorite,
+        onStop = coordinator::stopAndClear,
+        onTogglePlayback = coordinator::togglePlayback,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun AudioMiniPlayerContent(
+    state: AudioPlayerState,
+    session: AuthSession,
+    onOpenNowPlaying: () -> Unit,
+    onFavorite: (MediaItem) -> Unit = {},
+    onStop: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val entry = state.currentEntry ?: return
     val palette =
         remember(entry.track.id, entry.track.imageBlurHashes["Primary"]) {
@@ -143,6 +164,7 @@ fun AudioMiniPlayer(
         }
     val density = LocalDensity.current
     val gestureThresholdPx = with(density) { 72.dp.toPx() }
+    val loadingDescription = stringResource(R.string.audio_loading)
     Box(modifier = modifier.fillMaxWidth()) {
         Surface(
             modifier =
@@ -169,7 +191,7 @@ fun AudioMiniPlayer(
                                     !horizontalDominant && totalDrag.y <= -gestureThresholdPx ->
                                         onOpenNowPlaying()
                                     !horizontalDominant && totalDrag.y >= gestureThresholdPx ->
-                                        coordinator.stopAndClear()
+                                        onStop()
                                 }
                                 totalDrag = Offset.Zero
                             },
@@ -231,7 +253,7 @@ fun AudioMiniPlayer(
                         )
                     }
                     IconButton(
-                        onClick = coordinator::stopAndClear,
+                        onClick = onStop,
                         modifier = Modifier.size(40.dp).testTag("audio-mini-stop"),
                     ) {
                         Icon(
@@ -240,42 +262,74 @@ fun AudioMiniPlayer(
                         )
                     }
                     IconButton(
-                        onClick = coordinator::togglePlayback,
-                        modifier = Modifier.size(40.dp),
+                        onClick = onTogglePlayback,
+                        enabled = !state.isLoading,
+                        modifier = Modifier.size(40.dp).testTag("audio-mini-play-pause"),
                     ) {
-                        Icon(
-                            painterResource(
-                                if (state.isPlaying) LucideR.drawable.lucide_ic_pause
-                                else LucideR.drawable.lucide_ic_play
-                            ),
-                            contentDescription =
-                                stringResource(
-                                    if (state.isPlaying) R.string.pause else R.string.play
+                        if (state.isLoading) {
+                            CircularProgressIndicator(
+                                modifier =
+                                    Modifier.size(20.dp).testTag("audio-mini-loading").semantics {
+                                        contentDescription = loadingDescription
+                                    },
+                                color = palette.accent,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                painterResource(
+                                    if (state.isPlaying) LucideR.drawable.lucide_ic_pause
+                                    else LucideR.drawable.lucide_ic_play
                                 ),
-                        )
+                                contentDescription =
+                                    stringResource(
+                                        if (state.isPlaying) R.string.pause else R.string.play
+                                    ),
+                            )
+                        }
                     }
                 }
-                LinearProgressIndicator(
-                    progress = {
-                        if (state.durationSeconds > 0) {
-                            (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
-                                0f,
-                                1f,
-                            )
-                        } else 0f
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth()
-                            .height(3.dp)
-                            .clip(
-                                RoundedCornerShape(
-                                    bottomStart = 14.dp,
-                                    bottomEnd = 14.dp,
+                if (state.isLoading) {
+                    LinearProgressIndicator(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .height(3.dp)
+                                .clip(
+                                    RoundedCornerShape(
+                                        bottomStart = 14.dp,
+                                        bottomEnd = 14.dp,
+                                    )
                                 )
-                            ),
-                    color = palette.accent,
-                    trackColor = Color.White.copy(alpha = .16f),
-                )
+                                .testTag("audio-mini-loading-rail")
+                                .semantics {
+                                    contentDescription = loadingDescription
+                                },
+                        color = palette.accent,
+                        trackColor = Color.White.copy(alpha = .16f),
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        progress = {
+                            if (state.durationSeconds > 0) {
+                                (state.positionSeconds.toFloat() / state.durationSeconds).coerceIn(
+                                    0f,
+                                    1f,
+                                )
+                            } else 0f
+                        },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .height(3.dp)
+                                .clip(
+                                    RoundedCornerShape(
+                                        bottomStart = 14.dp,
+                                        bottomEnd = 14.dp,
+                                    )
+                                ),
+                        color = palette.accent,
+                        trackColor = Color.White.copy(alpha = .16f),
+                    )
+                }
             }
         }
     }
@@ -552,6 +606,7 @@ private fun NowPlayingMain(
     modifier: Modifier = Modifier,
 ) {
     val accent = palette.accent
+    val loadingDescription = stringResource(R.string.audio_loading)
     BoxWithConstraints(modifier.fillMaxSize()) {
         if (maxWidth > maxHeight) {
             NowPlayingLandscape(
@@ -701,6 +756,7 @@ private fun NowPlayingMain(
                             trackKey = state.currentEntry?.entryId ?: current.id,
                             positionSeconds = displayPositionSeconds,
                             durationSeconds = displayDurationSeconds,
+                            isLoading = state.isLoading,
                             accent = accent,
                             onSeek = { coordinator.seekTo(it) },
                         )
@@ -763,6 +819,7 @@ private fun NowPlayingMain(
                         }
                         IconButton(
                             onClick = coordinator::togglePlayback,
+                            enabled = !state.isLoading,
                             modifier = Modifier.size(playButtonSize).testTag("audio-control-play"),
                         ) {
                             Surface(
@@ -772,19 +829,33 @@ private fun NowPlayingMain(
                                 contentColor = palette.onAccent,
                             ) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        painterResource(
-                                            if (state.isPlaying) LucideR.drawable.lucide_ic_pause
-                                            else LucideR.drawable.lucide_ic_play
-                                        ),
-                                        contentDescription =
-                                            stringResource(
-                                                if (state.isPlaying) R.string.pause
-                                                else R.string.play
+                                    if (state.isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier =
+                                                Modifier.size(if (compact) 26.dp else 32.dp)
+                                                    .testTag("audio-now-playing-loading-control")
+                                                    .semantics {
+                                                        contentDescription = loadingDescription
+                                                    },
+                                            color = palette.onAccent,
+                                            strokeWidth = 2.dp,
+                                        )
+                                    } else {
+                                        Icon(
+                                            painterResource(
+                                                if (state.isPlaying)
+                                                    LucideR.drawable.lucide_ic_pause
+                                                else LucideR.drawable.lucide_ic_play
                                             ),
-                                        modifier = Modifier.size(if (compact) 26.dp else 32.dp),
-                                        tint = palette.onAccent,
-                                    )
+                                            contentDescription =
+                                                stringResource(
+                                                    if (state.isPlaying) R.string.pause
+                                                    else R.string.play
+                                                ),
+                                            modifier = Modifier.size(if (compact) 26.dp else 32.dp),
+                                            tint = palette.onAccent,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -898,6 +969,7 @@ private fun NowPlayingLandscape(
     modifier: Modifier = Modifier,
 ) {
     val accent = palette.accent
+    val loadingDescription = stringResource(R.string.audio_loading)
     val displayDurationSeconds = resolvedAudioDurationSeconds(state, current)
     val displayPositionSeconds =
         state.positionSeconds.coerceAtLeast(0L).let { position ->
@@ -1029,6 +1101,7 @@ private fun NowPlayingLandscape(
                             trackKey = state.currentEntry?.entryId ?: current.id,
                             positionSeconds = displayPositionSeconds,
                             durationSeconds = displayDurationSeconds,
+                            isLoading = state.isLoading,
                             accent = accent,
                             onSeek = { coordinator.seekTo(it) },
                         )
@@ -1091,6 +1164,7 @@ private fun NowPlayingLandscape(
                             }
                             IconButton(
                                 onClick = coordinator::togglePlayback,
+                                enabled = !state.isLoading,
                                 modifier =
                                     Modifier.size(playButtonSize).testTag("audio-control-play"),
                             ) {
@@ -1104,20 +1178,36 @@ private fun NowPlayingLandscape(
                                         Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        Icon(
-                                            painterResource(
-                                                if (state.isPlaying)
-                                                    LucideR.drawable.lucide_ic_pause
-                                                else LucideR.drawable.lucide_ic_play
-                                            ),
-                                            contentDescription =
-                                                stringResource(
-                                                    if (state.isPlaying) R.string.pause
-                                                    else R.string.play
+                                        if (state.isLoading) {
+                                            CircularProgressIndicator(
+                                                modifier =
+                                                    Modifier.size(if (compact) 28.dp else 38.dp)
+                                                        .testTag(
+                                                            "audio-now-playing-loading-control"
+                                                        )
+                                                        .semantics {
+                                                            contentDescription = loadingDescription
+                                                        },
+                                                color = palette.onAccent,
+                                                strokeWidth = 2.dp,
+                                            )
+                                        } else {
+                                            Icon(
+                                                painterResource(
+                                                    if (state.isPlaying)
+                                                        LucideR.drawable.lucide_ic_pause
+                                                    else LucideR.drawable.lucide_ic_play
                                                 ),
-                                            modifier = Modifier.size(if (compact) 28.dp else 38.dp),
-                                            tint = palette.onAccent,
-                                        )
+                                                contentDescription =
+                                                    stringResource(
+                                                        if (state.isPlaying) R.string.pause
+                                                        else R.string.play
+                                                    ),
+                                                modifier =
+                                                    Modifier.size(if (compact) 28.dp else 38.dp),
+                                                tint = palette.onAccent,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1241,14 +1331,16 @@ private fun resolvedAudioDurationSeconds(state: AudioPlayerState, current: Media
 
 /** Artwork-led seek control with a slim rail and an intentional, easy-to-grab handle. */
 @Composable
-private fun AudioProgressScrubber(
+internal fun AudioProgressScrubber(
     trackKey: String,
     positionSeconds: Long,
     durationSeconds: Long,
+    isLoading: Boolean,
     accent: Color,
     onSeek: (Long) -> Unit,
 ) {
     val duration = durationSeconds.coerceAtLeast(1L)
+    val loadingDescription = stringResource(R.string.audio_loading)
     var pendingPositionSeconds by remember(trackKey) { mutableStateOf<Long?>(null) }
     val position = (pendingPositionSeconds ?: positionSeconds).coerceIn(0L, duration)
     val fraction = position.toFloat() / duration.toFloat()
@@ -1256,69 +1348,83 @@ private fun AudioProgressScrubber(
         modifier = Modifier.fillMaxWidth().height(38.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val horizontalInset = 14.dp.toPx()
-            val centerY = size.height / 2f
-            val trackWidth = (size.width - horizontalInset * 2f).coerceAtLeast(0f)
-            val startX = horizontalInset
-            val endX = startX + trackWidth
-            val thumbX = startX + trackWidth * fraction
-            val trackStroke = 6.dp.toPx()
-
-            drawLine(
-                color = Color.White.copy(alpha = .13f),
-                start = Offset(startX, centerY),
-                end = Offset(endX, centerY),
-                strokeWidth = trackStroke,
-                cap = StrokeCap.Round,
+        if (isLoading) {
+            LinearProgressIndicator(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .height(6.dp)
+                        .testTag("audio-now-playing-loading")
+                        .semantics {
+                            contentDescription = loadingDescription
+                        },
+                color = accent,
+                trackColor = Color.White.copy(alpha = .13f),
             )
-            if (fraction > 0f) {
+        } else {
+            Canvas(Modifier.fillMaxSize()) {
+                val horizontalInset = 14.dp.toPx()
+                val centerY = size.height / 2f
+                val trackWidth = (size.width - horizontalInset * 2f).coerceAtLeast(0f)
+                val startX = horizontalInset
+                val endX = startX + trackWidth
+                val thumbX = startX + trackWidth * fraction
+                val trackStroke = 6.dp.toPx()
                 drawLine(
-                    color = accent,
+                    color = Color.White.copy(alpha = .13f),
                     start = Offset(startX, centerY),
-                    end = Offset(thumbX, centerY),
+                    end = Offset(endX, centerY),
                     strokeWidth = trackStroke,
                     cap = StrokeCap.Round,
                 )
+                if (fraction > 0f) {
+                    drawLine(
+                        color = accent,
+                        start = Offset(startX, centerY),
+                        end = Offset(thumbX, centerY),
+                        strokeWidth = trackStroke,
+                        cap = StrokeCap.Round,
+                    )
+                }
+                if (durationSeconds > 0) {
+                    drawCircle(
+                        color = accent,
+                        radius = 9.dp.toPx(),
+                        center = Offset(thumbX, centerY),
+                    )
+                }
             }
+            // Keep the standard semantics and drag/tap behavior while the canvas owns the visual.
+            // A disabled Material slider still draws its own large disabled rail, which makes the
+            // recovery state look like a different progress control while duration is unavailable.
             if (durationSeconds > 0) {
-                drawCircle(
-                    color = accent,
-                    radius = 9.dp.toPx(),
-                    center = Offset(thumbX, centerY),
+                Slider(
+                    value = position.toFloat(),
+                    onValueChange = {
+                        // Keep the gesture entirely local. Sending a seek command for every
+                        // pointer update makes the service rebuild/persist state repeatedly and
+                        // causes visible scrub lag.
+                        pendingPositionSeconds = it.toLong().coerceIn(0L, duration)
+                    },
+                    onValueChangeFinished = {
+                        val target = pendingPositionSeconds
+                        pendingPositionSeconds = null
+                        if (target != null && target != positionSeconds) onSeek(target)
+                    },
+                    valueRange = 0f..duration.toFloat(),
+                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                    colors =
+                        SliderDefaults.colors(
+                            thumbColor = Color.Transparent,
+                            activeTrackColor = Color.Transparent,
+                            inactiveTrackColor = Color.Transparent,
+                            activeTickColor = Color.Transparent,
+                            inactiveTickColor = Color.Transparent,
+                        ),
                 )
+            } else {
+                Spacer(Modifier.fillMaxWidth().height(38.dp))
             }
-        }
-        // Keep the standard semantics and drag/tap behavior while the canvas owns the visual.
-        // A disabled Material slider still draws its own large disabled rail, which makes the
-        // recovery state look like a different progress control while duration is unavailable.
-        if (durationSeconds > 0) {
-            Slider(
-                value = position.toFloat(),
-                onValueChange = {
-                    // Keep the gesture entirely local. Sending a seek command for every pointer
-                    // update makes the service rebuild/persist state repeatedly and causes visible
-                    // scrub lag.
-                    pendingPositionSeconds = it.toLong().coerceIn(0L, duration)
-                },
-                onValueChangeFinished = {
-                    val target = pendingPositionSeconds
-                    pendingPositionSeconds = null
-                    if (target != null && target != positionSeconds) onSeek(target)
-                },
-                valueRange = 0f..duration.toFloat(),
-                modifier = Modifier.fillMaxWidth().height(38.dp),
-                colors =
-                    SliderDefaults.colors(
-                        thumbColor = Color.Transparent,
-                        activeTrackColor = Color.Transparent,
-                        inactiveTrackColor = Color.Transparent,
-                        activeTickColor = Color.Transparent,
-                        inactiveTickColor = Color.Transparent,
-                    ),
-            )
-        } else {
-            Spacer(Modifier.fillMaxWidth().height(38.dp))
         }
     }
 }
