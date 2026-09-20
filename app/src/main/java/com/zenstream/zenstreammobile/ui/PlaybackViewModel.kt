@@ -19,6 +19,7 @@ import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -226,11 +227,18 @@ class PlaybackViewModel(
     private var backgrounded = false
     private var backgroundRecoveryJob: Job? = null
     private var backgroundRecoveryGeneration = 0L
+    private var mpvPlaybackSettings = MpvPlaybackSettings()
 
     init {
         subtitleSelectionInitialized = hasInitialSubtitleSelection
         viewModelScope.launch {
             val engineType = repository.playerEngine.first()
+            mpvPlaybackSettings =
+                MpvPlaybackSettings(
+                    videoOutput = repository.mpvVideoOutput.first(),
+                    profile = repository.mpvVideoProfile.first(),
+                    scaler = repository.mpvVideoScaler.first(),
+                )
             val timeDisplayMode = repository.playbackTimeDisplayMode.first()
             val autoplayNextEpisode = repository.autoplayNextEpisode.first()
             val watchHistoryEnabled =
@@ -282,7 +290,7 @@ class PlaybackViewModel(
     private fun createEngine(type: PlayerEngine) {
         engineJob?.cancel()
         playbackEngine?.release()
-        playbackEngine = createPlaybackEngine(type, appContext)
+        playbackEngine = createPlaybackEngine(type, appContext, mpvPlaybackSettings)
         engineJob = viewModelScope.launch {
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)

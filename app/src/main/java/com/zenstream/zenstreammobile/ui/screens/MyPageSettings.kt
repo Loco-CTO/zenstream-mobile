@@ -44,6 +44,9 @@ import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.data.PlaybackLanguageOption
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.SettingsUiState
@@ -186,6 +189,9 @@ internal fun MyPageSettingsContent(
     onMetadataLanguageChange: (String?) -> Unit,
     onPlaybackPreferenceChange: (String?, String?) -> Unit,
     onPlayerEngineChange: (PlayerEngine) -> Unit,
+    onMpvVideoOutputChange: (MpvVideoOutput) -> Unit,
+    onMpvVideoProfileChange: (MpvVideoProfile) -> Unit,
+    onMpvVideoScalerChange: (MpvVideoScaler) -> Unit,
     onShowDebugIconChange: (Boolean) -> Unit,
     onAutoplayNextEpisodeChange: (Boolean) -> Unit,
     onCheckForUpdatesOnStartupChange: (Boolean) -> Unit,
@@ -251,6 +257,28 @@ internal fun MyPageSettingsContent(
                 }
                 Spacer(Modifier.height(16.dp))
                 EngineSelector(state.playerEngine, onPlayerEngineChange)
+                if (state.playerEngine == PlayerEngine.MPV) {
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        text = stringResource(R.string.player_mpv_advanced_warning),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.player_mpv_settings_apply_note),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    MpvVideoOutputSelector(state.mpvVideoOutput, onMpvVideoOutputChange)
+                    Spacer(Modifier.height(8.dp))
+                    MpvVideoProfileSelector(state.mpvVideoProfile, onMpvVideoProfileChange)
+                    Spacer(Modifier.height(8.dp))
+                    MpvVideoScalerSelector(state.mpvVideoScaler, onMpvVideoScalerChange)
+                }
                 Spacer(Modifier.height(16.dp))
                 SettingSwitchRow(
                     title = stringResource(R.string.autoplay_next_episode),
@@ -536,6 +564,114 @@ private fun EngineSelector(selected: PlayerEngine, onChange: (PlayerEngine) -> U
         )
     }
 }
+
+@Composable
+private fun MpvVideoOutputSelector(
+    selected: MpvVideoOutput,
+    onChange: (MpvVideoOutput) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    SettingChoiceRow(
+        title = stringResource(R.string.player_mpv_video_output),
+        supporting = mpvVideoOutputLabel(selected),
+        onClick = { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_video_output_gpu)) },
+            onClick = {
+                onChange(MpvVideoOutput.GPU)
+                expanded = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_video_output_gpu_next)) },
+            onClick = {
+                onChange(MpvVideoOutput.GPU_NEXT)
+                expanded = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun MpvVideoProfileSelector(
+    selected: MpvVideoProfile,
+    onChange: (MpvVideoProfile) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    SettingChoiceRow(
+        title = stringResource(R.string.player_mpv_profile),
+        supporting = mpvVideoProfileLabel(selected),
+        onClick = { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_profile_fast)) },
+            onClick = {
+                onChange(MpvVideoProfile.FAST)
+                expanded = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_profile_gpu_hq)) },
+            onClick = {
+                onChange(MpvVideoProfile.GPU_HQ)
+                expanded = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun MpvVideoScalerSelector(
+    selected: MpvVideoScaler,
+    onChange: (MpvVideoScaler) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    SettingChoiceRow(
+        title = stringResource(R.string.player_mpv_scaler),
+        supporting = mpvVideoScalerLabel(selected),
+        onClick = { expanded = true },
+    )
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_scaler_bilinear)) },
+            onClick = {
+                onChange(MpvVideoScaler.BILINEAR)
+                expanded = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_mpv_scaler_lanczos)) },
+            onClick = {
+                onChange(MpvVideoScaler.LANCZOS)
+                expanded = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun mpvVideoOutputLabel(value: MpvVideoOutput): String =
+    when (value) {
+        MpvVideoOutput.GPU -> stringResource(R.string.player_mpv_video_output_gpu)
+        MpvVideoOutput.GPU_NEXT -> stringResource(R.string.player_mpv_video_output_gpu_next)
+    }
+
+@Composable
+private fun mpvVideoProfileLabel(value: MpvVideoProfile): String =
+    when (value) {
+        MpvVideoProfile.FAST -> stringResource(R.string.player_mpv_profile_fast)
+        MpvVideoProfile.GPU_HQ -> stringResource(R.string.player_mpv_profile_gpu_hq)
+    }
+
+@Composable
+private fun mpvVideoScalerLabel(value: MpvVideoScaler): String =
+    when (value) {
+        MpvVideoScaler.BILINEAR -> stringResource(R.string.player_mpv_scaler_bilinear)
+        MpvVideoScaler.LANCZOS -> stringResource(R.string.player_mpv_scaler_lanczos)
+    }
 
 @Composable
 private fun SettingChoiceRow(

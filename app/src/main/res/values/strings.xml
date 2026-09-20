@@ -182,6 +182,17 @@
     <string name="player_engine">Player engine</string>
     <string name="player_engine_media3">Media3</string>
     <string name="player_engine_mpv">MPV</string>
+    <string name="player_mpv_advanced_warning">Advanced MPV settings. Do not change these unless you know what you are doing.</string>
+    <string name="player_mpv_settings_apply_note">Changes apply the next time you open a video player.</string>
+    <string name="player_mpv_video_output">MPV video output</string>
+    <string name="player_mpv_video_output_gpu">GPU (stable)</string>
+    <string name="player_mpv_video_output_gpu_next">GPU Next (advanced)</string>
+    <string name="player_mpv_profile">MPV profile</string>
+    <string name="player_mpv_profile_fast">Fast (recommended)</string>
+    <string name="player_mpv_profile_gpu_hq">GPU high quality (advanced)</string>
+    <string name="player_mpv_scaler">MPV scaler</string>
+    <string name="player_mpv_scaler_bilinear">Bilinear (recommended)</string>
+    <string name="player_mpv_scaler_lanczos">Lanczos (advanced)</string>
     <string name="player_show_debug_icon">Show debug icon in player</string>
     <string name="player_show_debug_icon_description">Show playback diagnostics in the player controls.</string>
     <string name="autoplay_next_episode">Autoplay next episode</string>

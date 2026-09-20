@@ -11,6 +11,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
@@ -25,11 +26,11 @@ internal val mpvCaptionOptions =
         "secondary-sid" to "no",
     )
 
-internal val mpvVideoRenderingOptions =
+internal fun mpvVideoRenderingOptions(settings: MpvPlaybackSettings = MpvPlaybackSettings()) =
     listOf(
-        "profile" to "fast",
-        "scale" to "lanczos",
-        "cscale" to "lanczos",
+        "profile" to settings.profile.storageValue,
+        "scale" to settings.scaler.storageValue,
+        "cscale" to settings.scaler.storageValue,
     )
 
 internal class MpvSurfaceLifecycle {
@@ -310,7 +311,10 @@ class Media3PlaybackEngine : PlaybackEngine {
 private fun redactPlaybackUrl(value: String): String =
     value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
 
-class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
+class MpvPlaybackEngine(
+    private val context: Context,
+    private val settings: MpvPlaybackSettings = MpvPlaybackSettings(),
+) : PlaybackEngine {
     private val _state = MutableStateFlow(EngineState())
     override val state: StateFlow<EngineState> = _state
     private val handler = Handler(Looper.getMainLooper())
@@ -394,7 +398,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
             val configDir = context.filesDir.resolve("mpv-config").apply { mkdirs() }
             val cacheDir = context.cacheDir.resolve("mpv-cache").apply { mkdirs() }
             view =
-                MpvSurfaceView(context) { playWhenReady }
+                MpvSurfaceView(context, settings) { playWhenReady }
                     .also {
                         it.initialize(configDir.absolutePath, cacheDir.absolutePath)
                     }
@@ -477,18 +481,17 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
 
     private class MpvSurfaceView(
         context: Context,
+        private val settings: MpvPlaybackSettings,
         private val playWhenReady: () -> Boolean,
     ) : BaseMPVView(context, null) {
         private val lifecycle = MpvSurfaceLifecycle()
         private var destroyAfterSurfaceTeardown = false
 
         override fun initOptions() {
-            // Keep the fast profile's playback tuning while overriding its
-            // bilinear scaler for sharper upscaling on larger displays.
-            mpvVideoRenderingOptions.forEach { (name, value) ->
+            mpvVideoRenderingOptions(settings).forEach { (name, value) ->
                 MPVLib.setOptionString(name, value)
             }
-            MPVLib.setOptionString("vo", "gpu-next")
+            MPVLib.setOptionString("vo", settings.videoOutput.storageValue)
             MPVLib.setOptionString("ao", "aaudio")
             MPVLib.setOptionString("gpu-context", "android")
             MPVLib.setOptionString("opengl-es", "yes")
@@ -500,7 +503,7 @@ class MpvPlaybackEngine(private val context: Context) : PlaybackEngine {
         }
 
         override fun postInitOptions() {
-            setVo("gpu-next")
+            setVo(settings.videoOutput.storageValue)
         }
 
         override fun observeProperties() = Unit
@@ -556,8 +559,12 @@ private val MPV_READY_EVENTS =
         MPVLib.MpvEvent.MPV_EVENT_AUDIO_RECONFIG,
     )
 
-fun createPlaybackEngine(engine: PlayerEngine, context: Context): PlaybackEngine =
+fun createPlaybackEngine(
+    engine: PlayerEngine,
+    context: Context,
+    mpvPlaybackSettings: MpvPlaybackSettings = MpvPlaybackSettings(),
+): PlaybackEngine =
     when (engine) {
         PlayerEngine.MEDIA3 -> Media3PlaybackEngine()
-        PlayerEngine.MPV -> MpvPlaybackEngine(context)
+        PlayerEngine.MPV -> MpvPlaybackEngine(context, mpvPlaybackSettings)
     }

@@ -7,6 +7,9 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SettingsDataSource
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +25,9 @@ data class SettingsUiState(
     val interfaceLocaleSaving: Boolean = false,
     val interfaceLocaleSaveError: Boolean = false,
     val playerEngine: PlayerEngine = PlayerEngine.MPV,
+    val mpvVideoOutput: MpvVideoOutput = MpvVideoOutput.GPU,
+    val mpvVideoProfile: MpvVideoProfile = MpvVideoProfile.FAST,
+    val mpvVideoScaler: MpvVideoScaler = MpvVideoScaler.BILINEAR,
     val showDebugIcon: Boolean = false,
     val autoplayNextEpisode: Boolean = true,
     val checkForUpdatesOnStartup: Boolean = true,
@@ -70,6 +76,21 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
         viewModelScope.launch {
             repository.playerEngine.collectLatest { engine ->
                 _uiState.value = _uiState.value.copy(playerEngine = engine)
+            }
+        }
+        viewModelScope.launch {
+            repository.mpvVideoOutput.collectLatest { output ->
+                _uiState.value = _uiState.value.copy(mpvVideoOutput = output)
+            }
+        }
+        viewModelScope.launch {
+            repository.mpvVideoProfile.collectLatest { profile ->
+                _uiState.value = _uiState.value.copy(mpvVideoProfile = profile)
+            }
+        }
+        viewModelScope.launch {
+            repository.mpvVideoScaler.collectLatest { scaler ->
+                _uiState.value = _uiState.value.copy(mpvVideoScaler = scaler)
             }
         }
         viewModelScope.launch {
@@ -140,6 +161,18 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
 
     fun setPlayerEngine(engine: PlayerEngine) {
         viewModelScope.launch { repository.savePlayerEngine(engine) }
+    }
+
+    fun setMpvVideoOutput(output: MpvVideoOutput) {
+        viewModelScope.launch { repository.saveMpvVideoOutput(output) }
+    }
+
+    fun setMpvVideoProfile(profile: MpvVideoProfile) {
+        viewModelScope.launch { repository.saveMpvVideoProfile(profile) }
+    }
+
+    fun setMpvVideoScaler(scaler: MpvVideoScaler) {
+        viewModelScope.launch { repository.saveMpvVideoScaler(scaler) }
     }
 
     fun setShowDebugIcon(enabled: Boolean) {
