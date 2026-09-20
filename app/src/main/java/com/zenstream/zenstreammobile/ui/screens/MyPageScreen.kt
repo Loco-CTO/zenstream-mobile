@@ -290,6 +290,9 @@ fun MyPageScreen(
                             onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
                             onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
                             onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                            onMpvVideoOutputChange = settingsViewModel::setMpvVideoOutput,
+                            onMpvVideoProfileChange = settingsViewModel::setMpvVideoProfile,
+                            onMpvVideoScalerChange = settingsViewModel::setMpvVideoScaler,
                             onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
                             onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
                             onCheckForUpdatesOnStartupChange =

@@ -17,3 +17,7 @@ local.properties
 .kotlin/*
 app/release/*
 inspec/*
+
+# Agent guidance is maintained in the workspace-root AGENTS.md.
+AGENTS.md
+agents.md

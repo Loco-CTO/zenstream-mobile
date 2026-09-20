@@ -16,7 +16,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.BuildConfig
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.InterfaceLocaleMode
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
+import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.ui.SettingsUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -43,6 +48,56 @@ class MyPageSettingsTest {
         composeRule.onNodeWithText(context.getString(R.string.updates_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
         composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Player, selected) }
+    }
+
+    @Test
+    fun mpvAdvancedSettingsAreShownOnlyForMpvAndCanBeChanged() {
+        var state by
+            mutableStateOf(
+                SettingsUiState(
+                    playerEngine = PlayerEngine.MPV,
+                    mpvVideoOutput = MpvVideoOutput.GPU,
+                    mpvVideoProfile = MpvVideoProfile.FAST,
+                    mpvVideoScaler = MpvVideoScaler.BILINEAR,
+                )
+            )
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageSettingsContent(
+                    section = MyPageSettingsSection.Player,
+                    state = state,
+                    onInterfaceLocaleChange = {},
+                    onMetadataLanguageChange = {},
+                    onPlaybackPreferenceChange = { _, _ -> },
+                    onPlayerEngineChange = { state = state.copy(playerEngine = it) },
+                    onMpvVideoOutputChange = { state = state.copy(mpvVideoOutput = it) },
+                    onMpvVideoProfileChange = { state = state.copy(mpvVideoProfile = it) },
+                    onMpvVideoScalerChange = { state = state.copy(mpvVideoScaler = it) },
+                    onShowDebugIconChange = {},
+                    onAutoplayNextEpisodeChange = {},
+                    onCheckForUpdatesOnStartupChange = {},
+                    onWatchHistoryChange = {},
+                    onClearWatchHistory = {},
+                    onSubtitleChange = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val outputTitle = context.getString(R.string.player_mpv_video_output)
+        val gpuNext = context.getString(R.string.player_mpv_video_output_gpu_next)
+        composeRule.onNodeWithText(outputTitle).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(gpuNext).performClick()
+        composeRule.runOnIdle { assertEquals(MpvVideoOutput.GPU_NEXT, state.mpvVideoOutput) }
+        composeRule
+            .onNodeWithText(context.getString(R.string.player_mpv_advanced_warning))
+            .assertIsDisplayed()
+
+        composeRule.runOnIdle { state = state.copy(playerEngine = PlayerEngine.MEDIA3) }
+        composeRule.onNodeWithText(outputTitle).assertDoesNotExist()
+        composeRule
+            .onNodeWithText(context.getString(R.string.player_mpv_advanced_warning))
+            .assertDoesNotExist()
     }
 
     @Test

@@ -5,6 +5,9 @@ import com.zenstream.zenstreammobile.data.InterfaceLocalePreference
 import com.zenstream.zenstreammobile.data.MetadataPreference
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SettingsDataSource
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import kotlinx.coroutines.CompletableDeferred
@@ -147,6 +150,25 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun mpvRenderingSettingsArePersistedAndReflectedInState() = runTest {
+        val source = FakeSettingsDataSource()
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        viewModel.setMpvVideoOutput(MpvVideoOutput.GPU_NEXT)
+        viewModel.setMpvVideoProfile(MpvVideoProfile.GPU_HQ)
+        viewModel.setMpvVideoScaler(MpvVideoScaler.LANCZOS)
+        advanceUntilIdle()
+
+        assertEquals(MpvVideoOutput.GPU_NEXT, source.mpvVideoOutput.value)
+        assertEquals(MpvVideoProfile.GPU_HQ, source.mpvVideoProfile.value)
+        assertEquals(MpvVideoScaler.LANCZOS, source.mpvVideoScaler.value)
+        assertEquals(MpvVideoOutput.GPU_NEXT, viewModel.uiState.value.mpvVideoOutput)
+        assertEquals(MpvVideoProfile.GPU_HQ, viewModel.uiState.value.mpvVideoProfile)
+        assertEquals(MpvVideoScaler.LANCZOS, viewModel.uiState.value.mpvVideoScaler)
+    }
+
+    @Test
     fun subtitleBottomSpacingUpdatesAndUsesTheExistingSavePath() = runTest {
         val saved = mutableListOf<SubtitleStyle>()
         val source =
@@ -170,6 +192,9 @@ class SettingsViewModelTest {
 private class FakeSettingsDataSource : SettingsDataSource {
     override val interfaceLocaleMode = MutableStateFlow(InterfaceLocaleMode.Automatic)
     override val playerEngine = MutableStateFlow(PlayerEngine.MEDIA3)
+    override val mpvVideoOutput = MutableStateFlow(MpvVideoOutput.GPU)
+    override val mpvVideoProfile = MutableStateFlow(MpvVideoProfile.FAST)
+    override val mpvVideoScaler = MutableStateFlow(MpvVideoScaler.BILINEAR)
     override val showDebugIcon = MutableStateFlow(false)
     override val autoplayNextEpisode = MutableStateFlow(true)
     override val checkForUpdatesOnStartup = MutableStateFlow(true)
@@ -194,6 +219,18 @@ private class FakeSettingsDataSource : SettingsDataSource {
 
     override suspend fun savePlayerEngine(engine: PlayerEngine) {
         playerEngine.value = engine
+    }
+
+    override suspend fun saveMpvVideoOutput(output: MpvVideoOutput) {
+        mpvVideoOutput.value = output
+    }
+
+    override suspend fun saveMpvVideoProfile(profile: MpvVideoProfile) {
+        mpvVideoProfile.value = profile
+    }
+
+    override suspend fun saveMpvVideoScaler(scaler: MpvVideoScaler) {
+        mpvVideoScaler.value = scaler
     }
 
     override suspend fun saveShowDebugIcon(enabled: Boolean) {

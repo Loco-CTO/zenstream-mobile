@@ -3,6 +3,9 @@ package com.zenstream.zenstreammobile.data
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
@@ -94,19 +97,36 @@ class SessionStoreTest {
         val store =
             SessionStore(
                 InstrumentationRegistry.getInstrumentation().targetContext,
-                dataStoreName = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_engine",
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_engine_${UUID.randomUUID()}",
             )
         store.clearAll()
+        assertEquals(PlayerEngine.MPV, store.playerEngine.first())
+        assertEquals(MpvVideoOutput.GPU, store.mpvVideoOutput.first())
+        assertEquals(MpvVideoProfile.FAST, store.mpvVideoProfile.first())
+        assertEquals(MpvVideoScaler.BILINEAR, store.mpvVideoScaler.first())
         store.savePlayerEngine(PlayerEngine.MPV)
 
         assertEquals(PlayerEngine.MPV, store.playerEngine.first())
+        store.saveMpvVideoOutput(MpvVideoOutput.GPU_NEXT)
+        store.saveMpvVideoProfile(MpvVideoProfile.GPU_HQ)
+        store.saveMpvVideoScaler(MpvVideoScaler.LANCZOS)
+        assertEquals(MpvVideoOutput.GPU_NEXT, store.mpvVideoOutput.first())
+        assertEquals(MpvVideoProfile.GPU_HQ, store.mpvVideoProfile.first())
+        assertEquals(MpvVideoScaler.LANCZOS, store.mpvVideoScaler.first())
         store.savePlayerEngine(PlayerEngine.MEDIA3)
         assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
 
         store.clearSession()
         assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
+        assertEquals(MpvVideoOutput.GPU_NEXT, store.mpvVideoOutput.first())
+        assertEquals(MpvVideoProfile.GPU_HQ, store.mpvVideoProfile.first())
+        assertEquals(MpvVideoScaler.LANCZOS, store.mpvVideoScaler.first())
         store.clearAll()
         assertEquals(PlayerEngine.MEDIA3, store.playerEngine.first())
+        assertEquals(MpvVideoOutput.GPU_NEXT, store.mpvVideoOutput.first())
+        assertEquals(MpvVideoProfile.GPU_HQ, store.mpvVideoProfile.first())
+        assertEquals(MpvVideoScaler.LANCZOS, store.mpvVideoScaler.first())
         store.savePlayerEngine(PlayerEngine.MPV)
     }
 

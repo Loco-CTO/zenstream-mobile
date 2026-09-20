@@ -16,6 +16,9 @@ import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SortOrder
@@ -69,6 +72,9 @@ class SessionStore(
         val interfaceLocaleMode = stringPreferencesKey("interface_locale_mode")
         val metadataLanguage = stringPreferencesKey("metadata_language")
         val playerEngine = stringPreferencesKey("player_engine")
+        val mpvVideoOutput = stringPreferencesKey("mpv_video_output")
+        val mpvVideoProfile = stringPreferencesKey("mpv_video_profile")
+        val mpvVideoScaler = stringPreferencesKey("mpv_video_scaler")
         val playbackTimeDisplayMode = stringPreferencesKey("playback_time_display_mode")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
         val autoplayNextEpisode = booleanPreferencesKey("autoplay_next_episode")
@@ -113,6 +119,21 @@ class SessionStore(
                 runCatching { PlayerEngine.valueOf(value[Keys.playerEngine].orEmpty()) }
                     .getOrDefault(PlayerEngine.MPV)
             }
+            .distinctUntilChanged()
+
+    val mpvVideoOutput: Flow<MpvVideoOutput> =
+        dataStore.data
+            .map { MpvVideoOutput.fromStorageValue(it[Keys.mpvVideoOutput]) }
+            .distinctUntilChanged()
+
+    val mpvVideoProfile: Flow<MpvVideoProfile> =
+        dataStore.data
+            .map { MpvVideoProfile.fromStorageValue(it[Keys.mpvVideoProfile]) }
+            .distinctUntilChanged()
+
+    val mpvVideoScaler: Flow<MpvVideoScaler> =
+        dataStore.data
+            .map { MpvVideoScaler.fromStorageValue(it[Keys.mpvVideoScaler]) }
             .distinctUntilChanged()
 
     val playbackTimeDisplayMode: Flow<PlaybackTimeDisplayMode> =
@@ -237,6 +258,18 @@ class SessionStore(
 
     suspend fun savePlayerEngine(engine: PlayerEngine) {
         dataStore.edit { it[Keys.playerEngine] = engine.name }
+    }
+
+    suspend fun saveMpvVideoOutput(output: MpvVideoOutput) {
+        dataStore.edit { it[Keys.mpvVideoOutput] = output.storageValue }
+    }
+
+    suspend fun saveMpvVideoProfile(profile: MpvVideoProfile) {
+        dataStore.edit { it[Keys.mpvVideoProfile] = profile.storageValue }
+    }
+
+    suspend fun saveMpvVideoScaler(scaler: MpvVideoScaler) {
+        dataStore.edit { it[Keys.mpvVideoScaler] = scaler.storageValue }
     }
 
     suspend fun savePlaybackTimeDisplayMode(mode: PlaybackTimeDisplayMode) {

@@ -5,6 +5,10 @@ import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -58,14 +62,39 @@ class PlayerEngineTest {
     }
 
     @Test
-    fun mpvRenderingOverridesFastProfileScalingQuality() {
+    fun mpvDefaultsUseStableLowCostVideoRendering() {
+        val settings = MpvPlaybackSettings()
+
+        assertEquals(MpvVideoOutput.GPU, settings.videoOutput)
+        assertEquals(MpvVideoProfile.FAST, settings.profile)
+        assertEquals(MpvVideoScaler.BILINEAR, settings.scaler)
         assertEquals(
             listOf(
                 "profile" to "fast",
+                "scale" to "bilinear",
+                "cscale" to "bilinear",
+            ),
+            mpvVideoRenderingOptions(settings),
+        )
+    }
+
+    @Test
+    fun mpvAdvancedSettingsMapToNativeOptions() {
+        val settings =
+            MpvPlaybackSettings(
+                videoOutput = MpvVideoOutput.GPU_NEXT,
+                profile = MpvVideoProfile.GPU_HQ,
+                scaler = MpvVideoScaler.LANCZOS,
+            )
+
+        assertEquals("gpu-next", settings.videoOutput.storageValue)
+        assertEquals(
+            listOf(
+                "profile" to "gpu-hq",
                 "scale" to "lanczos",
                 "cscale" to "lanczos",
             ),
-            mpvVideoRenderingOptions,
+            mpvVideoRenderingOptions(settings),
         )
     }
 

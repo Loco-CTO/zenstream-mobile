@@ -14,6 +14,9 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MpvVideoOutput
+import com.zenstream.zenstreammobile.model.MpvVideoProfile
+import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.MusicAlbumData
 import com.zenstream.zenstreammobile.model.MusicArtistData
 import com.zenstream.zenstreammobile.model.PagedFavorites
@@ -224,6 +227,9 @@ interface CalendarDataSource : CatalogRefreshSource {
 interface SettingsDataSource {
     val interfaceLocaleMode: Flow<InterfaceLocaleMode>
     val playerEngine: Flow<PlayerEngine>
+    val mpvVideoOutput: Flow<MpvVideoOutput>
+    val mpvVideoProfile: Flow<MpvVideoProfile>
+    val mpvVideoScaler: Flow<MpvVideoScaler>
     val showDebugIcon: Flow<Boolean>
     val autoplayNextEpisode: Flow<Boolean>
     val checkForUpdatesOnStartup: Flow<Boolean>
@@ -236,6 +242,12 @@ interface SettingsDataSource {
     suspend fun saveInterfaceLocaleMode(mode: InterfaceLocaleMode): InterfaceLocalePreference
 
     suspend fun savePlayerEngine(engine: PlayerEngine)
+
+    suspend fun saveMpvVideoOutput(output: MpvVideoOutput)
+
+    suspend fun saveMpvVideoProfile(profile: MpvVideoProfile)
+
+    suspend fun saveMpvVideoScaler(scaler: MpvVideoScaler)
 
     suspend fun saveShowDebugIcon(enabled: Boolean)
 
@@ -296,6 +308,9 @@ class CatalogRepository(
     override val interfaceLocaleMode: Flow<InterfaceLocaleMode> = sessionStore.interfaceLocaleMode
     val metadataLanguage: Flow<String> = sessionStore.metadataLanguage
     override val playerEngine: Flow<PlayerEngine> = sessionStore.playerEngine
+    override val mpvVideoOutput: Flow<MpvVideoOutput> = sessionStore.mpvVideoOutput
+    override val mpvVideoProfile: Flow<MpvVideoProfile> = sessionStore.mpvVideoProfile
+    override val mpvVideoScaler: Flow<MpvVideoScaler> = sessionStore.mpvVideoScaler
     val playbackTimeDisplayMode: Flow<PlaybackTimeDisplayMode> =
         sessionStore.playbackTimeDisplayMode
     override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
@@ -738,6 +753,15 @@ class CatalogRepository(
 
     override suspend fun savePlayerEngine(engine: PlayerEngine) =
         sessionStore.savePlayerEngine(engine)
+
+    override suspend fun saveMpvVideoOutput(output: MpvVideoOutput) =
+        sessionStore.saveMpvVideoOutput(output)
+
+    override suspend fun saveMpvVideoProfile(profile: MpvVideoProfile) =
+        sessionStore.saveMpvVideoProfile(profile)
+
+    override suspend fun saveMpvVideoScaler(scaler: MpvVideoScaler) =
+        sessionStore.saveMpvVideoScaler(scaler)
 
     suspend fun savePlaybackTimeDisplayMode(mode: PlaybackTimeDisplayMode) =
         sessionStore.savePlaybackTimeDisplayMode(mode)
