@@ -1391,19 +1391,18 @@ class AudioPlaybackService : MediaLibraryService() {
     private suspend fun detachAudioSessionIfCurrent(
         commandSequence: Long,
         teardownGeneration: Long,
-    ): Boolean =
-        queueCommandMutex.withLock {
-            if (!transactionController.canFinalizeTeardown(commandSequence, teardownGeneration)) {
-                Log.i(
-                    AUDIO_TAG,
-                    "audio session teardown skipped sequence=$commandSequence generation=$teardownGeneration",
-                )
-                return@withLock false
-            }
-            detachAudioSessionAndStopService()
-            stopSelf()
-            true
+    ): Boolean = queueCommandMutex.withLock {
+        if (!transactionController.canFinalizeTeardown(commandSequence, teardownGeneration)) {
+            Log.i(
+                AUDIO_TAG,
+                "audio session teardown skipped sequence=$commandSequence generation=$teardownGeneration",
+            )
+            return@withLock false
         }
+        detachAudioSessionAndStopService()
+        stopSelf()
+        true
+    }
 
     private fun detachAudioSessionAndStopService() {
         if (sessionDetached) return
@@ -2382,6 +2381,7 @@ class AudioPlaybackService : MediaLibraryService() {
         private const val AUTO_PAGE_SIZE = 100
         private const val AUTO_MAX_ALBUMS = 1_000
         private const val AUTO_ARTIST_LIMIT = 100
+
         private fun primaryArtist(item: CatalogMediaItem): String =
             item.artistCredits.firstOrNull()?.name
                 ?: item.albumArtist
