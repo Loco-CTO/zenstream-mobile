@@ -67,6 +67,7 @@ import com.zenstream.zenstreammobile.ui.MusicAlbumViewModel
 import com.zenstream.zenstreammobile.ui.MusicArtistViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.AudioTrackRow
+import com.zenstream.zenstreammobile.ui.components.ExpandableDescription
 import com.zenstream.zenstreammobile.ui.components.MusicArtistCard
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
@@ -466,12 +467,10 @@ private fun AlbumDetails(album: MediaItem) {
             }
         }
         album.overview?.takeIf(String::isNotBlank)?.let {
-            Text(
-                it,
+            ExpandableDescription(
+                description = it,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyLarge,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -845,12 +844,10 @@ private fun ArtistDetails(artist: MediaItem) {
             }
         }
         artist.overview?.takeIf(String::isNotBlank)?.let {
-            Text(
-                it,
+            ExpandableDescription(
+                description = it,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyLarge,
-                maxLines = 7,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
