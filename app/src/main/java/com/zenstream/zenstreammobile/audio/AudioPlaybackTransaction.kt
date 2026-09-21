@@ -66,6 +66,10 @@ internal class AudioPlaybackTransactionController {
         request.generation == nextGeneration && request.entryId == currentEntryId
 
     @Synchronized
+    fun canFinalizeTeardown(commandSequence: Long, teardownGeneration: Long): Boolean =
+        teardownGeneration == nextGeneration && acceptsCommand(commandSequence)
+
+    @Synchronized
     fun registerLoad(job: Job) {
         activeLoadJob = job
     }
