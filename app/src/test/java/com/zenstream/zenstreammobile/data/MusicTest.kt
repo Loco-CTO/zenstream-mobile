@@ -60,4 +60,22 @@ class MusicTest {
         assertEquals("artist-a", credits.first().id)
         assertEquals("Artist A & Artist B", formatArtistCredits(credits))
     }
+
+    @Test
+    fun albumCreditsFallBackToArtistsAndContributingArtists() {
+        val album =
+            MediaItem(
+                id = "album-2",
+                name = "Album",
+                type = "MusicAlbum",
+                albumArtist = "Artist A",
+                artists = listOf("Artist A"),
+                contributingArtists = listOf("Artist B"),
+            )
+
+        val credits = artistCreditsForAlbum(album)
+
+        assertEquals(listOf("Artist A", "Artist B"), credits.map { it.name })
+        assertEquals("Artist A, Artist B", formatArtistCredits(credits))
+    }
 }

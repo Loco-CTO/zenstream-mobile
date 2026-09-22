@@ -44,6 +44,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.artistCreditSeparator
 import com.zenstream.zenstreammobile.data.artistCreditsForAlbum
 import com.zenstream.zenstreammobile.data.artistCreditsForTrack
+import com.zenstream.zenstreammobile.data.formatArtistCredits
 import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -59,7 +60,10 @@ fun AudioCard(
 ) {
     val isMusicAlbum = item.type.equals("MusicAlbum", ignoreCase = true)
     val releaseYear = musicReleaseYear(item)
-    val albumArtist = musicAlbumArtist(item)
+    val albumArtist =
+        if (isMusicAlbum) {
+            formatArtistCredits(artistCreditsForAlbum(item)).takeIf(String::isNotBlank)
+        } else null
     val albumType =
         item.albumType?.takeIf(String::isNotBlank) ?: stringResource(R.string.music_album)
     val albumMetadata = listOfNotNull(releaseYear, albumType).joinToString(" · ")
