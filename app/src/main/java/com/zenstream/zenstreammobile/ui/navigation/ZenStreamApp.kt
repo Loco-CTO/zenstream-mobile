@@ -81,7 +81,10 @@ import com.zenstream.zenstreammobile.audio.AudioCommandResult
 import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.NativeAppDeepLink
+import com.zenstream.zenstreammobile.data.NativeAppDestination
 import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -153,7 +156,7 @@ fun ZenStreamApp(
         appState.loading -> LoadingScreen()
         appState.showSetup ->
             ServerSetupScreen(
-                initialServerUrl = appState.orchestratorUrl,
+                initialServerUrl = appState.pendingDeepLink?.serverUrl ?: appState.orchestratorUrl,
                 onConfigured = appViewModel::configureServer,
             )
 
@@ -162,6 +165,8 @@ fun ZenStreamApp(
             MainScaffold(
                 repository = repository,
                 session = appState.session,
+                pendingDeepLink = appState.pendingDeepLink,
+                onNativeAppLinkConsumed = appViewModel::consumeNativeAppLink,
                 onLogout = appViewModel::logout,
                 onPasswordChanged = appViewModel::passwordChanged,
                 onPickAvatar = onPickAvatar,
@@ -178,6 +183,26 @@ fun ZenStreamApp(
             onOpenRelease = {
                 appViewModel.dismissAvailableUpdate()
                 openReleasePage(context, update.releaseUrl)
+            },
+        )
+    }
+
+    appState.serverSwitchRequest?.let { request ->
+        AlertDialog(
+            onDismissRequest = appViewModel::cancelNativeAppServerSwitch,
+            title = { Text(stringResource(R.string.native_app_switch_title)) },
+            text = {
+                Text(stringResource(R.string.native_app_switch_message, request.serverUrl))
+            },
+            confirmButton = {
+                TextButton(onClick = appViewModel::confirmNativeAppServerSwitch) {
+                    Text(stringResource(R.string.native_app_switch_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = appViewModel::cancelNativeAppServerSwitch) {
+                    Text(stringResource(R.string.cancel))
+                }
             },
         )
     }
@@ -226,6 +251,8 @@ private fun LoadingScreen() {
 private fun MainScaffold(
     repository: CatalogRepository,
     session: AuthSession,
+    pendingDeepLink: NativeAppDeepLink?,
+    onNativeAppLinkConsumed: () -> Unit,
     onLogout: () -> Unit,
     onPasswordChanged: () -> Unit,
     onPickAvatar: () -> Unit,
@@ -271,6 +298,14 @@ private fun MainScaffold(
         }
     }
     val navController = rememberNavController()
+    LaunchedEffect(pendingDeepLink, session.token) {
+        val link = pendingDeepLink ?: return@LaunchedEffect
+        if (!sameNativeAppServer(session.serverUrl, link.serverUrl)) {
+            return@LaunchedEffect
+        }
+        navigateToNativeAppLink(navController, link)
+        onNativeAppLinkConsumed()
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = routeName(backStackEntry?.destination?.route) ?: HOME
     val mainRoute =
@@ -732,6 +767,23 @@ private fun queueAddedMessage(context: Context, trackCount: Int): String =
 private fun navigateToDetail(navController: androidx.navigation.NavHostController, itemId: String) {
     navController.navigate("detail/${Uri.encode(itemId)}") {
         launchSingleTop = true
+    }
+}
+
+private fun navigateToNativeAppLink(
+    navController: androidx.navigation.NavHostController,
+    link: NativeAppDeepLink,
+) {
+    when (val destination = link.destination) {
+        NativeAppDestination.Home -> navigateToMainDestination(navController, HOME)
+        NativeAppDestination.Library -> navigateToMainDestination(navController, LIBRARY)
+        NativeAppDestination.Favorites -> navigateToMainDestination(navController, FAVORITES)
+        NativeAppDestination.Notifications ->
+            navigateToMainDestination(navController, NOTIFICATIONS)
+        is NativeAppDestination.Album ->
+            navigateToAlbum(navController, destination.albumId, destination.trackId)
+        is NativeAppDestination.Artist -> navigateToArtist(navController, destination.artistId)
+        is NativeAppDestination.Detail -> navigateToDetail(navController, destination.itemId)
     }
 }
 

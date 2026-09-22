@@ -15,6 +15,9 @@
     <string name="login">ログイン</string>
     <string name="login_failed">ログインできませんでした。ユーザー名とパスワードを確認してください。</string>
     <string name="change_server">サーバーを変更</string>
+    <string name="native_app_switch_title">サーバーを変更しますか？</string>
+    <string name="native_app_switch_message">このリンクは %1$s 用です。サーバーを変更して、もう一度ログインしますか？</string>
+    <string name="native_app_switch_confirm">サーバーを変更</string>
     <string name="home">ホーム</string>
     <string name="search">検索</string>
     <string name="library">ライブラリ</string>

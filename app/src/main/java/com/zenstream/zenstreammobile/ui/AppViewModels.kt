@@ -10,10 +10,13 @@ import com.zenstream.zenstreammobile.data.FavoritesDataSource
 import com.zenstream.zenstreammobile.data.GitHubUpdateChecker
 import com.zenstream.zenstreammobile.data.HomeDataSource
 import com.zenstream.zenstreammobile.data.LibraryDataSource
+import com.zenstream.zenstreammobile.data.NativeAppDeepLink
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
+import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
+import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
@@ -58,6 +61,8 @@ data class AppUiState(
     val session: AuthSession? = null,
     val locale: String = com.zenstream.zenstreammobile.data.ENGLISH_LOCALE,
     val availableUpdate: AppUpdate? = null,
+    val pendingDeepLink: NativeAppDeepLink? = null,
+    val serverSwitchRequest: NativeAppDeepLink? = null,
 ) {
     val showSetup
         get() = !loading && (orchestratorUrl.isNullOrBlank() || serverUrl.isNullOrBlank())
@@ -75,6 +80,8 @@ class AppViewModel(
 ) : ViewModel() {
     private var accountRefreshToken: String? = null
     private val _availableUpdate = MutableStateFlow<AppUpdate?>(null)
+    private val _pendingDeepLink = MutableStateFlow<NativeAppDeepLink?>(null)
+    private val _serverSwitchRequest = MutableStateFlow<NativeAppDeepLink?>(null)
 
     val uiState: StateFlow<AppUiState> =
         combine(
@@ -92,6 +99,12 @@ class AppViewModel(
                     locale = locale,
                     availableUpdate = availableUpdate,
                 )
+            }
+            .combine(_pendingDeepLink) { state, pendingDeepLink ->
+                state.copy(pendingDeepLink = pendingDeepLink)
+            }
+            .combine(_serverSwitchRequest) { state, serverSwitchRequest ->
+                state.copy(serverSwitchRequest = serverSwitchRequest)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
@@ -127,7 +140,52 @@ class AppViewModel(
         _availableUpdate.value = null
     }
 
-    suspend fun configureServer(value: String) = repository.configureOrchestrator(value)
+    suspend fun configureServer(value: String) {
+        repository.configureOrchestrator(value)
+        val pending = _pendingDeepLink.value
+        val configured = repository.orchestratorUrl.first()
+        if (
+            pending != null &&
+                (configured == null || !sameNativeAppServer(pending.serverUrl, configured))
+        ) {
+            _pendingDeepLink.value = null
+        }
+    }
+
+    fun handleNativeAppLink(uri: String?) {
+        val link = parseNativeAppDeepLink(uri) ?: return
+        viewModelScope.launch {
+            val configured = repository.orchestratorUrl.first()
+            if (configured.isNullOrBlank()) {
+                _pendingDeepLink.value = link
+                return@launch
+            }
+            if (sameNativeAppServer(configured, link.serverUrl)) {
+                _serverSwitchRequest.value = null
+                _pendingDeepLink.value = link
+            } else {
+                _pendingDeepLink.value = null
+                _serverSwitchRequest.value = link
+            }
+        }
+    }
+
+    fun consumeNativeAppLink() {
+        _pendingDeepLink.value = null
+    }
+
+    fun cancelNativeAppServerSwitch() {
+        _serverSwitchRequest.value = null
+    }
+
+    fun confirmNativeAppServerSwitch() {
+        val request = _serverSwitchRequest.value ?: return
+        _serverSwitchRequest.value = null
+        viewModelScope.launch {
+            clearServerConfiguration()
+            _pendingDeepLink.value = request
+        }
+    }
 
     fun logout() = viewModelScope.launch {
         val active = repository.session.first()
@@ -142,6 +200,12 @@ class AppViewModel(
     }
 
     fun changeServer() = viewModelScope.launch {
+        _pendingDeepLink.value = null
+        _serverSwitchRequest.value = null
+        clearServerConfiguration()
+    }
+
+    private suspend fun clearServerConfiguration() {
         val active = repository.session.first()
         if (active != null) runCatching { repository.revokeSession(active) }
         SyncplaySession.clear()
