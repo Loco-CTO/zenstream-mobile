@@ -50,6 +50,20 @@ class AudioPlaybackTransactionTest {
     }
 
     @Test
+    fun newerSelectionPreventsAnOlderTeardownFromFinalizing() {
+        val controller = AudioPlaybackTransactionController()
+        controller.acceptSelection(10L, "old", autoPlay = true, positionMs = 0L)
+        controller.invalidate(11L)
+        val teardownGeneration = controller.currentGeneration()
+
+        assertTrue(controller.canFinalizeTeardown(11L, teardownGeneration))
+
+        controller.acceptSelection(0L, "new", autoPlay = true, positionMs = 0L)
+
+        assertFalse(controller.canFinalizeTeardown(11L, teardownGeneration))
+    }
+
+    @Test
     fun cancellationAlsoStopsAnActiveRecoveryJob() = runTest {
         val controller = AudioPlaybackTransactionController()
         val recovery: Job = launch { awaitCancellation() }

@@ -280,7 +280,10 @@ class AudioPlaybackService : MediaLibraryService() {
                 AudioServiceBridge.ACTION_SEEK ->
                     seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
                 AudioServiceBridge.ACTION_REMOVE_QUEUE ->
-                    removeQueue(intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID))
+                    removeQueue(
+                        intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID),
+                        commandSequence,
+                    )
                 AudioServiceBridge.ACTION_REORDER_QUEUE ->
                     reorderQueue(
                         intent.getIntExtra(AudioServiceBridge.EXTRA_FROM, -1),
@@ -1222,7 +1225,7 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
     }
 
-    private suspend fun removeQueue(entryId: String?) {
+    private suspend fun removeQueue(entryId: String?, commandSequence: Long) {
         if (entryId.isNullOrBlank()) return
         var request: PlaybackRequest? = null
         var progress: ProgressSample? = null
@@ -1278,7 +1281,7 @@ class AudioPlaybackService : MediaLibraryService() {
             shouldPersist = true
         }
         if (shouldClear) {
-            clearQueue(commandSequence = 0L)
+            clearQueue(commandSequence)
             return
         }
         progress?.let(::enqueueProgress)
@@ -1299,9 +1302,11 @@ class AudioPlaybackService : MediaLibraryService() {
         val account = sessionStore.session.first()
         var progress: ProgressSample? = null
         var applied = false
+        var teardownGeneration = 0L
         queueCommandMutex.withLock {
             if (!transactionController.invalidate(commandSequence)) return@withLock
             applied = true
+            teardownGeneration = transactionController.currentGeneration()
             persistenceEpoch += 1L
             persistJob?.cancel()
             restoreValidationJob?.cancel()
@@ -1326,8 +1331,7 @@ class AudioPlaybackService : MediaLibraryService() {
         lyricsPrefetchJob = null
         autoAdoptionJob?.cancel()
         autoAdoptionJob = null
-        detachAudioSessionAndStopService()
-        stopSelf()
+        if (!detachAudioSessionIfCurrent(commandSequence, teardownGeneration)) return
     }
 
     private suspend fun pauseForVideoAndDetach(commandId: String?, commandSequence: Long) {
@@ -1335,9 +1339,11 @@ class AudioPlaybackService : MediaLibraryService() {
         val account = sessionStore.session.first()
         var progress: ProgressSample? = null
         var applied = false
+        var teardownGeneration = 0L
         queueCommandMutex.withLock {
             if (!transactionController.invalidate(commandSequence)) return@withLock
             applied = true
+            teardownGeneration = transactionController.currentGeneration()
             persistenceEpoch += 1L
             persistJob?.cancel()
             progress = captureProgressSample(paused = true)
@@ -1373,10 +1379,31 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         if (account != null) persistSnapshotNow(account)
         progress?.let(::enqueueProgress)
-        detachAudioSessionAndStopService()
+        if (!detachAudioSessionIfCurrent(commandSequence, teardownGeneration)) {
+            AudioServiceBridge.complete(
+                commandId,
+                AudioCommandResult.Failed("A newer audio command is already active"),
+            )
+            return
+        }
         AudioServiceBridge.complete(commandId, AudioCommandResult.Applied)
         Log.i(AUDIO_TAG, "audio video handoff acknowledged")
+    }
+
+    private suspend fun detachAudioSessionIfCurrent(
+        commandSequence: Long,
+        teardownGeneration: Long,
+    ): Boolean = queueCommandMutex.withLock {
+        if (!transactionController.canFinalizeTeardown(commandSequence, teardownGeneration)) {
+            Log.i(
+                AUDIO_TAG,
+                "audio session teardown skipped sequence=$commandSequence generation=$teardownGeneration",
+            )
+            return@withLock false
+        }
+        detachAudioSessionAndStopService()
         stopSelf()
+        true
     }
 
     private fun detachAudioSessionAndStopService() {
@@ -1494,9 +1521,9 @@ class AudioPlaybackService : MediaLibraryService() {
             this@AudioPlaybackService,
             object : DefaultMediaNotificationProvider.NotificationIdProvider {
                 override fun getNotificationId(mediaSession: MediaSession): Int =
-                    AUDIO_NOTIFICATION_ID
+                    AudioNotificationConfig.NOTIFICATION_ID
             },
-            AUDIO_NOTIFICATION_CHANNEL,
+            AudioNotificationConfig.CHANNEL_ID,
             R.string.app_name,
         ) {
         init {
@@ -1522,12 +1549,14 @@ class AudioPlaybackService : MediaLibraryService() {
                 Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-        librarySession =
+        val session =
             MediaLibrarySession.Builder(this, player, LibraryCallback())
                 .setSessionActivity(sessionActivity)
                 .setMediaButtonPreferences(notificationButtonPreferences())
                 .build()
+        librarySession = session
         sessionDetached = false
+        addSession(session)
         refreshNotificationControls(force = true)
     }
 
@@ -2083,7 +2112,7 @@ class AudioPlaybackService : MediaLibraryService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager.createNotificationChannel(
                 NotificationChannel(
-                        AUDIO_NOTIFICATION_CHANNEL,
+                        AudioNotificationConfig.CHANNEL_ID,
                         getString(R.string.app_name),
                         NotificationManager.IMPORTANCE_LOW,
                     )
@@ -2101,7 +2130,7 @@ class AudioPlaybackService : MediaLibraryService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         val notification =
-            NotificationCompat.Builder(this, AUDIO_NOTIFICATION_CHANNEL)
+            NotificationCompat.Builder(this, AudioNotificationConfig.CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText("Audio player ready")
@@ -2113,7 +2142,7 @@ class AudioPlaybackService : MediaLibraryService() {
                 .build()
         ServiceCompat.startForeground(
             this,
-            AUDIO_NOTIFICATION_ID,
+            AudioNotificationConfig.NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
@@ -2621,8 +2650,6 @@ class AudioPlaybackService : MediaLibraryService() {
         private const val AUTO_PAGE_SIZE = 100
         private const val AUTO_MAX_ALBUMS = 1_000
         private const val AUTO_ARTIST_LIMIT = 100
-        private const val AUDIO_NOTIFICATION_CHANNEL = "audio_playback"
-        private const val AUDIO_NOTIFICATION_ID = 21_847
 
         private fun primaryArtist(item: CatalogMediaItem): String =
             item.artistCredits.firstOrNull()?.name
