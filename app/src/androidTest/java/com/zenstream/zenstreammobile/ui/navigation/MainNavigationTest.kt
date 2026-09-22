@@ -252,6 +252,12 @@ class MainNavigationTest {
     }
 
     @Test
+    fun bottomOverlayPaddingLeavesSystemNavigationInsetToChildScreens() {
+        assertEquals(80, bottomOverlayContentPaddingPx(104, 24))
+        assertEquals(0, bottomOverlayContentPaddingPx(16, 24))
+    }
+
+    @Test
     fun hiddenTopBarKeepsStatusBarInsetAndDoesNotPutContentAtScreenEdge() {
         val chromeVisible = mutableStateOf(true)
         val statusBarInset = 24.dp

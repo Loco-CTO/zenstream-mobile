@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,6 +60,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -246,7 +248,7 @@ private fun LoadingScreen() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun MainScaffold(
     repository: CatalogRepository,
@@ -360,6 +362,7 @@ private fun MainScaffold(
     var bottomBarVisibilityFraction by remember { mutableStateOf(1f) }
     var topBarVisibilityFraction by remember { mutableStateOf(1f) }
     var contentScrollable by remember { mutableStateOf(false) }
+    var bottomOverlayHeightPx by remember { mutableStateOf(0) }
     var myPageNavigationResetKey by remember { mutableStateOf(0) }
     var lastMainRoute by remember { mutableStateOf(mainRoute) }
     val onContentScrollabilityChanged: (Boolean) -> Unit = remember {
@@ -454,11 +457,26 @@ private fun MainScaffold(
             bottomBar = {},
             containerColor = MaterialTheme.colorScheme.background,
         ) { padding ->
+            val bottomOverlayContentPadding =
+                with(density) {
+                    bottomOverlayContentPaddingPx(
+                            overlayHeightPx = bottomOverlayHeightPx,
+                            systemNavigationBarInsetPx =
+                                WindowInsets.navigationBarsIgnoringVisibility.getBottom(this),
+                        )
+                        .toDp()
+                }
             Box(modifier = Modifier.fillMaxSize()) {
                 NavHost(
                     navController,
                     startDestination = HOME,
-                    modifier = Modifier.fillMaxSize().nestedScroll(scrollConnection),
+                    modifier =
+                        Modifier.fillMaxSize()
+                            // The player/navigation chrome is outside Scaffold's bottom slot.
+                            // Child screens already consume Scaffold's system-bar inset, so only
+                            // reserve the measured overlay body here.
+                            .padding(bottom = bottomOverlayContentPadding)
+                            .nestedScroll(scrollConnection),
                 ) {
                     composable(HOME) {
                         HomeScreen(
@@ -692,7 +710,12 @@ private fun MainScaffold(
                 ToastHost(state = toast)
             }
         }
-        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+        Column(
+            modifier =
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged {
+                    bottomOverlayHeightPx = it.height
+                }
+        ) {
             AnimatedVisibility(
                 visible = audioState.currentEntry != null && currentRoute != NOW_PLAYING,
                 enter =
@@ -1117,3 +1140,8 @@ internal class ScrollVisibilityController(
 
 internal const val HIDE_DISTANCE_DP = 56f
 internal const val REVEAL_DISTANCE_DP = 64f
+
+internal fun bottomOverlayContentPaddingPx(
+    overlayHeightPx: Int,
+    systemNavigationBarInsetPx: Int,
+): Int = (overlayHeightPx - systemNavigationBarInsetPx).coerceAtLeast(0)
