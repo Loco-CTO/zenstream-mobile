@@ -94,6 +94,7 @@ import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.DetailViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.ExpandableDescription
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.progressPercent
@@ -284,7 +285,10 @@ internal fun DetailContent(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { overview ->
                     item {
-                        ExpandableOverview(overview)
+                        ExpandableDescription(
+                            description = overview,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        )
                     }
                 }
             if (mediaItem.type == "Series" || mediaItem.type == "Episode") {
@@ -725,43 +729,6 @@ private fun detailTrackLabel(stream: MediaStream): String =
         )
 
 private fun playTarget(data: DetailData): MediaItem = detailPlaybackTarget(data.item, data.episodes)
-
-@Composable
-private fun ExpandableOverview(overview: String) {
-    var expanded by remember(overview) { mutableStateOf(false) }
-    var canExpand by remember(overview) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Text(
-            overview,
-            maxLines = if (expanded) Int.MAX_VALUE else OVERVIEW_COLLAPSED_LINES,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { result ->
-                if (!expanded) canExpand = result.hasVisualOverflow
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (canExpand || expanded) {
-            TextButton(
-                onClick = { expanded = !expanded },
-                contentPadding = PaddingValues(horizontal = 0.dp),
-            ) {
-                Icon(
-                    painter =
-                        painterResource(
-                            if (expanded) LucideR.drawable.lucide_ic_chevron_up
-                            else LucideR.drawable.lucide_ic_chevron_down
-                        ),
-                    contentDescription = null,
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(if (expanded) R.string.show_less else R.string.show_more))
-            }
-        }
-    }
-}
-
-private const val OVERVIEW_COLLAPSED_LINES = 4
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
