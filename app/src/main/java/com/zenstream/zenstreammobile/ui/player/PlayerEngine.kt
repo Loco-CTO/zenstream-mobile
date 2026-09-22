@@ -345,7 +345,7 @@ class MpvPlaybackEngine(
                     Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
                     _state.value = _state.value.copy(ready = true, isBuffering = false)
                 }
-                if (!released && playWhenReady && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
+                if (!released && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
                     if (endFileGate.shouldReportEndFile()) {
                         _state.value = _state.value.copy(ended = true)
                     }
