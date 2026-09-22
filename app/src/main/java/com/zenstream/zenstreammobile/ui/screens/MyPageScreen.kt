@@ -67,6 +67,8 @@ import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import kotlinx.coroutines.launch
 
+private val MAIN_NAVIGATION_BAR_BODY_HEIGHT = 80.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyPageScreen(
@@ -180,7 +182,10 @@ fun MyPageScreen(
                             if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
                             else 8.dp,
                         end = 16.dp,
-                        bottom = 28.dp,
+                        // The main navigation bar is rendered in the root overlay instead of the
+                        // Scaffold bottom slot. Scaffold's outer padding already covers the
+                        // system navigation inset, so reserve the bar body here as well.
+                        bottom = 28.dp + MAIN_NAVIGATION_BAR_BODY_HEIGHT,
                     ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
