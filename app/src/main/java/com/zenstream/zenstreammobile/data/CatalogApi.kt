@@ -83,10 +83,17 @@ data class EpisodeNeighbors(
     val next: MediaItem? = null,
 )
 
+data class PlaybackAccess(
+    val ticket: String,
+    val expiresInSeconds: Long,
+)
+
 internal const val HOME_FEATURED_LIST_LIMIT = 25
 internal const val HOME_FEATURED_ITEM_LIMIT = 5
 internal const val AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS = 15_000L
 internal const val AUDIO_TELEMETRY_REQUEST_TIMEOUT_MILLIS = 3_000L
+private const val AUTH_FLOW_HEADER = "X-ZenStream-Auth-Flow"
+private const val AUTH_FLOW_VERSION = "refresh-v1"
 
 class CatalogApi(
     private val httpClient: OkHttpClient = OkHttpClient(),
@@ -119,6 +126,7 @@ class CatalogApi(
                     .put("username", username.trim())
                     .put("password", password)
                     .put("device", deviceMetadata())
+                    .put("authFlow", AUTH_FLOW_VERSION)
                     .toString()
             val json =
                 requestJson(
@@ -150,30 +158,78 @@ class CatalogApi(
                 resourceTicket = ticket,
                 avatarVersion = account?.optNullableString("avatarVersion"),
                 artworkTicket = bootstrap?.optString("artworkTicket")?.takeIf { it.isNotBlank() },
+                refreshToken = json.optString("refreshToken").takeIf { it.isNotBlank() },
+                accessExpiresAtMillis = json.optInstantMillis("expiresAt"),
+                refreshExpiresAtMillis = json.optInstantMillis("refreshExpiresAt"),
             )
         }
 
     suspend fun refreshAccount(session: AuthSession): AuthSession =
         withContext(Dispatchers.IO) {
-            val response =
-                authBootstrap(session.serverUrl, session.token)
-                    ?: requestJson(session, "/api/auth/me")
+            var active = session
+            var response: JSONObject?
+            try {
+                response = authBootstrap(active.serverUrl, active.token)
+            } catch (error: CatalogException) {
+                if (error.statusCode != 401 && error.statusCode != 403) throw error
+                active = refreshAccessToken(active)
+                response = authBootstrap(active.serverUrl, active.token)
+            }
+            val payload = response ?: requestJson(active, "/api/auth/me")
             val user =
-                response.optJSONObject("user")
+                payload.optJSONObject("user")
                     ?: error("Server did not return the authenticated user")
             val userId =
                 user.optString("id").takeIf { it.isNotBlank() }
                     ?: error("Server did not return a user ID")
             check(userId == session.userId) { "Server returned a different authenticated user" }
-            session.copy(
+            active.copy(
+                token = payload.optString("token").takeIf { it.isNotBlank() } ?: active.token,
                 username = user.optString("username").ifBlank { session.username },
                 avatarVersion = user.optNullableString("avatarVersion"),
                 resourceTicket =
-                    response.optString("resourceTicket").takeIf { it.isNotBlank() }
+                    payload.optString("resourceTicket").takeIf { it.isNotBlank() }
                         ?: session.resourceTicket,
                 artworkTicket =
-                    response.optString("artworkTicket").takeIf { it.isNotBlank() }
+                    payload.optString("artworkTicket").takeIf { it.isNotBlank() }
                         ?: session.artworkTicket,
+                refreshToken =
+                    payload.optString("refreshToken").takeIf { it.isNotBlank() }
+                        ?: active.refreshToken,
+                accessExpiresAtMillis =
+                    payload.optInstantMillis("expiresAt") ?: active.accessExpiresAtMillis,
+                refreshExpiresAtMillis =
+                    payload.optInstantMillis("refreshExpiresAt") ?: active.refreshExpiresAtMillis,
+            )
+        }
+
+    suspend fun refreshAccessToken(session: AuthSession): AuthSession =
+        withContext(Dispatchers.IO) {
+            val refreshToken =
+                session.refreshToken?.takeIf { it.isNotBlank() }
+                    ?: throw CatalogException(401, "Refresh token is unavailable")
+            val json =
+                requestJson(
+                    server = session.serverUrl,
+                    path = "/api/auth/refresh",
+                    token = null,
+                    method = "POST",
+                    body = JSONObject().put("refreshToken", refreshToken).toString(),
+                )
+            val token =
+                json.optString("token").takeIf { it.isNotBlank() }
+                    ?: throw CatalogException(401, "Server did not return an access token")
+            val user = json.optJSONObject("user")
+            session.copy(
+                token = token,
+                username = user?.optString("username")?.ifBlank { null } ?: session.username,
+                avatarVersion = user?.optNullableString("avatarVersion") ?: session.avatarVersion,
+                refreshToken =
+                    json.optString("refreshToken").takeIf { it.isNotBlank() } ?: refreshToken,
+                accessExpiresAtMillis =
+                    json.optInstantMillis("expiresAt") ?: session.accessExpiresAtMillis,
+                refreshExpiresAtMillis =
+                    json.optInstantMillis("refreshExpiresAt") ?: session.refreshExpiresAtMillis,
             )
         }
 
@@ -226,6 +282,7 @@ class CatalogApi(
                 Request.Builder()
                     .url(url)
                     .header("Accept", "application/json")
+                    .header(AUTH_FLOW_HEADER, AUTH_FLOW_VERSION)
                     .header("Authorization", authorizationHeader(session.token))
                     .header("Content-Type", contentType)
                     .post(body)
@@ -348,6 +405,7 @@ class CatalogApi(
                 durationSeconds = json.optDoubleOrNull("durationSeconds"),
                 startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
                 expiresAt = json.optString("expiresAt").ifBlank { null },
+                accessExpiresIn = json.optLongOrNull("accessExpiresIn"),
                 errorCode = json.optString("errorCode").ifBlank { null },
                 errorDetail = json.optString("errorDetail").ifBlank { null },
             )
@@ -360,6 +418,36 @@ class CatalogApi(
                     session,
                     "/api/playback/items/${android.net.Uri.encode(itemId)}/source",
                 )
+            )
+        }
+
+    suspend fun refreshPlaybackAccess(
+        session: AuthSession,
+        itemId: String,
+        sourceId: String,
+        playbackSessionId: String? = null,
+    ): PlaybackAccess =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject().put("sourceId", sourceId).apply {
+                    playbackSessionId?.let { put("sessionId", it) }
+                }
+            val json =
+                requestJson(
+                    session,
+                    "/api/playback/items/${android.net.Uri.encode(itemId)}/access",
+                    method = "POST",
+                    body = body.toString(),
+                )
+            val ticket =
+                json
+                    .optString("ticket")
+                    .ifBlank { json.optString("access") }
+                    .takeIf { it.isNotBlank() }
+                    ?: throw CatalogException(502, "Server did not return a playback ticket")
+            PlaybackAccess(
+                ticket = ticket,
+                expiresInSeconds = json.optLongOrNull("expiresIn")?.coerceAtLeast(1L) ?: 900L,
             )
         }
 
@@ -1426,6 +1514,7 @@ class CatalogApi(
                 .url(urlBuilder.build())
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
+                .header(AUTH_FLOW_HEADER, AUTH_FLOW_VERSION)
                 .apply {
                     token?.takeIf(String::isNotBlank)?.let { header("Authorization", "Bearer $it") }
                 }
@@ -1484,6 +1573,11 @@ class CatalogApi(
 
 private fun redactPlaybackUrl(value: String): String =
     value.replace(Regex("(?i)([?&]access=)[^&\\s\\\"']+"), "$1<redacted>")
+
+private fun JSONObject.optInstantMillis(key: String): Long? =
+    optString(key)
+        .takeIf { it.isNotBlank() }
+        ?.let { value -> runCatching { Instant.parse(value).toEpochMilli() }.getOrNull() }
 
 internal fun resolveEpisodeNeighbors(
     item: MediaItem,
@@ -2389,6 +2483,19 @@ fun playbackUrl(
     }
     error("Canonical playback response did not include a usable URL")
 }
+
+fun playbackUrlWithAccess(
+    session: AuthSession,
+    itemId: String,
+    source: MediaSource,
+    access: String,
+): String =
+    playbackUrl(session, itemId, source)
+        .toHttpUrl()
+        .newBuilder()
+        .setQueryParameter("access", access)
+        .build()
+        .toString()
 
 fun playbackStreamStartPositionSeconds(
     session: AuthSession,

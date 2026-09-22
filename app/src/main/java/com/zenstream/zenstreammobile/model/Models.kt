@@ -8,6 +8,9 @@ data class AuthSession(
     val resourceTicket: String? = null,
     val avatarVersion: String? = null,
     val artworkTicket: String? = null,
+    val refreshToken: String? = null,
+    val accessExpiresAtMillis: Long? = null,
+    val refreshExpiresAtMillis: Long? = null,
 )
 
 data class MediaChapter(
