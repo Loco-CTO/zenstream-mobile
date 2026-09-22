@@ -276,7 +276,11 @@ class DetailScreensTest {
             }
         }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithText(context.getString(R.string.show_more)).assertIsDisplayed()
+        val showMore = context.getString(R.string.show_more)
+        val showLess = context.getString(R.string.show_less)
+        composeRule.onNodeWithText(showMore).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(showLess).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(showMore).assertIsDisplayed()
     }
 
     @Test
