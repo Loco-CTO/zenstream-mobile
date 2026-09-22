@@ -313,7 +313,7 @@ fun MusicCreditLine(
             artistCreditSeparator(credits, index).takeIf(String::isNotEmpty)?.let { separator ->
                 Text(
                     separator,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
