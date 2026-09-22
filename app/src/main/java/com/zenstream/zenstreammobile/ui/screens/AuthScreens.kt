@@ -60,9 +60,7 @@ fun ServerSetupScreen(
     val scope = rememberCoroutineScope()
     val invalidUrlMessage = stringResource(R.string.server_url_invalid)
     LaunchedEffect(initialServerUrl) {
-        if (server.isBlank() && !initialServerUrl.isNullOrBlank()) {
-            server = initialServerUrl
-        }
+        if (!initialServerUrl.isNullOrBlank()) server = initialServerUrl
     }
     AuthContainer {
         Icon(
