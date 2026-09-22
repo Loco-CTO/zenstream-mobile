@@ -181,6 +181,7 @@ data class PlaybackData(
     val durationSeconds: Double? = null,
     val startPositionSeconds: Double = 0.0,
     val expiresAt: String? = null,
+    val accessExpiresIn: Long? = null,
     val errorCode: String? = null,
     val errorDetail: String? = null,
 )

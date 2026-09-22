@@ -63,8 +63,11 @@ class SessionStore(
         val orchestratorUrl = stringPreferencesKey("orchestrator_url")
         val serverUrl = stringPreferencesKey("server_url")
         val token = stringPreferencesKey("encrypted_token")
+        val refreshToken = stringPreferencesKey("encrypted_refresh_token")
         val resourceTicket = stringPreferencesKey("encrypted_resource_ticket")
         val artworkTicket = stringPreferencesKey("encrypted_artwork_ticket")
+        val accessExpiresAtMillis = longPreferencesKey("access_expires_at_millis")
+        val refreshExpiresAtMillis = longPreferencesKey("refresh_expires_at_millis")
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val avatarVersion = stringPreferencesKey("avatar_version")
@@ -186,13 +189,16 @@ class SessionStore(
                     return@map null
                 }
                 AuthSession(
-                    server,
-                    cipher.decrypt(encryptedToken),
-                    userId,
-                    prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
-                    prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
-                    prefs[Keys.avatarVersion],
-                    prefs[Keys.artworkTicket]?.let { cipher.decrypt(it) },
+                    serverUrl = server,
+                    token = cipher.decrypt(encryptedToken),
+                    userId = userId,
+                    username = prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
+                    resourceTicket = prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
+                    avatarVersion = prefs[Keys.avatarVersion],
+                    artworkTicket = prefs[Keys.artworkTicket]?.let { cipher.decrypt(it) },
+                    refreshToken = prefs[Keys.refreshToken]?.let { cipher.decrypt(it) },
+                    accessExpiresAtMillis = prefs[Keys.accessExpiresAtMillis],
+                    refreshExpiresAtMillis = prefs[Keys.refreshExpiresAtMillis],
                 )
             }
             // Android Keystore can be briefly unavailable while the device is
@@ -231,6 +237,15 @@ class SessionStore(
         dataStore.edit {
             it[Keys.serverUrl] = session.serverUrl
             it[Keys.token] = cipher.encrypt(session.token)
+            session.refreshToken?.let { token ->
+                it[Keys.refreshToken] = cipher.encrypt(token)
+            } ?: it.remove(Keys.refreshToken)
+            session.accessExpiresAtMillis?.let { expiresAt ->
+                it[Keys.accessExpiresAtMillis] = expiresAt
+            } ?: it.remove(Keys.accessExpiresAtMillis)
+            session.refreshExpiresAtMillis?.let { expiresAt ->
+                it[Keys.refreshExpiresAtMillis] = expiresAt
+            } ?: it.remove(Keys.refreshExpiresAtMillis)
             session.resourceTicket?.let { ticket ->
                 it[Keys.resourceTicket] = cipher.encrypt(ticket)
             } ?: it.remove(Keys.resourceTicket)
@@ -403,8 +418,11 @@ class SessionStore(
         }
         dataStore.edit {
             it.remove(Keys.token)
+            it.remove(Keys.refreshToken)
             it.remove(Keys.resourceTicket)
             it.remove(Keys.artworkTicket)
+            it.remove(Keys.accessExpiresAtMillis)
+            it.remove(Keys.refreshExpiresAtMillis)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.avatarVersion)
@@ -424,8 +442,11 @@ class SessionStore(
             it.remove(Keys.orchestratorUrl)
             it.remove(Keys.serverUrl)
             it.remove(Keys.token)
+            it.remove(Keys.refreshToken)
             it.remove(Keys.resourceTicket)
             it.remove(Keys.artworkTicket)
+            it.remove(Keys.accessExpiresAtMillis)
+            it.remove(Keys.refreshExpiresAtMillis)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.avatarVersion)

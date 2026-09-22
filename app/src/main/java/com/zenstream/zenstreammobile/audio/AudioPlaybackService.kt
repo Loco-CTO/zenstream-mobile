@@ -43,6 +43,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.data.audioQueueScope
 import com.zenstream.zenstreammobile.data.audioQueueSnapshotFromJson
+import com.zenstream.zenstreammobile.data.playbackUrlWithAccess
 import com.zenstream.zenstreammobile.data.withPrimaryArtworkFallback
 import com.zenstream.zenstreammobile.model.AudioPlayerState
 import com.zenstream.zenstreammobile.model.AudioQueueEntry
@@ -95,6 +96,7 @@ class AudioPlaybackService : MediaLibraryService() {
     private var positionJob: Job? = null
     private var persistJob: Job? = null
     private var lyricsPrefetchJob: Job? = null
+    private var audioAccessRefreshJob: Job? = null
     private var autoAdoptionJob: Job? = null
     private var currentState = AudioPlayerState()
     private var retryEntryId: String? = null
@@ -136,6 +138,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 positionMs = positionMs,
             )
         if (request != null) {
+            audioAccessRefreshJob?.cancel()
+            audioAccessRefreshJob = null
             if (sessionDetached) attachAudioSession()
             restoreValidationJob?.cancel()
             restoreValidationJob = null
@@ -856,12 +860,15 @@ class AudioPlaybackService : MediaLibraryService() {
             prefetchLyrics(account, entry)
             // Telemetry is deliberately after player.play(). It cannot delay or fail playback.
             if (request.autoPlay) launchPlayStart(account, entry, request.generation)
+            startAudioAccessRefresh(account, entry, request, data)
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId))
                 return
             if ((error as? CatalogException)?.statusCode == 401)
                 repository.clearSessionIfCurrent(account)
+            audioAccessRefreshJob?.cancel()
+            audioAccessRefreshJob = null
             queueCommandMutex.withLock {
                 if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
                     return@withLock
@@ -877,6 +884,88 @@ class AudioPlaybackService : MediaLibraryService() {
                 player.pause()
                 player.clearMediaItems()
                 publishAudioState()
+            }
+        }
+    }
+
+    private fun startAudioAccessRefresh(
+        account: AuthSession,
+        entry: AudioQueueEntry,
+        request: PlaybackRequest,
+        data: com.zenstream.zenstreammobile.model.PlaybackData,
+    ) {
+        audioAccessRefreshJob?.cancel()
+        val sourceId = data.source.id ?: return
+        var expiresInSeconds = data.accessExpiresIn ?: return
+        audioAccessRefreshJob = serviceScope.launch {
+            while (true) {
+                delay((expiresInSeconds * 1_000L - 60_000L).coerceAtLeast(30_000L))
+                if (!transactionController.isCurrent(request, currentState.currentEntry?.entryId)) {
+                    return@launch
+                }
+                val refreshed =
+                    try {
+                        repository.refreshPlaybackAccess(
+                            account,
+                            entry.track.id,
+                            sourceId,
+                            data.sessionId,
+                        )
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        Log.w(
+                            AUDIO_TAG,
+                            "audio access refresh failed entry=${entry.entryId} error=${error.message}",
+                        )
+                        delay(30_000L)
+                        continue
+                    }
+                val positionMs = observedPlayerPositionMs()
+                val shouldPlay = player.isPlaying
+                val nextUrl =
+                    playbackUrlWithAccess(
+                        account,
+                        entry.track.id,
+                        data.source,
+                        refreshed.ticket,
+                    )
+                val nextSource =
+                    normalizeAudioSource(
+                        url = nextUrl,
+                        mimeType = data.mimeType,
+                        mode = data.mode,
+                        sessionId = data.sessionId,
+                        durationSeconds = data.durationSeconds ?: data.source.durationSeconds,
+                        expiresAt = data.expiresAt,
+                    )
+                queueCommandMutex.withLock {
+                    if (
+                        !transactionController.isCurrent(
+                            request,
+                            currentState.currentEntry?.entryId,
+                        )
+                    ) {
+                        return@withLock
+                    }
+                    activeAudioSource = nextSource
+                    player.setMediaSource(
+                        mediaSourceFactory.createMediaSource(
+                            MediaItem.Builder()
+                                .setMediaId("zenstream:queue:${entry.entryId}")
+                                .setUri(Uri.parse(nextUrl))
+                                .apply { nextSource.mimeType?.let(::setMimeType) }
+                                .setMediaMetadata(
+                                    player.currentMediaItem?.mediaMetadata ?: MediaMetadata.EMPTY
+                                )
+                                .build()
+                        )
+                    )
+                    player.prepare()
+                    player.seekTo(positionMs)
+                    if (shouldPlay) player.play() else player.pause()
+                }
+                expiresInSeconds = refreshed.expiresInSeconds
             }
         }
     }
@@ -1310,6 +1399,8 @@ class AudioPlaybackService : MediaLibraryService() {
             persistenceEpoch += 1L
             persistJob?.cancel()
             restoreValidationJob?.cancel()
+            audioAccessRefreshJob?.cancel()
+            audioAccessRefreshJob = null
             progress = captureProgressSample(paused = true)
             suppressEnded = true
             loadingCurrent = false
@@ -1364,6 +1455,8 @@ class AudioPlaybackService : MediaLibraryService() {
             lyricsPrefetchJob = null
             autoAdoptionJob?.cancel()
             autoAdoptionJob = null
+            audioAccessRefreshJob?.cancel()
+            audioAccessRefreshJob = null
             player.pause()
             player.stop()
             player.clearMediaItems()
@@ -2086,6 +2179,7 @@ class AudioPlaybackService : MediaLibraryService() {
         }
         positionJob?.cancel()
         progressJob?.cancel()
+        audioAccessRefreshJob?.cancel()
         lyricsPrefetchJob?.cancel()
         autoAdoptionJob?.cancel()
         cancelRecovery()

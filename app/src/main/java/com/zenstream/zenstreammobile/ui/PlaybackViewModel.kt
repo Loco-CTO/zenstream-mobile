@@ -16,6 +16,7 @@ import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackMimeType
 import com.zenstream.zenstreammobile.data.playbackUrl
+import com.zenstream.zenstreammobile.data.playbackUrlWithAccess
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -33,6 +34,7 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -202,6 +204,7 @@ class PlaybackViewModel(
     private var engineJob: Job? = null
     private var progressJob: Job? = null
     private var viewerHeartbeatJob: Job? = null
+    private var playbackAccessJob: Job? = null
     private var progressFlushJob: Job? = null
     private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var playbackLoadJob: Job? = null
@@ -419,6 +422,7 @@ class PlaybackViewModel(
         progressFlushJob?.cancel()
         viewerHeartbeatJob?.cancel()
         playbackLoadJob?.cancel()
+        playbackAccessJob?.cancel()
         trickplayJob?.cancel()
         playbackLoadJob = viewModelScope.launch {
             _uiState.value.playback?.let { outgoing ->
@@ -558,6 +562,7 @@ class PlaybackViewModel(
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()
             startViewerHeartbeat()
+            startPlaybackAccessRefresh(playbackData)
             loadTrickplay(
                 loadGeneration,
                 playbackData.source.id,
@@ -678,6 +683,71 @@ class PlaybackViewModel(
             while (true) {
                 delay(10_000)
                 reportProgress()
+            }
+        }
+    }
+
+    private fun startPlaybackAccessRefresh(playback: PlaybackData) {
+        playbackAccessJob?.cancel()
+        val sourceId = playback.source.id ?: return
+        var expiresInSeconds = playback.accessExpiresIn ?: return
+        playbackAccessJob = viewModelScope.launch {
+            while (true) {
+                delay((expiresInSeconds * 1_000L - 60_000L).coerceAtLeast(30_000L))
+                val current = _uiState.value.playback
+                if (
+                    current?.item?.id != currentItemId ||
+                        current.source.id != sourceId ||
+                        playbackGeneration <= 0L
+                ) {
+                    return@launch
+                }
+                val position = currentPlayerPositionSeconds()
+                val shouldPlay = _uiState.value.engine.isPlaying
+                val refreshed =
+                    try {
+                        repository.refreshPlaybackAccess(
+                            session,
+                            currentItemId,
+                            sourceId,
+                            current.sessionId,
+                        )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        Log.w(
+                            PLAYBACK_TAG,
+                            "playback access refresh failed item=$currentItemId error=${error.message}",
+                        )
+                        delay(30_000L)
+                        continue
+                    }
+                val latest = _uiState.value.playback
+                if (latest?.item?.id != currentItemId || latest.source.id != sourceId) {
+                    return@launch
+                }
+                val nextUrl =
+                    playbackUrlWithAccess(
+                        session,
+                        currentItemId,
+                        latest.source,
+                        refreshed.ticket,
+                    )
+                val nextSource = latest.source.copy(url = nextUrl)
+                val nextPlayback =
+                    latest.copy(
+                        source = nextSource,
+                        url = nextUrl,
+                        accessExpiresIn = refreshed.expiresInSeconds,
+                    )
+                _uiState.value = _uiState.value.copy(playback = nextPlayback)
+                playbackEngine?.prepare(
+                    nextUrl,
+                    position,
+                    playbackMimeType(nextSource, _uiState.value.selectedQuality),
+                    shouldPlay,
+                )
+                expiresInSeconds = refreshed.expiresInSeconds
             }
         }
     }
@@ -1064,6 +1134,7 @@ class PlaybackViewModel(
         pendingCompletionGeneration = null
         progressFlushJob?.cancel()
         viewerHeartbeatJob?.cancel()
+        playbackAccessJob?.cancel()
         playbackLoadJob?.cancel()
         trickplayJob?.cancel()
         subtitleJob?.cancel()
@@ -1195,6 +1266,7 @@ class PlaybackViewModel(
     override fun onCleared() {
         progressJob?.cancel()
         viewerHeartbeatJob?.cancel()
+        playbackAccessJob?.cancel()
         progressFlushJob?.let { job ->
             job.invokeOnCompletion { progressReportingScope.cancel() }
         } ?: progressReportingScope.cancel()
