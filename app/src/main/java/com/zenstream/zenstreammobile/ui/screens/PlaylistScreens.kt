@@ -86,7 +86,7 @@ fun PlaylistPickerButton(
         Icon(
             painter = painterResource(LucideR.drawable.lucide_ic_list_plus),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = MaterialTheme.colorScheme.onSurface,
         )
     }
     if (open) {
