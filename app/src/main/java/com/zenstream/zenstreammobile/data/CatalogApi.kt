@@ -1177,23 +1177,26 @@ class CatalogApi(
                 .distinctBy { it.id }
         }
 
-    suspend fun fetchPlaylists(session: AuthSession): List<PlaylistSummary> =
+    suspend fun fetchPlaylists(session: AuthSession, membershipSourceId: String? = null): List<PlaylistSummary> =
         withContext(Dispatchers.IO) {
-            jsonArray(requestJson(session, "/api/account/playlists"), "items")
+            val suffix = membershipSourceId?.let { "?membershipSourceId=${encodePathSegment(it)}" }.orEmpty()
+            jsonArray(requestJson(session, "/api/account/playlists$suffix"), "items")
                 .map(::parsePlaylistSummary)
         }
 
-    suspend fun fetchPlaylist(session: AuthSession, playlistId: String): PlaylistData =
+    suspend fun fetchPlaylist(session: AuthSession, playlistId: String, page: Int? = null): PlaylistData =
         withContext(Dispatchers.IO) {
+            val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
             parsePlaylist(
-                requestJson(session, "/api/account/playlists/${encodePathSegment(playlistId)}")
+                requestJson(session, "/api/account/playlists/${encodePathSegment(playlistId)}$suffix")
             )
         }
 
-    suspend fun fetchSharedPlaylist(session: AuthSession, shareToken: String): PlaylistData =
+    suspend fun fetchSharedPlaylist(session: AuthSession, shareToken: String, page: Int? = null): PlaylistData =
         withContext(Dispatchers.IO) {
+            val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
             parsePlaylist(
-                requestJson(session, "/api/shared/playlists/${encodePathSegment(shareToken)}")
+                requestJson(session, "/api/shared/playlists/${encodePathSegment(shareToken)}$suffix")
             )
         }
 
@@ -1212,7 +1215,7 @@ class CatalogApi(
                     .put("isPrivate", isPrivate)
                     .apply { entityId?.let { put("entityId", it) } }
             parsePlaylist(
-                requestJson(session, "/api/account/playlists", method = "POST", body = body.toString())
+                requestJson(session, "/api/account/playlists?view=summary", method = "POST", body = body.toString())
             )
         }
 
@@ -1232,7 +1235,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${encodePathSegment(playlistId)}",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}?view=summary",
                     method = "PATCH",
                     body = body.toString(),
                 )
@@ -1259,7 +1262,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${encodePathSegment(playlistId)}/items",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items?view=summary",
                     method = "POST",
                     body = body.toString(),
                 )
@@ -1275,7 +1278,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}?view=summary",
                     method = "DELETE",
                 )
             )
@@ -1297,6 +1300,31 @@ class CatalogApi(
                 )
             )
         }
+
+    suspend fun removePlaylistSource(session: AuthSession, playlistId: String, sourceId: String): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(requestJson(
+                session,
+                "/api/account/playlists/${encodePathSegment(playlistId)}/items/by-source/${encodePathSegment(sourceId)}",
+                method = "DELETE",
+            ))
+        }
+
+    suspend fun movePlaylistEntry(
+        session: AuthSession, playlistId: String, entryId: String,
+        beforeEntryId: String? = null, afterEntryId: String? = null,
+    ): PlaylistData = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            beforeEntryId?.let { put("beforeEntryId", it) }
+            afterEntryId?.let { put("afterEntryId", it) }
+        }
+        parsePlaylist(requestJson(
+            session,
+            "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}/move",
+            method = "PATCH",
+            body = body.toString(),
+        ))
+    }
 
     suspend fun search(
         session: AuthSession,
@@ -1976,6 +2004,7 @@ private fun parsePlaylistSummary(payload: JSONObject): PlaylistSummary =
         createdAt = payload.optString("createdAt"),
         updatedAt = payload.optString("updatedAt"),
         isOwner = payload.optBoolean("isOwner", true),
+        isMember = if (payload.has("isMember")) payload.optBoolean("isMember") else null,
     )
 
 internal fun parsePlaylist(payload: JSONObject): PlaylistData {
@@ -1990,7 +2019,12 @@ internal fun parsePlaylist(payload: JSONObject): PlaylistData {
                 item = catalogMediaItem(item),
             )
         }
-    return PlaylistData(summary = summary, items = entries)
+    return PlaylistData(
+        summary = summary, items = entries,
+        page = if (payload.has("page")) payload.optInt("page") else null,
+        pageSize = if (payload.has("pageSize")) payload.optInt("pageSize") else null,
+        hasMore = payload.optBoolean("hasMore"),
+    )
 }
 
 internal fun parseDetailData(payload: JSONObject): DetailData {

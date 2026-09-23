@@ -51,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -86,12 +88,16 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaylistData
 import com.zenstream.zenstreammobile.model.PlaylistEntry
 import com.zenstream.zenstreammobile.model.PlaylistSummary
+import com.zenstream.zenstreammobile.model.playlistStartIndex
+import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -154,9 +160,8 @@ private fun PlaylistPickerDialog(
 ) {
     val scope = rememberCoroutineScope()
     var summaries by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
-    var details by remember { mutableStateOf<Map<String, PlaylistData>>(emptyMap()) }
     var pendingMembership by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
-    var selectedTracks by remember { mutableStateOf(providedTracks) }
+    var selectedTracks by remember { mutableStateOf(providedTracks.ifEmpty { listOf(source) }) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
@@ -165,10 +170,7 @@ private fun PlaylistPickerDialog(
     suspend fun refresh() {
         loading = true
         try {
-            summaries = repository.playlists(session)
-            details = summaries.associate { summary ->
-                summary.id to repository.playlist(session, summary.id)
-            }
+            summaries = repository.playlists(session, source.id)
             error = false
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -180,20 +182,7 @@ private fun PlaylistPickerDialog(
     }
 
     LaunchedEffect(source.id) {
-        selectedTracks =
-            when (source.type) {
-                "Audio" -> listOf(source)
-                "MusicAlbum" -> providedTracks
-                "MusicArtist" ->
-                    try {
-                        repository.musicArtistTracks(session, source.id)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Throwable) {
-                        providedTracks
-                    }
-                else -> emptyList()
-            }.distinctBy { it.id }
+        selectedTracks = providedTracks.ifEmpty { listOf(source) }.distinctBy { it.id }
         refresh()
     }
 
@@ -251,36 +240,20 @@ private fun PlaylistPickerDialog(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             items(summaries, key = { it.id }) { summary ->
-                                val detail = details[summary.id]
-                                val trackIds = selectedTracks.mapTo(hashSetOf()) { it.id }
-                                val memberIds = detail?.items?.mapTo(hashSetOf()) { it.item.id }.orEmpty()
-                                val savedSelection = trackIds.isNotEmpty() && memberIds.containsAll(trackIds)
+                                val savedSelection = summary.isMember == true
                                 val selected = pendingMembership[summary.id] ?: savedSelection
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
                                         .toggleable(
                                             value = selected,
-                                            enabled = !busy && detail != null,
+                                            enabled = !busy,
                                             role = Role.Checkbox,
                                         ) { shouldBeMember ->
-                                            val current = detail ?: return@toggleable
                                             pendingMembership = pendingMembership + (summary.id to shouldBeMember)
                                             busy = true
                                             error = false
                                             scope.launch {
-                                                fun publish(updated: PlaylistData) {
-                                                    details = details + (summary.id to updated)
-                                                    summaries = summaries.map {
-                                                        if (it.id == summary.id) updated.summary else it
-                                                    }
-                                                }
-
-                                                fun containsSelection(playlist: PlaylistData): Boolean {
-                                                    val ids = playlist.items.mapTo(hashSetOf()) { it.item.id }
-                                                    return trackIds.isNotEmpty() && ids.containsAll(trackIds)
-                                                }
-
                                                 try {
                                                     if (shouldBeMember) {
                                                         repository.addPlaylistItems(
@@ -289,26 +262,15 @@ private fun PlaylistPickerDialog(
                                                             listOf(source.id),
                                                         )
                                                     } else {
-                                                        current.items
-                                                            .filter { it.item.id in trackIds }
-                                                            .forEach { entry ->
-                                                                repository.removePlaylistEntry(
-                                                                    session,
-                                                                    summary.id,
-                                                                    entry.entryId,
-                                                                )
-                                                            }
+                                                        repository.removePlaylistSource(session, summary.id, source.id)
                                                     }
-                                                    val updated = repository.playlist(session, summary.id)
-                                                    publish(updated)
-                                                    error = containsSelection(updated) != shouldBeMember
+                                                    summaries = repository.playlists(session, source.id)
                                                 } catch (cancelled: CancellationException) {
                                                     throw cancelled
                                                 } catch (_: Throwable) {
                                                     try {
-                                                        val updated = repository.playlist(session, summary.id)
-                                                        publish(updated)
-                                                        error = containsSelection(updated) != shouldBeMember
+                                                        summaries = repository.playlists(session, source.id)
+                                                        error = true
                                                     } catch (cancelled: CancellationException) {
                                                         throw cancelled
                                                     } catch (_: Throwable) {
@@ -627,6 +589,10 @@ fun PlaylistLibraryContent(
     var detail by remember { mutableStateOf<PlaylistData?>(null) }
     var loading by remember(session.userId, session.token) { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
+    var pageBusy by remember { mutableStateOf(false) }
+    var pageError by remember { mutableStateOf(false) }
+    var mutationBusy by remember { mutableStateOf(false) }
+    var playBusy by remember { mutableStateOf(false) }
     var revision by remember { mutableIntStateOf(0) }
     var editor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
@@ -643,9 +609,10 @@ fun PlaylistLibraryContent(
 
     LaunchedEffect(session.userId, session.token, selectedId, revision) {
         loading = true
+        pageError = false
         try {
             summaries = repository.playlists(session)
-            detail = selectedId?.let { repository.playlist(session, it) }
+            detail = selectedId?.let { repository.playlist(session, it, 1) }
             error = false
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -654,6 +621,23 @@ fun PlaylistLibraryContent(
         } finally {
             loading = false
         }
+    }
+
+    suspend fun refreshLoaded(playlistId: String, loadedCount: Int) {
+        val pages = (1..maxOf(1, (loadedCount + 19) / 20)).map { page ->
+            repository.playlist(session, playlistId, page)
+        }
+        if (selectedId != playlistId) return
+        if (pages.any { it.summary.updatedAt != pages.first().summary.updatedAt }) {
+            revision++
+            return
+        }
+        val seen = hashSetOf<String>()
+        detail = pages.first().copy(
+            items = pages.flatMap { it.items }.filter { seen.add(it.entryId) },
+            page = pages.size,
+            hasMore = pages.last().hasMore,
+        )
     }
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -682,7 +666,7 @@ fun PlaylistLibraryContent(
                 else ->
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp)) {
                         items(summaries, key = { it.id }) { summary ->
-                            PlaylistCard(summary, session, onClick = { selectedId = summary.id })
+                            PlaylistCard(summary, session, onClick = { detail = null; selectedId = summary.id })
                         }
                     }
             }
@@ -692,9 +676,28 @@ fun PlaylistLibraryContent(
             data = detail,
             loading = loading,
             error = error,
+            pageBusy = pageBusy,
+            pageError = pageError,
+            playBusy = playBusy,
             session = session,
             onBack = { selectedId = null },
-            onPlayTracks = onPlayTracks,
+            onPlayFull = { entryId, shuffle ->
+                val playlistId = selectedId
+                if (playlistId != null && !playBusy) scope.launch {
+                    playBusy = true
+                    try {
+                        val full = repository.playlist(session, playlistId)
+                        if (selectedId == playlistId && full.items.isNotEmpty()) {
+                            val index = playlistStartIndex(full.items, entryId)
+                            onPlayTracks(full.items.map { it.item }, index, if (shuffle) true else null, entryId != null)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Throwable) {
+                        error = true
+                    } finally { playBusy = false }
+                }
+            },
             onEdit = { editing = true },
             onDelete = {
                 scope.launch {
@@ -710,7 +713,7 @@ fun PlaylistLibraryContent(
                     }
                 }
             },
-            onReorder = reorder@{ entryIds ->
+            onReorder = reorder@{ entryIds, movedId, beforeId, afterId ->
                 val playlistId = selectedId ?: return@reorder
                 val previous = detail ?: return@reorder
                 val byId = previous.items.associateBy { it.entryId }
@@ -718,29 +721,60 @@ fun PlaylistLibraryContent(
                 if (reordered.size != previous.items.size) return@reorder
                 detail = previous.copy(items = reordered)
                 scope.launch {
+                    mutationBusy = true
                     try {
-                        detail = repository.reorderPlaylist(session, playlistId, entryIds)
-                        revision++
+                        val result = repository.movePlaylistEntry(session, playlistId, movedId, beforeId, afterId)
+                        detail = detail?.copy(summary = result.summary)
+                        refreshLoaded(playlistId, reordered.size)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
                         detail = previous
                         error = true
-                    }
+                    } finally { mutationBusy = false }
                 }
             },
             onRemoveEntry = { entryId ->
+                val playlistId = selectedId
+                val previous = detail
+                if (playlistId != null && previous != null) {
+                    detail = previous.copy(items = previous.items.filter { it.entryId != entryId })
                 scope.launch {
+                    mutationBusy = true
                     try {
-                        repository.removePlaylistEntry(session, selectedId!!, entryId)
-                        revision++
+                        val result = repository.removePlaylistEntry(session, playlistId, entryId)
+                        detail = detail?.copy(summary = result.summary)
+                        refreshLoaded(playlistId, previous.items.size)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
+                        detail = previous
                         error = true
+                    } finally { mutationBusy = false }
+                }
+                }
+            },
+            onLoadMore = {
+                val playlistId = selectedId
+                val current = detail
+                if (playlistId != null && current?.hasMore == true && !pageBusy && !pageError && !mutationBusy) {
+                    pageBusy = true
+                    scope.launch {
+                        try {
+                            val next = repository.playlist(session, playlistId, (current.page ?: 1) + 1)
+                            if (selectedId == playlistId && !mutationBusy) {
+                                val combined = detail?.let { appendPlaylistPage(it, next) }
+                                if (combined == null) revision++ else detail = combined
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Throwable) {
+                            pageError = true
+                        } finally { pageBusy = false }
                     }
                 }
             },
+            onRetryPage = { pageError = false },
             onRefresh = { revision++ },
         )
     }
@@ -843,13 +877,18 @@ private fun PlaylistDetailContent(
     data: PlaylistData?,
     loading: Boolean,
     error: Boolean,
+    pageBusy: Boolean,
+    pageError: Boolean,
+    playBusy: Boolean,
     session: AuthSession,
     onBack: () -> Unit,
-    onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit,
+    onPlayFull: (String?, Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onReorder: (List<String>) -> Unit,
+    onReorder: (List<String>, String, String?, String?) -> Unit,
     onRemoveEntry: (String) -> Unit,
+    onLoadMore: () -> Unit,
+    onRetryPage: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -866,6 +905,17 @@ private fun PlaylistDetailContent(
     var insertionIndex by remember { mutableStateOf(-1) }
     var draggedCenterY by remember { mutableStateOf(0f) }
     var draggedHeightPx by remember { mutableStateOf(0f) }
+    val currentEntries by rememberUpdatedState(data?.items.orEmpty())
+    var retryPage by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(data?.items?.size, data?.hasMore, retryPage) {
+        if (data?.hasMore != true) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .distinctUntilChanged()
+            .collect { lastVisible ->
+                if (lastVisible >= data.items.size - 4) onLoadMore()
+            }
+    }
 
     fun updateInsertionIndex(entries: List<PlaylistEntry>) {
         val nearest = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
@@ -897,7 +947,7 @@ private fun PlaylistDetailContent(
                 val speed = minimumScrollPx + extraScrollPx *
                     (abs(edgeDistance) / edgeScrollThresholdPx).coerceIn(0f, 1f)
                 listState.scrollBy(if (edgeDistance > 0f) speed else -speed)
-                data?.items?.let(::updateInsertionIndex)
+                updateInsertionIndex(currentEntries)
             }
             delay(16)
         }
@@ -921,20 +971,19 @@ private fun PlaylistDetailContent(
             data != null -> {
                 val summary = data.summary
                 val entries = data.items
-                val tracks = entries.map { it.item }
                 Box(Modifier.fillMaxSize().onSizeChanged { viewportHeightPx = it.height }) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize().pointerInput(entries.map { it.entryId }, summary.isOwner) {
+                        modifier = Modifier.fillMaxSize().pointerInput(summary.id, summary.isOwner) {
                             if (summary.isOwner) detectDragGesturesAfterLongPress(
                                 onDragStart = { touch ->
                                     val info = listState.layoutInfo.visibleItemsInfo.firstOrNull {
                                         touch.y >= it.offset && touch.y < it.offset + it.size &&
-                                            entries.any { entry -> entry.entryId == it.key }
+                                            currentEntries.any { entry -> entry.entryId == it.key }
                                     } ?: return@detectDragGesturesAfterLongPress
                                     val id = info.key as String
                                     draggedEntryId = id
-                                    draggedFrom = entries.indexOfFirst { it.entryId == id }
+                                    draggedFrom = currentEntries.indexOfFirst { it.entryId == id }
                                     insertionIndex = draggedFrom
                                     draggedCenterY = info.offset + info.size / 2f
                                     draggedHeightPx = info.size.toFloat()
@@ -944,18 +993,20 @@ private fun PlaylistDetailContent(
                                     val from = draggedFrom
                                     val target = insertionIndex
                                     clearDrag()
-                                    if (from in entries.indices && target in entries.indices && from != target) {
-                                        val reordered = entries.toMutableList()
+                                    if (from in currentEntries.indices && target in currentEntries.indices && from != target) {
+                                        val reordered = currentEntries.toMutableList()
                                         val moving = reordered.removeAt(from)
                                         reordered.add(target, moving)
-                                        onReorder(reordered.map { it.entryId })
+                                        val before = if (target < from) reordered.getOrNull(target + 1)?.entryId else null
+                                        val after = if (target > from) reordered.getOrNull(target - 1)?.entryId else null
+                                        onReorder(reordered.map { it.entryId }, moving.entryId, before, after)
                                     }
                                 },
                                 onDrag = { change, dragAmount ->
                                     if (draggedEntryId != null) {
                                         change.consume()
                                         draggedCenterY += dragAmount.y
-                                        updateInsertionIndex(entries)
+                                        updateInsertionIndex(currentEntries)
                                     }
                                 },
                             )
@@ -975,12 +1026,12 @@ private fun PlaylistDetailContent(
                                 Text(it, modifier = Modifier.padding(top = 14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-                                Button(onClick = { if (tracks.isNotEmpty()) onPlayTracks(tracks, 0, null, false) }, enabled = tracks.isNotEmpty()) {
+                                Button(onClick = { onPlayFull(null, false) }, enabled = summary.itemCount > 0 && !playBusy) {
                                     Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.play_all))
+                                    Text(if (playBusy) stringResource(R.string.loading) else stringResource(R.string.play_all))
                                 }
-                                OutlinedButton(onClick = { if (tracks.isNotEmpty()) onPlayTracks(tracks, 0, true, false) }, enabled = tracks.isNotEmpty()) {
+                                OutlinedButton(onClick = { onPlayFull(null, true) }, enabled = summary.itemCount > 0 && !playBusy) {
                                     Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
                                     Text(stringResource(R.string.shuffle))
@@ -1039,7 +1090,7 @@ private fun PlaylistDetailContent(
                         ) {
                             MusicArtwork(entry.item, session, modifier = Modifier.size(52.dp), requestedSize = 160)
                             Column(
-                                Modifier.weight(1f).clickable { onPlayTracks(tracks, index, null, true) }.padding(horizontal = 10.dp),
+                                Modifier.weight(1f).clickable(enabled = !playBusy) { onPlayFull(entry.entryId, false) }.padding(horizontal = 10.dp),
                             ) {
                                 Text(entry.item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                                 Text(entry.item.album.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1049,6 +1100,13 @@ private fun PlaylistDetailContent(
                                     Icon(painterResource(LucideR.drawable.lucide_ic_x), contentDescription = stringResource(R.string.remove_from_playlist))
                                 }
                             }
+                        }
+                    }
+                    if (data.hasMore) item(key = "playlist-page-end") {
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            if (pageError) TextButton(onClick = { onRetryPage(); retryPage++ }) {
+                                Text(stringResource(R.string.retry))
+                            } else if (pageBusy) CircularProgressIndicator(Modifier.size(24.dp))
                         }
                     }
                 }

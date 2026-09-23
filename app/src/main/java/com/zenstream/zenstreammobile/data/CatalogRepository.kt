@@ -180,12 +180,12 @@ interface SearchDataSource : CatalogRefreshSource {
 interface PlaylistDataSource {
     suspend fun watchlist(session: AuthSession): List<MediaItem> = unsupportedPlaylistOperation()
 
-    suspend fun playlists(session: AuthSession): List<PlaylistSummary> = unsupportedPlaylistOperation()
+    suspend fun playlists(session: AuthSession, membershipSourceId: String? = null): List<PlaylistSummary> = unsupportedPlaylistOperation()
 
-    suspend fun playlist(session: AuthSession, playlistId: String): PlaylistData =
+    suspend fun playlist(session: AuthSession, playlistId: String, page: Int? = null): PlaylistData =
         unsupportedPlaylistOperation()
 
-    suspend fun sharedPlaylist(session: AuthSession, shareToken: String): PlaylistData =
+    suspend fun sharedPlaylist(session: AuthSession, shareToken: String, page: Int? = null): PlaylistData =
         unsupportedPlaylistOperation()
 
     suspend fun createPlaylist(
@@ -215,6 +215,14 @@ interface PlaylistDataSource {
 
     suspend fun removePlaylistEntry(session: AuthSession, playlistId: String, entryId: String): PlaylistData =
         unsupportedPlaylistOperation()
+
+    suspend fun removePlaylistSource(session: AuthSession, playlistId: String, sourceId: String): PlaylistData =
+        unsupportedPlaylistOperation()
+
+    suspend fun movePlaylistEntry(
+        session: AuthSession, playlistId: String, entryId: String,
+        beforeEntryId: String? = null, afterEntryId: String? = null,
+    ): PlaylistData = unsupportedPlaylistOperation()
 
     suspend fun reorderPlaylist(
         session: AuthSession,
@@ -658,14 +666,14 @@ class CatalogRepository(
     override suspend fun watchlist(session: AuthSession): List<MediaItem> =
         authenticatedCatalogRequest(session) { current -> api.fetchWatchlist(current) }
 
-    override suspend fun playlists(session: AuthSession): List<PlaylistSummary> =
-        authenticatedCatalogRequest(session) { current -> api.fetchPlaylists(current) }
+    override suspend fun playlists(session: AuthSession, membershipSourceId: String?): List<PlaylistSummary> =
+        authenticatedCatalogRequest(session) { current -> api.fetchPlaylists(current, membershipSourceId) }
 
-    override suspend fun playlist(session: AuthSession, playlistId: String): PlaylistData =
-        authenticatedCatalogRequest(session) { current -> api.fetchPlaylist(current, playlistId) }
+    override suspend fun playlist(session: AuthSession, playlistId: String, page: Int?): PlaylistData =
+        authenticatedCatalogRequest(session) { current -> api.fetchPlaylist(current, playlistId, page) }
 
-    override suspend fun sharedPlaylist(session: AuthSession, shareToken: String): PlaylistData =
-        authenticatedCatalogRequest(session) { current -> api.fetchSharedPlaylist(current, shareToken) }
+    override suspend fun sharedPlaylist(session: AuthSession, shareToken: String, page: Int?): PlaylistData =
+        authenticatedCatalogRequest(session) { current -> api.fetchSharedPlaylist(current, shareToken, page) }
 
     override suspend fun createPlaylist(
         session: AuthSession,
@@ -724,6 +732,25 @@ class CatalogRepository(
             authenticatedCatalogRequest(session) { current ->
                 api.removePlaylistEntry(current, playlistId, entryId)
             }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun removePlaylistSource(session: AuthSession, playlistId: String, sourceId: String): PlaylistData {
+        val result = authenticatedCatalogRequest(session) { current ->
+            api.removePlaylistSource(current, playlistId, sourceId)
+        }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun movePlaylistEntry(
+        session: AuthSession, playlistId: String, entryId: String,
+        beforeEntryId: String?, afterEntryId: String?,
+    ): PlaylistData {
+        val result = authenticatedCatalogRequest(session) { current ->
+            api.movePlaylistEntry(current, playlistId, entryId, beforeEntryId, afterEntryId)
+        }
         invalidateCatalogState()
         return result
     }

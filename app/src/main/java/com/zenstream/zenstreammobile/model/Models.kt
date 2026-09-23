@@ -233,12 +233,29 @@ data class PlaylistSummary(
     val createdAt: String = "",
     val updatedAt: String = "",
     val isOwner: Boolean = true,
+    val isMember: Boolean? = null,
 )
 
 data class PlaylistData(
     val summary: PlaylistSummary,
     val items: List<PlaylistEntry> = emptyList(),
+    val page: Int? = null,
+    val pageSize: Int? = null,
+    val hasMore: Boolean = false,
 )
+
+internal fun playlistStartIndex(entries: List<PlaylistEntry>, selectedEntryId: String?): Int =
+    selectedEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } }
+        ?.takeIf { it >= 0 } ?: 0
+
+internal fun appendPlaylistPage(current: PlaylistData, incoming: PlaylistData): PlaylistData? {
+    if (current.summary.id != incoming.summary.id ||
+        current.summary.updatedAt != incoming.summary.updatedAt ||
+        incoming.page != (current.page ?: 1) + 1
+    ) return null
+    val seen = current.items.mapTo(hashSetOf()) { it.entryId }
+    return incoming.copy(items = current.items + incoming.items.filter { seen.add(it.entryId) })
+}
 
 data class PagedLibrary(
     val library: Library,
