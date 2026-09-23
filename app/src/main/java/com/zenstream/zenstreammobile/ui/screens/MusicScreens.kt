@@ -36,7 +36,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -369,14 +368,14 @@ private fun AlbumHeader(
                         tint = if (album.favorite) accent else MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                PlaylistPickerButton(repository, session, album, tracks)
                 IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        painterResource(LucideR.drawable.lucide_ic_list_music),
+                        painterResource(LucideR.drawable.lucide_ic_list_plus),
                         contentDescription = stringResource(R.string.music_add_album_to_queue),
-                        tint = accent,
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                PlaylistPickerButton(repository, session, album, tracks)
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
                     Icon(
@@ -541,7 +540,7 @@ fun MusicArtistScreen(
                     onArtistClick = onOpenArtist,
                     onAlbumClick = onOpenAlbum,
                     onTrackClick = { tracks, index -> onPlayTracks(tracks, index, false) },
-                    onAddToQueue = onAddToQueue,
+                    onAddToQueue = { vm.playAll(onAddToQueue) },
                     currentTrackId = currentTrackId,
                     onScrollabilityChanged = onScrollabilityChanged,
                     onDetailScrolled = { detailScrolled = it },
@@ -573,7 +572,7 @@ private fun ArtistContent(
     onArtistClick: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
     onTrackClick: (List<MediaItem>, Int) -> Unit,
-    onAddToQueue: (List<MediaItem>) -> Unit,
+    onAddToQueue: () -> Unit,
     currentTrackId: String?,
     onScrollabilityChanged: (Boolean) -> Unit,
     onDetailScrolled: (Boolean) -> Unit = {},
@@ -693,6 +692,17 @@ private fun ArtistContent(
                             )
                         }
                         PlaylistPickerButton(repository, session, artist, tracks)
+                        IconButton(
+                            onClick = onAddToQueue,
+                            enabled = data.trackCount > 0 && !tracksLoading,
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_list_plus),
+                                contentDescription = stringResource(R.string.music_add_to_queue),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                         Spacer(Modifier.weight(1f))
                         IconButton(
                             onClick = onShuffleAll,
@@ -821,9 +831,6 @@ private fun ArtistContent(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { onAddToQueue(tracks) }) {
-                        Text(stringResource(R.string.music_add_to_queue))
-                    }
                 }
             }
             itemsIndexed(tracks, key = { _, track -> "artist-track-${track.id}" }) { index, track ->
