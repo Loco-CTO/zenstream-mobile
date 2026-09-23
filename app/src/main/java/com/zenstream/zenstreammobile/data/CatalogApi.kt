@@ -1186,14 +1186,14 @@ class CatalogApi(
     suspend fun fetchPlaylist(session: AuthSession, playlistId: String): PlaylistData =
         withContext(Dispatchers.IO) {
             parsePlaylist(
-                requestJson(session, "/api/account/playlists/${playlistId.encodePathSegment()}")
+                requestJson(session, "/api/account/playlists/${encodePathSegment(playlistId)}")
             )
         }
 
     suspend fun fetchSharedPlaylist(session: AuthSession, shareToken: String): PlaylistData =
         withContext(Dispatchers.IO) {
             parsePlaylist(
-                requestJson(session, "/api/shared/playlists/${shareToken.encodePathSegment()}")
+                requestJson(session, "/api/shared/playlists/${encodePathSegment(shareToken)}")
             )
         }
 
@@ -1232,7 +1232,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${playlistId.encodePathSegment()}",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}",
                     method = "PATCH",
                     body = body.toString(),
                 )
@@ -1243,7 +1243,7 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             requestJson(
                 session,
-                "/api/account/playlists/${playlistId.encodePathSegment()}",
+                "/api/account/playlists/${encodePathSegment(playlistId)}",
                 method = "DELETE",
             )
             Unit
@@ -1259,7 +1259,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${playlistId.encodePathSegment()}/items",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items",
                     method = "POST",
                     body = body.toString(),
                 )
@@ -1275,7 +1275,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${playlistId.encodePathSegment()}/items/${entryId.encodePathSegment()}",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}",
                     method = "DELETE",
                 )
             )
@@ -1291,7 +1291,7 @@ class CatalogApi(
             parsePlaylist(
                 requestJson(
                     session,
-                    "/api/account/playlists/${playlistId.encodePathSegment()}/order",
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/order",
                     method = "PUT",
                     body = body.toString(),
                 )

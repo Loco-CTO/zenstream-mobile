@@ -1052,11 +1052,6 @@ fun FavoritesScreen(
     var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
     Column(Modifier.fillMaxSize().padding(padding)) {
-        Text(
-            stringResource(R.string.my_lists),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).semantics { heading() },
-        )
         TabRow(selectedTabIndex = selectedTab) {
             tabs.forEachIndexed { index, title ->
                 Tab(
