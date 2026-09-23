@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,14 +57,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -85,12 +84,15 @@ import com.zenstream.zenstreammobile.data.MusicDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
 import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -708,14 +710,21 @@ fun PlaylistLibraryContent(
                     }
                 }
             },
-            onReorder = { entryIds ->
+            onReorder = reorder@{ entryIds ->
+                val playlistId = selectedId ?: return@reorder
+                val previous = detail ?: return@reorder
+                val byId = previous.items.associateBy { it.entryId }
+                val reordered = entryIds.mapNotNull(byId::get)
+                if (reordered.size != previous.items.size) return@reorder
+                detail = previous.copy(items = reordered)
                 scope.launch {
                     try {
-                        repository.reorderPlaylist(session, selectedId!!, entryIds)
+                        detail = repository.reorderPlaylist(session, playlistId, entryIds)
                         revision++
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
+                        detail = previous
                         error = true
                     }
                 }
@@ -845,26 +854,53 @@ private fun PlaylistDetailContent(
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val currentSummary = data?.summary
     val edgeScrollThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
     val fallbackRowHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
-    val entryBounds = remember { mutableMapOf<String, Rect>() }
-    var listBounds by remember { mutableStateOf<Rect?>(null) }
+    val minimumScrollPx = with(LocalDensity.current) { 4.dp.toPx() }
+    val extraScrollPx = with(LocalDensity.current) { 20.dp.toPx() }
+    val rowHeights = remember { mutableMapOf<String, Float>() }
+    var viewportHeightPx by remember { mutableStateOf(0) }
     var draggedEntryId by remember { mutableStateOf<String?>(null) }
     var draggedFrom by remember { mutableStateOf(-1) }
     var insertionIndex by remember { mutableStateOf(-1) }
-    var dragOffsetPx by remember { mutableStateOf(0f) }
-    var dragStartCenterY by remember { mutableStateOf(0f) }
-    var lastAutoScrollIndex by remember { mutableStateOf<Int?>(null) }
+    var draggedCenterY by remember { mutableStateOf(0f) }
+    var draggedHeightPx by remember { mutableStateOf(0f) }
+
+    fun updateInsertionIndex(entries: List<PlaylistEntry>) {
+        val nearest = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+            val id = info.key as? String ?: return@mapNotNull null
+            val index = entries.indexOfFirst { it.entryId == id }
+            if (index < 0) null else index to abs(info.offset + info.size / 2f - draggedCenterY)
+        }.minByOrNull { it.second }
+        if (nearest != null) insertionIndex = nearest.first
+    }
 
     fun clearDrag() {
         draggedEntryId = null
         draggedFrom = -1
         insertionIndex = -1
-        dragOffsetPx = 0f
-        dragStartCenterY = 0f
-        lastAutoScrollIndex = null
+        draggedCenterY = 0f
+        draggedHeightPx = 0f
+    }
+
+    LaunchedEffect(draggedEntryId) {
+        while (draggedEntryId != null) {
+            val edgeDistance = when {
+                draggedCenterY > viewportHeightPx - edgeScrollThresholdPx && listState.canScrollForward ->
+                    draggedCenterY - (viewportHeightPx - edgeScrollThresholdPx)
+                draggedCenterY < edgeScrollThresholdPx && listState.canScrollBackward ->
+                    draggedCenterY - edgeScrollThresholdPx
+                else -> 0f
+            }
+            if (edgeDistance != 0f && viewportHeightPx > 0) {
+                val speed = minimumScrollPx + extraScrollPx *
+                    (abs(edgeDistance) / edgeScrollThresholdPx).coerceIn(0f, 1f)
+                listState.scrollBy(if (edgeDistance > 0f) speed else -speed)
+                data?.items?.let(::updateInsertionIndex)
+            }
+            delay(16)
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -886,11 +922,46 @@ private fun PlaylistDetailContent(
                 val summary = data.summary
                 val entries = data.items
                 val tracks = entries.map { it.item }
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize().onGloballyPositioned { listBounds = it.boundsInRoot() },
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                ) {
+                Box(Modifier.fillMaxSize().onSizeChanged { viewportHeightPx = it.height }) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize().pointerInput(entries.map { it.entryId }, summary.isOwner) {
+                            if (summary.isOwner) detectDragGesturesAfterLongPress(
+                                onDragStart = { touch ->
+                                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                        touch.y >= it.offset && touch.y < it.offset + it.size &&
+                                            entries.any { entry -> entry.entryId == it.key }
+                                    } ?: return@detectDragGesturesAfterLongPress
+                                    val id = info.key as String
+                                    draggedEntryId = id
+                                    draggedFrom = entries.indexOfFirst { it.entryId == id }
+                                    insertionIndex = draggedFrom
+                                    draggedCenterY = info.offset + info.size / 2f
+                                    draggedHeightPx = info.size.toFloat()
+                                },
+                                onDragCancel = ::clearDrag,
+                                onDragEnd = {
+                                    val from = draggedFrom
+                                    val target = insertionIndex
+                                    clearDrag()
+                                    if (from in entries.indices && target in entries.indices && from != target) {
+                                        val reordered = entries.toMutableList()
+                                        val moving = reordered.removeAt(from)
+                                        reordered.add(target, moving)
+                                        onReorder(reordered.map { it.entryId })
+                                    }
+                                },
+                                onDrag = { change, dragAmount ->
+                                    if (draggedEntryId != null) {
+                                        change.consume()
+                                        draggedCenterY += dragAmount.y
+                                        updateInsertionIndex(entries)
+                                    }
+                                },
+                            )
+                        },
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                    ) {
                     item(key = "playlist-summary") {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -935,7 +1006,7 @@ private fun PlaylistDetailContent(
                     }
                     itemsIndexed(entries, key = { _, entry -> entry.entryId }) { index, entry ->
                         val isDragged = draggedEntryId == entry.entryId
-                        val rowStepPx = entryBounds[entry.entryId]?.height ?: fallbackRowHeightPx
+                        val rowStepPx = rowHeights[entry.entryId] ?: fallbackRowHeightPx
                         val targetOffsetPx = when {
                             isDragged -> 0f
                             draggedFrom >= 0 && insertionIndex > draggedFrom && index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
@@ -952,74 +1023,17 @@ private fun PlaylistDetailContent(
                             animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
                             label = "playlist drag lift",
                         )
-                        val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
                         Row(
                             Modifier.fillMaxWidth()
-                                .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
-                                .zIndex(if (isDragged) 1f else 0f)
+                                .offset { IntOffset(0, animatedOffsetPx.roundToInt()) }
                                 .graphicsLayer {
                                     val scale = 1f + liftProgress * .02f
                                     scaleX = scale
                                     scaleY = scale
                                     alpha = if (isDragged) .96f else 1f
                                 }
-                                .onGloballyPositioned { entryBounds[entry.entryId] = it.boundsInRoot() }
-                                .pointerInput(entry.entryId, entries, summary.isOwner) {
-                                    if (summary.isOwner) detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            draggedEntryId = entry.entryId
-                                            draggedFrom = index
-                                            insertionIndex = index
-                                            dragOffsetPx = 0f
-                                            dragStartCenterY = entryBounds[entry.entryId]?.center?.y ?: 0f
-                                            lastAutoScrollIndex = null
-                                        },
-                                        onDragCancel = ::clearDrag,
-                                        onDragEnd = {
-                                            val from = draggedFrom
-                                            val target = insertionIndex
-                                            clearDrag()
-                                            if (from in entries.indices && target in entries.indices && from != target) {
-                                                val reordered = entries.toMutableList()
-                                                val moving = reordered.removeAt(from)
-                                                reordered.add(target, moving)
-                                                onReorder(reordered.map { it.entryId })
-                                            }
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragOffsetPx += dragAmount.y
-                                            val draggedCenter = dragStartCenterY + dragOffsetPx
-                                            val visible = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
-                                                val id = info.key as? String ?: return@mapNotNull null
-                                                val candidateIndex = entries.indexOfFirst { it.entryId == id }
-                                                val bounds = entryBounds[id]
-                                                if (candidateIndex < 0 || bounds == null || candidateIndex == draggedFrom) null
-                                                else Triple(candidateIndex, bounds.center.y, info.index)
-                                            }.sortedBy { it.second }
-                                            if (visible.isNotEmpty()) {
-                                                val target = visible.firstOrNull { it.second >= draggedCenter }?.first ?: visible.last().first
-                                                insertionIndex = target.coerceIn(0, entries.lastIndex)
-                                            }
-                                            val viewport = listBounds
-                                            if (viewport != null && visible.isNotEmpty()) {
-                                                val first = visible.first()
-                                                val last = visible.last()
-                                                val scrollTarget = when {
-                                                    draggedCenter > viewport.bottom - edgeScrollThresholdPx && listState.canScrollForward -> last.third + 1
-                                                    draggedCenter < viewport.top + edgeScrollThresholdPx && listState.canScrollBackward -> first.third - 1
-                                                    else -> null
-                                                }
-                                                if (scrollTarget != null && scrollTarget != lastAutoScrollIndex) {
-                                                    lastAutoScrollIndex = scrollTarget
-                                                    scope.launch { listState.animateScrollToItem(scrollTarget.coerceAtLeast(0)) }
-                                                } else if (scrollTarget == null) {
-                                                    lastAutoScrollIndex = null
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
+                                .onSizeChanged { rowHeights[entry.entryId] = it.height.toFloat() }
+                                .graphicsLayer { alpha = if (isDragged) 0f else 1f }
                                 .padding(horizontal = 14.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -1034,6 +1048,32 @@ private fun PlaylistDetailContent(
                                 IconButton(onClick = { onRemoveEntry(entry.entryId) }) {
                                     Icon(painterResource(LucideR.drawable.lucide_ic_x), contentDescription = stringResource(R.string.remove_from_playlist))
                                 }
+                            }
+                        }
+                    }
+                }
+                    val dragged = entries.firstOrNull { it.entryId == draggedEntryId }
+                    if (dragged != null) {
+                        val previewTop = (draggedCenterY - draggedHeightPx / 2f)
+                            .coerceIn(0f, (viewportHeightPx - draggedHeightPx).coerceAtLeast(0f))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth()
+                                .offset { IntOffset(0, previewTop.roundToInt()) }
+                                .zIndex(2f),
+                            shape = RoundedCornerShape(12.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 10.dp,
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                MusicArtwork(dragged.item, session, modifier = Modifier.size(52.dp), requestedSize = 160)
+                                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                                    Text(dragged.item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                                    Text(dragged.item.album.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (summary.isOwner) Spacer(Modifier.size(48.dp))
                             }
                         }
                     }

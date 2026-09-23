@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -71,14 +72,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -1443,31 +1442,68 @@ private fun QueuePanel(
     coordinator: AudioPlayerCoordinator,
     accent: Color,
 ) {
-    val list = snapshot.entries
+    var pendingQueueOrder by remember { mutableStateOf<List<AudioQueueEntry>?>(null) }
+    val list = pendingQueueOrder ?: snapshot.entries
+    val pendingIds = pendingQueueOrder?.map { it.entryId }
+    LaunchedEffect(snapshot.entries, pendingIds) {
+        if (pendingIds != null && snapshot.entries.map { it.entryId } == pendingIds) {
+            pendingQueueOrder = null
+        }
+    }
+    LaunchedEffect(pendingIds) {
+        if (pendingIds != null) {
+            delay(2_000)
+            if (pendingQueueOrder?.map { it.entryId } == pendingIds) pendingQueueOrder = null
+        }
+    }
     val listState = rememberLazyListState()
-    val dragScrollScope = rememberCoroutineScope()
-    // Bounds are consumed only by the long-press drag coroutine. Keeping this map outside the
-    // snapshot system avoids invalidating every visible row each time it is measured.
-    val rowBounds = remember { mutableMapOf<String, Rect>() }
-    var queueBounds by remember { mutableStateOf<Rect?>(null) }
+    val rowHeights = remember { mutableMapOf<String, Float>() }
+    var viewportHeightPx by remember { mutableStateOf(0) }
     var draggedEntryId by remember { mutableStateOf<String?>(null) }
     var draggedFrom by remember { mutableStateOf(-1) }
     var insertionIndex by remember { mutableStateOf(-1) }
-    var dragOffsetPx by remember { mutableStateOf(0f) }
-    var dragStartCenterY by remember { mutableStateOf(0f) }
-    var dragStartCenters by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
-    var lastAutoScrollIndex by remember { mutableStateOf<Int?>(null) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    var draggedCenterY by remember { mutableStateOf(0f) }
+    var draggedHeightPx by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
     val rowGapPx = with(density) { 4.dp.toPx() }
+    val edgeThresholdPx = with(density) { 72.dp.toPx() }
+    val minimumScrollPx = with(density) { 4.dp.toPx() }
+    val extraScrollPx = with(density) { 20.dp.toPx() }
+
+    fun updateInsertionIndex() {
+        val nearest = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+            val id = info.key as? String ?: return@mapNotNull null
+            val index = list.indexOfFirst { it.entryId == id }
+            if (index < 0) null else index to abs(info.offset + info.size / 2f - draggedCenterY)
+        }.minByOrNull { it.second }
+        if (nearest != null) insertionIndex = nearest.first
+    }
 
     fun clearDrag() {
         draggedEntryId = null
         draggedFrom = -1
         insertionIndex = -1
-        dragOffsetPx = 0f
-        dragStartCenterY = 0f
-        dragStartCenters = emptyMap()
-        lastAutoScrollIndex = null
+        draggedCenterY = 0f
+        draggedHeightPx = 0f
+    }
+
+    LaunchedEffect(draggedEntryId) {
+        while (draggedEntryId != null) {
+            val edgeDistance = when {
+                draggedCenterY > viewportHeightPx - edgeThresholdPx && listState.canScrollForward ->
+                    draggedCenterY - (viewportHeightPx - edgeThresholdPx)
+                draggedCenterY < edgeThresholdPx && listState.canScrollBackward ->
+                    draggedCenterY - edgeThresholdPx
+                else -> 0f
+            }
+            if (edgeDistance != 0f && viewportHeightPx > 0) {
+                val speed = minimumScrollPx + extraScrollPx *
+                    (abs(edgeDistance) / edgeThresholdPx).coerceIn(0f, 1f)
+                listState.scrollBy(if (edgeDistance > 0f) speed else -speed)
+                updateInsertionIndex()
+            }
+            delay(16)
+        }
     }
 
     Column(modifier.fillMaxSize()) {
@@ -1489,15 +1525,51 @@ private fun QueuePanel(
                 }
             }
         }
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(vertical = 8.dp),
-            modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { queueBounds = it.boundsInRoot() },
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { viewportHeightPx = it.height }) {
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.fillMaxSize().pointerInput(list.map { it.entryId }) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { touch ->
+                            val info = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                touch.y >= it.offset && touch.y < it.offset + it.size &&
+                                    list.any { entry -> entry.entryId == it.key }
+                            } ?: return@detectDragGesturesAfterLongPress
+                            val id = info.key as String
+                            draggedEntryId = id
+                            draggedFrom = list.indexOfFirst { it.entryId == id }
+                            insertionIndex = draggedFrom
+                            draggedCenterY = info.offset + info.size / 2f
+                            draggedHeightPx = info.size.toFloat()
+                        },
+                        onDragCancel = ::clearDrag,
+                        onDragEnd = {
+                            val from = draggedFrom
+                            val target = insertionIndex
+                            clearDrag()
+                            if (from in list.indices && target in list.indices && target != from) {
+                                val reordered = list.toMutableList()
+                                val moving = reordered.removeAt(from)
+                                reordered.add(target, moving)
+                                pendingQueueOrder = reordered
+                                coordinator.reorderQueue(from, target)
+                            }
+                        },
+                        onDrag = { change, dragAmount ->
+                            if (draggedEntryId != null) {
+                                change.consume()
+                                draggedCenterY += dragAmount.y
+                                updateInsertionIndex()
+                            }
+                        },
+                    )
+                },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
             itemsIndexed(list, key = { _, entry -> entry.entryId }) { index, entry ->
                 val isDragged = draggedEntryId == entry.entryId
-                val rowStepPx = (rowBounds[entry.entryId]?.height ?: 0f) + rowGapPx
+                val rowStepPx = (rowHeights[entry.entryId] ?: draggedHeightPx) + rowGapPx
                 val targetOffsetPx =
                     when {
                         isDragged -> 0f
@@ -1559,12 +1631,10 @@ private fun QueuePanel(
                             ),
                         label = "queue row movement",
                     )
-                val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
                 Surface(
                     modifier =
                         Modifier.fillMaxWidth()
-                            .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
-                            .zIndex(if (isDragged) 1f else 0f)
+                            .offset { IntOffset(0, animatedOffsetPx.roundToInt()) }
                             .shadow(
                                 elevation = shadowElevation,
                                 shape = RoundedCornerShape(14.dp),
@@ -1574,75 +1644,8 @@ private fun QueuePanel(
                                 scaleX = scale
                                 scaleY = scale
                             }
-                            .onGloballyPositioned { coordinates ->
-                                rowBounds[entry.entryId] = coordinates.boundsInRoot()
-                            }
-                            .pointerInput(entry.entryId) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        val visibleIds = listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? String }.toSet()
-                                        val centers = list.filter { it.entryId in visibleIds }.mapNotNull { candidate ->
-                                            rowBounds[candidate.entryId]?.let { candidate.entryId to it.center.y }
-                                        }
-                                        dragStartCenters = centers.toMap()
-                                        draggedEntryId = entry.entryId
-                                        draggedFrom = index
-                                        insertionIndex = index
-                                        dragOffsetPx = 0f
-                                        dragStartCenterY =
-                                            dragStartCenters[entry.entryId]
-                                                ?: rowBounds[entry.entryId]?.center?.y
-                                                ?: 0f
-                                        lastAutoScrollIndex = null
-                                    },
-                                    onDragCancel = ::clearDrag,
-                                    onDragEnd = {
-                                        val from = draggedFrom
-                                        val target = insertionIndex
-                                        clearDrag()
-                                        if (
-                                            from in list.indices &&
-                                                target in list.indices &&
-                                                target != from
-                                        ) {
-                                            coordinator.reorderQueue(from, target)
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragOffsetPx += dragAmount.y
-                                        val draggedCenterY = dragStartCenterY + dragOffsetPx
-                                        val visibleRows = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
-                                            val id = info.key as? String ?: return@mapNotNull null
-                                            val candidateIndex = list.indexOfFirst { it.entryId == id }
-                                            val bounds = rowBounds[id]
-                                            if (candidateIndex < 0 || candidateIndex == draggedFrom || bounds == null) null
-                                            else Triple(candidateIndex, bounds.center.y, info.index)
-                                        }.sortedBy { it.second }
-                                        if (visibleRows.isNotEmpty()) {
-                                            val target = visibleRows.firstOrNull { it.second >= draggedCenterY }?.first
-                                                ?: visibleRows.last().first
-                                            insertionIndex = target.coerceIn(0, list.lastIndex.coerceAtLeast(0))
-                                        }
-                                        val viewport = queueBounds
-                                        if (viewport != null && visibleRows.isNotEmpty()) {
-                                            val threshold = with(density) { 72.dp.toPx() }
-                                            val scrollTarget = when {
-                                                draggedCenterY > viewport.bottom - threshold && listState.canScrollForward -> visibleRows.last().third + 1
-                                                draggedCenterY < viewport.top + threshold && listState.canScrollBackward -> visibleRows.first().third - 1
-                                                else -> null
-                                            }
-                                            if (scrollTarget != null && scrollTarget != lastAutoScrollIndex) {
-                                                lastAutoScrollIndex = scrollTarget
-                                                dragScrollScope.launch { listState.animateScrollToItem(scrollTarget.coerceAtLeast(0)) }
-                                            } else if (scrollTarget == null) {
-                                                lastAutoScrollIndex = null
-                                            }
-                                        }
-                                    },
-                                )
-                            }
-                            .alpha(previewAlpha),
+                            .onSizeChanged { rowHeights[entry.entryId] = it.height.toFloat() }
+                            .alpha(if (isDragged) 0f else previewAlpha),
                     shape = RoundedCornerShape(14.dp),
                     color =
                         if (isDragged) {
@@ -1700,6 +1703,54 @@ private fun QueuePanel(
                                 tint = accent,
                             )
                         }
+                    }
+                }
+            }
+        }
+            val dragged = list.firstOrNull { it.entryId == draggedEntryId }
+            if (dragged != null) {
+                val previewTop = (draggedCenterY - draggedHeightPx / 2f)
+                    .coerceIn(0f, (viewportHeightPx - draggedHeightPx).coerceAtLeast(0f))
+                Surface(
+                    modifier = Modifier.fillMaxWidth()
+                        .offset { IntOffset(0, previewTop.roundToInt()) }
+                        .zIndex(2f)
+                        .shadow(10.dp, RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .98f),
+                    tonalElevation = 4.dp,
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MusicArtwork(
+                            item = dragged.track,
+                            session = session,
+                            modifier = Modifier.size(56.dp),
+                            contentDescription = dragged.track.name,
+                            requestedSize = 256,
+                            shape = RoundedCornerShape(10.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                dragged.track.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                dragged.track.albumArtist
+                                    ?: dragged.track.artists.firstOrNull()
+                                    ?: stringResource(R.string.audio_unknown_artist),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.width(48.dp))
                     }
                 }
             }
