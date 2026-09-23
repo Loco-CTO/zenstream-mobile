@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,11 +23,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -47,8 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -109,6 +111,7 @@ fun PlaylistPickerButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaylistPickerDialog(
     repository: MusicDataSource,
@@ -162,10 +165,37 @@ private fun PlaylistPickerDialog(
         refresh()
     }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.add_to_playlist)) },
-        text = {
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = Color.Black.copy(alpha = 0.58f),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.36f))
+        },
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.add_to_playlist),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_x),
+                        contentDescription = stringResource(R.string.close),
+                    )
+                }
+            }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     onClick = { createDialog = true },
@@ -185,7 +215,7 @@ private fun PlaylistPickerDialog(
                     summaries.isEmpty() -> Text(stringResource(R.string.playlists_empty))
                     else ->
                         LazyColumn(
-                            modifier = Modifier.fillMaxWidth().height(300.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             items(summaries, key = { it.id }) { summary ->
@@ -276,9 +306,11 @@ private fun PlaylistPickerDialog(
                         }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
-    )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) }
+            }
+        }
+    }
 
     if (createDialog) {
         PlaylistEditorDialog(
@@ -320,8 +352,7 @@ private fun PlaylistMembershipCheckbox(checked: Boolean) {
     val outline = MaterialTheme.colorScheme.outline
     val foreground = MaterialTheme.colorScheme.onSurface
     val border = lerp(outline, foreground.copy(alpha = 0.82f), progress)
-    val fill = foreground.copy(alpha = 0.13f * progress)
-    val mark = foreground.copy(alpha = progress)
+    val fill = lerp(Color.Transparent, foreground, progress)
 
     Canvas(Modifier.size(18.dp)) {
         val stroke = 1.6.dp.toPx()
@@ -335,36 +366,6 @@ private fun PlaylistMembershipCheckbox(checked: Boolean) {
             cornerRadius = CornerRadius(corner),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
         )
-
-        val first = Offset(size.width * 0.23f, size.height * 0.51f)
-        val middle = Offset(size.width * 0.43f, size.height * 0.70f)
-        val last = Offset(size.width * 0.78f, size.height * 0.32f)
-        val firstProgress = (progress * 2f).coerceIn(0f, 1f)
-        if (firstProgress > 0f) {
-            drawLine(
-                color = mark,
-                start = first,
-                end = Offset(
-                    first.x + (middle.x - first.x) * firstProgress,
-                    first.y + (middle.y - first.y) * firstProgress,
-                ),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round,
-            )
-        }
-        val secondProgress = ((progress - 0.5f) * 2f).coerceIn(0f, 1f)
-        if (secondProgress > 0f) {
-            drawLine(
-                color = mark,
-                start = middle,
-                end = Offset(
-                    middle.x + (last.x - middle.x) * secondProgress,
-                    middle.y + (last.y - middle.y) * secondProgress,
-                ),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round,
-            )
-        }
     }
 }
 
