@@ -38,6 +38,24 @@ class ParserTest {
     }
 
     @Test
+    fun parsesAudioPlaylistSummaryAndOrderedEntries() {
+        val playlist =
+            parsePlaylist(
+                JSONObject(
+                    """{"id":"playlist-1","name":"Road Trip","description":"Long drives","isPrivate":false,"shareToken":"share-token","itemCount":2,"isOwner":true,"artworkItems":[{"Id":"track-a","Name":"Track A","Type":"Audio"}],"items":[{"entryId":"entry-a","position":0,"addedAt":"2026-09-01T12:00:00Z","item":{"Id":"track-a","Name":"Track A","Type":"Audio"}},{"entryId":"entry-b","position":1,"addedAt":"2026-09-01T12:01:00Z","item":{"Id":"track-b","Name":"Track B","Type":"Audio"}}]}"""
+                )
+            )
+
+        assertEquals("playlist-1", playlist.summary.id)
+        assertEquals("Road Trip", playlist.summary.name)
+        assertEquals(false, playlist.summary.isPrivate)
+        assertEquals("share-token", playlist.summary.shareToken)
+        assertEquals(2, playlist.summary.itemCount)
+        assertEquals(listOf("track-a", "track-b"), playlist.items.map { it.item.id })
+        assertEquals(listOf(0, 1), playlist.items.map { it.position })
+    }
+
+    @Test
     fun selectsRequestedSeasonThenItemSeasonThenSeasonOne() {
         val seasons =
             listOf(

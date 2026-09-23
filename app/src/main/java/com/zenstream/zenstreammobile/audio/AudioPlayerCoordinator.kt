@@ -66,6 +66,39 @@ class AudioPlayerCoordinator(
         AudioServiceBridge.start(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE, snapshot)
     }
 
+    /** Starts a My Lists queue using the current audio shuffle setting and preserves a selected
+     * track as the first entry when the user starts playback from that track. */
+    fun playPlaylistTracks(
+        tracks: List<MediaItem>,
+        selectedIndex: Int = 0,
+        shuffle: Boolean,
+        preserveSelectedFirst: Boolean = false,
+    ) {
+        val entries =
+            tracks
+                .filter { it.id.isNotBlank() }
+                .map { track ->
+                    AudioQueueEntry(entryId = UUID.randomUUID().toString(), track = track)
+                }
+        if (entries.isEmpty()) return
+        val playbackOrder =
+            queuePlaybackOrder(
+                entries,
+                selectedIndex,
+                shuffle,
+                preserveSelectedFirst = preserveSelectedFirst,
+            )
+        val snapshot =
+            AudioQueueSnapshot(
+                serverUrl = session.serverUrl,
+                userId = session.userId,
+                entries = playbackOrder.entries,
+                currentIndex = playbackOrder.currentIndex,
+                shuffle = shuffle,
+            )
+        AudioServiceBridge.start(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE, snapshot)
+    }
+
     fun addToQueue(tracks: List<MediaItem>) {
         val entries =
             tracks

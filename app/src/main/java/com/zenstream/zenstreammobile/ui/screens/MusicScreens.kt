@@ -118,6 +118,7 @@ fun MusicAlbumScreen(
             state.data != null ->
                 AlbumContent(
                     data = state.data!!,
+                    repository = repository,
                     session = session,
                     selectedTrackId = selectedTrackId,
                     padding = PaddingValues(),
@@ -146,6 +147,7 @@ fun MusicAlbumScreen(
 @Composable
 private fun AlbumContent(
     data: MusicAlbumData,
+    repository: MusicDataSource,
     session: AuthSession,
     selectedTrackId: String?,
     padding: PaddingValues,
@@ -201,6 +203,8 @@ private fun AlbumContent(
         item(key = "album-header") {
             AlbumHeader(
                 data = data,
+                repository = repository,
+                tracks = tracks,
                 session = session,
                 onArtistClick = onArtistClick,
                 onPlay = { onPlayTracks(tracks, 0, false) },
@@ -232,6 +236,9 @@ private fun AlbumContent(
                         )
                     },
                     onFavorite = onFavoriteTrack,
+                    onAddToPlaylist = {
+                        PlaylistPickerButton(repository, session, track, listOf(track))
+                    },
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -265,6 +272,8 @@ private fun AlbumContent(
 @Composable
 private fun AlbumHeader(
     data: MusicAlbumData,
+    repository: MusicDataSource,
+    tracks: List<MediaItem>,
     session: AuthSession,
     onArtistClick: (String) -> Unit,
     onPlay: () -> Unit,
@@ -367,6 +376,7 @@ private fun AlbumHeader(
                         tint = accent,
                     )
                 }
+                PlaylistPickerButton(repository, session, album, tracks)
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
                     Icon(
@@ -519,6 +529,7 @@ fun MusicArtistScreen(
             state.data != null ->
                 ArtistContent(
                     data = state.data!!,
+                    repository = repository,
                     session = session,
                     padding = PaddingValues(),
                     tracksLoading = state.tracksLoading,
@@ -550,6 +561,7 @@ fun MusicArtistScreen(
 @Composable
 private fun ArtistContent(
     data: MusicArtistData,
+    repository: MusicDataSource,
     session: AuthSession,
     padding: PaddingValues,
     tracksLoading: Boolean,
@@ -680,6 +692,7 @@ private fun ArtistContent(
                                 maxLines = 1,
                             )
                         }
+                        PlaylistPickerButton(repository, session, artist, tracks)
                         Spacer(Modifier.weight(1f))
                         IconButton(
                             onClick = onShuffleAll,
@@ -752,6 +765,9 @@ private fun ArtistContent(
                             tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
                         )
                     },
+                    onAddToPlaylist = {
+                        PlaylistPickerButton(repository, session, track, listOf(track))
+                    },
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
@@ -815,6 +831,9 @@ private fun ArtistContent(
                     item = track,
                     isCurrent = track.id == currentTrackId,
                     onClick = { onTrackClick(tracks, index) },
+                    onAddToPlaylist = {
+                        PlaylistPickerButton(repository, session, track, listOf(track))
+                    },
                     accentColor = accent,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )

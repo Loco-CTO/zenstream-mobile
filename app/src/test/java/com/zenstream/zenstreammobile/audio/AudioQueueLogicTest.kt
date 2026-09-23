@@ -162,4 +162,20 @@ class AudioQueueLogicTest {
             playbackOrder.entries.map { it.entryId }.toSet(),
         )
     }
+
+    @Test
+    fun playlistShuffleKeepsTheSelectedTrackFirstAndShufflesTheRest() {
+        val playbackOrder =
+            queuePlaybackOrder(
+                queue,
+                selectedIndex = 1,
+                shuffle = true,
+                random = Random(7),
+                preserveSelectedFirst = true,
+            )
+
+        assertEquals(0, playbackOrder.currentIndex)
+        assertEquals("b", playbackOrder.entries.first().entryId)
+        assertEquals(setOf("a", "b", "c"), playbackOrder.entries.map { it.entryId }.toSet())
+    }
 }

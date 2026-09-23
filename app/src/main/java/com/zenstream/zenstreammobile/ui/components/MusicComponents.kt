@@ -221,6 +221,7 @@ fun AudioTrackRow(
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
+    onAddToPlaylist: (@Composable () -> Unit)? = null,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
@@ -284,6 +285,9 @@ fun AudioTrackRow(
                     tint = if (item.favorite) accentColor else MaterialTheme.colorScheme.onSurface,
                 )
             }
+        }
+        if (onAddToPlaylist != null) {
+            onAddToPlaylist()
         }
     }
 }

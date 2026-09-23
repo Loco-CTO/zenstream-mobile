@@ -533,7 +533,7 @@ class SearchOverlayTest {
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.home)).performClick()
-        composeRule.onNodeWithText(context.getString(R.string.favorites)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.my_lists)).performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf("home", "favorites"), selectedRoutes)
