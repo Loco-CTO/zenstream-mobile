@@ -84,7 +84,7 @@ fun PlaylistPickerButton(
         modifier = Modifier.semantics { contentDescription = "${source.name}: $addDescription" },
     ) {
         Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_list_plus),
+            painter = painterResource(LucideR.drawable.lucide_ic_circle_plus),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
         )
