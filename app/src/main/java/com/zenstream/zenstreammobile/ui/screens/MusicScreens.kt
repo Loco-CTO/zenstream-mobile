@@ -371,7 +371,7 @@ private fun AlbumHeader(
                 }
                 IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        painterResource(LucideR.drawable.lucide_ic_list_plus),
+                        painterResource(LucideR.drawable.lucide_ic_list_music),
                         contentDescription = stringResource(R.string.music_add_album_to_queue),
                         tint = accent,
                     )
