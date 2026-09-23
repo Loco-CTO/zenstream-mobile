@@ -1,6 +1,9 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.content.Intent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,10 +46,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -111,6 +120,7 @@ private fun PlaylistPickerDialog(
     val scope = rememberCoroutineScope()
     var summaries by remember { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
     var details by remember { mutableStateOf<Map<String, PlaylistData>>(emptyMap()) }
+    var pendingMembership by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     var selectedTracks by remember { mutableStateOf(providedTracks) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -182,40 +192,68 @@ private fun PlaylistPickerDialog(
                                 val detail = details[summary.id]
                                 val trackIds = selectedTracks.mapTo(hashSetOf()) { it.id }
                                 val memberIds = detail?.items?.mapTo(hashSetOf()) { it.item.id }.orEmpty()
-                                val selected = trackIds.isNotEmpty() && memberIds.containsAll(trackIds)
+                                val savedSelection = trackIds.isNotEmpty() && memberIds.containsAll(trackIds)
+                                val selected = pendingMembership[summary.id] ?: savedSelection
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
-                                        .clickable(enabled = !busy && detail != null) {
-                                            val current = detail ?: return@clickable
+                                        .toggleable(
+                                            value = selected,
+                                            enabled = !busy && detail != null,
+                                            role = Role.Checkbox,
+                                        ) { shouldBeMember ->
+                                            val current = detail ?: return@toggleable
+                                            pendingMembership = pendingMembership + (summary.id to shouldBeMember)
+                                            busy = true
+                                            error = false
                                             scope.launch {
-                                                busy = true
-                                                try {
-                                                    val updated =
-                                                        if (selected) {
-                                                            current.items
-                                                                .filter { it.item.id in trackIds }
-                                                                .fold(current) { playlist, entry ->
-                                                                    repository.removePlaylistEntry(
-                                                                        session,
-                                                                        summary.id,
-                                                                        entry.entryId,
-                                                                    )
-                                                                }
-                                                        } else {
-                                                            repository.addPlaylistItems(
-                                                                session,
-                                                                summary.id,
-                                                                listOf(source.id),
-                                                            )
-                                                        }
+                                                fun publish(updated: PlaylistData) {
                                                     details = details + (summary.id to updated)
-                                                    summaries = repository.playlists(session)
+                                                    summaries = summaries.map {
+                                                        if (it.id == summary.id) updated.summary else it
+                                                    }
+                                                }
+
+                                                fun containsSelection(playlist: PlaylistData): Boolean {
+                                                    val ids = playlist.items.mapTo(hashSetOf()) { it.item.id }
+                                                    return trackIds.isNotEmpty() && ids.containsAll(trackIds)
+                                                }
+
+                                                try {
+                                                    if (shouldBeMember) {
+                                                        repository.addPlaylistItems(
+                                                            session,
+                                                            summary.id,
+                                                            listOf(source.id),
+                                                        )
+                                                    } else {
+                                                        current.items
+                                                            .filter { it.item.id in trackIds }
+                                                            .forEach { entry ->
+                                                                repository.removePlaylistEntry(
+                                                                    session,
+                                                                    summary.id,
+                                                                    entry.entryId,
+                                                                )
+                                                            }
+                                                    }
+                                                    val updated = repository.playlist(session, summary.id)
+                                                    publish(updated)
+                                                    error = containsSelection(updated) != shouldBeMember
                                                 } catch (cancelled: CancellationException) {
                                                     throw cancelled
                                                 } catch (_: Throwable) {
-                                                    error = true
+                                                    try {
+                                                        val updated = repository.playlist(session, summary.id)
+                                                        publish(updated)
+                                                        error = containsSelection(updated) != shouldBeMember
+                                                    } catch (cancelled: CancellationException) {
+                                                        throw cancelled
+                                                    } catch (_: Throwable) {
+                                                        error = true
+                                                    }
                                                 } finally {
+                                                    pendingMembership = pendingMembership - summary.id
                                                     busy = false
                                                 }
                                             }
@@ -232,14 +270,7 @@ private fun PlaylistPickerDialog(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    Icon(
-                                        painterResource(
-                                            if (selected) LucideR.drawable.lucide_ic_circle_check
-                                            else LucideR.drawable.lucide_ic_circle
-                                        ),
-                                        contentDescription = null,
-                                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    )
+                                    PlaylistMembershipCheckbox(selected)
                                 }
                             }
                         }
@@ -276,6 +307,64 @@ private fun PlaylistPickerDialog(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun PlaylistMembershipCheckbox(checked: Boolean) {
+    val progress by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 190),
+        label = "playlist membership checkbox",
+    )
+    val outline = MaterialTheme.colorScheme.outline
+    val foreground = MaterialTheme.colorScheme.onSurface
+    val border = lerp(outline, foreground.copy(alpha = 0.82f), progress)
+    val fill = foreground.copy(alpha = 0.13f * progress)
+    val mark = foreground.copy(alpha = progress)
+
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = 1.6.dp.toPx()
+        val corner = 3.dp.toPx()
+        drawRoundRect(
+            color = fill,
+            cornerRadius = CornerRadius(corner),
+        )
+        drawRoundRect(
+            color = border,
+            cornerRadius = CornerRadius(corner),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+        )
+
+        val first = Offset(size.width * 0.23f, size.height * 0.51f)
+        val middle = Offset(size.width * 0.43f, size.height * 0.70f)
+        val last = Offset(size.width * 0.78f, size.height * 0.32f)
+        val firstProgress = (progress * 2f).coerceIn(0f, 1f)
+        if (firstProgress > 0f) {
+            drawLine(
+                color = mark,
+                start = first,
+                end = Offset(
+                    first.x + (middle.x - first.x) * firstProgress,
+                    first.y + (middle.y - first.y) * firstProgress,
+                ),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
+        val secondProgress = ((progress - 0.5f) * 2f).coerceIn(0f, 1f)
+        if (secondProgress > 0f) {
+            drawLine(
+                color = mark,
+                start = middle,
+                end = Offset(
+                    middle.x + (last.x - middle.x) * secondProgress,
+                    middle.y + (last.y - middle.y) * secondProgress,
+                ),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }
 
