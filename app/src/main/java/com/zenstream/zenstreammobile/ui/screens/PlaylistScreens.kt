@@ -2,10 +2,13 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,9 +20,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -49,10 +55,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.boundsInRoot
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -61,6 +73,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -77,6 +91,7 @@ import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlin.math.roundToInt
 
 @Composable
 fun PlaylistPickerButton(
@@ -85,20 +100,35 @@ fun PlaylistPickerButton(
     source: MediaItem,
     trackItems: List<MediaItem> = emptyList(),
     enabled: Boolean = true,
+    triggerContent: (@Composable (onClick: () -> Unit) -> Unit)? = null,
+    openRequest: Int = 0,
+    showTrigger: Boolean = true,
 ) {
     var open by remember(source.id) { mutableStateOf(false) }
     val tracks = remember(source.id, trackItems) { trackItems.distinctBy { it.id } }
     val addDescription = stringResource(R.string.add_to_playlist)
-    IconButton(
-        enabled = enabled,
-        onClick = { open = true },
-        modifier = Modifier.semantics { contentDescription = "${source.name}: $addDescription" },
-    ) {
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_circle_plus),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-        )
+    LaunchedEffect(openRequest) {
+        if (openRequest > 0) open = true
+    }
+    val openPicker = { if (enabled) open = true }
+    if (showTrigger) {
+        if (triggerContent == null) {
+            IconButton(
+                enabled = enabled,
+                onClick = openPicker,
+                modifier = Modifier.semantics { contentDescription = "${source.name}: $addDescription" },
+            ) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_circle_plus),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        } else {
+            Box(Modifier.semantics { contentDescription = "${source.name}: $addDescription" }) {
+                triggerContent(openPicker)
+            }
+        }
     }
     if (open) {
         PlaylistPickerDialog(
@@ -814,7 +844,29 @@ private fun PlaylistDetailContent(
     onRefresh: () -> Unit,
 ) {
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val currentSummary = data?.summary
+    val edgeScrollThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+    val fallbackRowHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
+    val entryBounds = remember { mutableMapOf<String, Rect>() }
+    var listBounds by remember { mutableStateOf<Rect?>(null) }
+    var draggedEntryId by remember { mutableStateOf<String?>(null) }
+    var draggedFrom by remember { mutableStateOf(-1) }
+    var insertionIndex by remember { mutableStateOf(-1) }
+    var dragOffsetPx by remember { mutableStateOf(0f) }
+    var dragStartCenterY by remember { mutableStateOf(0f) }
+    var lastAutoScrollIndex by remember { mutableStateOf<Int?>(null) }
+
+    fun clearDrag() {
+        draggedEntryId = null
+        draggedFrom = -1
+        insertionIndex = -1
+        dragOffsetPx = 0f
+        dragStartCenterY = 0f
+        lastAutoScrollIndex = null
+    }
+
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -834,7 +886,11 @@ private fun PlaylistDetailContent(
                 val summary = data.summary
                 val entries = data.items
                 val tracks = entries.map { it.item }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().onGloballyPositioned { listBounds = it.boundsInRoot() },
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
                     item(key = "playlist-summary") {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -877,10 +933,94 @@ private fun PlaylistDetailContent(
                     if (entries.isEmpty()) item(key = "playlist-empty") {
                         Text(stringResource(R.string.playlist_empty), modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    items(entries, key = { it.entryId }) { entry ->
-                        val index = entries.indexOf(entry)
+                    itemsIndexed(entries, key = { _, entry -> entry.entryId }) { index, entry ->
+                        val isDragged = draggedEntryId == entry.entryId
+                        val rowStepPx = entryBounds[entry.entryId]?.height ?: fallbackRowHeightPx
+                        val targetOffsetPx = when {
+                            isDragged -> 0f
+                            draggedFrom >= 0 && insertionIndex > draggedFrom && index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
+                            draggedFrom >= 0 && insertionIndex in 0 until draggedFrom && index in insertionIndex until draggedFrom -> rowStepPx
+                            else -> 0f
+                        }
+                        val animatedOffsetPx by animateFloatAsState(
+                            targetValue = targetOffsetPx,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                            label = "playlist row movement",
+                        )
+                        val liftProgress by animateFloatAsState(
+                            targetValue = if (isDragged) 1f else 0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                            label = "playlist drag lift",
+                        )
+                        val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                            Modifier.fillMaxWidth()
+                                .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
+                                .zIndex(if (isDragged) 1f else 0f)
+                                .graphicsLayer {
+                                    val scale = 1f + liftProgress * .02f
+                                    scaleX = scale
+                                    scaleY = scale
+                                    alpha = if (isDragged) .96f else 1f
+                                }
+                                .onGloballyPositioned { entryBounds[entry.entryId] = it.boundsInRoot() }
+                                .pointerInput(entry.entryId, entries, summary.isOwner) {
+                                    if (summary.isOwner) detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggedEntryId = entry.entryId
+                                            draggedFrom = index
+                                            insertionIndex = index
+                                            dragOffsetPx = 0f
+                                            dragStartCenterY = entryBounds[entry.entryId]?.center?.y ?: 0f
+                                            lastAutoScrollIndex = null
+                                        },
+                                        onDragCancel = ::clearDrag,
+                                        onDragEnd = {
+                                            val from = draggedFrom
+                                            val target = insertionIndex
+                                            clearDrag()
+                                            if (from in entries.indices && target in entries.indices && from != target) {
+                                                val reordered = entries.toMutableList()
+                                                val moving = reordered.removeAt(from)
+                                                reordered.add(target, moving)
+                                                onReorder(reordered.map { it.entryId })
+                                            }
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragOffsetPx += dragAmount.y
+                                            val draggedCenter = dragStartCenterY + dragOffsetPx
+                                            val visible = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+                                                val id = info.key as? String ?: return@mapNotNull null
+                                                val candidateIndex = entries.indexOfFirst { it.entryId == id }
+                                                val bounds = entryBounds[id]
+                                                if (candidateIndex < 0 || bounds == null || candidateIndex == draggedFrom) null
+                                                else Triple(candidateIndex, bounds.center.y, info.index)
+                                            }.sortedBy { it.second }
+                                            if (visible.isNotEmpty()) {
+                                                val target = visible.firstOrNull { it.second >= draggedCenter }?.first ?: visible.last().first
+                                                insertionIndex = target.coerceIn(0, entries.lastIndex)
+                                            }
+                                            val viewport = listBounds
+                                            if (viewport != null && visible.isNotEmpty()) {
+                                                val first = visible.first()
+                                                val last = visible.last()
+                                                val scrollTarget = when {
+                                                    draggedCenter > viewport.bottom - edgeScrollThresholdPx && listState.canScrollForward -> last.third + 1
+                                                    draggedCenter < viewport.top + edgeScrollThresholdPx && listState.canScrollBackward -> first.third - 1
+                                                    else -> null
+                                                }
+                                                if (scrollTarget != null && scrollTarget != lastAutoScrollIndex) {
+                                                    lastAutoScrollIndex = scrollTarget
+                                                    scope.launch { listState.animateScrollToItem(scrollTarget.coerceAtLeast(0)) }
+                                                } else if (scrollTarget == null) {
+                                                    lastAutoScrollIndex = null
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             MusicArtwork(entry.item, session, modifier = Modifier.size(52.dp), requestedSize = 160)
@@ -891,30 +1031,6 @@ private fun PlaylistDetailContent(
                                 Text(entry.item.album.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (summary.isOwner) {
-                                IconButton(onClick = {
-                                    val order = entries.map { it.entryId }.toMutableList()
-                                    val other = index - 1
-                                    if (other >= 0) {
-                                        val current = order[index]
-                                        order[index] = order[other]
-                                        order[other] = current
-                                        onReorder(order)
-                                    }
-                                }, enabled = index > 0) {
-                                    Icon(painterResource(LucideR.drawable.lucide_ic_arrow_up), contentDescription = stringResource(R.string.move_up))
-                                }
-                                IconButton(onClick = {
-                                    val order = entries.map { it.entryId }.toMutableList()
-                                    val other = index + 1
-                                    if (other < order.size) {
-                                        val current = order[index]
-                                        order[index] = order[other]
-                                        order[other] = current
-                                        onReorder(order)
-                                    }
-                                }, enabled = index < entries.lastIndex) {
-                                    Icon(painterResource(LucideR.drawable.lucide_ic_arrow_down), contentDescription = stringResource(R.string.move_down))
-                                }
                                 IconButton(onClick = { onRemoveEntry(entry.entryId) }) {
                                     Icon(painterResource(LucideR.drawable.lucide_ic_x), contentDescription = stringResource(R.string.remove_from_playlist))
                                 }

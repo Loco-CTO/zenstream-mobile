@@ -103,6 +103,19 @@ private fun MediaItem.toAudioQueueJson(): JSONObject =
             "primaryImageBlurHash",
             imageBlurHashes["Primary"]?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
         )
+        .put(
+            "primaryArtworkFallback",
+            primaryArtworkFallback?.let { fallback ->
+                JSONObject()
+                    .put("id", fallback.id.take(AUDIO_QUEUE_MAX_TEXT_LENGTH))
+                    .put("type", fallback.type)
+                    .put("primaryImageTag", safeQueueArtworkTag(fallback.imageTags["Primary"]))
+                    .put(
+                        "primaryImageBlurHash",
+                        fallback.imageBlurHashes["Primary"]?.take(AUDIO_QUEUE_MAX_TEXT_LENGTH),
+                    )
+            },
+        )
 
 internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? {
     if (value.optInt("schemaVersion", -1) != AUDIO_QUEUE_SCHEMA_VERSION) return null
@@ -249,6 +262,26 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
     val primaryImageTag = safeQueueArtworkTag(value.optString("primaryImageTag").ifBlank { null })
     val primaryImageBlurHash =
         value.optString("primaryImageBlurHash").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null }
+    val artworkFallback =
+        value.optJSONObject("primaryArtworkFallback")?.let { fallback ->
+            val fallbackId =
+                fallback.optString("id").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null }
+                    ?: return@let null
+            val fallbackImageTag =
+                safeQueueArtworkTag(fallback.optString("primaryImageTag").ifBlank { null })
+                    ?: return@let null
+            val fallbackBlurHash =
+                fallback.optString("primaryImageBlurHash")
+                    .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
+                    .ifBlank { null }
+            MediaItem(
+                id = fallbackId,
+                name = "Artwork",
+                type = fallback.optString("type").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
+                imageTags = mapOf("Primary" to fallbackImageTag),
+                imageBlurHashes = fallbackBlurHash?.let { mapOf("Primary" to it) }.orEmpty(),
+            )
+        }
     return MediaItem(
         id = id,
         name = name,
@@ -266,6 +299,7 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
         durationSeconds = value.optDoubleOrNull("durationSeconds"),
         imageTags = primaryImageTag?.let { mapOf("Primary" to it) }.orEmpty(),
         imageBlurHashes = primaryImageBlurHash?.let { mapOf("Primary" to it) }.orEmpty(),
+        primaryArtworkFallback = artworkFallback,
     )
 }
 

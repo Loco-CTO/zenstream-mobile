@@ -68,6 +68,8 @@ data class MediaItem(
     val runtimeTicks: Long? = null,
     val imageTags: Map<String, String> = emptyMap(),
     val imageBlurHashes: Map<String, String> = emptyMap(),
+    /** Client-only release artwork fallback for tracks without their own primary image. */
+    val primaryArtworkFallback: MediaItem? = null,
     val backdropImageTags: List<String> = emptyList(),
     val seriesPrimaryImageTag: String? = null,
     val seriesPrimaryImageBlurHash: String? = null,

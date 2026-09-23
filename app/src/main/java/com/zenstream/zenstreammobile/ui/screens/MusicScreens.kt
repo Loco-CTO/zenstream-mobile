@@ -5,6 +5,7 @@ package com.zenstream.zenstreammobile.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,13 +30,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +76,19 @@ import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 
 private val MUSIC_DETAIL_TOP_CONTENT_PADDING = 96.dp
+
+private fun withPrimaryArtworkFallback(track: MediaItem, fallback: MediaItem): MediaItem {
+    if (!track.imageTags["Primary"].isNullOrBlank() || track.primaryArtworkFallback != null) return track
+    if (fallback.imageTags["Primary"].isNullOrBlank()) return track
+    return track.copy(primaryArtworkFallback = fallback)
+}
+
+private fun artistTracksWithArtwork(data: MusicArtistData, tracks: List<MediaItem>): List<MediaItem> {
+    val releases = (data.albums + data.appearsIn).associateBy { it.id }
+    return tracks.map { track ->
+        withPrimaryArtworkFallback(track, releases[track.albumId] ?: data.artist)
+    }
+}
 
 @Composable
 fun MusicAlbumScreen(
@@ -171,7 +187,7 @@ private fun AlbumContent(
             musicArtworkPalette(data.album).accent
         }
     val tracks =
-        remember(data.tracks) {
+        remember(data.tracks, data.album) {
             data.tracks
                 .distinctBy { it.id }
                 .sortedWith(
@@ -179,6 +195,7 @@ private fun AlbumContent(
                         .thenBy { it.trackNumber ?: Int.MAX_VALUE }
                         .thenBy { it.name.lowercase() }
                 )
+                .map { track -> withPrimaryArtworkFallback(track, data.album) }
         }
     val grouped = remember(tracks) { tracks.groupBy { it.discNumber ?: 1 }.toSortedMap() }
     val duration = remember(tracks) { tracks.sumOf { it.durationSeconds ?: 0.0 } }
@@ -281,6 +298,8 @@ private fun AlbumHeader(
     onAddToQueue: () -> Unit,
 ) {
     val album = data.album
+    var moreOpen by remember(album.id) { mutableStateOf(false) }
+    var playlistPickerRequest by remember(album.id) { mutableStateOf(0) }
     val year =
         album.releaseDate?.take(4)?.takeIf { it.length == 4 } ?: album.productionYear?.toString()
     val palette =
@@ -352,53 +371,64 @@ private fun AlbumHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_heart),
-                        contentDescription =
-                            stringResource(
-                                if (album.favorite) R.string.remove_favorite
-                                else R.string.add_favorite
-                            ),
-                        tint = if (album.favorite) accent else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                PlaylistPickerButton(repository, session, album, tracks)
-                IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_list_plus),
-                        contentDescription = stringResource(R.string.music_add_album_to_queue),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_shuffle),
-                        contentDescription = stringResource(R.string.music_shuffle_album),
-                        tint = accent,
-                    )
-                }
-                IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = CircleShape,
-                        color = accent,
-                        contentColor = palette.onAccent,
-                    ) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val compact = maxWidth < 600.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
                         Icon(
-                            painterResource(LucideR.drawable.lucide_ic_play),
-                            contentDescription = stringResource(R.string.music_play_album),
-                            modifier = Modifier.padding(15.dp),
-                            tint = palette.onAccent,
+                            painterResource(LucideR.drawable.lucide_ic_heart),
+                            contentDescription = stringResource(if (album.favorite) R.string.remove_favorite else R.string.add_favorite),
+                            tint = if (album.favorite) accent else MaterialTheme.colorScheme.onSurface,
                         )
                     }
+                    if (compact) {
+                        PlaylistPickerButton(
+                            repository,
+                            session,
+                            album,
+                            tracks,
+                            openRequest = playlistPickerRequest,
+                            showTrigger = false,
+                        )
+                        IconButton(onClick = { moreOpen = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical), contentDescription = stringResource(R.string.show_more))
+                        }
+                    } else {
+                        PlaylistPickerButton(repository, session, album, tracks, openRequest = playlistPickerRequest)
+                        IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
+                            Icon(painterResource(LucideR.drawable.lucide_ic_list_plus), contentDescription = stringResource(R.string.music_add_album_to_queue), tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
+                            Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_album), tint = accent)
+                        }
+                        IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
+                            Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
+                                Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_album), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
+                            }
+                        }
+                    }
                 }
+            }
+            if (moreOpen) {
+                MusicDetailActionSheet(
+                    item = album,
+                    subtitle = album.albumArtist ?: data.artist?.name,
+                    session = session,
+                    playLabel = R.string.music_play_album,
+                    shuffleLabel = R.string.music_shuffle_album,
+                    queueLabel = R.string.music_add_album_to_queue,
+                    onPlay = { moreOpen = false; onPlay() },
+                    onShuffle = { moreOpen = false; onShuffle() },
+                    onAddToPlaylist = { moreOpen = false; playlistPickerRequest += 1 },
+                    onAddToQueue = { moreOpen = false; onAddToQueue() },
+                    onGoToArtist = data.artist?.let { { moreOpen = false; onArtistClick(it.id) } },
+                    onDismiss = { moreOpen = false },
+                )
             }
         }
     }
@@ -535,12 +565,12 @@ fun MusicArtistScreen(
                     tracksError = state.tracksError,
                     onFollow = vm::toggleFollowing,
                     onFavorite = vm::toggleFavorite,
-                    onPlayAll = { vm.playAll { tracks -> onPlayTracks(tracks, 0, false) } },
-                    onShuffleAll = { vm.playAll(onShuffleTracks) },
+                    onPlayAll = { vm.playAll { tracks -> onPlayTracks(artistTracksWithArtwork(state.data!!, tracks), 0, false) } },
+                    onShuffleAll = { vm.playAll { tracks -> onShuffleTracks(artistTracksWithArtwork(state.data!!, tracks)) } },
                     onArtistClick = onOpenArtist,
                     onAlbumClick = onOpenAlbum,
                     onTrackClick = { tracks, index -> onPlayTracks(tracks, index, false) },
-                    onAddToQueue = { vm.playAll(onAddToQueue) },
+                    onAddToQueue = { vm.playAll { tracks -> onAddToQueue(artistTracksWithArtwork(state.data!!, tracks)) } },
                     currentTrackId = currentTrackId,
                     onScrollabilityChanged = onScrollabilityChanged,
                     onDetailScrolled = { detailScrolled = it },
@@ -578,7 +608,11 @@ private fun ArtistContent(
     onDetailScrolled: (Boolean) -> Unit = {},
 ) {
     val artist = data.artist
-    val tracks = remember(data.tracks) { data.tracks.distinctBy { it.id } }
+    var moreOpen by remember(artist.id) { mutableStateOf(false) }
+    var playlistPickerRequest by remember(artist.id) { mutableStateOf(0) }
+    val tracks = remember(data.tracks, data.albums, data.appearsIn, data.artist) {
+        artistTracksWithArtwork(data, data.tracks.distinctBy { it.id })
+    }
     val albums = remember(data.albums) { data.albums.distinctBy { it.id } }
     val palette =
         remember(artist.id, artist.imageBlurHashes["Primary"]) { musicArtworkPalette(artist) }
@@ -657,95 +691,71 @@ private fun ArtistContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_heart),
-                                contentDescription =
-                                    stringResource(
-                                        if (artist.favorite) R.string.remove_favorite
-                                        else R.string.add_favorite
-                                    ),
-                                tint =
-                                    if (artist.favorite) accent
-                                    else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = onFollow,
-                            modifier = Modifier.height(44.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
-                            border = BorderStroke(1.dp, accent.copy(alpha = .62f)),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val compact = maxWidth < 600.dp
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                if (artist.following == true) {
-                                    stringResource(R.string.music_following)
-                                } else {
-                                    stringResource(R.string.follow)
-                                },
-                                maxLines = 1,
-                            )
-                        }
-                        PlaylistPickerButton(repository, session, artist, tracks)
-                        IconButton(
-                            onClick = onAddToQueue,
-                            enabled = data.trackCount > 0 && !tracksLoading,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_list_plus),
-                                contentDescription = stringResource(R.string.music_add_to_queue),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(
-                            onClick = onShuffleAll,
-                            enabled = !tracksLoading,
-                            modifier = Modifier.size(44.dp),
-                        ) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_shuffle),
-                                contentDescription =
-                                    stringResource(R.string.music_shuffle_artist_tracks),
-                                tint =
-                                    if (!tracksLoading) accent
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(
-                            onClick = onPlayAll,
-                            enabled = !tracksLoading,
-                            modifier = Modifier.size(54.dp),
-                        ) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                shape = CircleShape,
-                                color = accent,
-                                contentColor = palette.onAccent,
-                            ) {
-                                if (tracksLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.padding(15.dp),
-                                        strokeWidth = 2.dp,
-                                        color = palette.onAccent,
-                                    )
-                                } else {
-                                    Icon(
-                                        painterResource(LucideR.drawable.lucide_ic_play),
-                                        contentDescription =
-                                            stringResource(R.string.music_play_all_artist_tracks),
-                                        modifier = Modifier.padding(15.dp),
-                                        tint = palette.onAccent,
-                                    )
+                            IconButton(onClick = onFollow, modifier = Modifier.size(48.dp)) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_bookmark),
+                                    contentDescription = stringResource(if (artist.following == true) R.string.music_following else R.string.follow),
+                                    tint = if (artist.following == true) accent else MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            IconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_heart),
+                                    contentDescription = stringResource(if (artist.favorite) R.string.remove_favorite else R.string.add_favorite),
+                                    tint = if (artist.favorite) accent else MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            if (compact) {
+                                PlaylistPickerButton(
+                                    repository,
+                                    session,
+                                    artist,
+                                    tracks,
+                                    openRequest = playlistPickerRequest,
+                                    showTrigger = false,
+                                )
+                                IconButton(onClick = { moreOpen = true }, modifier = Modifier.size(48.dp)) {
+                                    Icon(painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical), contentDescription = stringResource(R.string.show_more))
+                                }
+                            } else {
+                                PlaylistPickerButton(repository, session, artist, tracks, openRequest = playlistPickerRequest)
+                                IconButton(onClick = onAddToQueue, enabled = data.trackCount > 0 && !tracksLoading, modifier = Modifier.size(48.dp)) {
+                                    Icon(painterResource(LucideR.drawable.lucide_ic_list_plus), contentDescription = stringResource(R.string.music_add_to_queue), tint = MaterialTheme.colorScheme.onSurface)
+                                }
+                                Spacer(Modifier.weight(1f))
+                                IconButton(onClick = onShuffleAll, enabled = !tracksLoading, modifier = Modifier.size(44.dp)) {
+                                    Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_artist_tracks), tint = if (!tracksLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = onPlayAll, enabled = !tracksLoading, modifier = Modifier.size(54.dp)) {
+                                    Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
+                                        if (tracksLoading) CircularProgressIndicator(modifier = Modifier.padding(15.dp), strokeWidth = 2.dp, color = palette.onAccent)
+                                        else Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_all_artist_tracks), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
+                                    }
                                 }
                             }
                         }
+                    }
+                    if (moreOpen) {
+                        MusicDetailActionSheet(
+                            item = artist,
+                            subtitle = stringResource(R.string.music_artist),
+                            session = session,
+                            playLabel = R.string.music_play_all_artist_tracks,
+                            shuffleLabel = R.string.music_shuffle_artist_tracks,
+                            queueLabel = R.string.music_add_to_queue,
+                            onPlay = { moreOpen = false; onPlayAll() },
+                            onShuffle = { moreOpen = false; onShuffleAll() },
+                            onAddToPlaylist = { moreOpen = false; playlistPickerRequest += 1 },
+                            onAddToQueue = { moreOpen = false; onAddToQueue() },
+                            onDismiss = { moreOpen = false },
+                        )
                     }
                     if (tracksError)
                         Text(
@@ -753,34 +763,6 @@ private fun ArtistContent(
                             color = MaterialTheme.colorScheme.error,
                         )
                 }
-            }
-        }
-        if (tracks.isNotEmpty()) {
-            item(key = "artist-top-tracks-header") {
-                Text(
-                    stringResource(R.string.music_top_tracks),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                )
-            }
-            itemsIndexed(tracks.take(5), key = { _, track -> "artist-top-track-${track.id}" }) {
-                _,
-                track ->
-                AudioTrackRow(
-                    item = track,
-                    isCurrent = track.id == currentTrackId,
-                    onClick = {
-                        onTrackClick(
-                            tracks,
-                            tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
-                        )
-                    },
-                    onAddToPlaylist = {
-                        PlaylistPickerButton(repository, session, track, listOf(track))
-                    },
-                    accentColor = accent,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
             }
         }
         if (artist.genres.isNotEmpty() || !artist.overview.isNullOrBlank()) {
@@ -820,7 +802,7 @@ private fun ArtistContent(
                 )
             }
         }
-        if (tracks.size > 5) {
+        if (tracks.isNotEmpty()) {
             item(key = "artist-tracks-header") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -876,6 +858,85 @@ private fun ArtistDetails(artist: MediaItem) {
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
+    }
+}
+
+@Composable
+private fun MusicDetailActionSheet(
+    item: MediaItem,
+    subtitle: String?,
+    session: AuthSession,
+    playLabel: Int,
+    shuffleLabel: Int,
+    queueLabel: Int,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onGoToArtist: (() -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = .58f),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f),
+            )
+        },
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MusicArtwork(
+                    item = item,
+                    session = session,
+                    modifier = Modifier.size(72.dp),
+                    contentDescription = item.name,
+                    requestedSize = 256,
+                    shape = RoundedCornerShape(10.dp),
+                )
+                Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                    Text(item.name, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    subtitle?.takeIf(String::isNotBlank)?.let {
+                        Text(it, modifier = Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            MusicSheetAction(LucideR.drawable.lucide_ic_play, stringResource(playLabel), onPlay)
+            MusicSheetAction(LucideR.drawable.lucide_ic_shuffle, stringResource(shuffleLabel), onShuffle)
+            MusicSheetAction(LucideR.drawable.lucide_ic_circle_plus, stringResource(R.string.add_to_playlist), onAddToPlaylist)
+            MusicSheetAction(LucideR.drawable.lucide_ic_list_plus, stringResource(queueLabel), onAddToQueue)
+            if (onGoToArtist != null) {
+                MusicSheetAction(LucideR.drawable.lucide_ic_users, stringResource(R.string.music_artist), onGoToArtist)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicSheetAction(icon: Int, label: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface)
+        Text(label, modifier = Modifier.padding(start = 18.dp), style = MaterialTheme.typography.titleMedium)
     }
 }
 

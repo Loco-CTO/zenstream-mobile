@@ -1445,15 +1445,18 @@ private fun QueuePanel(
 ) {
     val list = snapshot.entries
     val listState = rememberLazyListState()
+    val dragScrollScope = rememberCoroutineScope()
     // Bounds are consumed only by the long-press drag coroutine. Keeping this map outside the
     // snapshot system avoids invalidating every visible row each time it is measured.
     val rowBounds = remember { mutableMapOf<String, Rect>() }
+    var queueBounds by remember { mutableStateOf<Rect?>(null) }
     var draggedEntryId by remember { mutableStateOf<String?>(null) }
     var draggedFrom by remember { mutableStateOf(-1) }
     var insertionIndex by remember { mutableStateOf(-1) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
     var dragStartCenterY by remember { mutableStateOf(0f) }
     var dragStartCenters by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+    var lastAutoScrollIndex by remember { mutableStateOf<Int?>(null) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rowGapPx = with(density) { 4.dp.toPx() }
 
@@ -1464,6 +1467,7 @@ private fun QueuePanel(
         dragOffsetPx = 0f
         dragStartCenterY = 0f
         dragStartCenters = emptyMap()
+        lastAutoScrollIndex = null
     }
 
     Column(modifier.fillMaxSize()) {
@@ -1488,7 +1492,7 @@ private fun QueuePanel(
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(vertical = 8.dp),
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { queueBounds = it.boundsInRoot() },
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             itemsIndexed(list, key = { _, entry -> entry.entryId }) { index, entry ->
@@ -1576,10 +1580,9 @@ private fun QueuePanel(
                             .pointerInput(entry.entryId) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
-                                        val centers = list.mapNotNull { candidate ->
-                                            rowBounds[candidate.entryId]?.let {
-                                                candidate.entryId to it.center.y
-                                            }
+                                        val visibleIds = listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? String }.toSet()
+                                        val centers = list.filter { it.entryId in visibleIds }.mapNotNull { candidate ->
+                                            rowBounds[candidate.entryId]?.let { candidate.entryId to it.center.y }
                                         }
                                         dragStartCenters = centers.toMap()
                                         draggedEntryId = entry.entryId
@@ -1590,6 +1593,7 @@ private fun QueuePanel(
                                             dragStartCenters[entry.entryId]
                                                 ?: rowBounds[entry.entryId]?.center?.y
                                                 ?: 0f
+                                        lastAutoScrollIndex = null
                                     },
                                     onDragCancel = ::clearDrag,
                                     onDragEnd = {
@@ -1608,21 +1612,33 @@ private fun QueuePanel(
                                         change.consume()
                                         dragOffsetPx += dragAmount.y
                                         val draggedCenterY = dragStartCenterY + dragOffsetPx
-                                        val target =
-                                            list.indices
-                                                .filter { it != draggedFrom }
-                                                .count { candidateIndex ->
-                                                    val candidate = list[candidateIndex]
-                                                    val centerY =
-                                                        dragStartCenters[candidate.entryId]
-                                                            ?: rowBounds[candidate.entryId]
-                                                                ?.center
-                                                                ?.y
-                                                            ?: Float.MAX_VALUE
-                                                    centerY < draggedCenterY
-                                                }
-                                        insertionIndex =
-                                            target.coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                                        val visibleRows = listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+                                            val id = info.key as? String ?: return@mapNotNull null
+                                            val candidateIndex = list.indexOfFirst { it.entryId == id }
+                                            val bounds = rowBounds[id]
+                                            if (candidateIndex < 0 || candidateIndex == draggedFrom || bounds == null) null
+                                            else Triple(candidateIndex, bounds.center.y, info.index)
+                                        }.sortedBy { it.second }
+                                        if (visibleRows.isNotEmpty()) {
+                                            val target = visibleRows.firstOrNull { it.second >= draggedCenterY }?.first
+                                                ?: visibleRows.last().first
+                                            insertionIndex = target.coerceIn(0, list.lastIndex.coerceAtLeast(0))
+                                        }
+                                        val viewport = queueBounds
+                                        if (viewport != null && visibleRows.isNotEmpty()) {
+                                            val threshold = with(density) { 72.dp.toPx() }
+                                            val scrollTarget = when {
+                                                draggedCenterY > viewport.bottom - threshold && listState.canScrollForward -> visibleRows.last().third + 1
+                                                draggedCenterY < viewport.top + threshold && listState.canScrollBackward -> visibleRows.first().third - 1
+                                                else -> null
+                                            }
+                                            if (scrollTarget != null && scrollTarget != lastAutoScrollIndex) {
+                                                lastAutoScrollIndex = scrollTarget
+                                                dragScrollScope.launch { listState.animateScrollToItem(scrollTarget.coerceAtLeast(0)) }
+                                            } else if (scrollTarget == null) {
+                                                lastAutoScrollIndex = null
+                                            }
+                                        }
                                     },
                                 )
                             }
