@@ -27,9 +27,21 @@ internal fun queuePlaybackOrder(
     selectedIndex: Int,
     shuffle: Boolean,
     random: Random = Random.Default,
+    preserveSelectedFirst: Boolean = false,
 ): QueuePlaybackOrder {
     if (entries.isEmpty()) return QueuePlaybackOrder(emptyList(), -1)
-    if (shuffle) return QueuePlaybackOrder(entries.shuffled(random), currentIndex = 0)
+    if (shuffle) {
+        if (preserveSelectedFirst) {
+            val index = selectedIndex.coerceIn(0, entries.lastIndex)
+            val selected = entries[index]
+            val remaining = entries.filterIndexed { entryIndex, _ -> entryIndex != index }
+            return QueuePlaybackOrder(
+                entries = listOf(selected) + remaining.shuffled(random),
+                currentIndex = 0,
+            )
+        }
+        return QueuePlaybackOrder(entries.shuffled(random), currentIndex = 0)
+    }
 
     val selectedEntryId = entries[selectedIndex.coerceIn(0, entries.lastIndex)].entryId
     return QueuePlaybackOrder(

@@ -121,7 +121,7 @@ class MainNavigationTest {
         val labels =
             listOf(
                     R.string.home,
-                    R.string.favorites,
+                    R.string.my_lists,
                     R.string.library,
                     R.string.my_page,
                 )

@@ -38,6 +38,9 @@ import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
@@ -53,6 +56,7 @@ import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.model.ViewerCommand
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
+import com.zenstream.zenstreammobile.model.WatchlistStatus
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
@@ -1154,6 +1158,146 @@ class CatalogApi(
             )
         }
 
+    suspend fun fetchWatchlist(session: AuthSession): List<MediaItem> =
+        withContext(Dispatchers.IO) {
+            jsonArray(requestJson(session, "/api/catalog/following"), "items")
+                .map { item ->
+                    val status = item.optJSONObject("watchlistStatus")
+                    catalogMediaItem(item).copy(
+                        watchlistStatus =
+                            status?.let {
+                                WatchlistStatus(
+                                    kind = it.optString("kind"),
+                                    seasonNumber = it.optIntOrNull("seasonNumber"),
+                                    episodeNumber = it.optIntOrNull("episodeNumber"),
+                                )
+                            }
+                    )
+                }
+                .distinctBy { it.id }
+        }
+
+    suspend fun fetchPlaylists(session: AuthSession): List<PlaylistSummary> =
+        withContext(Dispatchers.IO) {
+            jsonArray(requestJson(session, "/api/account/playlists"), "items")
+                .map(::parsePlaylistSummary)
+        }
+
+    suspend fun fetchPlaylist(session: AuthSession, playlistId: String): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(
+                requestJson(session, "/api/account/playlists/${playlistId.encodePathSegment()}")
+            )
+        }
+
+    suspend fun fetchSharedPlaylist(session: AuthSession, shareToken: String): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(
+                requestJson(session, "/api/shared/playlists/${shareToken.encodePathSegment()}")
+            )
+        }
+
+    suspend fun createPlaylist(
+        session: AuthSession,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+        entityId: String? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject()
+                    .put("name", name)
+                    .put("description", description ?: JSONObject.NULL)
+                    .put("isPrivate", isPrivate)
+                    .apply { entityId?.let { put("entityId", it) } }
+            parsePlaylist(
+                requestJson(session, "/api/account/playlists", method = "POST", body = body.toString())
+            )
+        }
+
+    suspend fun updatePlaylist(
+        session: AuthSession,
+        playlistId: String,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject()
+                    .put("name", name)
+                    .put("description", description ?: JSONObject.NULL)
+                    .put("isPrivate", isPrivate)
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${playlistId.encodePathSegment()}",
+                    method = "PATCH",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun deletePlaylist(session: AuthSession, playlistId: String) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/account/playlists/${playlistId.encodePathSegment()}",
+                method = "DELETE",
+            )
+            Unit
+        }
+
+    suspend fun addPlaylistItems(
+        session: AuthSession,
+        playlistId: String,
+        entityIds: List<String>,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("entityIds", JSONArray(entityIds))
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${playlistId.encodePathSegment()}/items",
+                    method = "POST",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun removePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${playlistId.encodePathSegment()}/items/${entryId.encodePathSegment()}",
+                    method = "DELETE",
+                )
+            )
+        }
+
+    suspend fun reorderPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        entryIds: List<String>,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("entryIds", JSONArray(entryIds))
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${playlistId.encodePathSegment()}/order",
+                    method = "PUT",
+                    body = body.toString(),
+                )
+            )
+        }
+
     suspend fun search(
         session: AuthSession,
         query: String,
@@ -1819,6 +1963,35 @@ internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
 
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
+
+private fun parsePlaylistSummary(payload: JSONObject): PlaylistSummary =
+    PlaylistSummary(
+        id = payload.optString("id"),
+        name = payload.optString("name"),
+        description = payload.optNullableString("description"),
+        isPrivate = payload.optBoolean("isPrivate", true),
+        shareToken = payload.optNullableString("shareToken"),
+        itemCount = payload.optInt("itemCount"),
+        artworkItems = jsonArray(payload, "artworkItems").map(::catalogMediaItem),
+        createdAt = payload.optString("createdAt"),
+        updatedAt = payload.optString("updatedAt"),
+        isOwner = payload.optBoolean("isOwner", true),
+    )
+
+internal fun parsePlaylist(payload: JSONObject): PlaylistData {
+    val summary = parsePlaylistSummary(payload)
+    val entries =
+        jsonArray(payload, "items").mapNotNull { entry ->
+            val item = entry.optJSONObject("item") ?: return@mapNotNull null
+            PlaylistEntry(
+                entryId = entry.optString("entryId"),
+                position = entry.optInt("position"),
+                addedAt = entry.optString("addedAt"),
+                item = catalogMediaItem(item),
+            )
+        }
+    return PlaylistData(summary = summary, items = entries)
+}
 
 internal fun parseDetailData(payload: JSONObject): DetailData {
     val item = catalogMediaItem(payload.getJSONObject("item"))

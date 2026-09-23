@@ -75,10 +75,17 @@ data class MediaItem(
     val favorite: Boolean = false,
     /** Follow is populated for movies, series, and music artists only. */
     val following: Boolean? = null,
+    val watchlistStatus: WatchlistStatus? = null,
     val unplayedItemCount: Int? = null,
     val playedPercentage: Double? = null,
     val playbackPositionTicks: Long? = null,
     val chapters: List<MediaChapter> = emptyList(),
+)
+
+data class WatchlistStatus(
+    val kind: String,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 data class MediaPerson(
@@ -204,6 +211,31 @@ data class FavoriteSort(
 data class PagedFavorites(
     val items: List<MediaItem>,
     val totalRecordCount: Int,
+)
+
+data class PlaylistEntry(
+    val entryId: String,
+    val position: Int,
+    val addedAt: String,
+    val item: MediaItem,
+)
+
+data class PlaylistSummary(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val isPrivate: Boolean = true,
+    val shareToken: String? = null,
+    val itemCount: Int = 0,
+    val artworkItems: List<MediaItem> = emptyList(),
+    val createdAt: String = "",
+    val updatedAt: String = "",
+    val isOwner: Boolean = true,
+)
+
+data class PlaylistData(
+    val summary: PlaylistSummary,
+    val items: List<PlaylistEntry> = emptyList(),
 )
 
 data class PagedLibrary(
