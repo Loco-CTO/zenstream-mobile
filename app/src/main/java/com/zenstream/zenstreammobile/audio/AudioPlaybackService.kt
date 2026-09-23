@@ -440,16 +440,14 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun restoreAudioPreferences() {
-        val shuffle =
-            currentState.queue.takeIf { it.isNotEmpty() }?.let { currentState.shuffle }
-                ?: sessionStore.audioShuffle.first()
-        val repeatMode =
-            currentState.queue.takeIf { it.isNotEmpty() }?.let { currentState.repeatMode }
-                ?: sessionStore.audioRepeatMode.first()
         // Android's media stream volume is the only volume authority. Ignore
         // legacy app-local gain/mute values so an old saved mute cannot silence
         // playback after the in-app volume control has been removed.
         queueCommandMutex.withLock {
+            // Queue snapshots can lag a just-toggled setting. The dedicated device-local
+            // preferences remain authoritative even when a queue is restored.
+            val shuffle = sessionStore.audioShuffle.first()
+            val repeatMode = sessionStore.audioRepeatMode.first()
             player.volume = 1f
             currentState =
                 currentState.copy(
@@ -506,6 +504,9 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private suspend fun replaceQueue(encoded: String, commandSequence: Long) {
         val snapshot = parseSnapshot(encoded) ?: return
+        // The first explicit play can arrive before the coordinator's startup restore finishes.
+        // Load saved player modes before applying a newly-created queue snapshot with defaults.
+        ensureRestored(commandSequence)
         val account = sessionStore.session.first() ?: return
         if (!snapshotBelongsTo(snapshot, account)) return
         val entryId = snapshot.entries.getOrNull(snapshot.currentIndex)?.entryId ?: return
@@ -523,11 +524,17 @@ class AudioPlaybackService : MediaLibraryService() {
             sessionDetached = false
             playerScope = accountScope(account)
             loadingCurrent = true
+            // A normal Play/track selection carries default values in its queue snapshot. Keep
+            // the device-local modes already active in the service; an explicit Shuffle action
+            // can turn shuffle on for the new queue.
+            val shuffle = snapshot.shuffle || currentState.shuffle
+            val repeatMode = currentState.repeatMode
             // PLAY_QUEUE is an explicit user selection, not queue restoration. Never carry a
             // position from the previously playing item (or from a stale caller snapshot) into
             // the newly selected track.
             currentState =
                 snapshot
+                    .copy(shuffle = shuffle, repeatMode = repeatMode)
                     .toPlayerState()
                     .copy(
                         positionSeconds = 0L,
@@ -550,10 +557,10 @@ class AudioPlaybackService : MediaLibraryService() {
                 "audio selection accepted generation=${accepted.generation} sequence=$commandSequence entry=$entryId",
             )
             publishAudioState()
+            sessionStore.saveAudioShuffle(shuffle)
+            sessionStore.saveAudioRepeatMode(repeatMode)
         }
         val accepted = request ?: return
-        sessionStore.saveAudioShuffle(snapshot.shuffle)
-        sessionStore.saveAudioRepeatMode(snapshot.repeatMode)
         persistSnapshot()
         launchLoad(accepted)
     }
@@ -1267,8 +1274,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 if (value) shuffleQueueKeepingCurrent(currentState)
                 else currentState.copy(shuffle = false)
             publishPlayerState()
+            sessionStore.saveAudioShuffle(value)
         }
-        sessionStore.saveAudioShuffle(value)
         persistSnapshot()
     }
 
@@ -1278,8 +1285,8 @@ class AudioPlaybackService : MediaLibraryService() {
             value = currentState.repeatMode.next()
             currentState = currentState.copy(repeatMode = value)
             publishPlayerState()
+            sessionStore.saveAudioRepeatMode(value)
         }
-        sessionStore.saveAudioRepeatMode(value)
         persistSnapshot()
     }
 
