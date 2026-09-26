@@ -286,7 +286,7 @@ private fun PlaylistPickerDialog(
                                         .padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    PlaylistArtwork(summary.artworkItems, session, Modifier.size(42.dp))
+                                    PlaylistArtwork(summary.artworkItems, summary.itemCount, session, Modifier.size(42.dp))
                                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                                         Text(summary.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(
@@ -832,7 +832,7 @@ private fun PlaylistCard(summary: PlaylistSummary, session: AuthSession, onClick
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlaylistArtwork(summary.artworkItems, session, Modifier.size(88.dp))
+        PlaylistArtwork(summary.artworkItems, summary.itemCount, session, Modifier.size(88.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             Text(summary.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -852,22 +852,69 @@ private fun PlaylistCard(summary: PlaylistSummary, session: AuthSession, onClick
 }
 
 @Composable
-private fun PlaylistArtwork(items: List<MediaItem>, session: AuthSession, modifier: Modifier = Modifier) {
+private fun PlaylistArtwork(
+    items: List<MediaItem>,
+    itemCount: Int,
+    session: AuthSession,
+    modifier: Modifier = Modifier,
+) {
     val visible = items.take(4)
     Surface(modifier.clip(RoundedCornerShape(10.dp)), color = MaterialTheme.colorScheme.surfaceVariant) {
-        when (visible.size) {
-            0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_list_music), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        when {
+            itemCount >= 4 -> {
+                Column(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    repeat(2) { rowIndex ->
+                        Row(
+                            Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(1.dp),
+                        ) {
+                            repeat(2) { columnIndex ->
+                                val item = visible.getOrNull(rowIndex * 2 + columnIndex)
+                                if (item != null) {
+                                    MusicArtwork(
+                                        item,
+                                        session,
+                                        modifier = Modifier.weight(1f).fillMaxSize(),
+                                        requestedSize = 160,
+                                        shape = RoundedCornerShape(0.dp),
+                                    )
+                                } else {
+                                    Box(
+                                        Modifier.weight(1f).fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            painterResource(LucideR.drawable.lucide_ic_list_music),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            1 -> MusicArtwork(visible.first(), session, modifier = Modifier.fillMaxSize(), requestedSize = 320)
-            else -> Column(Modifier.fillMaxSize()) {
-                Row(Modifier.weight(1f)) {
-                    visible.take(2).forEach { item -> MusicArtwork(item, session, modifier = Modifier.weight(1f).fillMaxSize(), requestedSize = 160) }
-                }
-                if (visible.size > 2) Row(Modifier.weight(1f)) {
-                    visible.drop(2).forEach { item -> MusicArtwork(item, session, modifier = Modifier.weight(1f).fillMaxSize(), requestedSize = 160) }
-                    if (visible.size == 3) Spacer(Modifier.weight(1f).fillMaxSize())
-                }
+            visible.isNotEmpty() -> {
+                val cover = visible.firstOrNull { !it.imageTags["Primary"].isNullOrBlank() } ?: visible.first()
+                MusicArtwork(
+                    cover,
+                    session,
+                    modifier = Modifier.fillMaxSize(),
+                    requestedSize = 320,
+                    shape = RoundedCornerShape(0.dp),
+                )
+            }
+            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_list_music),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -1021,7 +1068,7 @@ private fun PlaylistDetailContent(
                         }
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                PlaylistArtwork(summary.artworkItems, session, Modifier.size(112.dp))
+                                PlaylistArtwork(summary.artworkItems, summary.itemCount, session, Modifier.size(112.dp))
                                 Column(Modifier.padding(start = 16.dp)) {
                                     Text(stringResource(R.string.playlist_track_count, summary.itemCount), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(if (summary.isPrivate) stringResource(R.string.playlist_private) else stringResource(R.string.playlist_public), color = MaterialTheme.colorScheme.onSurfaceVariant)
