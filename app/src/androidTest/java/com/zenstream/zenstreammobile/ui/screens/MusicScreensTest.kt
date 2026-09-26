@@ -2,10 +2,10 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -87,7 +87,8 @@ class MusicScreensTest {
     fun creatingPlaylistFromAlbumPickerAddsTheSelectedAlbum() {
         val album = MediaItem(id = "album", name = "Example Album", type = "MusicAlbum")
         val track = MediaItem(id = "track", name = "Example Track", type = "Audio")
-        val repository = FakeMusicDataSource(album = MusicAlbumData(album = album, tracks = listOf(track)))
+        val repository =
+            FakeMusicDataSource(album = MusicAlbumData(album = album, tracks = listOf(track)))
         val session = AuthSession("https://example.com", "token", "user", "name")
         val context = composeRule.activity
 
@@ -106,9 +107,11 @@ class MusicScreensTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription(
-            "${album.name}: ${context.getString(R.string.add_to_playlist)}"
-        ).performClick()
+        composeRule
+            .onNodeWithContentDescription(
+                "${album.name}: ${context.getString(R.string.add_to_playlist)}"
+            )
+            .performClick()
         composeRule.onNodeWithText(context.getString(R.string.create_playlist)).performClick()
         composeRule.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Road Trip")
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()

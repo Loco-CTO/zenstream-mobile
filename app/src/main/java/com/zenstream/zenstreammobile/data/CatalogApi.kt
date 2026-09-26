@@ -38,14 +38,14 @@ import com.zenstream.zenstreammobile.model.NotificationPage
 import com.zenstream.zenstreammobile.model.PagedFavorites
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
-import com.zenstream.zenstreammobile.model.PlaylistData
-import com.zenstream.zenstreammobile.model.PlaylistEntry
-import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
 import com.zenstream.zenstreammobile.model.SearchFacets
@@ -56,8 +56,8 @@ import com.zenstream.zenstreammobile.model.TrickplaySheet
 import com.zenstream.zenstreammobile.model.ViewerCommand
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
-import com.zenstream.zenstreammobile.model.WatchlistStatus
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
+import com.zenstream.zenstreammobile.model.WatchlistStatus
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
 import java.time.Instant
@@ -355,10 +355,10 @@ class CatalogApi(
                     method = "POST",
                     body =
                         playbackNegotiationBody(
-                            capabilities = capabilities,
-                            device = deviceMetadata(),
-                            options = negotiatedOptions,
-                        )
+                                capabilities = capabilities,
+                                device = deviceMetadata(),
+                                options = negotiatedOptions,
+                            )
                             .toString(),
                     requestTimeoutMillis = AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS,
                 )
@@ -1155,40 +1155,59 @@ class CatalogApi(
             jsonArray(requestJson(session, "/api/catalog/following"), "items")
                 .map { item ->
                     val status = item.optJSONObject("watchlistStatus")
-                    catalogMediaItem(item).copy(
-                        watchlistStatus =
-                            status?.let {
-                                WatchlistStatus(
-                                    kind = it.optString("kind"),
-                                    seasonNumber = it.optIntOrNull("seasonNumber"),
-                                    episodeNumber = it.optIntOrNull("episodeNumber"),
-                                )
-                            }
-                    )
+                    catalogMediaItem(item)
+                        .copy(
+                            watchlistStatus =
+                                status?.let {
+                                    WatchlistStatus(
+                                        kind = it.optString("kind"),
+                                        seasonNumber = it.optIntOrNull("seasonNumber"),
+                                        episodeNumber = it.optIntOrNull("episodeNumber"),
+                                    )
+                                }
+                        )
                 }
                 .distinctBy { it.id }
         }
 
-    suspend fun fetchPlaylists(session: AuthSession, membershipSourceId: String? = null): List<PlaylistSummary> =
+    suspend fun fetchPlaylists(
+        session: AuthSession,
+        membershipSourceId: String? = null,
+    ): List<PlaylistSummary> =
         withContext(Dispatchers.IO) {
-            val suffix = membershipSourceId?.let { "?membershipSourceId=${encodePathSegment(it)}" }.orEmpty()
+            val suffix =
+                membershipSourceId?.let { "?membershipSourceId=${encodePathSegment(it)}" }.orEmpty()
             jsonArray(requestJson(session, "/api/account/playlists$suffix"), "items")
                 .map(::parsePlaylistSummary)
         }
 
-    suspend fun fetchPlaylist(session: AuthSession, playlistId: String, page: Int? = null): PlaylistData =
+    suspend fun fetchPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        page: Int? = null,
+    ): PlaylistData =
         withContext(Dispatchers.IO) {
             val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
             parsePlaylist(
-                requestJson(session, "/api/account/playlists/${encodePathSegment(playlistId)}$suffix")
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}$suffix",
+                )
             )
         }
 
-    suspend fun fetchSharedPlaylist(session: AuthSession, shareToken: String, page: Int? = null): PlaylistData =
+    suspend fun fetchSharedPlaylist(
+        session: AuthSession,
+        shareToken: String,
+        page: Int? = null,
+    ): PlaylistData =
         withContext(Dispatchers.IO) {
             val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
             parsePlaylist(
-                requestJson(session, "/api/shared/playlists/${encodePathSegment(shareToken)}$suffix")
+                requestJson(
+                    session,
+                    "/api/shared/playlists/${encodePathSegment(shareToken)}$suffix",
+                )
             )
         }
 
@@ -1207,7 +1226,12 @@ class CatalogApi(
                     .put("isPrivate", isPrivate)
                     .apply { entityId?.let { put("entityId", it) } }
             parsePlaylist(
-                requestJson(session, "/api/account/playlists?view=summary", method = "POST", body = body.toString())
+                requestJson(
+                    session,
+                    "/api/account/playlists?view=summary",
+                    method = "POST",
+                    body = body.toString(),
+                )
             )
         }
 
@@ -1293,30 +1317,43 @@ class CatalogApi(
             )
         }
 
-    suspend fun removePlaylistSource(session: AuthSession, playlistId: String, sourceId: String): PlaylistData =
+    suspend fun removePlaylistSource(
+        session: AuthSession,
+        playlistId: String,
+        sourceId: String,
+    ): PlaylistData =
         withContext(Dispatchers.IO) {
-            parsePlaylist(requestJson(
-                session,
-                "/api/account/playlists/${encodePathSegment(playlistId)}/items/by-source/${encodePathSegment(sourceId)}",
-                method = "DELETE",
-            ))
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/by-source/${encodePathSegment(sourceId)}",
+                    method = "DELETE",
+                )
+            )
         }
 
     suspend fun movePlaylistEntry(
-        session: AuthSession, playlistId: String, entryId: String,
-        beforeEntryId: String? = null, afterEntryId: String? = null,
-    ): PlaylistData = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply {
-            beforeEntryId?.let { put("beforeEntryId", it) }
-            afterEntryId?.let { put("afterEntryId", it) }
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+        beforeEntryId: String? = null,
+        afterEntryId: String? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject().apply {
+                    beforeEntryId?.let { put("beforeEntryId", it) }
+                    afterEntryId?.let { put("afterEntryId", it) }
+                }
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}/move",
+                    method = "PATCH",
+                    body = body.toString(),
+                )
+            )
         }
-        parsePlaylist(requestJson(
-            session,
-            "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}/move",
-            method = "PATCH",
-            body = body.toString(),
-        ))
-    }
 
     suspend fun search(
         session: AuthSession,
@@ -2012,7 +2049,8 @@ internal fun parsePlaylist(payload: JSONObject): PlaylistData {
             )
         }
     return PlaylistData(
-        summary = summary, items = entries,
+        summary = summary,
+        items = entries,
         page = if (payload.has("page")) payload.optInt("page") else null,
         pageSize = if (payload.has("pageSize")) payload.optInt("pageSize") else null,
         hasMore = payload.optBoolean("hasMore"),

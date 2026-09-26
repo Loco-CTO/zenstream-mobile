@@ -245,14 +245,16 @@ data class PlaylistData(
 )
 
 internal fun playlistStartIndex(entries: List<PlaylistEntry>, selectedEntryId: String?): Int =
-    selectedEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } }
-        ?.takeIf { it >= 0 } ?: 0
+    selectedEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } }?.takeIf { it >= 0 }
+        ?: 0
 
 internal fun appendPlaylistPage(current: PlaylistData, incoming: PlaylistData): PlaylistData? {
-    if (current.summary.id != incoming.summary.id ||
-        current.summary.updatedAt != incoming.summary.updatedAt ||
-        incoming.page != (current.page ?: 1) + 1
-    ) return null
+    if (
+        current.summary.id != incoming.summary.id ||
+            current.summary.updatedAt != incoming.summary.updatedAt ||
+            incoming.page != (current.page ?: 1) + 1
+    )
+        return null
     val seen = current.items.mapTo(hashSetOf()) { it.entryId }
     return incoming.copy(items = current.items + incoming.items.filter { seen.add(it.entryId) })
 }

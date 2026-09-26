@@ -271,13 +271,15 @@ private fun audioQueueTrackFromJson(value: JSONObject?): MediaItem? {
                 safeQueueArtworkTag(fallback.optString("primaryImageTag").ifBlank { null })
                     ?: return@let null
             val fallbackBlurHash =
-                fallback.optString("primaryImageBlurHash")
+                fallback
+                    .optString("primaryImageBlurHash")
                     .take(AUDIO_QUEUE_MAX_TEXT_LENGTH)
                     .ifBlank { null }
             MediaItem(
                 id = fallbackId,
                 name = "Artwork",
-                type = fallback.optString("type").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
+                type =
+                    fallback.optString("type").take(AUDIO_QUEUE_MAX_TEXT_LENGTH).ifBlank { null },
                 imageTags = mapOf("Primary" to fallbackImageTag),
                 imageBlurHashes = fallbackBlurHash?.let { mapOf("Primary" to it) }.orEmpty(),
             )

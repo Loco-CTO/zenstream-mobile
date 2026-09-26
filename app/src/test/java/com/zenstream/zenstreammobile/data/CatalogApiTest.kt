@@ -4,17 +4,17 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
-import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.PlaybackOptions
-import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
 import com.zenstream.zenstreammobile.model.PlaylistSummary
-import com.zenstream.zenstreammobile.model.appendPlaylistPage
-import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
+import com.zenstream.zenstreammobile.model.appendPlaylistPage
+import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
@@ -32,20 +32,25 @@ class CatalogApiTest {
 
     @Test
     fun parsesPagedPlaylistAndSourceMembership() {
-        val payload = JSONObject()
-            .put("id", "playlist-1")
-            .put("name", "Road Mix")
-            .put("itemCount", 21)
-            .put("isMember", true)
-            .put("page", 1)
-            .put("pageSize", 20)
-            .put("hasMore", true)
-            .put("items", JSONArray().put(
-                JSONObject()
-                    .put("entryId", "entry-1")
-                    .put("position", 0)
-                    .put("item", JSONObject().put("id", "track-1").put("type", "track"))
-            ))
+        val payload =
+            JSONObject()
+                .put("id", "playlist-1")
+                .put("name", "Road Mix")
+                .put("itemCount", 21)
+                .put("isMember", true)
+                .put("page", 1)
+                .put("pageSize", 20)
+                .put("hasMore", true)
+                .put(
+                    "items",
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("entryId", "entry-1")
+                                .put("position", 0)
+                                .put("item", JSONObject().put("id", "track-1").put("type", "track"))
+                        ),
+                )
         val parsed = parsePlaylist(payload)
         assertEquals(21, parsed.summary.itemCount)
         assertEquals(true, parsed.summary.isMember)
@@ -57,9 +62,15 @@ class CatalogApiTest {
 
     @Test
     fun playlistPlaybackSelectsEntryFromCompleteQueue() {
-        val tracks = (0..20).map { index ->
-            PlaylistEntry("entry-$index", index, "", MediaItem(id = "track-$index", name = "Track $index", type = "Audio"))
-        }
+        val tracks =
+            (0..20).map { index ->
+                PlaylistEntry(
+                    "entry-$index",
+                    index,
+                    "",
+                    MediaItem(id = "track-$index", name = "Track $index", type = "Audio"),
+                )
+            }
         assertEquals(0, playlistStartIndex(tracks, null))
         assertEquals(20, playlistStartIndex(tracks, "entry-20"))
         assertEquals(0, playlistStartIndex(tracks, "missing"))
@@ -67,16 +78,31 @@ class CatalogApiTest {
 
     @Test
     fun playlistPageAppendDeduplicatesAndRejectsCrossDeviceChanges() {
-        val entries = (0..20).map { index ->
-            PlaylistEntry("entry-$index", index, "", MediaItem("track-$index", "Track $index", "Audio"))
-        }
-        val summary = PlaylistSummary(id = "playlist-1", name = "Road Mix", updatedAt = "revision-1", itemCount = 21)
+        val entries =
+            (0..20).map { index ->
+                PlaylistEntry(
+                    "entry-$index",
+                    index,
+                    "",
+                    MediaItem("track-$index", "Track $index", "Audio"),
+                )
+            }
+        val summary =
+            PlaylistSummary(
+                id = "playlist-1",
+                name = "Road Mix",
+                updatedAt = "revision-1",
+                itemCount = 21,
+            )
         val first = PlaylistData(summary, entries.take(20), page = 1, pageSize = 20, hasMore = true)
-        val second = PlaylistData(summary, listOf(entries[19], entries[20]), page = 2, pageSize = 20)
+        val second =
+            PlaylistData(summary, listOf(entries[19], entries[20]), page = 2, pageSize = 20)
         val combined = appendPlaylistPage(first, second)
         assertEquals(21, combined?.items?.size)
         assertEquals("entry-20", combined?.items?.last()?.entryId)
-        assertNull(appendPlaylistPage(first, second.copy(summary = summary.copy(updatedAt = "revision-2"))))
+        assertNull(
+            appendPlaylistPage(first, second.copy(summary = summary.copy(updatedAt = "revision-2")))
+        )
         assertNull(appendPlaylistPage(first, second.copy(page = 3)))
     }
 
