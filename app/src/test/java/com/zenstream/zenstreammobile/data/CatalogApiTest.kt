@@ -4,11 +4,17 @@ import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
+import com.zenstream.zenstreammobile.model.appendPlaylistPage
+import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageUrl
 import com.zenstream.zenstreammobile.ui.components.resolveImageUrl
 import com.zenstream.zenstreammobile.ui.components.stackNewlyAdded
@@ -23,6 +29,82 @@ import org.junit.Test
 
 class CatalogApiTest {
     private val api = CatalogApi()
+
+    @Test
+    fun parsesPagedPlaylistAndSourceMembership() {
+        val payload =
+            JSONObject()
+                .put("id", "playlist-1")
+                .put("name", "Road Mix")
+                .put("itemCount", 21)
+                .put("isMember", true)
+                .put("page", 1)
+                .put("pageSize", 20)
+                .put("hasMore", true)
+                .put(
+                    "items",
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("entryId", "entry-1")
+                                .put("position", 0)
+                                .put("item", JSONObject().put("id", "track-1").put("type", "track"))
+                        ),
+                )
+        val parsed = parsePlaylist(payload)
+        assertEquals(21, parsed.summary.itemCount)
+        assertEquals(true, parsed.summary.isMember)
+        assertEquals(1, parsed.page)
+        assertEquals(20, parsed.pageSize)
+        assertTrue(parsed.hasMore)
+        assertEquals(listOf("entry-1"), parsed.items.map { it.entryId })
+    }
+
+    @Test
+    fun playlistPlaybackSelectsEntryFromCompleteQueue() {
+        val tracks =
+            (0..20).map { index ->
+                PlaylistEntry(
+                    "entry-$index",
+                    index,
+                    "",
+                    MediaItem(id = "track-$index", name = "Track $index", type = "Audio"),
+                )
+            }
+        assertEquals(0, playlistStartIndex(tracks, null))
+        assertEquals(20, playlistStartIndex(tracks, "entry-20"))
+        assertEquals(0, playlistStartIndex(tracks, "missing"))
+    }
+
+    @Test
+    fun playlistPageAppendDeduplicatesAndRejectsCrossDeviceChanges() {
+        val entries =
+            (0..20).map { index ->
+                PlaylistEntry(
+                    "entry-$index",
+                    index,
+                    "",
+                    MediaItem("track-$index", "Track $index", "Audio"),
+                )
+            }
+        val summary =
+            PlaylistSummary(
+                id = "playlist-1",
+                name = "Road Mix",
+                updatedAt = "revision-1",
+                itemCount = 21,
+            )
+        val first = PlaylistData(summary, entries.take(20), page = 1, pageSize = 20, hasMore = true)
+        val second =
+            PlaylistData(summary, listOf(entries[19], entries[20]), page = 2, pageSize = 20)
+        val combined = appendPlaylistPage(first, second)
+        assertEquals(21, combined?.items?.size)
+        assertEquals("entry-20", combined?.items?.last()?.entryId)
+        assertNull(
+            appendPlaylistPage(first, second.copy(summary = summary.copy(updatedAt = "revision-2")))
+        )
+        assertNull(appendPlaylistPage(first, second.copy(page = 3)))
+    }
 
     @Test
     fun includesGrantedMusicLibrariesAlongsideVideoLibraries() {
@@ -361,23 +443,120 @@ class CatalogApiTest {
     }
 
     @Test
-    fun media3CapabilityProfileAllowsNativeMatroskaAndCommonAudioCodecs() {
-        val capabilities = playbackCapabilities(PlayerEngine.MEDIA3)
+    fun media3CapabilityProfileReflectsAvailablePlatformAndExtensionDecoders() {
+        val capabilities =
+            media3PlaybackCapabilities(
+                decoderMimeTypes =
+                    setOf(
+                        "video/avc",
+                        "video/hevc",
+                        "video/x-vnd.on2.vp8",
+                        "video/x-vnd.on2.vp9",
+                        "audio/mp4a-latm",
+                        "audio/mpeg",
+                        "audio/opus",
+                        "audio/vorbis",
+                        "audio/flac",
+                    ),
+                extensionCodecs = setOf("av1", "ac3", "eac3", "alac", "dts", "dts_hd", "truehd"),
+            )
 
         assertEquals("media3", capabilities.engine)
-        assertTrue("mkv" in capabilities.containers)
-        assertTrue("mp3" in capabilities.containers)
-        assertTrue("flac" in capabilities.containers)
-        assertTrue("wav" in capabilities.containers)
-        assertTrue("h265" in capabilities.videoCodecs)
-        assertTrue("eac3" in capabilities.audioCodecs)
+        assertEquals(listOf("h264", "hevc", "vp8", "vp9", "av1"), capabilities.videoCodecs)
+        assertTrue("aac" in capabilities.audioCodecs)
+        assertTrue("mp3" in capabilities.audioCodecs)
+        assertTrue("opus" in capabilities.audioCodecs)
+        assertTrue("vorbis" in capabilities.audioCodecs)
         assertTrue("flac" in capabilities.audioCodecs)
+        assertTrue("ac3" in capabilities.audioCodecs)
+        assertTrue("eac3" in capabilities.audioCodecs)
+        assertTrue("alac" in capabilities.audioCodecs)
+        assertTrue("dts" in capabilities.audioCodecs)
+        assertTrue("dts_hd" in capabilities.audioCodecs)
+        assertTrue("truehd" in capabilities.audioCodecs)
         assertTrue("pcm_s16le" in capabilities.audioCodecs)
+        assertFalse("mpeg2video" in capabilities.videoCodecs)
+        assertFalse("mpeg4" in capabilities.videoCodecs)
+        assertFalse("xvid" in capabilities.videoCodecs)
+    }
+
+    @Test
+    fun media3CapabilitiesKeepContainerSupportSeparateAndHandleNoDecoders() {
+        val capabilities = media3PlaybackCapabilities(decoderMimeTypes = emptySet())
+
+        assertTrue("mkv" in capabilities.containers)
+        assertTrue("wav" in capabilities.containers)
+        assertFalse("aiff" in capabilities.containers)
+        assertTrue(capabilities.videoCodecs.isEmpty())
+        assertTrue(capabilities.audioCodecs.all { it.startsWith("pcm_") })
+        assertFalse("ac3" in capabilities.audioCodecs)
+        assertFalse("mpeg2video" in capabilities.videoCodecs)
+        assertFalse("mpeg4" in capabilities.videoCodecs)
+    }
+
+    @Test
+    fun playbackNegotiationBodyPreservesExistingFieldsAndEmptyCodecLists() {
+        val capabilities =
+            PlaybackCapabilities(
+                engine = "media3",
+                containers = listOf("mp4", "mkv"),
+                videoCodecs = emptyList(),
+                audioCodecs = emptyList(),
+                maxAudioChannels = 2,
+            )
+        val body =
+            playbackNegotiationBody(
+                capabilities = capabilities,
+                device = JSONObject().put("model", "test"),
+                options =
+                    PlaybackOptions(
+                        engine = PlayerEngine.MEDIA3,
+                        sourceId = "source-1",
+                        requestedMode = "audio-transcode",
+                        audioStreamId = 4,
+                        maxStreamingBitrate = 2_000_000,
+                        startPositionSeconds = 12.5,
+                    ),
+            )
+
+        val bodyKeys = mutableSetOf<String>()
+        val keyIterator = body.keys()
+        while (keyIterator.hasNext()) bodyKeys += keyIterator.next()
+
+        assertEquals(
+            setOf(
+                "engine",
+                "device",
+                "sourceId",
+                "requestedMode",
+                "forceTranscoding",
+                "containers",
+                "videoCodecs",
+                "audioCodecs",
+                "maxAudioChannels",
+                "maxStreamingBitrate",
+                "startPositionSeconds",
+                "audioStreamId",
+            ),
+            bodyKeys,
+        )
+        assertEquals("media3", body.getString("engine"))
+        assertEquals("source-1", body.getString("sourceId"))
+        assertEquals("audio-transcode", body.getString("requestedMode"))
+        assertEquals(4, body.getInt("audioStreamId"))
+        assertEquals(12.5, body.getDouble("startPositionSeconds"), 0.0)
+        assertEquals(0, body.getJSONArray("videoCodecs").length())
+        assertEquals(0, body.getJSONArray("audioCodecs").length())
     }
 
     @Test
     fun mpvCapabilityProfileIdentifiesTheMpvEngine() {
-        assertEquals("mpv", playbackCapabilities(PlayerEngine.MPV).engine)
+        val capabilities = playbackCapabilities(PlayerEngine.MPV)
+
+        assertEquals("mpv", capabilities.engine)
+        assertTrue("mpeg2video" in capabilities.videoCodecs)
+        assertTrue("xvid" in capabilities.videoCodecs)
+        assertTrue("dts_hd" in capabilities.audioCodecs)
     }
 
     @Test

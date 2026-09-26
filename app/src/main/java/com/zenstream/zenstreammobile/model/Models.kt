@@ -68,6 +68,8 @@ data class MediaItem(
     val runtimeTicks: Long? = null,
     val imageTags: Map<String, String> = emptyMap(),
     val imageBlurHashes: Map<String, String> = emptyMap(),
+    /** Client-only release artwork fallback for tracks without their own primary image. */
+    val primaryArtworkFallback: MediaItem? = null,
     val backdropImageTags: List<String> = emptyList(),
     val seriesPrimaryImageTag: String? = null,
     val seriesPrimaryImageBlurHash: String? = null,
@@ -75,10 +77,17 @@ data class MediaItem(
     val favorite: Boolean = false,
     /** Follow is populated for movies, series, and music artists only. */
     val following: Boolean? = null,
+    val watchlistStatus: WatchlistStatus? = null,
     val unplayedItemCount: Int? = null,
     val playedPercentage: Double? = null,
     val playbackPositionTicks: Long? = null,
     val chapters: List<MediaChapter> = emptyList(),
+)
+
+data class WatchlistStatus(
+    val kind: String,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 data class MediaPerson(
@@ -205,6 +214,50 @@ data class PagedFavorites(
     val items: List<MediaItem>,
     val totalRecordCount: Int,
 )
+
+data class PlaylistEntry(
+    val entryId: String,
+    val position: Int,
+    val addedAt: String,
+    val item: MediaItem,
+)
+
+data class PlaylistSummary(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val isPrivate: Boolean = true,
+    val shareToken: String? = null,
+    val itemCount: Int = 0,
+    val artworkItems: List<MediaItem> = emptyList(),
+    val createdAt: String = "",
+    val updatedAt: String = "",
+    val isOwner: Boolean = true,
+    val isMember: Boolean? = null,
+)
+
+data class PlaylistData(
+    val summary: PlaylistSummary,
+    val items: List<PlaylistEntry> = emptyList(),
+    val page: Int? = null,
+    val pageSize: Int? = null,
+    val hasMore: Boolean = false,
+)
+
+internal fun playlistStartIndex(entries: List<PlaylistEntry>, selectedEntryId: String?): Int =
+    selectedEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } }?.takeIf { it >= 0 }
+        ?: 0
+
+internal fun appendPlaylistPage(current: PlaylistData, incoming: PlaylistData): PlaylistData? {
+    if (
+        current.summary.id != incoming.summary.id ||
+            current.summary.updatedAt != incoming.summary.updatedAt ||
+            incoming.page != (current.page ?: 1) + 1
+    )
+        return null
+    val seen = current.items.mapTo(hashSetOf()) { it.entryId }
+    return incoming.copy(items = current.items + incoming.items.filter { seen.add(it.entryId) })
+}
 
 data class PagedLibrary(
     val library: Library,

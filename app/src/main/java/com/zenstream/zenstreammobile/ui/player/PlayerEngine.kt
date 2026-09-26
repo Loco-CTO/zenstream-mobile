@@ -9,6 +9,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
@@ -75,7 +77,23 @@ data class EngineState(
     val ready: Boolean = false,
     val ended: Boolean = false,
     val error: String? = null,
+    val errorTrackType: Int? = null,
 )
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal fun media3PlaybackErrorTrackType(
+    errorType: Int?,
+    rendererIndex: Int,
+    rendererTypeAt: (Int) -> Int,
+): Int? {
+    if (errorType != ExoPlaybackException.TYPE_RENDERER || rendererIndex < 0) return null
+    return runCatching { rendererTypeAt(rendererIndex) }
+        .getOrNull()
+        ?.takeIf { it == C.TRACK_TYPE_AUDIO || it == C.TRACK_TYPE_VIDEO }
+}
+
+internal fun playbackRecoveryMode(errorTrackType: Int?): String =
+    if (errorTrackType == C.TRACK_TYPE_AUDIO) "audio-transcode" else "video-transcode"
 
 internal fun media3PlaybackState(state: EngineState, playbackState: Int): EngineState {
     val activePlayback =
@@ -85,6 +103,7 @@ internal fun media3PlaybackState(state: EngineState, playbackState: Int): Engine
         isBuffering = playbackState == Player.STATE_BUFFERING,
         ended = playbackState == Player.STATE_ENDED,
         error = if (activePlayback) null else state.error,
+        errorTrackType = if (activePlayback) null else state.errorTrackType,
     )
 }
 
@@ -191,34 +210,53 @@ class Media3PlaybackEngine : PlaybackEngine {
     override fun createView(context: Context): View {
         if (player == null) {
             player =
-                ExoPlayer.Builder(context.applicationContext).build().also { exo ->
-                    exo.trackSelectionParameters =
-                        exo.trackSelectionParameters
-                            .buildUpon()
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                            .build()
-                    exo.addListener(
-                        object : Player.Listener {
-                            override fun onPlayerError(error: PlaybackException) {
-                                Log.e(
-                                    tag,
-                                    "Media3 playback error code=${error.errorCodeName} message=${error.message}",
-                                )
-                                _state.value =
-                                    _state.value.copy(error = error.message ?: "Playback failed")
-                            }
-
-                            override fun onPlaybackStateChanged(playbackState: Int) {
-                                _state.value = media3PlaybackState(_state.value, playbackState)
-                                Log.i(
-                                    tag,
-                                    "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
-                                )
-                                if (playbackState == Player.STATE_READY) applyInitialSeek()
-                            }
-                        }
+                ExoPlayer.Builder(
+                        context.applicationContext,
+                        DefaultRenderersFactory(context.applicationContext)
+                            .setExtensionRendererMode(
+                                DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                            ),
                     )
-                }
+                    .build()
+                    .also { exo ->
+                        exo.trackSelectionParameters =
+                            exo.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                .build()
+                        exo.addListener(
+                            object : Player.Listener {
+                                override fun onPlayerError(error: PlaybackException) {
+                                    val rendererError = error as? ExoPlaybackException
+                                    Log.e(
+                                        tag,
+                                        "Media3 playback error code=${error.errorCodeName} message=${error.message}",
+                                    )
+                                    _state.value =
+                                        _state.value.copy(
+                                            error = error.message ?: "Playback failed",
+                                            errorTrackType =
+                                                rendererError?.let {
+                                                    media3PlaybackErrorTrackType(
+                                                        errorType = it.type,
+                                                        rendererIndex = it.rendererIndex,
+                                                        rendererTypeAt = exo::getRendererType,
+                                                    )
+                                                },
+                                        )
+                                }
+
+                                override fun onPlaybackStateChanged(playbackState: Int) {
+                                    _state.value = media3PlaybackState(_state.value, playbackState)
+                                    Log.i(
+                                        tag,
+                                        "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
+                                    )
+                                    if (playbackState == Player.STATE_READY) applyInitialSeek()
+                                }
+                            }
+                        )
+                    }
             handler.post(ticker)
         }
         return PlayerView(context)

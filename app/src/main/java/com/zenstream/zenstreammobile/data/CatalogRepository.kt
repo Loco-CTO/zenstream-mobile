@@ -26,6 +26,8 @@ import com.zenstream.zenstreammobile.model.PlaybackData
 import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
 import com.zenstream.zenstreammobile.model.PlayerEngine
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
@@ -175,7 +177,82 @@ interface SearchDataSource : CatalogRefreshSource {
     ): PagedSearch = search(session, query, page)
 }
 
-interface FavoritesDataSource : CatalogRefreshSource {
+interface PlaylistDataSource {
+    suspend fun watchlist(session: AuthSession): List<MediaItem> = unsupportedPlaylistOperation()
+
+    suspend fun playlists(
+        session: AuthSession,
+        membershipSourceId: String? = null,
+    ): List<PlaylistSummary> = unsupportedPlaylistOperation()
+
+    suspend fun playlist(
+        session: AuthSession,
+        playlistId: String,
+        page: Int? = null,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun sharedPlaylist(
+        session: AuthSession,
+        shareToken: String,
+        page: Int? = null,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun createPlaylist(
+        session: AuthSession,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+        entityId: String? = null,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun updatePlaylist(
+        session: AuthSession,
+        playlistId: String,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun deletePlaylist(session: AuthSession, playlistId: String) =
+        unsupportedPlaylistOperation<Unit>()
+
+    suspend fun addPlaylistItems(
+        session: AuthSession,
+        playlistId: String,
+        entityIds: List<String>,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun removePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun removePlaylistSource(
+        session: AuthSession,
+        playlistId: String,
+        sourceId: String,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun movePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+        beforeEntryId: String? = null,
+        afterEntryId: String? = null,
+    ): PlaylistData = unsupportedPlaylistOperation()
+
+    suspend fun reorderPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        entryIds: List<String>,
+    ): PlaylistData = unsupportedPlaylistOperation()
+}
+
+private suspend fun <T> unsupportedPlaylistOperation(): T =
+    throw UnsupportedOperationException("Playlists are not supported by this data source")
+
+interface FavoritesDataSource : CatalogRefreshSource, PlaylistDataSource {
     override suspend fun clearSession()
 
     suspend fun favoritesPage(
@@ -188,9 +265,12 @@ interface FavoritesDataSource : CatalogRefreshSource {
     suspend fun cachedFavoriteSort(userId: String): FavoriteSort?
 
     suspend fun saveFavoriteSort(userId: String, sort: FavoriteSort)
+
+    suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) =
+        unsupportedPlaylistOperation<Unit>()
 }
 
-interface MusicDataSource : CatalogRefreshSource {
+interface MusicDataSource : CatalogRefreshSource, PlaylistDataSource {
     override suspend fun clearSession()
 
     suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData
@@ -600,6 +680,137 @@ class CatalogRepository(
         authenticatedCatalogRequest(session) { current ->
             api.fetchFavoritesPage(current, startIndex, limit, sort)
         }
+
+    override suspend fun watchlist(session: AuthSession): List<MediaItem> =
+        authenticatedCatalogRequest(session) { current -> api.fetchWatchlist(current) }
+
+    override suspend fun playlists(
+        session: AuthSession,
+        membershipSourceId: String?,
+    ): List<PlaylistSummary> =
+        authenticatedCatalogRequest(session) { current ->
+            api.fetchPlaylists(current, membershipSourceId)
+        }
+
+    override suspend fun playlist(
+        session: AuthSession,
+        playlistId: String,
+        page: Int?,
+    ): PlaylistData =
+        authenticatedCatalogRequest(session) { current ->
+            api.fetchPlaylist(current, playlistId, page)
+        }
+
+    override suspend fun sharedPlaylist(
+        session: AuthSession,
+        shareToken: String,
+        page: Int?,
+    ): PlaylistData =
+        authenticatedCatalogRequest(session) { current ->
+            api.fetchSharedPlaylist(current, shareToken, page)
+        }
+
+    override suspend fun createPlaylist(
+        session: AuthSession,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+        entityId: String?,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.createPlaylist(current, name, description, isPrivate, entityId)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun updatePlaylist(
+        session: AuthSession,
+        playlistId: String,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.updatePlaylist(current, playlistId, name, description, isPrivate)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun deletePlaylist(session: AuthSession, playlistId: String) {
+        authenticatedCatalogRequest(session) { current -> api.deletePlaylist(current, playlistId) }
+        invalidateCatalogState()
+    }
+
+    override suspend fun addPlaylistItems(
+        session: AuthSession,
+        playlistId: String,
+        entityIds: List<String>,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.addPlaylistItems(current, playlistId, entityIds)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun removePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.removePlaylistEntry(current, playlistId, entryId)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun removePlaylistSource(
+        session: AuthSession,
+        playlistId: String,
+        sourceId: String,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.removePlaylistSource(current, playlistId, sourceId)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun movePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+        beforeEntryId: String?,
+        afterEntryId: String?,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.movePlaylistEntry(current, playlistId, entryId, beforeEntryId, afterEntryId)
+            }
+        invalidateCatalogState()
+        return result
+    }
+
+    override suspend fun reorderPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        entryIds: List<String>,
+    ): PlaylistData {
+        val result =
+            authenticatedCatalogRequest(session) { current ->
+                api.reorderPlaylist(current, playlistId, entryIds)
+            }
+        invalidateCatalogState()
+        return result
+    }
 
     override suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData =
         authenticatedCatalogRequest(session) { current -> api.musicAlbum(current, albumId) }

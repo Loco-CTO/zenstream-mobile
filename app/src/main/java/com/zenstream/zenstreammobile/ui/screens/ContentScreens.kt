@@ -46,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +55,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -1039,6 +1042,43 @@ private fun SearchField(
 
 @Composable
 fun FavoritesScreen(
+    repository: FavoritesDataSource,
+    session: AuthSession,
+    padding: PaddingValues,
+    onScrollabilityChanged: (Boolean) -> Unit = {},
+    onItemClick: (MediaItem) -> Unit,
+    onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit = { _, _, _, _ -> },
+) {
+    var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
+    val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
+    Column(Modifier.fillMaxSize().padding(padding)) {
+        TabRow(selectedTabIndex = selectedTab) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(stringResource(title)) },
+                )
+            }
+        }
+        when (selectedTab) {
+            0 -> WatchlistContent(repository, session, onItemClick, onScrollabilityChanged)
+            1 ->
+                FavoritesTabContent(
+                    repository,
+                    session,
+                    PaddingValues(),
+                    onScrollabilityChanged,
+                    onItemClick,
+                )
+            else ->
+                PlaylistLibraryContent(repository, session, onPlayTracks, onScrollabilityChanged)
+        }
+    }
+}
+
+@Composable
+private fun FavoritesTabContent(
     repository: FavoritesDataSource,
     session: AuthSession,
     padding: PaddingValues,

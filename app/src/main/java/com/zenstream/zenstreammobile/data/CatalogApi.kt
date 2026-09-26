@@ -43,6 +43,9 @@ import com.zenstream.zenstreammobile.model.PlaybackOptions
 import com.zenstream.zenstreammobile.model.PlaybackSegment
 import com.zenstream.zenstreammobile.model.PlaybackSegmentType
 import com.zenstream.zenstreammobile.model.PlaybackSessionStatus
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.model.RowVariant
 import com.zenstream.zenstreammobile.model.SearchFacets
@@ -54,6 +57,7 @@ import com.zenstream.zenstreammobile.model.ViewerCommand
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
+import com.zenstream.zenstreammobile.model.WatchlistStatus
 import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.io.IOException
 import java.time.Instant
@@ -350,19 +354,11 @@ class CatalogApi(
                     "/api/playback/items/${encodePathSegment(itemId)}/negotiate",
                     method = "POST",
                     body =
-                        JSONObject()
-                            .put("engine", capabilities.engine)
-                            .put("device", deviceMetadata())
-                            .put("sourceId", negotiatedOptions.sourceId)
-                            .put("requestedMode", negotiatedOptions.requestedMode)
-                            .put("forceTranscoding", negotiatedOptions.forceTranscoding)
-                            .put("containers", JSONArray(capabilities.containers))
-                            .put("videoCodecs", JSONArray(capabilities.videoCodecs))
-                            .put("audioCodecs", JSONArray(capabilities.audioCodecs))
-                            .put("maxAudioChannels", capabilities.maxAudioChannels)
-                            .put("maxStreamingBitrate", negotiatedOptions.maxStreamingBitrate)
-                            .put("startPositionSeconds", negotiatedOptions.startPositionSeconds)
-                            .put("audioStreamId", negotiatedOptions.audioStreamId)
+                        playbackNegotiationBody(
+                                capabilities = capabilities,
+                                device = deviceMetadata(),
+                                options = negotiatedOptions,
+                            )
                             .toString(),
                     requestTimeoutMillis = AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS,
                 )
@@ -1154,6 +1150,211 @@ class CatalogApi(
             )
         }
 
+    suspend fun fetchWatchlist(session: AuthSession): List<MediaItem> =
+        withContext(Dispatchers.IO) {
+            jsonArray(requestJson(session, "/api/catalog/following"), "items")
+                .map { item ->
+                    val status = item.optJSONObject("watchlistStatus")
+                    catalogMediaItem(item)
+                        .copy(
+                            watchlistStatus =
+                                status?.let {
+                                    WatchlistStatus(
+                                        kind = it.optString("kind"),
+                                        seasonNumber = it.optIntOrNull("seasonNumber"),
+                                        episodeNumber = it.optIntOrNull("episodeNumber"),
+                                    )
+                                }
+                        )
+                }
+                .distinctBy { it.id }
+        }
+
+    suspend fun fetchPlaylists(
+        session: AuthSession,
+        membershipSourceId: String? = null,
+    ): List<PlaylistSummary> =
+        withContext(Dispatchers.IO) {
+            val suffix =
+                membershipSourceId?.let { "?membershipSourceId=${encodePathSegment(it)}" }.orEmpty()
+            jsonArray(requestJson(session, "/api/account/playlists$suffix"), "items")
+                .map(::parsePlaylistSummary)
+        }
+
+    suspend fun fetchPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        page: Int? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}$suffix",
+                )
+            )
+        }
+
+    suspend fun fetchSharedPlaylist(
+        session: AuthSession,
+        shareToken: String,
+        page: Int? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val suffix = page?.let { "?page=$it&pageSize=20" }.orEmpty()
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/shared/playlists/${encodePathSegment(shareToken)}$suffix",
+                )
+            )
+        }
+
+    suspend fun createPlaylist(
+        session: AuthSession,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+        entityId: String? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject()
+                    .put("name", name)
+                    .put("description", description ?: JSONObject.NULL)
+                    .put("isPrivate", isPrivate)
+                    .apply { entityId?.let { put("entityId", it) } }
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists?view=summary",
+                    method = "POST",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun updatePlaylist(
+        session: AuthSession,
+        playlistId: String,
+        name: String,
+        description: String?,
+        isPrivate: Boolean,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject()
+                    .put("name", name)
+                    .put("description", description ?: JSONObject.NULL)
+                    .put("isPrivate", isPrivate)
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}?view=summary",
+                    method = "PATCH",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun deletePlaylist(session: AuthSession, playlistId: String) =
+        withContext(Dispatchers.IO) {
+            requestJson(
+                session,
+                "/api/account/playlists/${encodePathSegment(playlistId)}",
+                method = "DELETE",
+            )
+            Unit
+        }
+
+    suspend fun addPlaylistItems(
+        session: AuthSession,
+        playlistId: String,
+        entityIds: List<String>,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("entityIds", JSONArray(entityIds))
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items?view=summary",
+                    method = "POST",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun removePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}?view=summary",
+                    method = "DELETE",
+                )
+            )
+        }
+
+    suspend fun reorderPlaylist(
+        session: AuthSession,
+        playlistId: String,
+        entryIds: List<String>,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("entryIds", JSONArray(entryIds))
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/order",
+                    method = "PUT",
+                    body = body.toString(),
+                )
+            )
+        }
+
+    suspend fun removePlaylistSource(
+        session: AuthSession,
+        playlistId: String,
+        sourceId: String,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/by-source/${encodePathSegment(sourceId)}",
+                    method = "DELETE",
+                )
+            )
+        }
+
+    suspend fun movePlaylistEntry(
+        session: AuthSession,
+        playlistId: String,
+        entryId: String,
+        beforeEntryId: String? = null,
+        afterEntryId: String? = null,
+    ): PlaylistData =
+        withContext(Dispatchers.IO) {
+            val body =
+                JSONObject().apply {
+                    beforeEntryId?.let { put("beforeEntryId", it) }
+                    afterEntryId?.let { put("afterEntryId", it) }
+                }
+            parsePlaylist(
+                requestJson(
+                    session,
+                    "/api/account/playlists/${encodePathSegment(playlistId)}/items/${encodePathSegment(entryId)}/move",
+                    method = "PATCH",
+                    body = body.toString(),
+                )
+            )
+        }
+
     suspend fun search(
         session: AuthSession,
         query: String,
@@ -1819,6 +2020,42 @@ internal fun parseCalendarResponse(root: JSONObject): CalendarResponse {
 
 internal fun catalogItems(root: JSONObject, key: String = "items"): List<MediaItem> =
     jsonArray(root, key).map(::catalogMediaItem).distinctBy { it.id }
+
+private fun parsePlaylistSummary(payload: JSONObject): PlaylistSummary =
+    PlaylistSummary(
+        id = payload.optString("id"),
+        name = payload.optString("name"),
+        description = payload.optNullableString("description"),
+        isPrivate = payload.optBoolean("isPrivate", true),
+        shareToken = payload.optNullableString("shareToken"),
+        itemCount = payload.optInt("itemCount"),
+        artworkItems = jsonArray(payload, "artworkItems").map(::catalogMediaItem),
+        createdAt = payload.optString("createdAt"),
+        updatedAt = payload.optString("updatedAt"),
+        isOwner = payload.optBoolean("isOwner", true),
+        isMember = if (payload.has("isMember")) payload.optBoolean("isMember") else null,
+    )
+
+internal fun parsePlaylist(payload: JSONObject): PlaylistData {
+    val summary = parsePlaylistSummary(payload)
+    val entries =
+        jsonArray(payload, "items").mapNotNull { entry ->
+            val item = entry.optJSONObject("item") ?: return@mapNotNull null
+            PlaylistEntry(
+                entryId = entry.optString("entryId"),
+                position = entry.optInt("position"),
+                addedAt = entry.optString("addedAt"),
+                item = catalogMediaItem(item),
+            )
+        }
+    return PlaylistData(
+        summary = summary,
+        items = entries,
+        page = if (payload.has("page")) payload.optInt("page") else null,
+        pageSize = if (payload.has("pageSize")) payload.optInt("pageSize") else null,
+        hasMore = payload.optBoolean("hasMore"),
+    )
+}
 
 internal fun parseDetailData(payload: JSONObject): DetailData {
     val item = catalogMediaItem(payload.getJSONObject("item"))
@@ -2637,3 +2874,22 @@ private fun JSONObject.optLongOrNull(key: String): Long? =
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (has(key) && !isNull(key)) optDouble(key) else null
+
+internal fun playbackNegotiationBody(
+    capabilities: PlaybackCapabilities,
+    device: JSONObject,
+    options: PlaybackOptions,
+): JSONObject =
+    JSONObject()
+        .put("engine", capabilities.engine)
+        .put("device", device)
+        .put("sourceId", options.sourceId)
+        .put("requestedMode", options.requestedMode)
+        .put("forceTranscoding", options.forceTranscoding)
+        .put("containers", JSONArray(capabilities.containers))
+        .put("videoCodecs", JSONArray(capabilities.videoCodecs))
+        .put("audioCodecs", JSONArray(capabilities.audioCodecs))
+        .put("maxAudioChannels", capabilities.maxAudioChannels)
+        .put("maxStreamingBitrate", options.maxStreamingBitrate)
+        .put("startPositionSeconds", options.startPositionSeconds)
+        .put("audioStreamId", options.audioStreamId)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -71,14 +72,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -1443,27 +1442,75 @@ private fun QueuePanel(
     coordinator: AudioPlayerCoordinator,
     accent: Color,
 ) {
-    val list = snapshot.entries
+    var pendingQueueOrder by remember { mutableStateOf<List<AudioQueueEntry>?>(null) }
+    val list = pendingQueueOrder ?: snapshot.entries
+    val pendingIds = pendingQueueOrder?.map { it.entryId }
+    LaunchedEffect(snapshot.entries, pendingIds) {
+        if (pendingIds != null && snapshot.entries.map { it.entryId } == pendingIds) {
+            pendingQueueOrder = null
+        }
+    }
+    LaunchedEffect(pendingIds) {
+        if (pendingIds != null) {
+            delay(2_000)
+            if (pendingQueueOrder?.map { it.entryId } == pendingIds) pendingQueueOrder = null
+        }
+    }
     val listState = rememberLazyListState()
-    // Bounds are consumed only by the long-press drag coroutine. Keeping this map outside the
-    // snapshot system avoids invalidating every visible row each time it is measured.
-    val rowBounds = remember { mutableMapOf<String, Rect>() }
+    val rowHeights = remember { mutableMapOf<String, Float>() }
+    var viewportHeightPx by remember { mutableStateOf(0) }
     var draggedEntryId by remember { mutableStateOf<String?>(null) }
     var draggedFrom by remember { mutableStateOf(-1) }
     var insertionIndex by remember { mutableStateOf(-1) }
-    var dragOffsetPx by remember { mutableStateOf(0f) }
-    var dragStartCenterY by remember { mutableStateOf(0f) }
-    var dragStartCenters by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    var draggedCenterY by remember { mutableStateOf(0f) }
+    var draggedHeightPx by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
     val rowGapPx = with(density) { 4.dp.toPx() }
+    val edgeThresholdPx = with(density) { 72.dp.toPx() }
+    val minimumScrollPx = with(density) { 4.dp.toPx() }
+    val extraScrollPx = with(density) { 20.dp.toPx() }
+
+    fun updateInsertionIndex() {
+        val nearest =
+            listState.layoutInfo.visibleItemsInfo
+                .mapNotNull { info ->
+                    val id = info.key as? String ?: return@mapNotNull null
+                    val index = list.indexOfFirst { it.entryId == id }
+                    if (index < 0) null
+                    else index to abs(info.offset + info.size / 2f - draggedCenterY)
+                }
+                .minByOrNull { it.second }
+        if (nearest != null) insertionIndex = nearest.first
+    }
 
     fun clearDrag() {
         draggedEntryId = null
         draggedFrom = -1
         insertionIndex = -1
-        dragOffsetPx = 0f
-        dragStartCenterY = 0f
-        dragStartCenters = emptyMap()
+        draggedCenterY = 0f
+        draggedHeightPx = 0f
+    }
+
+    LaunchedEffect(draggedEntryId) {
+        while (draggedEntryId != null) {
+            val edgeDistance =
+                when {
+                    draggedCenterY > viewportHeightPx - edgeThresholdPx &&
+                        listState.canScrollForward ->
+                        draggedCenterY - (viewportHeightPx - edgeThresholdPx)
+                    draggedCenterY < edgeThresholdPx && listState.canScrollBackward ->
+                        draggedCenterY - edgeThresholdPx
+                    else -> 0f
+                }
+            if (edgeDistance != 0f && viewportHeightPx > 0) {
+                val speed =
+                    minimumScrollPx +
+                        extraScrollPx * (abs(edgeDistance) / edgeThresholdPx).coerceIn(0f, 1f)
+                listState.scrollBy(if (edgeDistance > 0f) speed else -speed)
+                updateInsertionIndex()
+            }
+            delay(16)
+        }
     }
 
     Column(modifier.fillMaxSize()) {
@@ -1485,205 +1532,241 @@ private fun QueuePanel(
                 }
             }
         }
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(vertical = 8.dp),
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            itemsIndexed(list, key = { _, entry -> entry.entryId }) { index, entry ->
-                val isDragged = draggedEntryId == entry.entryId
-                val rowStepPx = (rowBounds[entry.entryId]?.height ?: 0f) + rowGapPx
-                val targetOffsetPx =
-                    when {
-                        isDragged -> 0f
-                        draggedFrom >= 0 &&
-                            insertionIndex > draggedFrom &&
-                            index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
-                        draggedFrom >= 0 &&
-                            insertionIndex in 0 until draggedFrom &&
-                            index in insertionIndex until draggedFrom -> rowStepPx
-                        else -> 0f
+        Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { viewportHeightPx = it.height }) {
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier =
+                    Modifier.fillMaxSize().pointerInput(list.map { it.entryId }) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { touch ->
+                                val info =
+                                    listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                        touch.y >= it.offset &&
+                                            touch.y < it.offset + it.size &&
+                                            list.any { entry -> entry.entryId == it.key }
+                                    } ?: return@detectDragGesturesAfterLongPress
+                                val id = info.key as String
+                                draggedEntryId = id
+                                draggedFrom = list.indexOfFirst { it.entryId == id }
+                                insertionIndex = draggedFrom
+                                draggedCenterY = info.offset + info.size / 2f
+                                draggedHeightPx = info.size.toFloat()
+                            },
+                            onDragCancel = ::clearDrag,
+                            onDragEnd = {
+                                val from = draggedFrom
+                                val target = insertionIndex
+                                clearDrag()
+                                if (
+                                    from in list.indices && target in list.indices && target != from
+                                ) {
+                                    val reordered = list.toMutableList()
+                                    val moving = reordered.removeAt(from)
+                                    reordered.add(target, moving)
+                                    pendingQueueOrder = reordered
+                                    coordinator.reorderQueue(from, target)
+                                }
+                            },
+                            onDrag = { change, dragAmount ->
+                                if (draggedEntryId != null) {
+                                    change.consume()
+                                    draggedCenterY += dragAmount.y
+                                    updateInsertionIndex()
+                                }
+                            },
+                        )
+                    },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                itemsIndexed(list, key = { _, entry -> entry.entryId }) { index, entry ->
+                    val isDragged = draggedEntryId == entry.entryId
+                    val rowStepPx = (rowHeights[entry.entryId] ?: draggedHeightPx) + rowGapPx
+                    val targetOffsetPx =
+                        when {
+                            isDragged -> 0f
+                            draggedFrom >= 0 &&
+                                insertionIndex > draggedFrom &&
+                                index in (draggedFrom + 1)..insertionIndex -> -rowStepPx
+                            draggedFrom >= 0 &&
+                                insertionIndex in 0 until draggedFrom &&
+                                index in insertionIndex until draggedFrom -> rowStepPx
+                            else -> 0f
+                        }
+                    val liftProgress by
+                        animateFloatAsState(
+                            targetValue = if (isDragged) 1f else 0f,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "queue drag lift",
+                        )
+                    val previewAlpha by
+                        animateFloatAsState(
+                            targetValue = if (isDragged) .96f else 1f,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "queue drag alpha",
+                        )
+                    val shadowElevation by
+                        animateDpAsState(
+                            targetValue = if (isDragged) 10.dp else 0.dp,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "queue drag shadow",
+                        )
+                    val tonalElevation by
+                        animateDpAsState(
+                            targetValue = if (isDragged) 4.dp else 0.dp,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "queue drag elevation",
+                        )
+                    val animatedOffsetPx by
+                        animateFloatAsState(
+                            targetValue = targetOffsetPx,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "queue row movement",
+                        )
+                    Surface(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .offset { IntOffset(0, animatedOffsetPx.roundToInt()) }
+                                .shadow(
+                                    elevation = shadowElevation,
+                                    shape = RoundedCornerShape(14.dp),
+                                )
+                                .graphicsLayer {
+                                    val scale = 1f + (liftProgress * .02f)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .onSizeChanged { rowHeights[entry.entryId] = it.height.toFloat() }
+                                .alpha(if (isDragged) 0f else previewAlpha),
+                        shape = RoundedCornerShape(14.dp),
+                        color =
+                            if (isDragged) {
+                                MaterialTheme.colorScheme.surface.copy(alpha = .98f)
+                            } else if (entry.entryId == snapshot.currentEntryId) {
+                                accent.copy(alpha = .1f)
+                            } else Color.Transparent,
+                        tonalElevation = tonalElevation,
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                Modifier.weight(1f)
+                                    .clickable { coordinator.playQueueEntry(entry.entryId) }
+                                    .testTag("audio-queue-entry-${entry.entryId}"),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                MusicArtwork(
+                                    item = entry.track,
+                                    session = session,
+                                    modifier = Modifier.size(56.dp),
+                                    contentDescription = entry.track.name,
+                                    requestedSize = 256,
+                                    shape = RoundedCornerShape(10.dp),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        entry.track.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        entry.track.albumArtist
+                                            ?: entry.track.artists.firstOrNull()
+                                            ?: stringResource(R.string.audio_unknown_artist),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = { coordinator.removeQueueEntry(entry.entryId) },
+                                modifier = Modifier.size(48.dp),
+                            ) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_x),
+                                    contentDescription =
+                                        stringResource(R.string.audio_remove_from_queue),
+                                    tint = accent,
+                                )
+                            }
+                        }
                     }
-                val liftProgress by
-                    animateFloatAsState(
-                        targetValue = if (isDragged) 1f else 0f,
-                        animationSpec =
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        label = "queue drag lift",
+                }
+            }
+            val dragged = list.firstOrNull { it.entryId == draggedEntryId }
+            if (dragged != null) {
+                val previewTop =
+                    (draggedCenterY - draggedHeightPx / 2f).coerceIn(
+                        0f,
+                        (viewportHeightPx - draggedHeightPx).coerceAtLeast(0f),
                     )
-                val previewAlpha by
-                    animateFloatAsState(
-                        targetValue = if (isDragged) .96f else 1f,
-                        animationSpec =
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        label = "queue drag alpha",
-                    )
-                val shadowElevation by
-                    animateDpAsState(
-                        targetValue = if (isDragged) 10.dp else 0.dp,
-                        animationSpec =
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        label = "queue drag shadow",
-                    )
-                val tonalElevation by
-                    animateDpAsState(
-                        targetValue = if (isDragged) 4.dp else 0.dp,
-                        animationSpec =
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        label = "queue drag elevation",
-                    )
-                val animatedOffsetPx by
-                    animateFloatAsState(
-                        targetValue = targetOffsetPx,
-                        animationSpec =
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                        label = "queue row movement",
-                    )
-                val visualOffsetPx = if (isDragged) dragOffsetPx else animatedOffsetPx
                 Surface(
                     modifier =
                         Modifier.fillMaxWidth()
-                            .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
-                            .zIndex(if (isDragged) 1f else 0f)
-                            .shadow(
-                                elevation = shadowElevation,
-                                shape = RoundedCornerShape(14.dp),
-                            )
-                            .graphicsLayer {
-                                val scale = 1f + (liftProgress * .02f)
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .onGloballyPositioned { coordinates ->
-                                rowBounds[entry.entryId] = coordinates.boundsInRoot()
-                            }
-                            .pointerInput(entry.entryId) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        val centers = list.mapNotNull { candidate ->
-                                            rowBounds[candidate.entryId]?.let {
-                                                candidate.entryId to it.center.y
-                                            }
-                                        }
-                                        dragStartCenters = centers.toMap()
-                                        draggedEntryId = entry.entryId
-                                        draggedFrom = index
-                                        insertionIndex = index
-                                        dragOffsetPx = 0f
-                                        dragStartCenterY =
-                                            dragStartCenters[entry.entryId]
-                                                ?: rowBounds[entry.entryId]?.center?.y
-                                                ?: 0f
-                                    },
-                                    onDragCancel = ::clearDrag,
-                                    onDragEnd = {
-                                        val from = draggedFrom
-                                        val target = insertionIndex
-                                        clearDrag()
-                                        if (
-                                            from in list.indices &&
-                                                target in list.indices &&
-                                                target != from
-                                        ) {
-                                            coordinator.reorderQueue(from, target)
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragOffsetPx += dragAmount.y
-                                        val draggedCenterY = dragStartCenterY + dragOffsetPx
-                                        val target =
-                                            list.indices
-                                                .filter { it != draggedFrom }
-                                                .count { candidateIndex ->
-                                                    val candidate = list[candidateIndex]
-                                                    val centerY =
-                                                        dragStartCenters[candidate.entryId]
-                                                            ?: rowBounds[candidate.entryId]
-                                                                ?.center
-                                                                ?.y
-                                                            ?: Float.MAX_VALUE
-                                                    centerY < draggedCenterY
-                                                }
-                                        insertionIndex =
-                                            target.coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                                    },
-                                )
-                            }
-                            .alpha(previewAlpha),
+                            .offset { IntOffset(0, previewTop.roundToInt()) }
+                            .zIndex(2f)
+                            .shadow(10.dp, RoundedCornerShape(14.dp)),
                     shape = RoundedCornerShape(14.dp),
-                    color =
-                        if (isDragged) {
-                            MaterialTheme.colorScheme.surface.copy(alpha = .98f)
-                        } else if (entry.entryId == snapshot.currentEntryId) {
-                            accent.copy(alpha = .1f)
-                        } else Color.Transparent,
-                    tonalElevation = tonalElevation,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .98f),
+                    tonalElevation = 4.dp,
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            Modifier.weight(1f)
-                                .clickable { coordinator.playQueueEntry(entry.entryId) }
-                                .testTag("audio-queue-entry-${entry.entryId}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            MusicArtwork(
-                                item = entry.track,
-                                session = session,
-                                modifier = Modifier.size(56.dp),
-                                contentDescription = entry.track.name,
-                                requestedSize = 256,
-                                shape = RoundedCornerShape(10.dp),
+                        MusicArtwork(
+                            item = dragged.track,
+                            session = session,
+                            modifier = Modifier.size(56.dp),
+                            contentDescription = dragged.track.name,
+                            requestedSize = 256,
+                            shape = RoundedCornerShape(10.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                dragged.track.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    entry.track.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    entry.track.albumArtist
-                                        ?: entry.track.artists.firstOrNull()
-                                        ?: stringResource(R.string.audio_unknown_artist),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = { coordinator.removeQueueEntry(entry.entryId) },
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_x),
-                                contentDescription =
-                                    stringResource(R.string.audio_remove_from_queue),
-                                tint = accent,
+                            Text(
+                                dragged.track.albumArtist
+                                    ?: dragged.track.artists.firstOrNull()
+                                    ?: stringResource(R.string.audio_unknown_artist),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
+                        Spacer(Modifier.width(48.dp))
                     }
                 }
             }

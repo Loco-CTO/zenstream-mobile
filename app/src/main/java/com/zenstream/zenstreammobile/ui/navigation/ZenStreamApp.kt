@@ -528,6 +528,14 @@ private fun MainScaffold(
                             session = session,
                             padding = padding,
                             onItemClick = { item -> navigateToMedia(navController, item) },
+                            onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
+                                audio.playPlaylistTracks(
+                                    tracks,
+                                    index,
+                                    shuffle = shuffle ?: audioState.shuffle,
+                                    preserveSelectedFirst = preserveSelectedFirst,
+                                )
+                            },
                             onScrollabilityChanged = onContentScrollabilityChanged,
                         )
                     }
@@ -962,7 +970,7 @@ internal fun mainNavigationDestinations(): List<NavigationDestination> =
         ),
         NavigationDestination(
             FAVORITES,
-            com.zenstream.zenstreammobile.R.string.favorites,
+            com.zenstream.zenstreammobile.R.string.my_lists,
             LucideR.drawable.lucide_ic_heart,
         ),
         NavigationDestination(

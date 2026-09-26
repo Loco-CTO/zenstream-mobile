@@ -34,6 +34,7 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
+import com.zenstream.zenstreammobile.ui.player.playbackRecoveryMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +96,9 @@ internal fun shouldClearPlayedOnPlaybackStart(
     played: Boolean,
     resetAlreadyRequested: Boolean,
 ): Boolean = isPlaying && played && !resetAlreadyRequested
+
+internal fun shouldRecoverPlaybackError(mode: String?, alreadyRecovered: Boolean): Boolean =
+    !alreadyRecovered && mode in setOf(null, "direct", "remux")
 
 internal fun syncplayShouldAutoplay(
     room: SyncplayGroup?,
@@ -320,18 +324,17 @@ class PlaybackViewModel(
                 clearPlayedOnPlaybackStart(state)
                 if (
                     state.error != null &&
-                        !recovered &&
-                        (_uiState.value.playback?.mode == null ||
-                            _uiState.value.playback?.mode == "direct")
+                        shouldRecoverPlaybackError(_uiState.value.playback?.mode, recovered)
                 ) {
                     recovered = true
+                    val recoveryMode = playbackRecoveryMode(state.errorTrackType)
                     Log.w(
                         PLAYBACK_TAG,
-                        "performing single video-transcode recovery item=$currentItemId previousMode=${_uiState.value.playback?.mode}",
+                        "performing single $recoveryMode recovery item=$currentItemId previousMode=${_uiState.value.playback?.mode}",
                     )
                     loadPlayback(
                         PlaybackOptions(
-                            requestedMode = "video-transcode",
+                            requestedMode = recoveryMode,
                             maxStreamingBitrate = 1_000_000,
                             sourceId = _uiState.value.playback?.source?.id,
                             audioStreamId = _uiState.value.selectedAudio,

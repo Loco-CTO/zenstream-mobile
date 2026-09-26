@@ -138,7 +138,12 @@ fun MusicArtwork(
     fallbackGlyph: String = "♪",
 ) {
     val safeSize = requestedSize.coerceIn(160, 1_024)
-    val sourceItem = if (item.imageTags["Primary"].isNullOrBlank()) fallbackItem ?: item else item
+    val sourceItem =
+        if (item.imageTags["Primary"].isNullOrBlank()) {
+            fallbackItem ?: item.primaryArtworkFallback ?: item
+        } else {
+            item
+        }
     val url = imageUrl(session.serverUrl, sourceItem, "Primary", safeSize, safeSize)
     val request = url?.let { authenticatedImageRequest(LocalContext.current, it, session) }
     val blurHash = imageBlurHash(sourceItem, "Primary")
@@ -221,6 +226,7 @@ fun AudioTrackRow(
     onClick: (MediaItem) -> Unit,
     onFavorite: ((MediaItem) -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
+    onAddToPlaylist: (@Composable () -> Unit)? = null,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
@@ -284,6 +290,9 @@ fun AudioTrackRow(
                     tint = if (item.favorite) accentColor else MaterialTheme.colorScheme.onSurface,
                 )
             }
+        }
+        if (onAddToPlaylist != null) {
+            onAddToPlaylist()
         }
     }
 }
