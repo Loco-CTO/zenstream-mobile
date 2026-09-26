@@ -92,6 +92,7 @@ import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
+import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -1014,6 +1015,10 @@ private fun PlaylistDetailContent(
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                     item(key = "playlist-summary") {
+                        val actionArtwork = summary.artworkItems.firstOrNull()
+                        val actionPalette = remember(actionArtwork?.id, actionArtwork?.imageBlurHashes?.get("Primary")) {
+                            musicArtworkPalette(actionArtwork)
+                        }
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 PlaylistArtwork(summary.artworkItems, session, Modifier.size(112.dp))
@@ -1048,6 +1053,7 @@ private fun PlaylistDetailContent(
                                     onPlay = { onPlayFull(null, false) },
                                     shuffleLabel = R.string.shuffle,
                                     playLabel = R.string.play_all,
+                                    palette = actionPalette,
                                     enabled = summary.itemCount > 0 && !playBusy,
                                     loading = playBusy,
                                 )
