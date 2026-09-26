@@ -354,19 +354,11 @@ class CatalogApi(
                     "/api/playback/items/${encodePathSegment(itemId)}/negotiate",
                     method = "POST",
                     body =
-                        JSONObject()
-                            .put("engine", capabilities.engine)
-                            .put("device", deviceMetadata())
-                            .put("sourceId", negotiatedOptions.sourceId)
-                            .put("requestedMode", negotiatedOptions.requestedMode)
-                            .put("forceTranscoding", negotiatedOptions.forceTranscoding)
-                            .put("containers", JSONArray(capabilities.containers))
-                            .put("videoCodecs", JSONArray(capabilities.videoCodecs))
-                            .put("audioCodecs", JSONArray(capabilities.audioCodecs))
-                            .put("maxAudioChannels", capabilities.maxAudioChannels)
-                            .put("maxStreamingBitrate", negotiatedOptions.maxStreamingBitrate)
-                            .put("startPositionSeconds", negotiatedOptions.startPositionSeconds)
-                            .put("audioStreamId", negotiatedOptions.audioStreamId)
+                        playbackNegotiationBody(
+                            capabilities = capabilities,
+                            device = deviceMetadata(),
+                            options = negotiatedOptions,
+                        )
                             .toString(),
                     requestTimeoutMillis = AUDIO_PLAYBACK_REQUEST_TIMEOUT_MILLIS,
                 )
@@ -2844,3 +2836,22 @@ private fun JSONObject.optLongOrNull(key: String): Long? =
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (has(key) && !isNull(key)) optDouble(key) else null
+
+internal fun playbackNegotiationBody(
+    capabilities: PlaybackCapabilities,
+    device: JSONObject,
+    options: PlaybackOptions,
+): JSONObject =
+    JSONObject()
+        .put("engine", capabilities.engine)
+        .put("device", device)
+        .put("sourceId", options.sourceId)
+        .put("requestedMode", options.requestedMode)
+        .put("forceTranscoding", options.forceTranscoding)
+        .put("containers", JSONArray(capabilities.containers))
+        .put("videoCodecs", JSONArray(capabilities.videoCodecs))
+        .put("audioCodecs", JSONArray(capabilities.audioCodecs))
+        .put("maxAudioChannels", capabilities.maxAudioChannels)
+        .put("maxStreamingBitrate", options.maxStreamingBitrate)
+        .put("startPositionSeconds", options.startPositionSeconds)
+        .put("audioStreamId", options.audioStreamId)
