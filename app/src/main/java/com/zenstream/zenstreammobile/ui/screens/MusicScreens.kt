@@ -404,14 +404,14 @@ private fun AlbumHeader(
                         IconButton(onClick = onAddToQueue, modifier = Modifier.size(48.dp)) {
                             Icon(painterResource(LucideR.drawable.lucide_ic_list_plus), contentDescription = stringResource(R.string.music_add_album_to_queue), tint = MaterialTheme.colorScheme.onSurface)
                         }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
-                            Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_album), tint = accent)
-                        }
-                        IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
-                            Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
-                                Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_album), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
-                            }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
+                        Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_album), tint = accent)
+                    }
+                    IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
+                        Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
+                            Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_album), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
                         }
                     }
                 }
@@ -731,15 +731,15 @@ private fun ArtistContent(
                                 IconButton(onClick = onAddToQueue, enabled = data.trackCount > 0 && !tracksLoading, modifier = Modifier.size(48.dp)) {
                                     Icon(painterResource(LucideR.drawable.lucide_ic_list_plus), contentDescription = stringResource(R.string.music_add_to_queue), tint = MaterialTheme.colorScheme.onSurface)
                                 }
-                                Spacer(Modifier.weight(1f))
-                                IconButton(onClick = onShuffleAll, enabled = !tracksLoading, modifier = Modifier.size(44.dp)) {
-                                    Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_artist_tracks), tint = if (!tracksLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                IconButton(onClick = onPlayAll, enabled = !tracksLoading, modifier = Modifier.size(54.dp)) {
-                                    Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
-                                        if (tracksLoading) CircularProgressIndicator(modifier = Modifier.padding(15.dp), strokeWidth = 2.dp, color = palette.onAccent)
-                                        else Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_all_artist_tracks), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
-                                    }
+                            }
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = onShuffleAll, enabled = !tracksLoading, modifier = Modifier.size(44.dp)) {
+                                Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = stringResource(R.string.music_shuffle_artist_tracks), tint = if (!tracksLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = onPlayAll, enabled = !tracksLoading, modifier = Modifier.size(54.dp)) {
+                                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = accent, contentColor = palette.onAccent) {
+                                    if (tracksLoading) CircularProgressIndicator(modifier = Modifier.padding(15.dp), strokeWidth = 2.dp, color = palette.onAccent)
+                                    else Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = stringResource(R.string.music_play_all_artist_tracks), modifier = Modifier.padding(15.dp), tint = palette.onAccent)
                                 }
                             }
                         }
