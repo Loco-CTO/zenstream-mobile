@@ -92,6 +92,7 @@ import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
+import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -1014,6 +1015,10 @@ private fun PlaylistDetailContent(
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                     item(key = "playlist-summary") {
+                        val actionArtwork = summary.artworkItems.firstOrNull()
+                        val actionPalette = remember(actionArtwork?.id, actionArtwork?.imageBlurHashes?.get("Primary")) {
+                            musicArtworkPalette(actionArtwork)
+                        }
                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 PlaylistArtwork(summary.artworkItems, session, Modifier.size(112.dp))
@@ -1025,17 +1030,10 @@ private fun PlaylistDetailContent(
                             summary.description?.takeIf(String::isNotBlank)?.let {
                                 Text(it, modifier = Modifier.padding(top = 14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-                                Button(onClick = { onPlayFull(null, false) }, enabled = summary.itemCount > 0 && !playBusy) {
-                                    Icon(painterResource(LucideR.drawable.lucide_ic_play), contentDescription = null)
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (playBusy) stringResource(R.string.loading) else stringResource(R.string.play_all))
-                                }
-                                OutlinedButton(onClick = { onPlayFull(null, true) }, enabled = summary.itemCount > 0 && !playBusy) {
-                                    Icon(painterResource(LucideR.drawable.lucide_ic_shuffle), contentDescription = null)
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.shuffle))
-                                }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 if (summary.isOwner && !summary.isPrivate && !summary.shareToken.isNullOrBlank()) {
                                     IconButton(onClick = {
                                         val url = "${session.serverUrl.trimEnd('/')}/shared/playlist/${summary.shareToken}"
@@ -1049,6 +1047,16 @@ private fun PlaylistDetailContent(
                                         Icon(painterResource(LucideR.drawable.lucide_ic_share_2), contentDescription = stringResource(R.string.share_playlist))
                                     }
                                 }
+                                Spacer(Modifier.weight(1f))
+                                MusicPlaybackButtons(
+                                    onShuffle = { onPlayFull(null, true) },
+                                    onPlay = { onPlayFull(null, false) },
+                                    shuffleLabel = R.string.shuffle,
+                                    playLabel = R.string.play_all,
+                                    palette = actionPalette,
+                                    enabled = summary.itemCount > 0 && !playBusy,
+                                    loading = playBusy,
+                                )
                             }
                         }
                     }
