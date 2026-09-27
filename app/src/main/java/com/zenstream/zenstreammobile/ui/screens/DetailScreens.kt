@@ -99,6 +99,7 @@ import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import java.util.Locale
 
 @Composable
@@ -234,7 +235,7 @@ internal fun DetailContent(
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag("detail_content_list"),
             state = listState,
-            contentPadding = PaddingValues(bottom = 28.dp),
+            contentPadding = PaddingValues(bottom = 28.dp + LocalBottomOverlayHeight.current),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item {

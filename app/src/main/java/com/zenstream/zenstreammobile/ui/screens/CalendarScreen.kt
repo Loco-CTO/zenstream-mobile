@@ -65,6 +65,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.CalendarEvent
 import com.zenstream.zenstreammobile.ui.CalendarUiState
 import com.zenstream.zenstreammobile.ui.CalendarViewModel
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -357,7 +358,13 @@ private fun CalendarAgenda(
     LazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding =
+            PaddingValues(
+                start = 16.dp,
+                top = 12.dp,
+                end = 16.dp,
+                bottom = 12.dp + LocalBottomOverlayHeight.current,
+            ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {

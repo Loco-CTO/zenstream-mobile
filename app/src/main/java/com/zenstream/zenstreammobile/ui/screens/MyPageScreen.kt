@@ -65,6 +65,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,7 +181,7 @@ fun MyPageScreen(
                             if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
                             else 8.dp,
                         end = 16.dp,
-                        bottom = 28.dp,
+                        bottom = 28.dp + LocalBottomOverlayHeight.current,
                     ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
