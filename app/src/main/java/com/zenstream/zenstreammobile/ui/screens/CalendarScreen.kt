@@ -63,9 +63,9 @@ import com.zenstream.zenstreammobile.data.calendarEventSortKey
 import com.zenstream.zenstreammobile.data.parseCalendarInstant
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.CalendarEvent
-import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.CalendarUiState
 import com.zenstream.zenstreammobile.ui.CalendarViewModel
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

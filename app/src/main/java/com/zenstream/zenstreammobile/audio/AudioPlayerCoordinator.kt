@@ -66,8 +66,10 @@ class AudioPlayerCoordinator(
         AudioServiceBridge.start(appContext, AudioServiceBridge.ACTION_PLAY_QUEUE, snapshot)
     }
 
-    /** Starts a My Lists queue using the current audio shuffle setting and preserves a selected
-     * track as the first entry when the user starts playback from that track. */
+    /**
+     * Starts a My Lists queue using the current audio shuffle setting and preserves a selected
+     * track as the first entry when the user starts playback from that track.
+     */
     fun playPlaylistTracks(
         tracks: List<MediaItem>,
         selectedIndex: Int = 0,

@@ -63,8 +63,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -123,8 +123,8 @@ import com.zenstream.zenstreammobile.ui.SearchUiState
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
-import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.MediaImage
+import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
@@ -1071,24 +1071,21 @@ fun FavoritesScreen(
     val tabScrollState = rememberScrollState()
     var tabWidths by remember { mutableStateOf(List(tabs.size) { 0 }) }
     val density = LocalDensity.current
-    val indicatorOffset by animateDpAsState(
-        targetValue = with(density) { tabWidths.take(selectedTab).sum().toDp() },
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        label = "my-lists-tab-indicator-offset",
-    )
-    val indicatorWidth by animateDpAsState(
-        targetValue = with(density) { tabWidths.getOrElse(selectedTab) { 0 }.toDp() },
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        label = "my-lists-tab-indicator-width",
-    )
+    val indicatorOffset by
+        animateDpAsState(
+            targetValue = with(density) { tabWidths.take(selectedTab).sum().toDp() },
+            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            label = "my-lists-tab-indicator-offset",
+        )
+    val indicatorWidth by
+        animateDpAsState(
+            targetValue = with(density) { tabWidths.getOrElse(selectedTab) { 0 }.toDp() },
+            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            label = "my-lists-tab-indicator-width",
+        )
     Column(Modifier.fillMaxSize().padding(padding)) {
         Column {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .horizontalScroll(tabScrollState),
-            ) {
+            Box(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(tabScrollState)) {
                 Box(Modifier.wrapContentWidth(unbounded = true).fillMaxHeight()) {
                     Row(
                         modifier = Modifier.align(Alignment.TopStart),
@@ -1102,29 +1099,33 @@ fun FavoritesScreen(
                                 softWrap = false,
                                 overflow = TextOverflow.Clip,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.45f),
-                                modifier = Modifier
-                                    .onSizeChanged { size ->
-                                        if (tabWidths[index] != size.width) {
-                                            tabWidths = tabWidths.toMutableList().also { it[index] = size.width }
+                                color =
+                                    if (isSelected) Color.White
+                                    else Color.White.copy(alpha = 0.45f),
+                                modifier =
+                                    Modifier.onSizeChanged { size ->
+                                            if (tabWidths[index] != size.width) {
+                                                tabWidths =
+                                                    tabWidths.toMutableList().also {
+                                                        it[index] = size.width
+                                                    }
+                                            }
                                         }
-                                    }
-                                    .selectable(
-                                        selected = isSelected,
-                                        role = Role.Tab,
-                                        onClick = { selectedTab = index },
-                                    )
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        .selectable(
+                                            selected = isSelected,
+                                            role = Role.Tab,
+                                            onClick = { selectedTab = index },
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
                             )
                         }
                     }
                     Box(
-                        Modifier
-                            .align(Alignment.BottomStart)
+                        Modifier.align(Alignment.BottomStart)
                             .offset(x = indicatorOffset)
                             .width(indicatorWidth)
                             .height(2.dp)
-                            .background(Color.White),
+                            .background(Color.White)
                     )
                 }
             }
@@ -1132,7 +1133,14 @@ fun FavoritesScreen(
         }
         when (selectedTab) {
             0 -> WatchlistContent(repository, session, onItemClick, onScrollabilityChanged)
-            1 -> FavoritesTabContent(repository, session, PaddingValues(), onScrollabilityChanged, onItemClick)
+            1 ->
+                FavoritesTabContent(
+                    repository,
+                    session,
+                    PaddingValues(),
+                    onScrollabilityChanged,
+                    onItemClick,
+                )
             else ->
                 PlaylistLibraryContent(
                     repository,
@@ -1347,9 +1355,10 @@ private fun FavoriteSectionHeading(title: String) {
         title,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth()
-            .padding(start = 20.dp, top = 18.dp, end = 16.dp, bottom = 4.dp)
-            .semantics { heading() },
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(start = 20.dp, top = 18.dp, end = 16.dp, bottom = 4.dp)
+                .semantics { heading() },
     )
 }
 

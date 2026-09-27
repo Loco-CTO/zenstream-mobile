@@ -465,9 +465,7 @@ private fun MainScaffold(
         ) { padding ->
             val bottomOverlayHeight = with(density) { bottomOverlayHeightPx.toDp() }
             Box(modifier = Modifier.fillMaxSize()) {
-                CompositionLocalProvider(
-                    LocalBottomOverlayHeight provides bottomOverlayHeight,
-                ) {
+                CompositionLocalProvider(LocalBottomOverlayHeight provides bottomOverlayHeight) {
                     NavHost(
                         navController,
                         startDestination = HOME,
@@ -501,7 +499,9 @@ private fun MainScaffold(
                                 session = session,
                                 currentRoute = mainRoute,
                                 onDestinationClick = { route ->
-                                    if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                    if (
+                                        shouldResetMyPageNavigationOnReselection(mainRoute, route)
+                                    ) {
                                         myPageNavigationResetKey += 1
                                     }
                                     navigateToMainDestination(navController, route)
@@ -546,7 +546,8 @@ private fun MainScaffold(
                             arguments =
                                 listOf(navArgument("playlistId") { type = NavType.StringType }),
                         ) { entry ->
-                            val playlistId = Uri.decode(entry.arguments?.getString("playlistId").orEmpty())
+                            val playlistId =
+                                Uri.decode(entry.arguments?.getString("playlistId").orEmpty())
                             PlaylistLibraryContent(
                                 repository = repository,
                                 session = session,
@@ -595,7 +596,8 @@ private fun MainScaffold(
                                 session = session,
                                 // The nested Material top bar owns status-bar insets.
                                 // Only carry the root mini-player slot into detail content.
-                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                outerPadding =
+                                    PaddingValues(bottom = padding.calculateBottomPadding()),
                                 onBack = { navController.popBackStack() },
                                 onOpenDestination = { destination ->
                                     when (destination) {
@@ -619,7 +621,8 @@ private fun MainScaffold(
                                     },
                                 ),
                         ) { entry ->
-                            val albumId = Uri.decode(entry.arguments?.getString("albumId").orEmpty())
+                            val albumId =
+                                Uri.decode(entry.arguments?.getString("albumId").orEmpty())
                             val trackId = entry.arguments?.getString("trackId")?.let(Uri::decode)
                             MusicAlbumScreen(
                                 repository = repository,
@@ -627,7 +630,8 @@ private fun MainScaffold(
                                 albumId = albumId,
                                 selectedTrackId = trackId,
                                 currentTrackId = audioState.currentEntry?.track?.id,
-                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                outerPadding =
+                                    PaddingValues(bottom = padding.calculateBottomPadding()),
                                 onBack = { navController.popBackStack() },
                                 onOpenArtist = { artistId ->
                                     navigateToArtist(navController, artistId)
@@ -651,16 +655,20 @@ private fun MainScaffold(
                         }
                         composable(
                             ARTIST,
-                            arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
+                            arguments =
+                                listOf(navArgument("artistId") { type = NavType.StringType }),
                         ) { entry ->
-                            val artistId = Uri.decode(entry.arguments?.getString("artistId").orEmpty())
+                            val artistId =
+                                Uri.decode(entry.arguments?.getString("artistId").orEmpty())
                             MusicArtistScreen(
                                 repository = repository,
                                 session = session,
                                 artistId = artistId,
-                                // The detail route owns its transparent overlay and status-bar inset;
+                                // The detail route owns its transparent overlay and status-bar
+                                // inset;
                                 // carry only the root mini-player/navigation slot into it.
-                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                outerPadding =
+                                    PaddingValues(bottom = padding.calculateBottomPadding()),
                                 currentTrackId = audioState.currentEntry?.track?.id,
                                 onBack = { navController.popBackStack() },
                                 onOpenArtist = { relatedId ->
@@ -710,7 +718,8 @@ private fun MainScaffold(
                                 itemId = itemId,
                                 // DetailScreen owns its transparent overlay and status-bar inset;
                                 // carry only the root mini-player/navigation slot into the route.
-                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                outerPadding =
+                                    PaddingValues(bottom = padding.calculateBottomPadding()),
                                 onBack = { navController.popBackStack() },
                                 onOpenItem = { item -> navigateToDetail(navController, item.id) },
                                 onPlay = { item, tracks ->
@@ -792,8 +801,7 @@ private fun MainScaffold(
                         if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
                         else bottomBarVisibilityFraction,
                     modifier =
-                        Modifier.fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background),
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
                     collapseFromBottom = true,
                     applyNavigationBarsPadding = true,
                 ) {
