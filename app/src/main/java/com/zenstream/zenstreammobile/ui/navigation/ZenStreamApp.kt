@@ -460,7 +460,7 @@ private fun MainScaffold(
             // Player and navigation chrome are drawn in the transparent overlay below. Keeping the
             // Scaffold bottom slot empty lets the current screen continue behind that chrome.
             bottomBar = {},
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.Transparent,
         ) { padding ->
             val bottomOverlayContentPadding =
                 with(density) {
@@ -478,9 +478,13 @@ private fun MainScaffold(
                     modifier =
                         Modifier.fillMaxSize()
                             // The player/navigation chrome is outside Scaffold's bottom slot.
-                            // Child screens already consume Scaffold's system-bar inset, so only
-                            // reserve the measured overlay body here.
-                            .padding(bottom = bottomOverlayContentPadding)
+                            // Keep the Home screen behind the transparent bottom chrome; its list
+                            // adds the measured overlay height as content padding for safe scrolling.
+                            .padding(
+                                bottom =
+                                    if (mainRoute == HOME) 0.dp
+                                    else bottomOverlayContentPadding
+                            )
                             .nestedScroll(scrollConnection),
                 ) {
                     composable(HOME) {
@@ -488,6 +492,8 @@ private fun MainScaffold(
                             repository,
                             session,
                             padding,
+                            bottomContentPadding =
+                                with(density) { bottomOverlayHeightPx.toDp() } + 20.dp,
                             onItemClick = { item -> navigateToMedia(navController, item) },
                             onScrollabilityChanged = onContentScrollabilityChanged,
                         )
@@ -1035,8 +1041,8 @@ internal fun MainNavigationBar(
     onDestinationClick: (String) -> Unit,
 ) {
     androidx.compose.material3.NavigationBar(
-        containerColor = MaterialTheme.colorScheme.background,
-        tonalElevation = 3.dp,
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
     ) {
         mainNavigationDestinations().forEach { destination ->

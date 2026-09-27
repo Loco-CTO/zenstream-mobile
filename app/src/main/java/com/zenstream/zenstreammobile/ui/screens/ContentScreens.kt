@@ -147,6 +147,7 @@ fun HomeScreen(
     repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
+    bottomContentPadding: Dp = 20.dp,
     onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
@@ -182,7 +183,7 @@ fun HomeScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 20.dp),
+                    contentPadding = PaddingValues(bottom = bottomContentPadding),
                 ) {
                     item {
                         FeaturedHero(
