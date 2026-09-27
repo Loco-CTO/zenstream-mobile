@@ -231,11 +231,18 @@ private fun PlaylistPickerDialog(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.create_playlist))
                 }
+                if (error && summaries.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.playlists_load_failed),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 when {
                     loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                    error -> Text(stringResource(R.string.playlists_load_failed), color = MaterialTheme.colorScheme.error)
+                    error && summaries.isEmpty() -> TextButton(onClick = { scope.launch { refresh() } }) { Text(stringResource(R.string.playlists_load_failed)) }
                     selectedTracks.isEmpty() -> Text(stringResource(R.string.playlist_no_audio_tracks))
                     summaries.isEmpty() -> Text(stringResource(R.string.playlists_empty))
                     else ->
@@ -251,38 +258,42 @@ private fun PlaylistPickerDialog(
                                         .clip(RoundedCornerShape(12.dp))
                                         .toggleable(
                                             value = selected,
-                                            enabled = !busy,
+                                            enabled = summary.id !in pendingMembership,
                                             role = Role.Checkbox,
                                         ) { shouldBeMember ->
                                             pendingMembership = pendingMembership + (summary.id to shouldBeMember)
-                                            busy = true
                                             error = false
                                             scope.launch {
                                                 try {
-                                                    if (shouldBeMember) {
+                                                    val updatedPlaylist = if (shouldBeMember) {
                                                         repository.addPlaylistItems(
                                                             session,
                                                             summary.id,
                                                             listOf(source.id),
                                                         )
                                                     } else {
-                                                        repository.removePlaylistSource(session, summary.id, source.id)
+                                                        repository.removePlaylistSource(
+                                                            session,
+                                                            summary.id,
+                                                            source.id,
+                                                        )
                                                     }
-                                                    summaries = repository.playlists(session, source.id)
+                                                    summaries = summaries.map { current ->
+                                                        if (current.id == summary.id) {
+                                                            current.copy(
+                                                                itemCount = updatedPlaylist.summary.itemCount,
+                                                                isMember = shouldBeMember,
+                                                            )
+                                                        } else {
+                                                            current
+                                                        }
+                                                    }
                                                 } catch (cancelled: CancellationException) {
                                                     throw cancelled
                                                 } catch (_: Throwable) {
-                                                    try {
-                                                        summaries = repository.playlists(session, source.id)
-                                                        error = true
-                                                    } catch (cancelled: CancellationException) {
-                                                        throw cancelled
-                                                    } catch (_: Throwable) {
-                                                        error = true
-                                                    }
+                                                    error = true
                                                 } finally {
                                                     pendingMembership = pendingMembership - summary.id
-                                                    busy = false
                                                 }
                                             }
                                         }
