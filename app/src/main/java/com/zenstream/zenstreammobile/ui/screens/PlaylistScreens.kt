@@ -1039,10 +1039,6 @@ private fun PlaylistDetailContent(
         ) {
             IconButton(onClick = onBack) { Icon(painterResource(LucideR.drawable.lucide_ic_arrow_left), contentDescription = stringResource(R.string.back)) }
             Text(currentSummary?.name ?: stringResource(R.string.playlist), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (currentSummary?.isOwner == true) {
-                IconButton(onClick = onEdit) { Icon(painterResource(LucideR.drawable.lucide_ic_pencil), contentDescription = stringResource(R.string.edit_playlist)) }
-                IconButton(onClick = onDelete) { Icon(painterResource(LucideR.drawable.lucide_ic_trash_2), contentDescription = stringResource(R.string.delete_playlist)) }
-            }
         }
         when {
             loading && data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -1123,6 +1119,14 @@ private fun PlaylistDetailContent(
                                         )
                                     }) {
                                         Icon(painterResource(LucideR.drawable.lucide_ic_share_2), contentDescription = stringResource(R.string.share_playlist))
+                                    }
+                                }
+                                if (summary.isOwner) {
+                                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                                        Icon(painterResource(LucideR.drawable.lucide_ic_pencil), contentDescription = stringResource(R.string.edit_playlist))
+                                    }
+                                    IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                                        Icon(painterResource(LucideR.drawable.lucide_ic_trash_2), contentDescription = stringResource(R.string.delete_playlist))
                                     }
                                 }
                                 Spacer(Modifier.weight(1f))
