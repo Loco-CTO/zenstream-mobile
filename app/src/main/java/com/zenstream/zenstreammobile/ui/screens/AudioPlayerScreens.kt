@@ -341,12 +341,14 @@ fun NowPlayingScreen(
     coordinator: AudioPlayerCoordinator,
     onBack: () -> Unit,
     onOpenArtist: (String) -> Unit,
+    onOpenAlbum: (String) -> Unit,
     onFavorite: (MediaItem) -> Unit = {},
 ) {
     val state by coordinator.state.collectAsStateWithLifecycle()
     // The player itself is a fixed, one-page control surface. Queue and lyrics are separate
     // inner pages so the primary player never becomes a competing scrolling surface.
     val current = state.currentEntry?.track
+    val currentAlbumId = current?.albumId?.takeIf(String::isNotBlank)
     var innerPage by remember(current?.id) { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember(context) { SessionStore(context.applicationContext) }
@@ -431,6 +433,13 @@ fun NowPlayingScreen(
                                         style = MaterialTheme.typography.titleSmall,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                        modifier =
+                                            Modifier.clickable(
+                                                enabled = currentAlbumId != null,
+                                                role = Role.Button,
+                                            ) {
+                                                currentAlbumId?.let(onOpenAlbum)
+                                            },
                                     )
                                 }
                             } else {

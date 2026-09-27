@@ -112,6 +112,7 @@ import com.zenstream.zenstreammobile.ui.screens.MyPageScreen
 import com.zenstream.zenstreammobile.ui.screens.NotificationDestination
 import com.zenstream.zenstreammobile.ui.screens.NotificationsScreen
 import com.zenstream.zenstreammobile.ui.screens.NowPlayingScreen
+import com.zenstream.zenstreammobile.ui.screens.PlaylistLibraryContent
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.SyncplayGroupMenu
@@ -126,6 +127,7 @@ private const val MYPAGE = "my-page"
 private const val NOTIFICATIONS = "notifications"
 private const val DETAIL = "detail/{itemId}"
 private const val ALBUM = "album/{albumId}?trackId={trackId}"
+private const val PLAYLIST = "playlist/{playlistId}"
 private const val ARTIST = "artist/{artistId}"
 private const val NOW_PLAYING = "now-playing"
 
@@ -409,6 +411,7 @@ private fun MainScaffold(
             setOf(
                 DETAIL.substringBefore("/"),
                 ALBUM.substringBefore("/"),
+                PLAYLIST.substringBefore("/"),
                 ARTIST.substringBefore("/"),
                 NOW_PLAYING,
             )
@@ -537,6 +540,36 @@ private fun MainScaffold(
                                 )
                             },
                             onScrollabilityChanged = onContentScrollabilityChanged,
+                            onOpenPlaylist = { playlistId ->
+                                navigateToPlaylist(navController, playlistId)
+                            },
+                        )
+                    }
+                    composable(
+                        PLAYLIST,
+                        arguments =
+                            listOf(navArgument("playlistId") { type = NavType.StringType }),
+                    ) { entry ->
+                        val playlistId = Uri.decode(entry.arguments?.getString("playlistId").orEmpty())
+                        PlaylistLibraryContent(
+                            repository = repository,
+                            session = session,
+                            onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
+                                audio.playPlaylistTracks(
+                                    tracks,
+                                    index,
+                                    shuffle = shuffle ?: audioState.shuffle,
+                                    preserveSelectedFirst = preserveSelectedFirst,
+                                )
+                            },
+                            onScrollabilityChanged = onContentScrollabilityChanged,
+                            initialPlaylistId = playlistId,
+                            onBack = { navController.popBackStack() },
+                            outerPadding =
+                                PaddingValues(
+                                    top = padding.calculateTopPadding(),
+                                    bottom = padding.calculateBottomPadding(),
+                                ),
                         )
                     }
                     composable(MYPAGE) {
@@ -663,6 +696,9 @@ private fun MainScaffold(
                             onBack = { navController.popBackStack() },
                             onOpenArtist = { artistId ->
                                 navigateToArtist(navController, artistId)
+                            },
+                            onOpenAlbum = { albumId ->
+                                navigateToAlbum(navController, albumId)
                             },
                             onFavorite = onAudioFavorite,
                         )
@@ -826,6 +862,13 @@ private fun navigateToAlbum(
     val route =
         "album/${Uri.encode(albumId)}" + (trackId?.let { "?trackId=${Uri.encode(it)}" } ?: "")
     navController.navigate(route) { launchSingleTop = true }
+}
+
+private fun navigateToPlaylist(
+    navController: androidx.navigation.NavHostController,
+    playlistId: String,
+) {
+    navController.navigate("playlist/${Uri.encode(playlistId)}") { launchSingleTop = true }
 }
 
 private fun navigateToArtist(

@@ -605,9 +605,13 @@ fun PlaylistLibraryContent(
     session: AuthSession,
     onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit,
+    onOpenPlaylist: (String) -> Unit = {},
+    initialPlaylistId: String? = null,
+    onBack: () -> Unit = {},
+    outerPadding: PaddingValues = PaddingValues(),
 ) {
     var summaries by remember(session.userId, session.token) { mutableStateOf<List<PlaylistSummary>>(emptyList()) }
-    var selectedId by remember(session.userId, session.token) { mutableStateOf<String?>(null) }
+    var selectedId by remember(session.userId, session.token, initialPlaylistId) { mutableStateOf(initialPlaylistId) }
     var detail by remember { mutableStateOf<PlaylistData?>(null) }
     var loading by remember(session.userId, session.token) { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
@@ -633,7 +637,7 @@ fun PlaylistLibraryContent(
         loading = true
         pageError = false
         try {
-            summaries = repository.playlists(session)
+            if (selectedId == null) summaries = repository.playlists(session)
             detail = selectedId?.let { repository.playlist(session, it, 1) }
             error = false
         } catch (cancelled: CancellationException) {
@@ -694,7 +698,7 @@ fun PlaylistLibraryContent(
                 else ->
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp)) {
                         items(summaries, key = { it.id }) { summary ->
-                            PlaylistCard(summary, session, onClick = { detail = null; selectedId = summary.id })
+                            PlaylistCard(summary, session, onClick = { onOpenPlaylist(summary.id) })
                         }
                     }
             }
@@ -708,7 +712,8 @@ fun PlaylistLibraryContent(
             pageError = pageError,
             playBusy = playBusy,
             session = session,
-            onBack = { selectedId = null },
+            onBack = onBack,
+            modifier = Modifier.fillMaxSize().padding(outerPadding),
             onPlayFull = { entryId, shuffle ->
                 val playlistId = selectedId
                 if (playlistId != null && !playBusy) scope.launch {
@@ -731,9 +736,8 @@ fun PlaylistLibraryContent(
                 scope.launch {
                     try {
                         repository.deletePlaylist(session, selectedId!!)
-                        selectedId = null
                         detail = null
-                        revision++
+                        onBack()
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -817,8 +821,7 @@ fun PlaylistLibraryContent(
                         val created = repository.createPlaylist(session, name, description, isPrivate)
                         summaries = repository.playlists(session)
                         editor = false
-                        selectedId = created.summary.id
-                        revision++
+                        onOpenPlaylist(created.summary.id)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -965,6 +968,7 @@ private fun PlaylistDetailContent(
     onLoadMore: () -> Unit,
     onRetryPage: () -> Unit,
     onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -1028,7 +1032,7 @@ private fun PlaylistDetailContent(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

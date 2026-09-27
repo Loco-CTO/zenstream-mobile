@@ -1062,6 +1062,7 @@ fun FavoritesScreen(
     onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
     onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenPlaylist: (String) -> Unit = {},
 ) {
     var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
@@ -1130,7 +1131,14 @@ fun FavoritesScreen(
         when (selectedTab) {
             0 -> WatchlistContent(repository, session, onItemClick, onScrollabilityChanged)
             1 -> FavoritesTabContent(repository, session, PaddingValues(), onScrollabilityChanged, onItemClick)
-            else -> PlaylistLibraryContent(repository, session, onPlayTracks, onScrollabilityChanged)
+            else ->
+                PlaylistLibraryContent(
+                    repository,
+                    session,
+                    onPlayTracks,
+                    onScrollabilityChanged,
+                    onOpenPlaylist = onOpenPlaylist,
+                )
         }
     }
 }
