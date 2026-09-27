@@ -971,7 +971,7 @@ internal fun mainNavigationDestinations(): List<NavigationDestination> =
         NavigationDestination(
             FAVORITES,
             com.zenstream.zenstreammobile.R.string.my_lists,
-            LucideR.drawable.lucide_ic_heart,
+            LucideR.drawable.lucide_ic_layout_grid,
         ),
         NavigationDestination(
             LIBRARY,

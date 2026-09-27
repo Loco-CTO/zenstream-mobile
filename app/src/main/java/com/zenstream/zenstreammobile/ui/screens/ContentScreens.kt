@@ -46,10 +46,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -1041,6 +1041,7 @@ private fun SearchField(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun FavoritesScreen(
     repository: FavoritesDataSource,
     session: AuthSession,
@@ -1052,12 +1053,25 @@ fun FavoritesScreen(
     var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
     Column(Modifier.fillMaxSize().padding(padding)) {
-        TabRow(selectedTabIndex = selectedTab) {
+        Text(
+            stringResource(R.string.my_lists),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
+        )
+        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 12.dp) {
             tabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
-                    text = { Text(stringResource(title)) },
+                    text = {
+                        Text(
+                            stringResource(title),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                    },
                 )
             }
         }
@@ -1215,13 +1229,8 @@ private fun FavoritesHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                stringResource(R.string.favorites),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
                 stringResource(R.string.favorite_item_count, total),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

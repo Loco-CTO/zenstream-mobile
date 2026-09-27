@@ -33,6 +33,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -530,6 +532,7 @@ private fun WatchlistRow(
     onRemove: () -> Unit,
 ) {
     val status = item.watchlistStatus
+    var menuExpanded by remember { mutableStateOf(false) }
     val statusText =
         when (status?.kind) {
             "continue" -> stringResource(R.string.watchlist_continue)
@@ -542,7 +545,7 @@ private fun WatchlistRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaImage(item, session, wide = false, modifier = Modifier.size(width = 72.dp, height = 96.dp))
+        MediaImage(item, session, wide = false, modifier = Modifier.size(width = 76.dp, height = 112.dp))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             statusText?.let {
@@ -572,8 +575,26 @@ private fun WatchlistRow(
                 tint = if (item.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onRemove, enabled = !busy) {
-            Icon(painterResource(LucideR.drawable.lucide_ic_trash_2), contentDescription = stringResource(R.string.remove_from_watchlist))
+        Box {
+            IconButton(onClick = { menuExpanded = true }, enabled = !busy) {
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
+                    contentDescription = stringResource(R.string.show_more),
+                )
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.remove_from_watchlist)) },
+                    leadingIcon = {
+                        Icon(painterResource(LucideR.drawable.lucide_ic_trash_2), contentDescription = null)
+                    },
+                    enabled = !busy,
+                    onClick = {
+                        menuExpanded = false
+                        onRemove()
+                    },
+                )
+            }
         }
     }
 }
@@ -653,11 +674,17 @@ fun PlaylistLibraryContent(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.playlists), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Button(onClick = { editor = true }) {
-                    Icon(painterResource(LucideR.drawable.lucide_ic_plus), contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.create_playlist))
+                Text(
+                    stringResource(R.string.playlists),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { editor = true }) {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_plus),
+                        contentDescription = stringResource(R.string.create_playlist),
+                    )
                 }
             }
             when {
