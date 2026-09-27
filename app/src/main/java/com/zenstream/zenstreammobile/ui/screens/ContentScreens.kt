@@ -42,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -115,8 +116,12 @@ import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
+import com.zenstream.zenstreammobile.ui.components.MediaImage
+import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
+import com.zenstream.zenstreammobile.ui.components.episodeCardSubtitle
+import com.zenstream.zenstreammobile.ui.components.episodeCardTitle
 import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.components.musicAlbumArtist
@@ -1131,65 +1136,50 @@ private fun FavoritesTabContent(
                     ) {
                         if (favoriteArtists.isNotEmpty()) {
                             item(key = "favorite-artists") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_artists),
-                                    items = favoriteArtists,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_artists))
+                            }
+                            items(favoriteArtists.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (favoriteAlbums.isNotEmpty()) {
                             item(key = "favorite-albums") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_albums),
-                                    items = favoriteAlbums,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_albums))
+                            }
+                            items(favoriteAlbums.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (favoriteTracks.isNotEmpty()) {
                             item(key = "favorite-tracks") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_tracks),
-                                    items = favoriteTracks,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_tracks))
+                            }
+                            items(favoriteTracks.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
-                                FavoriteSection(
-                                    R.string.favorite_episodes,
-                                    episodes,
-                                    session,
-                                    wide = true,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_episodes))
+                            }
+                            items(episodes.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (movies.isNotEmpty()) {
                             item(key = "favorite-movies") {
-                                FavoriteSection(
-                                    R.string.favorite_movies,
-                                    movies,
-                                    session,
-                                    wide = false,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_movies))
+                            }
+                            items(movies.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (series.isNotEmpty()) {
                             item(key = "favorite-series") {
-                                FavoriteSection(
-                                    R.string.favorite_series,
-                                    series,
-                                    session,
-                                    wide = false,
-                                    onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_series))
+                            }
+                            items(series.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (state.loadingMore) {
@@ -1294,65 +1284,77 @@ private fun FavoritesHeader(
 }
 
 @Composable
-private fun FavoriteSection(
-    title: Int,
-    items: List<MediaItem>,
-    session: AuthSession,
-    wide: Boolean,
-    onItemClick: (MediaItem) -> Unit,
-) {
-    val uniqueItems = items.distinctBy { it.id }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(uniqueItems, key = { it.id }) { item ->
-                com.zenstream.zenstreammobile.ui.components.MediaCard(
-                    item = item,
-                    session = session,
-                    wide = wide,
-                    onClick = onItemClick,
-                    gridCard = false,
-                )
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-    }
+private fun FavoriteSectionHeading(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth()
+            .padding(start = 20.dp, top = 18.dp, end = 16.dp, bottom = 4.dp)
+            .semantics { heading() },
+    )
 }
 
 @Composable
-private fun FavoriteMusicSection(
-    title: String,
-    items: List<MediaItem>,
+private fun FavoriteListRow(
+    item: MediaItem,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
 ) {
-    val uniqueItems = items.distinctBy { it.id }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(uniqueItems, key = { it.id }) { item ->
-                AudioCard(item = item, session = session, onClick = onItemClick)
+    val isAudio = item.type in setOf("MusicArtist", "MusicAlbum", "Audio")
+    val isEpisode = item.type.equals("Episode", ignoreCase = true)
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable { onItemClick(item) }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isAudio) {
+            MusicArtwork(
+                item = item,
+                session = session,
+                requestedSize = 240,
+                modifier = Modifier.size(64.dp),
+                shape = RoundedCornerShape(8.dp),
+            )
+        } else {
+            MediaImage(
+                item = item,
+                session = session,
+                wide = false,
+                modifier = Modifier.size(width = 72.dp, height = 108.dp),
+            )
+        }
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                if (isEpisode) episodeCardTitle(item) else item.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle =
+                when {
+                    isEpisode -> episodeCardSubtitle(item)
+                    isAudio -> musicSubtitle(item)
+                    else -> itemSubtitle(item)
+                }
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            progressPercent(item)?.let { percent ->
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                )
             }
         }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
