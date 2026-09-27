@@ -414,6 +414,9 @@ class CatalogRepository(
         sessionStore.saveServerConfig(orchestrator)
     }
 
+    suspend fun fetchPublicWebUrl(session: AuthSession): String? =
+        orchestratorApi.fetchPublicWebUrl(session.serverUrl)
+
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
         return api.authenticate(server, username, password, sessionStore.deviceId()).also {

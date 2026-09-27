@@ -22,6 +22,30 @@ data class PlaybackPreference(
 )
 
 class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
+    suspend fun fetchPublicWebUrl(orchestratorUrl: String): String? =
+        withContext(Dispatchers.IO) {
+            val orchestrator = normalizeServerUrl(orchestratorUrl)
+            val request =
+                Request.Builder()
+                    .url("$orchestrator/api/config/public-web-url".toHttpUrl())
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+            val response = httpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful)
+                    throw OrchestratorException(
+                        it.code,
+                        "Orchestrator request failed with ${it.code}",
+                    )
+                JSONObject(it.body?.string().orEmpty())
+                    .optString("publicWebUrl")
+                    .trim()
+                    .trimEnd('/')
+                    .takeIf(String::isNotBlank)
+            }
+        }
+
     suspend fun fetchConfig(orchestratorUrl: String) =
         withContext(Dispatchers.IO) {
             val orchestrator = normalizeServerUrl(orchestratorUrl)
