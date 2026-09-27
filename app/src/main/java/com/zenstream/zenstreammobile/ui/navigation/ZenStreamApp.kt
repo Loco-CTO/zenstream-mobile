@@ -287,6 +287,7 @@ private fun MainScaffold(
     val videoHandoffError = stringResource(R.string.audio_video_handoff_failed)
     val linkCopiedMessage = stringResource(R.string.link_copied)
     val copyLinkFailedMessage = stringResource(R.string.copy_link_failed)
+    val copyShareLinkLabel = stringResource(R.string.copy_share_link)
     val shareLinkUnavailableMessage = stringResource(R.string.share_link_unavailable)
     val copyShareLink: (String) -> Unit = { path ->
         scope.launch {
@@ -310,7 +311,7 @@ private fun MainScaffold(
                         ?: error("Clipboard service is unavailable")
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText(
-                        context.getString(R.string.copy_share_link),
+                        copyShareLinkLabel,
                         shareUrl,
                     )
                 )
