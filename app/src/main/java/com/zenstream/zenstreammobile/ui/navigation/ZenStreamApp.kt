@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -100,7 +99,6 @@ import com.zenstream.zenstreammobile.ui.NotificationsViewModel
 import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
-import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.screens.AudioMiniPlayer
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
@@ -420,17 +418,6 @@ private fun MainScaffold(
     val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
     val miniPlayerUsesNavigationInset =
         detailRoute || mainRoute == NOTIFICATIONS || currentRoute == SEARCH
-    val miniPlayerTrack = audioState.currentEntry?.track
-    val miniPlayerSurfaceColor =
-        remember(miniPlayerTrack?.id, miniPlayerTrack?.imageBlurHashes?.get("Primary")) {
-            miniPlayerTrack?.let { musicArtworkPalette(it).surface }
-        }
-    val miniPlayerBackdropVisible =
-        miniPlayerUsesNavigationInset && miniPlayerTrack != null && currentRoute != NOW_PLAYING
-    val miniPlayerBackdropHeight =
-        with(density) {
-            WindowInsets.navigationBarsIgnoringVisibility.getBottom(this).toDp() + 5.dp
-        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.material3.Scaffold(
@@ -769,14 +756,6 @@ private fun MainScaffold(
                 ToastHost(state = toast)
             }
         }
-        if (miniPlayerBackdropVisible && miniPlayerSurfaceColor != null) {
-            Box(
-                Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(miniPlayerBackdropHeight)
-                    .background(miniPlayerSurfaceColor)
-            )
-        }
         Column(
             modifier =
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged {
@@ -817,8 +796,7 @@ private fun MainScaffold(
                     visibilityFraction =
                         if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
                         else bottomBarVisibilityFraction,
-                    modifier =
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                    modifier = Modifier.fillMaxWidth(),
                     collapseFromBottom = true,
                     applyNavigationBarsPadding = true,
                 ) {
