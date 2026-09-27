@@ -3,11 +3,16 @@ package com.zenstream.zenstreammobile.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -132,6 +137,7 @@ class AuthScreensTest {
             .assertIsDisplayed()
     }
 
+    @OptIn(ExperimentalLayoutApi::class)
     @Test
     fun featuredHeroFillsTheWidthAndItsIndicatorsStayAboveBottomNavigation() {
         val item =
@@ -143,9 +149,15 @@ class AuthScreensTest {
                 backdropImageTags = listOf("backdrop-tag"),
             )
         val session = AuthSession("https://example.com", "token", "user", "name")
+        var expectedTopGradientHeightDp = 0f
 
         composeRule.setContent {
             ZenStreamTheme {
+                expectedTopGradientHeightDp =
+                    with(LocalDensity.current) {
+                        WindowInsets.statusBarsIgnoringVisibility.getTop(this).toDp().value +
+                            TopAppBarDefaults.TopAppBarExpandedHeight.value
+                    }
                 Box(Modifier.fillMaxSize().testTag("featured_hero_test_root")) {
                     Column(Modifier.align(Alignment.TopCenter)) {
                         FeaturedHero(
@@ -172,6 +184,10 @@ class AuthScreensTest {
             composeRule
                 .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
+        val topGradientBounds =
+            composeRule
+                .onNodeWithTag("featured_hero_top_gradient", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
         val indicatorBounds =
             composeRule
                 .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
@@ -183,6 +199,12 @@ class AuthScreensTest {
         assertEquals(rootBounds.right.value, heroBounds.right.value, 0.5f)
         assertEquals(rootBounds.left.value, artworkBounds.left.value, 0.5f)
         assertEquals(rootBounds.right.value, artworkBounds.right.value, 0.5f)
+        assertEquals(rootBounds.top.value, topGradientBounds.top.value, 0.5f)
+        assertEquals(
+            expectedTopGradientHeightDp,
+            (topGradientBounds.bottom - topGradientBounds.top).value,
+            1f,
+        )
         val configuration =
             InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
         val screenHeightDp = configuration.screenHeightDp

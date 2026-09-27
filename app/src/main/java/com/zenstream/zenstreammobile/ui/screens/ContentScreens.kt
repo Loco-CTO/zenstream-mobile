@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -219,6 +221,7 @@ fun HomeScreen(
 @OptIn(
     ExperimentalMaterial3Api::class,
     androidx.compose.foundation.ExperimentalFoundationApi::class,
+    ExperimentalLayoutApi::class,
 )
 @Composable
 internal fun FeaturedHero(
@@ -248,6 +251,11 @@ internal fun FeaturedHero(
         }
         return
     }
+    val topGradientHeight =
+        with(LocalDensity.current) {
+            WindowInsets.statusBarsIgnoringVisibility.getTop(this).toDp() +
+                TopAppBarDefaults.TopAppBarExpandedHeight
+        }
     val pagerState = rememberPagerState(pageCount = { items.size })
     val configuration = LocalConfiguration.current
     val screenHeightDp = configuration.screenHeightDp
@@ -309,7 +317,8 @@ internal fun FeaturedHero(
                     Box(
                         Modifier.align(Alignment.TopCenter)
                             .fillMaxWidth()
-                            .height(72.dp)
+                            .height(topGradientHeight)
+                            .testTag("featured_hero_top_gradient")
                             .background(
                                 Brush.verticalGradient(listOf(Color(0xFF080808), Color.Transparent))
                             )
