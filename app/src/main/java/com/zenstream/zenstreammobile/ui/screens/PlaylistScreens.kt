@@ -1353,6 +1353,8 @@ private fun PlaylistDetailContent(
                                             !summary.isPrivate &&
                                             !summary.shareToken.isNullOrBlank()
                                     ) {
+                                        val sharePlaylistLabel =
+                                            stringResource(R.string.share_playlist)
                                         IconButton(
                                             onClick = {
                                                 val url =
@@ -1362,7 +1364,7 @@ private fun PlaylistDetailContent(
                                                         Intent(Intent.ACTION_SEND)
                                                             .setType("text/plain")
                                                             .putExtra(Intent.EXTRA_TEXT, url),
-                                                        context.getString(R.string.share_playlist),
+                                                        sharePlaylistLabel,
                                                     )
                                                 )
                                             }

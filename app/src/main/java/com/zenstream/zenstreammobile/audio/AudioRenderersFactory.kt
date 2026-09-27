@@ -6,8 +6,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 
 /**
  * Keeps the renderer choice in one place for the service player used by the app and Android Auto.
- * The bundled FLAC renderer is preferred over the device MediaCodec renderer when both support a
- * track, while all other formats keep Media3's normal renderer selection.
+ * The bundled FLAC and selected FFmpeg renderers are preferred when they support a track; other
+ * formats keep Media3's normal renderer selection.
  */
 @UnstableApi
 internal fun preferredAudioRenderersFactory(context: Context): DefaultRenderersFactory =

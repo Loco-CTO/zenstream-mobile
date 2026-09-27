@@ -40,6 +40,16 @@ class PlaybackViewModelTest {
     }
 
     @Test
+    fun playbackErrorsRecoverOnlyOnceFromDirectOrRemuxModes() {
+        assertTrue(shouldRecoverPlaybackError(null, alreadyRecovered = false))
+        assertTrue(shouldRecoverPlaybackError("direct", alreadyRecovered = false))
+        assertTrue(shouldRecoverPlaybackError("remux", alreadyRecovered = false))
+        assertFalse(shouldRecoverPlaybackError("audio-transcode", alreadyRecovered = false))
+        assertFalse(shouldRecoverPlaybackError("video-transcode", alreadyRecovered = false))
+        assertFalse(shouldRecoverPlaybackError("direct", alreadyRecovered = true))
+    }
+
+    @Test
     fun defaultsToTheFirstSubtitleWhenTheServerDoesNotMarkOneDefault() {
         val subtitles =
             listOf(
