@@ -88,6 +88,7 @@ import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -234,7 +235,7 @@ internal fun DetailContent(
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag("detail_content_list"),
             state = listState,
-            contentPadding = PaddingValues(bottom = 28.dp),
+            contentPadding = PaddingValues(bottom = 28.dp + LocalBottomOverlayHeight.current),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item {

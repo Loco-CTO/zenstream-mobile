@@ -63,6 +63,7 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import kotlinx.coroutines.launch
@@ -180,7 +181,7 @@ fun MyPageScreen(
                             if (activeSection == null && !profileOpen && !passwordEditorOpen) 20.dp
                             else 8.dp,
                         end = 16.dp,
-                        bottom = 28.dp,
+                        bottom = 28.dp + LocalBottomOverlayHeight.current,
                     ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {

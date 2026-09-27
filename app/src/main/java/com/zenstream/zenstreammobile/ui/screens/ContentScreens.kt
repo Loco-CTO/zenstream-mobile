@@ -138,6 +138,7 @@ import com.zenstream.zenstreammobile.ui.components.musicSubtitle
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.navigation.ChromeVisibilitySlot
 import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
 import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
@@ -696,7 +697,7 @@ private fun SearchResultsList(
     val visibleItems = items.distinctBy { it.id }.filterNot { item -> item.id == featured?.id }
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(bottom = 20.dp),
+        contentPadding = PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
         modifier = modifier.testTag("search-results-list"),
     ) {
         featured?.let { item ->
@@ -1188,7 +1189,8 @@ private fun FavoritesTabContent(
                 else ->
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(bottom = 20.dp),
+                        contentPadding =
+                            PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
                     ) {
                         if (favoriteArtists.isNotEmpty()) {
                             item(key = "favorite-artists") {
@@ -1541,7 +1543,13 @@ fun LibraryScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         state = gridState,
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                top = 16.dp,
+                                end = 16.dp,
+                                bottom = 16.dp + LocalBottomOverlayHeight.current,
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {

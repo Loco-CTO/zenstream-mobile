@@ -90,6 +90,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaylistData
 import com.zenstream.zenstreammobile.model.PlaylistEntry
 import com.zenstream.zenstreammobile.model.PlaylistSummary
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.ui.components.MediaImage
@@ -474,7 +475,8 @@ fun WatchlistContent(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 20.dp),
+                    contentPadding =
+                        PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items(items, key = { it.id }) { item ->
@@ -696,7 +698,12 @@ fun PlaylistLibraryContent(
                 error && summaries.isEmpty() -> TextButton(onClick = { revision++ }) { Text(stringResource(R.string.playlists_load_failed)) }
                 summaries.isEmpty() -> Text(stringResource(R.string.playlists_empty), modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else ->
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding =
+                            PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
+                    ) {
                         items(summaries, key = { it.id }) { summary ->
                             PlaylistCard(summary, session, onClick = { onOpenPlaylist(summary.id) })
                         }
@@ -1086,7 +1093,8 @@ private fun PlaylistDetailContent(
                                 },
                             )
                         },
-                        contentPadding = PaddingValues(bottom = 24.dp),
+                        contentPadding =
+                            PaddingValues(bottom = 24.dp + LocalBottomOverlayHeight.current),
                     ) {
                     item(key = "playlist-summary") {
                         val actionArtwork = summary.artworkItems.firstOrNull()

@@ -67,6 +67,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MusicAlbumData
 import com.zenstream.zenstreammobile.model.MusicArtistData
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.MusicAlbumViewModel
 import com.zenstream.zenstreammobile.ui.MusicArtistViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
@@ -265,7 +266,7 @@ private fun AlbumContent(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(bottom = 32.dp + LocalBottomOverlayHeight.current),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item(key = "album-header") {
@@ -682,7 +683,7 @@ private fun ArtistContent(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(bottom = 32.dp + LocalBottomOverlayHeight.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item(key = "artist-header") {

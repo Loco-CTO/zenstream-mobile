@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,8 +43,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -462,295 +463,283 @@ private fun MainScaffold(
             bottomBar = {},
             containerColor = Color.Transparent,
         ) { padding ->
-            val bottomOverlayContentPadding =
-                with(density) {
-                    bottomOverlayContentPaddingPx(
-                            overlayHeightPx = bottomOverlayHeightPx,
-                            systemNavigationBarInsetPx =
-                                WindowInsets.navigationBarsIgnoringVisibility.getBottom(this),
-                        )
-                        .toDp()
-                }
+            val bottomOverlayHeight = with(density) { bottomOverlayHeightPx.toDp() }
             Box(modifier = Modifier.fillMaxSize()) {
-                NavHost(
-                    navController,
-                    startDestination = HOME,
-                    modifier =
-                        Modifier.fillMaxSize()
-                            // The player/navigation chrome is outside Scaffold's bottom slot.
-                            // Keep the Home screen behind the transparent bottom chrome; its list
-                            // adds the measured overlay height as content padding for safe scrolling.
-                            .padding(
-                                bottom =
-                                    if (mainRoute == HOME) 0.dp
-                                    else bottomOverlayContentPadding
-                            )
-                            .nestedScroll(scrollConnection),
+                CompositionLocalProvider(
+                    LocalBottomOverlayHeight provides bottomOverlayHeight,
                 ) {
-                    composable(HOME) {
-                        HomeScreen(
-                            repository,
-                            session,
-                            padding,
-                            bottomContentPadding =
-                                with(density) { bottomOverlayHeightPx.toDp() } + 20.dp,
-                            onItemClick = { item -> navigateToMedia(navController, item) },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                        )
-                    }
-                    dialog(
-                        SEARCH,
-                        dialogProperties =
-                            DialogProperties(
-                                usePlatformDefaultWidth = false,
-                                decorFitsSystemWindows = false,
-                                dismissOnBackPress = true,
-                                dismissOnClickOutside = false,
-                            ),
+                    NavHost(
+                        navController,
+                        startDestination = HOME,
+                        modifier =
+                            Modifier.fillMaxSize()
+                                // Keep every route behind the player and navigation overlay.
+                                .nestedScroll(scrollConnection),
                     ) {
-                        SearchOverlayScreen(
-                            repository = repository,
-                            session = session,
-                            currentRoute = mainRoute,
-                            onDestinationClick = { route ->
-                                if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
-                                    myPageNavigationResetKey += 1
-                                }
-                                navigateToMainDestination(navController, route)
-                            },
-                            onDismiss = { navController.popBackStack() },
-                            onItemClick = { item ->
-                                navigateToMedia(navController, item)
-                            },
-                        )
-                    }
-                    composable(LIBRARY) {
-                        LibraryScreen(
-                            repository = repository,
-                            session = session,
-                            padding = padding,
-                            onItemClick = { item -> navigateToMedia(navController, item) },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                        )
-                    }
-                    composable(FAVORITES) {
-                        FavoritesScreen(
-                            repository = repository,
-                            session = session,
-                            padding = padding,
-                            onItemClick = { item -> navigateToMedia(navController, item) },
-                            onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
-                                audio.playPlaylistTracks(
-                                    tracks,
-                                    index,
-                                    shuffle = shuffle ?: audioState.shuffle,
-                                    preserveSelectedFirst = preserveSelectedFirst,
-                                )
-                            },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                            onOpenPlaylist = { playlistId ->
-                                navigateToPlaylist(navController, playlistId)
-                            },
-                        )
-                    }
-                    composable(
-                        PLAYLIST,
-                        arguments =
-                            listOf(navArgument("playlistId") { type = NavType.StringType }),
-                    ) { entry ->
-                        val playlistId = Uri.decode(entry.arguments?.getString("playlistId").orEmpty())
-                        PlaylistLibraryContent(
-                            repository = repository,
-                            session = session,
-                            onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
-                                audio.playPlaylistTracks(
-                                    tracks,
-                                    index,
-                                    shuffle = shuffle ?: audioState.shuffle,
-                                    preserveSelectedFirst = preserveSelectedFirst,
-                                )
-                            },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                            initialPlaylistId = playlistId,
-                            onBack = { navController.popBackStack() },
-                            outerPadding =
-                                PaddingValues(
-                                    top = padding.calculateTopPadding(),
-                                    bottom = padding.calculateBottomPadding(),
+                        composable(HOME) {
+                            HomeScreen(
+                                repository,
+                                session,
+                                padding,
+                                bottomContentPadding = bottomOverlayHeight + 20.dp,
+                                onItemClick = { item -> navigateToMedia(navController, item) },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                            )
+                        }
+                        dialog(
+                            SEARCH,
+                            dialogProperties =
+                                DialogProperties(
+                                    usePlatformDefaultWidth = false,
+                                    decorFitsSystemWindows = false,
+                                    dismissOnBackPress = true,
+                                    dismissOnClickOutside = false,
                                 ),
-                        )
-                    }
-                    composable(MYPAGE) {
-                        MyPageScreen(
-                            repository = repository,
-                            session = session,
-                            onLogout = {
-                                audio.stopAndClear()
-                                onLogout()
-                            },
-                            onPasswordChanged = onPasswordChanged,
-                            outerPadding = padding,
-                            onPickAvatar = onPickAvatar,
-                            avatarPickerResult = avatarPickerResult,
-                            onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
-                            onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
-                            onOpenNotifications = {
-                                navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
-                            },
-                            navigationResetKey = myPageNavigationResetKey,
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                        )
-                    }
-                    composable(NOTIFICATIONS) {
-                        NotificationsScreen(
-                            repository = repository,
-                            session = session,
-                            // The nested Material top bar owns status-bar insets.
-                            // Only carry the root mini-player slot into detail content.
-                            outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                            onBack = { navController.popBackStack() },
-                            onOpenDestination = { destination ->
-                                when (destination) {
-                                    is NotificationDestination.Album ->
-                                        navigateToAlbum(navController, destination.albumId)
-                                    is NotificationDestination.Video ->
-                                        navigateToDetail(navController, destination.itemId)
-                                }
-                            },
-                        )
-                    }
-                    composable(
-                        ALBUM,
-                        arguments =
-                            listOf(
-                                navArgument("albumId") { type = NavType.StringType },
-                                navArgument("trackId") {
-                                    type = NavType.StringType
-                                    nullable = true
-                                    defaultValue = null
+                        ) {
+                            SearchOverlayScreen(
+                                repository = repository,
+                                session = session,
+                                currentRoute = mainRoute,
+                                onDestinationClick = { route ->
+                                    if (shouldResetMyPageNavigationOnReselection(mainRoute, route)) {
+                                        myPageNavigationResetKey += 1
+                                    }
+                                    navigateToMainDestination(navController, route)
                                 },
-                            ),
-                    ) { entry ->
-                        val albumId = Uri.decode(entry.arguments?.getString("albumId").orEmpty())
-                        val trackId = entry.arguments?.getString("trackId")?.let(Uri::decode)
-                        MusicAlbumScreen(
-                            repository = repository,
-                            session = session,
-                            albumId = albumId,
-                            selectedTrackId = trackId,
-                            currentTrackId = audioState.currentEntry?.track?.id,
-                            outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                            onBack = { navController.popBackStack() },
-                            onOpenArtist = { artistId ->
-                                navigateToArtist(navController, artistId)
-                            },
-                            onOpenAlbum = { relatedId ->
-                                navigateToAlbum(navController, relatedId)
-                            },
-                            onPlayTracks = { tracks, index, shuffle ->
-                                audio.playTracks(tracks, index, shuffle)
-                            },
-                            onAddToQueue = { tracks ->
-                                audio.addToQueue(tracks)
-                                scope.launch {
-                                    queueSnackbarHostState.showSnackbar(
-                                        queueAddedMessage(context, tracks.size)
+                                onDismiss = { navController.popBackStack() },
+                                onItemClick = { item ->
+                                    navigateToMedia(navController, item)
+                                },
+                            )
+                        }
+                        composable(LIBRARY) {
+                            LibraryScreen(
+                                repository = repository,
+                                session = session,
+                                padding = padding,
+                                onItemClick = { item -> navigateToMedia(navController, item) },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                            )
+                        }
+                        composable(FAVORITES) {
+                            FavoritesScreen(
+                                repository = repository,
+                                session = session,
+                                padding = padding,
+                                onItemClick = { item -> navigateToMedia(navController, item) },
+                                onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
+                                    audio.playPlaylistTracks(
+                                        tracks,
+                                        index,
+                                        shuffle = shuffle ?: audioState.shuffle,
+                                        preserveSelectedFirst = preserveSelectedFirst,
                                     )
-                                }
-                            },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                        )
-                    }
-                    composable(
-                        ARTIST,
-                        arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
-                    ) { entry ->
-                        val artistId = Uri.decode(entry.arguments?.getString("artistId").orEmpty())
-                        MusicArtistScreen(
-                            repository = repository,
-                            session = session,
-                            artistId = artistId,
-                            // The detail route owns its transparent overlay and status-bar inset;
-                            // carry only the root mini-player/navigation slot into it.
-                            outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                            currentTrackId = audioState.currentEntry?.track?.id,
-                            onBack = { navController.popBackStack() },
-                            onOpenArtist = { relatedId ->
-                                navigateToArtist(navController, relatedId)
-                            },
-                            onOpenAlbum = { relatedId ->
-                                navigateToAlbum(navController, relatedId)
-                            },
-                            onPlayTracks = { tracks, index, shuffle ->
-                                audio.playTracks(tracks, index, shuffle)
-                            },
-                            onAddToQueue = { tracks ->
-                                audio.addToQueue(tracks)
-                                scope.launch {
-                                    queueSnackbarHostState.showSnackbar(
-                                        queueAddedMessage(context, tracks.size)
+                                },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                                onOpenPlaylist = { playlistId ->
+                                    navigateToPlaylist(navController, playlistId)
+                                },
+                            )
+                        }
+                        composable(
+                            PLAYLIST,
+                            arguments =
+                                listOf(navArgument("playlistId") { type = NavType.StringType }),
+                        ) { entry ->
+                            val playlistId = Uri.decode(entry.arguments?.getString("playlistId").orEmpty())
+                            PlaylistLibraryContent(
+                                repository = repository,
+                                session = session,
+                                onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
+                                    audio.playPlaylistTracks(
+                                        tracks,
+                                        index,
+                                        shuffle = shuffle ?: audioState.shuffle,
+                                        preserveSelectedFirst = preserveSelectedFirst,
                                     )
-                                }
-                            },
-                            onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
-                            onScrollabilityChanged = onContentScrollabilityChanged,
-                        )
-                    }
-                    composable(NOW_PLAYING) {
-                        NowPlayingScreen(
-                            repository = repository,
-                            session = session,
-                            coordinator = audio,
-                            onBack = { navController.popBackStack() },
-                            onOpenArtist = { artistId ->
-                                navigateToArtist(navController, artistId)
-                            },
-                            onOpenAlbum = { albumId ->
-                                navigateToAlbum(navController, albumId)
-                            },
-                            onFavorite = onAudioFavorite,
-                        )
-                    }
-                    composable(
-                        DETAIL,
-                        arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
-                    ) { entry ->
-                        val itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty())
-                        DetailScreen(
-                            repository = repository,
-                            session = session,
-                            itemId = itemId,
-                            // DetailScreen owns its transparent overlay and status-bar inset;
-                            // carry only the root mini-player/navigation slot into the route.
-                            outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                            onBack = { navController.popBackStack() },
-                            onOpenItem = { item -> navigateToDetail(navController, item.id) },
-                            onPlay = { item, tracks ->
-                                scope.launch {
-                                    val handoff = audio.pauseForVideoAndDetach()
-                                    if (handoff != AudioCommandResult.Applied) {
-                                        queueSnackbarHostState.showSnackbar(videoHandoffError)
-                                        return@launch
+                                },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                                initialPlaylistId = playlistId,
+                                onBack = { navController.popBackStack() },
+                                outerPadding =
+                                    PaddingValues(
+                                        top = padding.calculateTopPadding(),
+                                        bottom = padding.calculateBottomPadding(),
+                                    ),
+                            )
+                        }
+                        composable(MYPAGE) {
+                            MyPageScreen(
+                                repository = repository,
+                                session = session,
+                                onLogout = {
+                                    audio.stopAndClear()
+                                    onLogout()
+                                },
+                                onPasswordChanged = onPasswordChanged,
+                                outerPadding = padding,
+                                onPickAvatar = onPickAvatar,
+                                avatarPickerResult = avatarPickerResult,
+                                onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
+                                onOpenItem = { itemId -> navigateToDetail(navController, itemId) },
+                                onOpenNotifications = {
+                                    navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                                },
+                                navigationResetKey = myPageNavigationResetKey,
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                            )
+                        }
+                        composable(NOTIFICATIONS) {
+                            NotificationsScreen(
+                                repository = repository,
+                                session = session,
+                                // The nested Material top bar owns status-bar insets.
+                                // Only carry the root mini-player slot into detail content.
+                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                onBack = { navController.popBackStack() },
+                                onOpenDestination = { destination ->
+                                    when (destination) {
+                                        is NotificationDestination.Album ->
+                                            navigateToAlbum(navController, destination.albumId)
+                                        is NotificationDestination.Video ->
+                                            navigateToDetail(navController, destination.itemId)
                                     }
-                                    val active = syncplay.state.value.active
-                                    if (
-                                        active == null ||
-                                            syncplay.state.value.canControl(session.userId)
-                                    ) {
-                                        if (active != null) {
-                                            syncplay.command("media", 0.0, true, item.id)
-                                            syncplay.state.value.active?.let { updated ->
-                                                followedGeneration =
-                                                    updated.mediaItemId()?.let { itemId ->
-                                                        "${updated.id}:${updated.mediaGeneration}:$itemId"
-                                                    }
-                                            }
+                                },
+                            )
+                        }
+                        composable(
+                            ALBUM,
+                            arguments =
+                                listOf(
+                                    navArgument("albumId") { type = NavType.StringType },
+                                    navArgument("trackId") {
+                                        type = NavType.StringType
+                                        nullable = true
+                                        defaultValue = null
+                                    },
+                                ),
+                        ) { entry ->
+                            val albumId = Uri.decode(entry.arguments?.getString("albumId").orEmpty())
+                            val trackId = entry.arguments?.getString("trackId")?.let(Uri::decode)
+                            MusicAlbumScreen(
+                                repository = repository,
+                                session = session,
+                                albumId = albumId,
+                                selectedTrackId = trackId,
+                                currentTrackId = audioState.currentEntry?.track?.id,
+                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                onBack = { navController.popBackStack() },
+                                onOpenArtist = { artistId ->
+                                    navigateToArtist(navController, artistId)
+                                },
+                                onOpenAlbum = { relatedId ->
+                                    navigateToAlbum(navController, relatedId)
+                                },
+                                onPlayTracks = { tracks, index, shuffle ->
+                                    audio.playTracks(tracks, index, shuffle)
+                                },
+                                onAddToQueue = { tracks ->
+                                    audio.addToQueue(tracks)
+                                    scope.launch {
+                                        queueSnackbarHostState.showSnackbar(
+                                            queueAddedMessage(context, tracks.size)
+                                        )
+                                    }
+                                },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                            )
+                        }
+                        composable(
+                            ARTIST,
+                            arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
+                        ) { entry ->
+                            val artistId = Uri.decode(entry.arguments?.getString("artistId").orEmpty())
+                            MusicArtistScreen(
+                                repository = repository,
+                                session = session,
+                                artistId = artistId,
+                                // The detail route owns its transparent overlay and status-bar inset;
+                                // carry only the root mini-player/navigation slot into it.
+                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                currentTrackId = audioState.currentEntry?.track?.id,
+                                onBack = { navController.popBackStack() },
+                                onOpenArtist = { relatedId ->
+                                    navigateToArtist(navController, relatedId)
+                                },
+                                onOpenAlbum = { relatedId ->
+                                    navigateToAlbum(navController, relatedId)
+                                },
+                                onPlayTracks = { tracks, index, shuffle ->
+                                    audio.playTracks(tracks, index, shuffle)
+                                },
+                                onAddToQueue = { tracks ->
+                                    audio.addToQueue(tracks)
+                                    scope.launch {
+                                        queueSnackbarHostState.showSnackbar(
+                                            queueAddedMessage(context, tracks.size)
+                                        )
+                                    }
+                                },
+                                onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
+                                onScrollabilityChanged = onContentScrollabilityChanged,
+                            )
+                        }
+                        composable(NOW_PLAYING) {
+                            NowPlayingScreen(
+                                repository = repository,
+                                session = session,
+                                coordinator = audio,
+                                onBack = { navController.popBackStack() },
+                                onOpenArtist = { artistId ->
+                                    navigateToArtist(navController, artistId)
+                                },
+                                onOpenAlbum = { albumId ->
+                                    navigateToAlbum(navController, albumId)
+                                },
+                                onFavorite = onAudioFavorite,
+                            )
+                        }
+                        composable(
+                            DETAIL,
+                            arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
+                        ) { entry ->
+                            val itemId = Uri.decode(entry.arguments?.getString("itemId").orEmpty())
+                            DetailScreen(
+                                repository = repository,
+                                session = session,
+                                itemId = itemId,
+                                // DetailScreen owns its transparent overlay and status-bar inset;
+                                // carry only the root mini-player/navigation slot into the route.
+                                outerPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                                onBack = { navController.popBackStack() },
+                                onOpenItem = { item -> navigateToDetail(navController, item.id) },
+                                onPlay = { item, tracks ->
+                                    scope.launch {
+                                        val handoff = audio.pauseForVideoAndDetach()
+                                        if (handoff != AudioCommandResult.Applied) {
+                                            queueSnackbarHostState.showSnackbar(videoHandoffError)
+                                            return@launch
                                         }
-                                        navigateToPlayback(context, item.id, item.name, tracks)
+                                        val active = syncplay.state.value.active
+                                        if (
+                                            active == null ||
+                                                syncplay.state.value.canControl(session.userId)
+                                        ) {
+                                            if (active != null) {
+                                                syncplay.command("media", 0.0, true, item.id)
+                                                syncplay.state.value.active?.let { updated ->
+                                                    followedGeneration =
+                                                        updated.mediaItemId()?.let { itemId ->
+                                                            "${updated.id}:${updated.mediaGeneration}:$itemId"
+                                                        }
+                                                }
+                                            }
+                                            navigateToPlayback(context, item.id, item.name, tracks)
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
                 SyncplayToastNotifications(
@@ -802,7 +791,9 @@ private fun MainScaffold(
                     visibilityFraction =
                         if (shouldKeepMainBottomBarVisible(mainRoute)) 1f
                         else bottomBarVisibilityFraction,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background),
                     collapseFromBottom = true,
                     applyNavigationBarsPadding = true,
                 ) {
@@ -1041,7 +1032,7 @@ internal fun MainNavigationBar(
     onDestinationClick: (String) -> Unit,
 ) {
     androidx.compose.material3.NavigationBar(
-        containerColor = Color.Transparent,
+        containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
     ) {
@@ -1198,6 +1189,8 @@ internal class ScrollVisibilityController(
 
 internal const val HIDE_DISTANCE_DP = 56f
 internal const val REVEAL_DISTANCE_DP = 64f
+
+internal val LocalBottomOverlayHeight = compositionLocalOf { 0.dp }
 
 internal fun bottomOverlayContentPaddingPx(
     overlayHeightPx: Int,
