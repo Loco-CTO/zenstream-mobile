@@ -287,6 +287,7 @@ private fun MainScaffold(
     val videoHandoffError = stringResource(R.string.audio_video_handoff_failed)
     val linkCopiedMessage = stringResource(R.string.link_copied)
     val copyLinkFailedMessage = stringResource(R.string.copy_link_failed)
+    val shareLinkUnavailableMessage = stringResource(R.string.share_link_unavailable)
     val copyShareLink: (String) -> Unit = { path ->
         scope.launch {
             val publicWebUrl =
@@ -295,8 +296,14 @@ private fun MainScaffold(
                 } catch (error: kotlinx.coroutines.CancellationException) {
                     throw error
                 } catch (_: Throwable) {
-                    null
+                    queueSnackbarHostState.showSnackbar(copyLinkFailedMessage)
+                    return@launch
                 }
+            val shareUrl = detailShareUrl(publicWebUrl, path)
+            if (shareUrl == null) {
+                queueSnackbarHostState.showSnackbar(shareLinkUnavailableMessage)
+                return@launch
+            }
             try {
                 val clipboard =
                     context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -304,7 +311,7 @@ private fun MainScaffold(
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText(
                         context.getString(R.string.copy_share_link),
-                        detailShareUrl(publicWebUrl, session.serverUrl, path),
+                        shareUrl,
                     )
                 )
                 queueSnackbarHostState.showSnackbar(linkCopiedMessage)

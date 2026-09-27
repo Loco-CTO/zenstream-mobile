@@ -86,15 +86,12 @@ class DetailScreensTest {
     }
 
     @Test
-    fun detailShareUrlPrefersConfiguredWebUrlAndFallsBackToServerUrl() {
+    fun detailShareUrlRequiresConfiguredWebUrl() {
         assertEquals(
             "https://web.example.com/show/movie",
-            detailShareUrl("https://web.example.com/", "https://api.example.com", "/show/movie"),
+            detailShareUrl("https://web.example.com/", "/show/movie"),
         )
-        assertEquals(
-            "https://api.example.com/show/movie",
-            detailShareUrl(" ", "https://api.example.com/", "/show/movie"),
-        )
+        assertEquals(null, detailShareUrl(" ", "/show/movie"))
     }
 
     @Test

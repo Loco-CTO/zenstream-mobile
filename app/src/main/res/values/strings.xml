@@ -51,6 +51,7 @@
     <string name="share_playlist">Share playlist</string>
     <string name="copy_share_link">Copy share link</string>
     <string name="link_copied">Link copied</string>
+    <string name="share_link_unavailable">A public web URL is not configured for this server.</string>
     <string name="copy_link_failed">Could not copy the link.</string>
     <string name="delete_playlist">Delete playlist</string>
     <string name="move_up">Move up</string>

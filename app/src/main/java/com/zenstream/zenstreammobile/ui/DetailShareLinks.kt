@@ -31,8 +31,7 @@ internal fun musicAlbumSharePath(albumId: String, selectedTrackId: String? = nul
 
 internal fun musicArtistSharePath(artistId: String): String = "/artist/${Uri.encode(artistId)}"
 
-internal fun detailShareUrl(publicWebUrl: String?, serverUrl: String, path: String): String {
-    val baseUrl =
-        publicWebUrl?.trim()?.trimEnd('/')?.takeIf(String::isNotBlank) ?: serverUrl.trimEnd('/')
+internal fun detailShareUrl(publicWebUrl: String?, path: String): String? {
+    val baseUrl = publicWebUrl?.trim()?.trimEnd('/')?.takeIf(String::isNotBlank) ?: return null
     return baseUrl + path
 }
