@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -30,8 +31,9 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,7 +93,9 @@ import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.model.playlistStartIndex
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
+import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.progressPercent
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
@@ -232,6 +236,13 @@ private fun PlaylistPickerDialog(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.create_playlist))
                 }
+                if (error && summaries.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.playlists_load_failed),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 when {
                     loading ->
                         Box(
@@ -240,11 +251,10 @@ private fun PlaylistPickerDialog(
                         ) {
                             CircularProgressIndicator()
                         }
-                    error ->
-                        Text(
-                            stringResource(R.string.playlists_load_failed),
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    error && summaries.isEmpty() ->
+                        TextButton(onClick = { scope.launch { refresh() } }) {
+                            Text(stringResource(R.string.playlists_load_failed))
+                        }
                     selectedTracks.isEmpty() ->
                         Text(stringResource(R.string.playlist_no_audio_tracks))
                     summaries.isEmpty() -> Text(stringResource(R.string.playlists_empty))
@@ -261,46 +271,47 @@ private fun PlaylistPickerDialog(
                                         .clip(RoundedCornerShape(12.dp))
                                         .toggleable(
                                             value = selected,
-                                            enabled = !busy,
+                                            enabled = summary.id !in pendingMembership,
                                             role = Role.Checkbox,
                                         ) { shouldBeMember ->
                                             pendingMembership =
                                                 pendingMembership + (summary.id to shouldBeMember)
-                                            busy = true
                                             error = false
                                             scope.launch {
                                                 try {
-                                                    if (shouldBeMember) {
-                                                        repository.addPlaylistItems(
-                                                            session,
-                                                            summary.id,
-                                                            listOf(source.id),
-                                                        )
-                                                    } else {
-                                                        repository.removePlaylistSource(
-                                                            session,
-                                                            summary.id,
-                                                            source.id,
-                                                        )
+                                                    val updatedPlaylist =
+                                                        if (shouldBeMember) {
+                                                            repository.addPlaylistItems(
+                                                                session,
+                                                                summary.id,
+                                                                listOf(source.id),
+                                                            )
+                                                        } else {
+                                                            repository.removePlaylistSource(
+                                                                session,
+                                                                summary.id,
+                                                                source.id,
+                                                            )
+                                                        }
+                                                    summaries = summaries.map { current ->
+                                                        if (current.id == summary.id) {
+                                                            current.copy(
+                                                                itemCount =
+                                                                    updatedPlaylist.summary
+                                                                        .itemCount,
+                                                                isMember = shouldBeMember,
+                                                            )
+                                                        } else {
+                                                            current
+                                                        }
                                                     }
-                                                    summaries =
-                                                        repository.playlists(session, source.id)
                                                 } catch (cancelled: CancellationException) {
                                                     throw cancelled
                                                 } catch (_: Throwable) {
-                                                    try {
-                                                        summaries =
-                                                            repository.playlists(session, source.id)
-                                                        error = true
-                                                    } catch (cancelled: CancellationException) {
-                                                        throw cancelled
-                                                    } catch (_: Throwable) {
-                                                        error = true
-                                                    }
+                                                    error = true
                                                 } finally {
                                                     pendingMembership =
                                                         pendingMembership - summary.id
-                                                    busy = false
                                                 }
                                             }
                                         }
@@ -309,6 +320,7 @@ private fun PlaylistPickerDialog(
                                 ) {
                                     PlaylistArtwork(
                                         summary.artworkItems,
+                                        summary.itemCount,
                                         session,
                                         Modifier.size(42.dp),
                                     )
@@ -524,7 +536,8 @@ fun WatchlistContent(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 20.dp),
+                    contentPadding =
+                        PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items(items, key = { it.id }) { item ->
@@ -584,6 +597,7 @@ private fun WatchlistRow(
     onRemove: () -> Unit,
 ) {
     val status = item.watchlistStatus
+    var menuExpanded by remember { mutableStateOf(false) }
     val statusText =
         when (status?.kind) {
             "continue" -> stringResource(R.string.watchlist_continue)
@@ -600,7 +614,7 @@ private fun WatchlistRow(
             item,
             session,
             wide = false,
-            modifier = Modifier.size(width = 72.dp, height = 96.dp),
+            modifier = Modifier.size(width = 76.dp, height = 112.dp),
         )
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(
@@ -641,11 +655,29 @@ private fun WatchlistRow(
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onRemove, enabled = !busy) {
-            Icon(
-                painterResource(LucideR.drawable.lucide_ic_trash_2),
-                contentDescription = stringResource(R.string.remove_from_watchlist),
-            )
+        Box {
+            IconButton(onClick = { menuExpanded = true }, enabled = !busy) {
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
+                    contentDescription = stringResource(R.string.show_more),
+                )
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.remove_from_watchlist)) },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_trash_2),
+                            contentDescription = null,
+                        )
+                    },
+                    enabled = !busy,
+                    onClick = {
+                        menuExpanded = false
+                        onRemove()
+                    },
+                )
+            }
         }
     }
 }
@@ -656,12 +688,19 @@ fun PlaylistLibraryContent(
     session: AuthSession,
     onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit,
+    onOpenPlaylist: (String) -> Unit = {},
+    initialPlaylistId: String? = null,
+    onBack: () -> Unit = {},
+    outerPadding: PaddingValues = PaddingValues(),
 ) {
     var summaries by
         remember(session.userId, session.token) {
             mutableStateOf<List<PlaylistSummary>>(emptyList())
         }
-    var selectedId by remember(session.userId, session.token) { mutableStateOf<String?>(null) }
+    var selectedId by
+        remember(session.userId, session.token, initialPlaylistId) {
+            mutableStateOf(initialPlaylistId)
+        }
     var detail by remember { mutableStateOf<PlaylistData?>(null) }
     var loading by remember(session.userId, session.token) { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
@@ -687,7 +726,7 @@ fun PlaylistLibraryContent(
         loading = true
         pageError = false
         try {
-            summaries = repository.playlists(session)
+            if (selectedId == null) summaries = repository.playlists(session)
             detail = selectedId?.let { repository.playlist(session, it, 1) }
             error = false
         } catch (cancelled: CancellationException) {
@@ -734,16 +773,15 @@ fun PlaylistLibraryContent(
             ) {
                 Text(
                     stringResource(R.string.playlists),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
-                Button(onClick = { editor = true }) {
+                IconButton(onClick = { editor = true }) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_plus),
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.create_playlist),
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.create_playlist))
                 }
             }
             when {
@@ -765,17 +803,11 @@ fun PlaylistLibraryContent(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 20.dp),
+                        contentPadding =
+                            PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
                     ) {
                         items(summaries, key = { it.id }) { summary ->
-                            PlaylistCard(
-                                summary,
-                                session,
-                                onClick = {
-                                    detail = null
-                                    selectedId = summary.id
-                                },
-                            )
+                            PlaylistCard(summary, session, onClick = { onOpenPlaylist(summary.id) })
                         }
                     }
             }
@@ -789,7 +821,8 @@ fun PlaylistLibraryContent(
             pageError = pageError,
             playBusy = playBusy,
             session = session,
-            onBack = { selectedId = null },
+            onBack = onBack,
+            modifier = Modifier.fillMaxSize().padding(outerPadding),
             onPlayFull = { entryId, shuffle ->
                 val playlistId = selectedId
                 if (playlistId != null && !playBusy)
@@ -820,9 +853,8 @@ fun PlaylistLibraryContent(
                 scope.launch {
                     try {
                         repository.deletePlaylist(session, selectedId!!)
-                        selectedId = null
                         detail = null
-                        revision++
+                        onBack()
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -928,8 +960,7 @@ fun PlaylistLibraryContent(
                             repository.createPlaylist(session, name, description, isPrivate)
                         summaries = repository.playlists(session)
                         editor = false
-                        selectedId = created.summary.id
-                        revision++
+                        onOpenPlaylist(created.summary.id)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -978,7 +1009,7 @@ private fun PlaylistCard(summary: PlaylistSummary, session: AuthSession, onClick
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlaylistArtwork(summary.artworkItems, session, Modifier.size(88.dp))
+        PlaylistArtwork(summary.artworkItems, summary.itemCount, session, Modifier.size(88.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             Text(
                 summary.name,
@@ -1011,6 +1042,7 @@ private fun PlaylistCard(summary: PlaylistSummary, session: AuthSession, onClick
 @Composable
 private fun PlaylistArtwork(
     items: List<MediaItem>,
+    itemCount: Int,
     session: AuthSession,
     modifier: Modifier = Modifier,
 ) {
@@ -1019,46 +1051,66 @@ private fun PlaylistArtwork(
         modifier.clip(RoundedCornerShape(10.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        when (visible.size) {
-            0 ->
+        when {
+            itemCount >= 4 -> {
+                Column(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    repeat(2) { rowIndex ->
+                        Row(
+                            Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(1.dp),
+                        ) {
+                            repeat(2) { columnIndex ->
+                                val item = visible.getOrNull(rowIndex * 2 + columnIndex)
+                                if (item != null) {
+                                    MusicArtwork(
+                                        item,
+                                        session,
+                                        modifier = Modifier.weight(1f).fillMaxSize(),
+                                        requestedSize = 160,
+                                        shape = RoundedCornerShape(0.dp),
+                                    )
+                                } else {
+                                    Box(
+                                        Modifier.weight(1f)
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            painterResource(LucideR.drawable.lucide_ic_list_music),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            visible.isNotEmpty() -> {
+                val cover =
+                    visible.firstOrNull { !it.imageTags["Primary"].isNullOrBlank() }
+                        ?: visible.first()
+                MusicArtwork(
+                    cover,
+                    session,
+                    modifier = Modifier.fillMaxSize(),
+                    requestedSize = 320,
+                    shape = RoundedCornerShape(0.dp),
+                )
+            }
+            else ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         painterResource(LucideR.drawable.lucide_ic_list_music),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            1 ->
-                MusicArtwork(
-                    visible.first(),
-                    session,
-                    modifier = Modifier.fillMaxSize(),
-                    requestedSize = 320,
-                )
-            else ->
-                Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.weight(1f)) {
-                        visible.take(2).forEach { item ->
-                            MusicArtwork(
-                                item,
-                                session,
-                                modifier = Modifier.weight(1f).fillMaxSize(),
-                                requestedSize = 160,
-                            )
-                        }
-                    }
-                    if (visible.size > 2)
-                        Row(Modifier.weight(1f)) {
-                            visible.drop(2).forEach { item ->
-                                MusicArtwork(
-                                    item,
-                                    session,
-                                    modifier = Modifier.weight(1f).fillMaxSize(),
-                                    requestedSize = 160,
-                                )
-                            }
-                            if (visible.size == 3) Spacer(Modifier.weight(1f).fillMaxSize())
-                        }
                 }
         }
     }
@@ -1082,6 +1134,7 @@ private fun PlaylistDetailContent(
     onLoadMore: () -> Unit,
     onRetryPage: () -> Unit,
     onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -1152,7 +1205,7 @@ private fun PlaylistDetailContent(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1170,20 +1223,6 @@ private fun PlaylistDetailContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (currentSummary?.isOwner == true) {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_pencil),
-                        contentDescription = stringResource(R.string.edit_playlist),
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_trash_2),
-                        contentDescription = stringResource(R.string.delete_playlist),
-                    )
-                }
-            }
         }
         when {
             loading && data == null ->
@@ -1260,15 +1299,25 @@ private fun PlaylistDetailContent(
                                         },
                                     )
                             },
-                        contentPadding = PaddingValues(bottom = 24.dp),
+                        contentPadding =
+                            PaddingValues(bottom = 24.dp + LocalBottomOverlayHeight.current),
                     ) {
                         item(key = "playlist-summary") {
+                            val actionArtwork = summary.artworkItems.firstOrNull()
+                            val actionPalette =
+                                remember(
+                                    actionArtwork?.id,
+                                    actionArtwork?.imageBlurHashes?.get("Primary"),
+                                ) {
+                                    musicArtworkPalette(actionArtwork)
+                                }
                             Column(
                                 Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     PlaylistArtwork(
                                         summary.artworkItems,
+                                        summary.itemCount,
                                         session,
                                         Modifier.size(112.dp),
                                     )
@@ -1296,39 +1345,16 @@ private fun PlaylistDetailContent(
                                     )
                                 }
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(top = 12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Button(
-                                        onClick = { onPlayFull(null, false) },
-                                        enabled = summary.itemCount > 0 && !playBusy,
-                                    ) {
-                                        Icon(
-                                            painterResource(LucideR.drawable.lucide_ic_play),
-                                            contentDescription = null,
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            if (playBusy) stringResource(R.string.loading)
-                                            else stringResource(R.string.play_all)
-                                        )
-                                    }
-                                    OutlinedButton(
-                                        onClick = { onPlayFull(null, true) },
-                                        enabled = summary.itemCount > 0 && !playBusy,
-                                    ) {
-                                        Icon(
-                                            painterResource(LucideR.drawable.lucide_ic_shuffle),
-                                            contentDescription = null,
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(stringResource(R.string.shuffle))
-                                    }
                                     if (
                                         summary.isOwner &&
                                             !summary.isPrivate &&
                                             !summary.shareToken.isNullOrBlank()
                                     ) {
+                                        val sharePlaylistLabel =
+                                            stringResource(R.string.share_playlist)
                                         IconButton(
                                             onClick = {
                                                 val url =
@@ -1338,7 +1364,7 @@ private fun PlaylistDetailContent(
                                                         Intent(Intent.ACTION_SEND)
                                                             .setType("text/plain")
                                                             .putExtra(Intent.EXTRA_TEXT, url),
-                                                        context.getString(R.string.share_playlist),
+                                                        sharePlaylistLabel,
                                                     )
                                                 )
                                             }
@@ -1350,6 +1376,38 @@ private fun PlaylistDetailContent(
                                             )
                                         }
                                     }
+                                    if (summary.isOwner) {
+                                        IconButton(
+                                            onClick = onEdit,
+                                            modifier = Modifier.size(48.dp),
+                                        ) {
+                                            Icon(
+                                                painterResource(LucideR.drawable.lucide_ic_pencil),
+                                                contentDescription =
+                                                    stringResource(R.string.edit_playlist),
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = onDelete,
+                                            modifier = Modifier.size(48.dp),
+                                        ) {
+                                            Icon(
+                                                painterResource(LucideR.drawable.lucide_ic_trash_2),
+                                                contentDescription =
+                                                    stringResource(R.string.delete_playlist),
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    MusicPlaybackButtons(
+                                        onShuffle = { onPlayFull(null, true) },
+                                        onPlay = { onPlayFull(null, false) },
+                                        shuffleLabel = R.string.shuffle,
+                                        playLabel = R.string.play_all,
+                                        palette = actionPalette,
+                                        enabled = summary.itemCount > 0 && !playBusy,
+                                        loading = playBusy,
+                                    )
                                 }
                             }
                         }

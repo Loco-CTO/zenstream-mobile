@@ -1,8 +1,12 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,14 +16,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,6 +38,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,12 +51,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,6 +81,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -114,16 +123,22 @@ import com.zenstream.zenstreammobile.ui.SearchUiState
 import com.zenstream.zenstreammobile.ui.SearchViewModel
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
+import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
+import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
+import com.zenstream.zenstreammobile.ui.components.episodeCardSubtitle
+import com.zenstream.zenstreammobile.ui.components.episodeCardTitle
 import com.zenstream.zenstreammobile.ui.components.formatDurationSeconds
 import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.components.musicAlbumArtist
 import com.zenstream.zenstreammobile.ui.components.musicReleaseYear
 import com.zenstream.zenstreammobile.ui.components.musicSubtitle
+import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.navigation.ChromeVisibilitySlot
 import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
 import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
@@ -133,6 +148,7 @@ fun HomeScreen(
     repository: CatalogRepository,
     session: AuthSession,
     padding: PaddingValues,
+    bottomContentPadding: Dp = 20.dp,
     onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
@@ -168,7 +184,7 @@ fun HomeScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 20.dp),
+                    contentPadding = PaddingValues(bottom = bottomContentPadding),
                 ) {
                     item {
                         FeaturedHero(
@@ -681,7 +697,7 @@ private fun SearchResultsList(
     val visibleItems = items.distinctBy { it.id }.filterNot { item -> item.id == featured?.id }
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(bottom = 20.dp),
+        contentPadding = PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
         modifier = modifier.testTag("search-results-list"),
     ) {
         featured?.let { item ->
@@ -1048,18 +1064,72 @@ fun FavoritesScreen(
     onScrollabilityChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
     onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenPlaylist: (String) -> Unit = {},
 ) {
     var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
+    val tabScrollState = rememberScrollState()
+    var tabWidths by remember { mutableStateOf(List(tabs.size) { 0 }) }
+    val density = LocalDensity.current
+    val indicatorOffset by
+        animateDpAsState(
+            targetValue = with(density) { tabWidths.take(selectedTab).sum().toDp() },
+            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            label = "my-lists-tab-indicator-offset",
+        )
+    val indicatorWidth by
+        animateDpAsState(
+            targetValue = with(density) { tabWidths.getOrElse(selectedTab) { 0 }.toDp() },
+            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            label = "my-lists-tab-indicator-width",
+        )
     Column(Modifier.fillMaxSize().padding(padding)) {
-        TabRow(selectedTabIndex = selectedTab) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
-                    text = { Text(stringResource(title)) },
-                )
+        Column {
+            Box(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(tabScrollState)) {
+                Box(Modifier.wrapContentWidth(unbounded = true).fillMaxHeight()) {
+                    Row(
+                        modifier = Modifier.align(Alignment.TopStart),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        tabs.forEachIndexed { index, title ->
+                            val isSelected = selectedTab == index
+                            Text(
+                                stringResource(title),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                                style = MaterialTheme.typography.titleSmall,
+                                color =
+                                    if (isSelected) Color.White
+                                    else Color.White.copy(alpha = 0.45f),
+                                modifier =
+                                    Modifier.onSizeChanged { size ->
+                                            if (tabWidths[index] != size.width) {
+                                                tabWidths =
+                                                    tabWidths.toMutableList().also {
+                                                        it[index] = size.width
+                                                    }
+                                            }
+                                        }
+                                        .selectable(
+                                            selected = isSelected,
+                                            role = Role.Tab,
+                                            onClick = { selectedTab = index },
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier.align(Alignment.BottomStart)
+                            .offset(x = indicatorOffset)
+                            .width(indicatorWidth)
+                            .height(2.dp)
+                            .background(Color.White)
+                    )
+                }
             }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
         }
         when (selectedTab) {
             0 -> WatchlistContent(repository, session, onItemClick, onScrollabilityChanged)
@@ -1072,7 +1142,13 @@ fun FavoritesScreen(
                     onItemClick,
                 )
             else ->
-                PlaylistLibraryContent(repository, session, onPlayTracks, onScrollabilityChanged)
+                PlaylistLibraryContent(
+                    repository,
+                    session,
+                    onPlayTracks,
+                    onScrollabilityChanged,
+                    onOpenPlaylist = onOpenPlaylist,
+                )
         }
     }
 }
@@ -1121,69 +1197,55 @@ private fun FavoritesTabContent(
                 else ->
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(bottom = 20.dp),
+                        contentPadding =
+                            PaddingValues(bottom = 20.dp + LocalBottomOverlayHeight.current),
                     ) {
                         if (favoriteArtists.isNotEmpty()) {
                             item(key = "favorite-artists") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_artists),
-                                    items = favoriteArtists,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_artists))
+                            }
+                            items(favoriteArtists.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (favoriteAlbums.isNotEmpty()) {
                             item(key = "favorite-albums") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_albums),
-                                    items = favoriteAlbums,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_albums))
+                            }
+                            items(favoriteAlbums.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (favoriteTracks.isNotEmpty()) {
                             item(key = "favorite-tracks") {
-                                FavoriteMusicSection(
-                                    title = stringResource(R.string.favorite_tracks),
-                                    items = favoriteTracks,
-                                    session = session,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_tracks))
+                            }
+                            items(favoriteTracks.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (episodes.isNotEmpty()) {
                             item(key = "favorite-episodes") {
-                                FavoriteSection(
-                                    R.string.favorite_episodes,
-                                    episodes,
-                                    session,
-                                    wide = true,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_episodes))
+                            }
+                            items(episodes.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (movies.isNotEmpty()) {
                             item(key = "favorite-movies") {
-                                FavoriteSection(
-                                    R.string.favorite_movies,
-                                    movies,
-                                    session,
-                                    wide = false,
-                                    onItemClick = onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_movies))
+                            }
+                            items(movies.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (series.isNotEmpty()) {
                             item(key = "favorite-series") {
-                                FavoriteSection(
-                                    R.string.favorite_series,
-                                    series,
-                                    session,
-                                    wide = false,
-                                    onItemClick,
-                                )
+                                FavoriteSectionHeading(stringResource(R.string.favorite_series))
+                            }
+                            items(series.distinctBy { it.id }, key = { it.id }) { item ->
+                                FavoriteListRow(item, session, onItemClick)
                             }
                         }
                         if (state.loadingMore) {
@@ -1223,13 +1285,8 @@ private fun FavoritesHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                stringResource(R.string.favorites),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
                 stringResource(R.string.favorite_item_count, total),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -1293,65 +1350,78 @@ private fun FavoritesHeader(
 }
 
 @Composable
-private fun FavoriteSection(
-    title: Int,
-    items: List<MediaItem>,
-    session: AuthSession,
-    wide: Boolean,
-    onItemClick: (MediaItem) -> Unit,
-) {
-    val uniqueItems = items.distinctBy { it.id }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(uniqueItems, key = { it.id }) { item ->
-                com.zenstream.zenstreammobile.ui.components.MediaCard(
-                    item = item,
-                    session = session,
-                    wide = wide,
-                    onClick = onItemClick,
-                    gridCard = false,
-                )
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-    }
+private fun FavoriteSectionHeading(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(start = 20.dp, top = 18.dp, end = 16.dp, bottom = 4.dp)
+                .semantics { heading() },
+    )
 }
 
 @Composable
-private fun FavoriteMusicSection(
-    title: String,
-    items: List<MediaItem>,
+private fun FavoriteListRow(
+    item: MediaItem,
     session: AuthSession,
     onItemClick: (MediaItem) -> Unit,
 ) {
-    val uniqueItems = items.distinctBy { it.id }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .72f),
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(uniqueItems, key = { it.id }) { item ->
-                AudioCard(item = item, session = session, onClick = onItemClick)
+    val isAudio = item.type in setOf("MusicArtist", "MusicAlbum", "Audio")
+    val isEpisode = item.type.equals("Episode", ignoreCase = true)
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable { onItemClick(item) }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isAudio) {
+            MusicArtwork(
+                item = item,
+                session = session,
+                requestedSize = 240,
+                modifier = Modifier.size(64.dp),
+                shape = RoundedCornerShape(8.dp),
+            )
+        } else {
+            MediaImage(
+                item = item,
+                session = session,
+                wide = false,
+                modifier = Modifier.size(width = 72.dp, height = 108.dp),
+            )
+        }
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                if (isEpisode) episodeCardTitle(item) else item.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle =
+                when {
+                    isEpisode -> episodeCardSubtitle(item)
+                    isAudio -> musicSubtitle(item)
+                    else -> itemSubtitle(item)
+                }
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            progressPercent(item)?.let { percent ->
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                )
             }
         }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -1482,7 +1552,13 @@ fun LibraryScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
                         state = gridState,
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                top = 16.dp,
+                                end = 16.dp,
+                                bottom = 16.dp + LocalBottomOverlayHeight.current,
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {

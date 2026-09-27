@@ -69,6 +69,7 @@ import com.zenstream.zenstreammobile.model.MusicAlbumData
 import com.zenstream.zenstreammobile.model.MusicArtistData
 import com.zenstream.zenstreammobile.ui.MusicAlbumViewModel
 import com.zenstream.zenstreammobile.ui.MusicArtistViewModel
+import com.zenstream.zenstreammobile.ui.components.ArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.AudioTrackRow
 import com.zenstream.zenstreammobile.ui.components.ExpandableDescription
@@ -76,6 +77,7 @@ import com.zenstream.zenstreammobile.ui.components.MusicArtistCard
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
+import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 
 private val MUSIC_DETAIL_TOP_CONTENT_PADDING = 96.dp
 
@@ -93,6 +95,55 @@ private fun artistTracksWithArtwork(
     val releases = (data.albums + data.appearsIn).associateBy { it.id }
     return tracks.map { track ->
         withPrimaryArtworkFallback(track, releases[track.albumId] ?: data.artist)
+    }
+}
+
+@Composable
+internal fun MusicPlaybackButtons(
+    onShuffle: () -> Unit,
+    onPlay: () -> Unit,
+    shuffleLabel: Int,
+    playLabel: Int,
+    palette: ArtworkPalette,
+    enabled: Boolean,
+    loading: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onShuffle, enabled = enabled, modifier = Modifier.size(44.dp)) {
+            Icon(
+                painterResource(LucideR.drawable.lucide_ic_shuffle),
+                contentDescription = stringResource(shuffleLabel),
+                tint = if (enabled) palette.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onPlay, enabled = enabled, modifier = Modifier.size(54.dp)) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
+                color = palette.accent,
+                contentColor = palette.onAccent,
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(15.dp),
+                        strokeWidth = 2.dp,
+                        color = palette.onAccent,
+                    )
+                } else {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_play),
+                        contentDescription = stringResource(playLabel),
+                        modifier = Modifier.padding(15.dp),
+                        tint = palette.onAccent,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -219,7 +270,7 @@ private fun AlbumContent(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(bottom = 32.dp + LocalBottomOverlayHeight.current),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item(key = "album-header") {
@@ -429,28 +480,14 @@ private fun AlbumHeader(
                         }
                     }
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onShuffle, modifier = Modifier.size(44.dp)) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_shuffle),
-                            contentDescription = stringResource(R.string.music_shuffle_album),
-                            tint = accent,
-                        )
-                    }
-                    IconButton(onClick = onPlay, modifier = Modifier.size(54.dp)) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = CircleShape,
-                            color = accent,
-                            contentColor = palette.onAccent,
-                        ) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_play),
-                                contentDescription = stringResource(R.string.music_play_album),
-                                modifier = Modifier.padding(15.dp),
-                                tint = palette.onAccent,
-                            )
-                        }
-                    }
+                    MusicPlaybackButtons(
+                        onShuffle = onShuffle,
+                        onPlay = onPlay,
+                        shuffleLabel = R.string.music_shuffle_album,
+                        playLabel = R.string.music_play_album,
+                        palette = palette,
+                        enabled = true,
+                    )
                 }
             }
             if (moreOpen) {
@@ -700,7 +737,7 @@ private fun ArtistContent(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(bottom = 32.dp + LocalBottomOverlayHeight.current),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item(key = "artist-header") {
@@ -836,49 +873,15 @@ private fun ArtistContent(
                                 }
                             }
                             Spacer(Modifier.weight(1f))
-                            IconButton(
-                                onClick = onShuffleAll,
+                            MusicPlaybackButtons(
+                                onShuffle = onShuffleAll,
+                                onPlay = onPlayAll,
+                                shuffleLabel = R.string.music_shuffle_artist_tracks,
+                                playLabel = R.string.music_play_all_artist_tracks,
+                                palette = palette,
                                 enabled = !tracksLoading,
-                                modifier = Modifier.size(44.dp),
-                            ) {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_shuffle),
-                                    contentDescription =
-                                        stringResource(R.string.music_shuffle_artist_tracks),
-                                    tint =
-                                        if (!tracksLoading) accent
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            IconButton(
-                                onClick = onPlayAll,
-                                enabled = !tracksLoading,
-                                modifier = Modifier.size(54.dp),
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    shape = CircleShape,
-                                    color = accent,
-                                    contentColor = palette.onAccent,
-                                ) {
-                                    if (tracksLoading)
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.padding(15.dp),
-                                            strokeWidth = 2.dp,
-                                            color = palette.onAccent,
-                                        )
-                                    else
-                                        Icon(
-                                            painterResource(LucideR.drawable.lucide_ic_play),
-                                            contentDescription =
-                                                stringResource(
-                                                    R.string.music_play_all_artist_tracks
-                                                ),
-                                            modifier = Modifier.padding(15.dp),
-                                            tint = palette.onAccent,
-                                        )
-                                }
-                            }
+                                loading = tracksLoading,
+                            )
                         }
                     }
                     if (moreOpen) {
