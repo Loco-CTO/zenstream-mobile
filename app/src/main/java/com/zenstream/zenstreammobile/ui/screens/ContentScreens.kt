@@ -260,13 +260,22 @@ internal fun FeaturedHero(
     val configuration = LocalConfiguration.current
     val screenHeightDp = configuration.screenHeightDp
     val screenWidthDp = configuration.screenWidthDp
+    val expandHeroToAvailableHeight = shouldExpandFeatureHero(screenHeightDp, screenWidthDp)
+    val featureLogoWidth = calculateFeatureLogoWidth(screenWidthDp)
+    val featureLogoHeight = featureLogoWidth / FEATURE_LOGO_SOURCE_ASPECT_RATIO
     val currentItem = items[pagerState.currentPage]
     val openDescription = stringResource(R.string.open_details_description, currentItem.name)
     Column(
         Modifier.fillMaxWidth()
-            .heightIn(
-                min = calculateFeatureBarHeight(screenHeightDp),
-                max = calculateFeatureBarMaxHeight(screenHeightDp),
+            .then(
+                if (expandHeroToAvailableHeight) {
+                    Modifier.height(calculateFeatureBarMaxHeight(screenHeightDp))
+                } else {
+                    Modifier.heightIn(
+                        min = calculateFeatureBarHeight(screenHeightDp),
+                        max = calculateFeatureBarMaxHeight(screenHeightDp),
+                    )
+                }
             )
             .background(Color(0xFF080808))
             .clickable { onItemClick(currentItem) }
@@ -278,7 +287,15 @@ internal fun FeaturedHero(
     ) {
         Box(
             Modifier.fillMaxWidth()
-                .height(calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp))
+                .then(
+                    if (expandHeroToAvailableHeight) {
+                        Modifier.weight(1f)
+                    } else {
+                        Modifier.height(
+                            calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp)
+                        )
+                    }
+                )
                 .testTag("featured_hero_artwork")
         ) {
             HorizontalPager(
@@ -342,7 +359,11 @@ internal fun FeaturedHero(
                                         item.name,
                                     ),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(260.dp, 72.dp).semantics { heading() },
+                                modifier =
+                                    Modifier.size(featureLogoWidth, featureLogoHeight).semantics {
+                                        heading()
+                                    },
+                                alignment = Alignment.CenterStart,
                             )
                         } else {
                             Text(
@@ -375,56 +396,82 @@ internal fun FeaturedHero(
                 .joinToString(" · ")
                 .ifBlank { itemSubtitle(item) }
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .then(
+                        if (expandHeroToAvailableHeight) {
+                            Modifier.heightIn(
+                                min =
+                                    screenHeightDp.toFloat().dp *
+                                        (FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION -
+                                            FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION)
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+            verticalArrangement =
+                if (expandHeroToAvailableHeight) Arrangement.SpaceBetween else Arrangement.Top,
         ) {
-            if (metadata.isNotBlank()) {
-                Text(
-                    metadata,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = .7f),
-                )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (metadata.isNotBlank()) {
+                    Text(
+                        metadata,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = .7f),
+                    )
+                }
+                item.overview?.takeIf(String::isNotBlank)?.let { overview ->
+                    Text(
+                        overview,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = .78f),
+                        minLines = 2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            item.overview?.takeIf(String::isNotBlank)?.let { overview ->
-                Text(
-                    overview,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = .78f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
-                .testTag("featured_hero_page_indicators"),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            repeat(items.size) { index ->
-                Box(
-                    Modifier.padding(horizontal = 3.dp)
-                        .size(if (index == pagerState.currentPage) 18.dp else 6.dp, 4.dp)
-                        .clip(MaterialTheme.shapes.small)
-                        .background(
-                            if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
-                            else Color.White.copy(alpha = .25f)
-                        )
-                        .testTag("featured_hero_page_indicator_$index")
-                )
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                    .testTag("featured_hero_page_indicators"),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                repeat(items.size) { index ->
+                    Box(
+                        Modifier.padding(horizontal = 3.dp)
+                            .size(if (index == pagerState.currentPage) 18.dp else 6.dp, 4.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(
+                                if (index == pagerState.currentPage)
+                                    MaterialTheme.colorScheme.primary
+                                else Color.White.copy(alpha = .25f)
+                            )
+                            .testTag("featured_hero_page_indicator_$index")
+                    )
+                }
             }
         }
     }
 }
 
 internal const val FEATURE_BAR_SCREEN_HEIGHT_FRACTION = 0.5f
-internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.9f
+internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.7f
 internal const val FEATURE_ARTWORK_SCREEN_HEIGHT_FRACTION = 0.4f
 internal const val FEATURE_BAR_MIN_HEIGHT_DP = 320f
 internal const val FEATURE_ARTWORK_MIN_HEIGHT_DP = 200f
 internal const val FEATURE_ARTWORK_TABLET_WIDTH_DP = 600f
 internal const val FEATURE_ARTWORK_WIDE_ASPECT_RATIO = 3f
-internal const val FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION = 0.8f
+internal const val FEATURE_ARTWORK_SOURCE_ASPECT_RATIO = 16f / 9f
+internal const val FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION = 0.6f
+internal const val FEATURE_LOGO_SCREEN_WIDTH_FRACTION = 0.42f
+internal const val FEATURE_LOGO_MIN_WIDTH_DP = 188f
+internal const val FEATURE_LOGO_MAX_WIDTH_DP = 440f
+internal const val FEATURE_LOGO_SOURCE_ASPECT_RATIO = 680f / 260f
 
 internal fun calculateFeatureBarHeight(screenHeightDp: Int) =
     maxOf(
@@ -453,6 +500,18 @@ internal fun calculateFeatureArtworkHeight(screenHeightDp: Int, screenWidthDp: I
             0.dp
         },
     )
+
+internal fun shouldExpandFeatureHero(screenHeightDp: Int, screenWidthDp: Int) =
+    screenWidthDp >= FEATURE_ARTWORK_TABLET_WIDTH_DP &&
+        calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp) <
+            screenWidthDp.toFloat().dp / FEATURE_ARTWORK_SOURCE_ASPECT_RATIO
+
+internal fun calculateFeatureLogoWidth(screenWidthDp: Int) =
+    minOf(
+            screenWidthDp.toFloat().dp * FEATURE_LOGO_SCREEN_WIDTH_FRACTION,
+            FEATURE_LOGO_MAX_WIDTH_DP.dp,
+        )
+        .coerceAtLeast(FEATURE_LOGO_MIN_WIDTH_DP.dp)
 
 @Composable
 fun SearchOverlayScreen(

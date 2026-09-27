@@ -1,5 +1,6 @@
 package com.zenstream.zenstreammobile.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,8 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
@@ -24,6 +28,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -40,8 +45,11 @@ import com.zenstream.zenstreammobile.ui.screens.ServerSetupScreen
 import com.zenstream.zenstreammobile.ui.screens.calculateFeatureArtworkHeight
 import com.zenstream.zenstreammobile.ui.screens.calculateFeatureBarHeight
 import com.zenstream.zenstreammobile.ui.screens.calculateFeatureBarMaxHeight
+import com.zenstream.zenstreammobile.ui.screens.calculateFeatureLogoWidth
+import com.zenstream.zenstreammobile.ui.screens.shouldExpandFeatureHero
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -99,6 +107,12 @@ class AuthScreensTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val logoDescription = context.getString(R.string.logo_description, "Example")
         val expectedMetadata = "2026 · Series · ${context.getString(R.string.runtime_minutes, 23)}"
+        val screenWidthDp =
+            InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .resources
+                .configuration
+                .screenWidthDp
         composeRule
             .onNodeWithContentDescription(logoDescription, useUnmergedTree = true)
             .assertExists()
@@ -106,6 +120,25 @@ class AuthScreensTest {
             .onNodeWithContentDescription(logoDescription, useUnmergedTree = true)
             .assertIsDisplayed()
         composeRule.onNodeWithText(expectedMetadata, useUnmergedTree = true).assertIsDisplayed()
+        val logoBounds =
+            composeRule
+                .onNodeWithContentDescription(logoDescription, useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+        val metadataBounds =
+            composeRule
+                .onNodeWithText(expectedMetadata, useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+        assertEquals(
+            "Expected logo to align with metadata",
+            metadataBounds.left.value,
+            logoBounds.left.value,
+            1f,
+        )
+        assertEquals(
+            calculateFeatureLogoWidth(screenWidthDp).value,
+            (logoBounds.right - logoBounds.left).value,
+            1f,
+        )
         composeRule
             .onNodeWithText(
                 "A young hunter discovers a hidden world beneath the mountains.",
@@ -209,11 +242,26 @@ class AuthScreensTest {
             InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
         val screenHeightDp = configuration.screenHeightDp
         val screenWidthDp = configuration.screenWidthDp
-        assertEquals(
-            calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp).value,
-            (artworkBounds.bottom - artworkBounds.top).value,
-            1f,
-        )
+        if (shouldExpandFeatureHero(screenHeightDp, screenWidthDp)) {
+            assertEquals(
+                calculateFeatureBarMaxHeight(screenHeightDp).value,
+                (heroBounds.bottom - heroBounds.top).value,
+                1f,
+            )
+            assertTrue(
+                "Expected tablet artwork to expand into available hero height; artwork=$artworkBounds",
+                (artworkBounds.bottom - artworkBounds.top).value >=
+                    screenHeightDp * FEATURE_ARTWORK_SCREEN_HEIGHT_FRACTION &&
+                    (artworkBounds.bottom - artworkBounds.top).value <=
+                        screenHeightDp * FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION,
+            )
+        } else {
+            assertEquals(
+                calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp).value,
+                (artworkBounds.bottom - artworkBounds.top).value,
+                1f,
+            )
+        }
         assertTrue(
             "Expected hero height to meet the responsive minimum; hero=$heroBounds",
             (heroBounds.bottom - heroBounds.top).value >=
@@ -280,19 +328,132 @@ class AuthScreensTest {
     }
 
     @Test
-    fun featureBarUses50To90PercentHeightWithResponsiveArtworkAndLandscapeMinimums() {
+    fun featureBarUses50To70PercentHeightWithResponsiveArtworkAndLandscapeMinimums() {
         assertEquals(0.5f, FEATURE_BAR_SCREEN_HEIGHT_FRACTION, 0.001f)
-        assertEquals(0.9f, FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION, 0.001f)
+        assertEquals(0.7f, FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION, 0.001f)
         assertEquals(0.4f, FEATURE_ARTWORK_SCREEN_HEIGHT_FRACTION, 0.001f)
-        assertEquals(0.8f, FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION, 0.001f)
+        assertEquals(0.6f, FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION, 0.001f)
         assertEquals(400f, calculateFeatureBarHeight(800).value, 0.001f)
-        assertEquals(720f, calculateFeatureBarMaxHeight(800).value, 0.001f)
+        assertEquals(560f, calculateFeatureBarMaxHeight(800).value, 0.001f)
         assertEquals(320f, calculateFeatureArtworkHeight(800, 400).value, 0.001f)
         assertEquals(400f, calculateFeatureArtworkHeight(800, 1200).value, 0.001f)
-        assertEquals(640f, calculateFeatureArtworkHeight(800, 3000).value, 0.001f)
+        assertEquals(480f, calculateFeatureArtworkHeight(800, 3000).value, 0.001f)
         assertEquals(FEATURE_BAR_MIN_HEIGHT_DP, calculateFeatureBarHeight(392).value)
-        assertEquals(352.8f, calculateFeatureBarMaxHeight(392).value, 0.1f)
+        assertEquals(FEATURE_BAR_MIN_HEIGHT_DP, calculateFeatureBarMaxHeight(392).value)
         assertEquals(FEATURE_ARTWORK_MIN_HEIGHT_DP, calculateFeatureArtworkHeight(392, 392).value)
-        assertEquals(283.67f, calculateFeatureArtworkHeight(392, 851).value, 0.1f)
+        assertEquals(235.2f, calculateFeatureArtworkHeight(392, 851).value, 0.1f)
+        assertTrue(shouldExpandFeatureHero(800, 1200))
+        assertFalse(shouldExpandFeatureHero(1200, 800))
+        assertEquals(188f, calculateFeatureLogoWidth(393).value, 0.001f)
+        assertEquals(336f, calculateFeatureLogoWidth(800).value, 0.001f)
+        assertEquals(440f, calculateFeatureLogoWidth(1200).value, 0.001f)
+    }
+
+    @Test
+    fun tabletHeroUsesSeventyPercentHeightAndKeepsIndicatorsStableAcrossDescriptionLines() {
+        val shortDescriptionItem =
+            MediaItem(
+                id = "tablet-feature",
+                name = "Tablet Feature",
+                type = "Movie",
+                productionYear = 2026,
+                overview = "A featured item with a short description.",
+                imageTags = mapOf("Logo" to "logo-tag"),
+                backdropImageTags = listOf("backdrop-tag"),
+            )
+        val longDescriptionItem =
+            shortDescriptionItem.copy(
+                id = "tablet-feature-long-description",
+                overview =
+                    "A longer featured item description that wraps to a second line on the " +
+                        "available screen width so the slide selector must hold its position.",
+            )
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        val tabletConfiguration =
+            Configuration(
+                    InstrumentationRegistry.getInstrumentation()
+                        .targetContext
+                        .resources
+                        .configuration
+                )
+                .apply {
+                    screenWidthDp = 1200
+                    screenHeightDp = 800
+                    orientation = Configuration.ORIENTATION_LANDSCAPE
+                }
+        val displayConfiguration = mutableStateOf(tabletConfiguration)
+
+        composeRule.setContent {
+            CompositionLocalProvider(LocalConfiguration provides displayConfiguration.value) {
+                ZenStreamTheme {
+                    Box(Modifier.fillMaxSize()) {
+                        Column(Modifier.align(Alignment.TopCenter)) {
+                            FeaturedHero(
+                                items = listOf(shortDescriptionItem, longDescriptionItem),
+                                session = session,
+                                showEmptyLibrary = false,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        val heroBounds = composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+        val artworkBounds =
+            composeRule
+                .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+        val indicatorBounds =
+            composeRule
+                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+
+        assertEquals(560f, (heroBounds.bottom - heroBounds.top).value, 1f)
+        assertTrue(
+            "Expected tablet artwork to use the available vertical space; artwork=$artworkBounds",
+            (artworkBounds.bottom - artworkBounds.top).value >= 440f &&
+                (artworkBounds.bottom - artworkBounds.top).value <= 480f,
+        )
+        assertTrue(
+            "Expected slide indicators to stay at the bottom of the expanded hero",
+            (heroBounds.bottom - indicatorBounds.bottom).value <= 5f,
+        )
+
+        composeRule
+            .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+            .performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+
+        val nextHeroBounds = composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+        val nextIndicatorBounds =
+            composeRule
+                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+        assertEquals(
+            (heroBounds.bottom - heroBounds.top).value,
+            (nextHeroBounds.bottom - nextHeroBounds.top).value,
+            1f,
+        )
+        assertEquals(indicatorBounds.top.value, nextIndicatorBounds.top.value, 1f)
+
+        val portraitTabletConfiguration =
+            Configuration(tabletConfiguration).apply {
+                screenWidthDp = 800
+                screenHeightDp = 1200
+                orientation = Configuration.ORIENTATION_PORTRAIT
+            }
+        composeRule.runOnIdle {
+            displayConfiguration.value = portraitTabletConfiguration
+        }
+        composeRule.waitForIdle()
+        val portraitHeroBounds =
+            composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+        val portraitArtworkBounds =
+            composeRule
+                .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
+        assertEquals(600f, (portraitHeroBounds.bottom - portraitHeroBounds.top).value, 1f)
+        assertEquals(480f, (portraitArtworkBounds.bottom - portraitArtworkBounds.top).value, 1f)
     }
 }
