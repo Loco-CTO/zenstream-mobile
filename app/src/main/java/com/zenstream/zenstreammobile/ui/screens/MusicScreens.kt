@@ -77,6 +77,8 @@ import com.zenstream.zenstreammobile.ui.components.MusicArtistCard
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.MusicCreditLine
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
+import com.zenstream.zenstreammobile.ui.musicAlbumSharePath
+import com.zenstream.zenstreammobile.ui.musicArtistSharePath
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 
 private val MUSIC_DETAIL_TOP_CONTENT_PADDING = 96.dp
@@ -161,6 +163,7 @@ fun MusicAlbumScreen(
     onPlayTracks: (List<MediaItem>, Int, Boolean) -> Unit,
     onAddToQueue: (List<MediaItem>) -> Unit,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onCopyShareLink: ((String) -> Unit)? = null,
 ) {
     val vm: MusicAlbumViewModel =
         viewModel(
@@ -212,6 +215,12 @@ fun MusicAlbumScreen(
             scrolled = detailScrolled,
             backOnly = state.data == null,
             onBack = onBack,
+            onCopyShareLink =
+                onCopyShareLink?.let { copyShareLink ->
+                    state.data?.let {
+                        { copyShareLink(musicAlbumSharePath(it.album.id, selectedTrackId)) }
+                    }
+                },
         )
     }
 }
@@ -623,6 +632,7 @@ fun MusicArtistScreen(
     onShuffleTracks: (List<MediaItem>) -> Unit = {},
     currentTrackId: String? = null,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onCopyShareLink: ((String) -> Unit)? = null,
 ) {
     val vm: MusicArtistViewModel =
         viewModel(
@@ -689,6 +699,10 @@ fun MusicArtistScreen(
             scrolled = detailScrolled,
             backOnly = state.data == null,
             onBack = onBack,
+            onCopyShareLink =
+                onCopyShareLink?.let { copyShareLink ->
+                    state.data?.let { { copyShareLink(musicArtistSharePath(it.artist.id)) } }
+                },
         )
     }
 }

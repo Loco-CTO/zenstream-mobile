@@ -49,6 +49,10 @@
     <string name="play_all">すべて再生</string>
     <string name="shuffle">シャッフル</string>
     <string name="share_playlist">プレイリストを共有</string>
+    <string name="copy_share_link">共有リンクをコピー</string>
+    <string name="link_copied">リンクをコピーしました</string>
+    <string name="share_link_unavailable">このサーバーには公開 Web URL が設定されていません。</string>
+    <string name="copy_link_failed">リンクをコピーできませんでした。</string>
     <string name="delete_playlist">プレイリストを削除</string>
     <string name="move_up">上へ移動</string>
     <string name="move_down">下へ移動</string>

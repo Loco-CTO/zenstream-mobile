@@ -37,6 +37,10 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
+import com.zenstream.zenstreammobile.ui.detailSharePath
+import com.zenstream.zenstreammobile.ui.detailShareUrl
+import com.zenstream.zenstreammobile.ui.musicAlbumSharePath
+import com.zenstream.zenstreammobile.ui.musicArtistSharePath
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -45,6 +49,74 @@ import org.junit.Test
 
 class DetailScreensTest {
     @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun detailSharePathsMatchWebRoutesForEveryMediaType() {
+        assertEquals("/show/movie", detailSharePath(MediaItem("movie", "Film", type = "Movie")))
+        assertEquals(
+            "/show/series",
+            detailSharePath(MediaItem("series", "Series", type = "Series")),
+        )
+        assertEquals(
+            "/show/series/episode/episode",
+            detailSharePath(MediaItem("episode", "Pilot", type = "Episode", seriesId = "series")),
+        )
+        assertEquals(
+            "/collection/collection",
+            detailSharePath(MediaItem("collection", "Collection", type = "BoxSet")),
+        )
+        assertEquals(
+            "/album/album?trackId=track",
+            detailSharePath(MediaItem("track", "Track", type = "Audio", albumId = "album")),
+        )
+        assertEquals(
+            "/album/album",
+            detailSharePath(MediaItem("album", "Album", type = "MusicAlbum")),
+        )
+        assertEquals(
+            "/artist/artist",
+            detailSharePath(MediaItem("artist", "Artist", type = "MusicArtist")),
+        )
+        assertEquals("/album/album", musicAlbumSharePath("album"))
+        assertEquals("/artist/artist", musicArtistSharePath("artist"))
+        assertEquals(
+            "/album/album?trackId=track",
+            musicAlbumSharePath("album", "track"),
+        )
+    }
+
+    @Test
+    fun detailShareUrlRequiresConfiguredWebUrl() {
+        assertEquals(
+            "https://web.example.com/show/movie",
+            detailShareUrl("https://web.example.com/", "/show/movie"),
+        )
+        assertEquals(null, detailShareUrl(" ", "/show/movie"))
+    }
+
+    @Test
+    fun detailOverlayShowsCopyShareActionWhenLoaded() {
+        var copied = false
+        composeRule.setContent {
+            ZenStreamTheme {
+                DetailOverlayTopBar(
+                    title = "Film",
+                    onBack = {},
+                    onCopyShareLink = { copied = true },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithContentDescription(
+                InstrumentationRegistry.getInstrumentation()
+                    .targetContext
+                    .getString(R.string.copy_share_link)
+            )
+            .performClick()
+
+        assertTrue(copied)
+    }
 
     @Test
     fun seriesDetailShowsActionsEpisodesAndCast() {

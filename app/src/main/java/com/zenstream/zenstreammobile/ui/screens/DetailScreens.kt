@@ -99,6 +99,7 @@ import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.authenticatedImageRequest
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.detailPlaybackTarget
+import com.zenstream.zenstreammobile.ui.detailSharePath
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import java.util.Locale
 
@@ -111,6 +112,7 @@ fun DetailScreen(
     onBack: () -> Unit,
     onOpenItem: (MediaItem) -> Unit,
     onPlay: (MediaItem, PlaybackTrackSelection?) -> Unit,
+    onCopyShareLink: ((String) -> Unit)? = null,
 ) {
     val vm: DetailViewModel =
         viewModel(
@@ -186,6 +188,12 @@ fun DetailScreen(
             backOnly = state.data == null,
             onBack = onBack,
             onOpenItem = onOpenItem,
+            onCopyShareLink =
+                onCopyShareLink?.let { copyShareLink ->
+                    state.data?.let { data ->
+                        { copyShareLink(detailSharePath(data.item, data.selectedSeasonId)) }
+                    }
+                },
         )
     }
 }
@@ -742,6 +750,7 @@ internal fun DetailOverlayTopBar(
     backOnly: Boolean = false,
     onBack: () -> Unit,
     onOpenItem: (MediaItem) -> Unit = {},
+    onCopyShareLink: (() -> Unit)? = null,
 ) {
     val scrimAlpha by
         animateFloatAsState(
@@ -785,46 +794,77 @@ internal fun DetailOverlayTopBar(
                         stringResource(R.string.back),
                     )
                 }
-                AnimatedVisibility(
-                    visible = !backOnly && (showTitleWithoutScroll || scrolled),
+                Box(
                     modifier = Modifier.weight(1f),
-                    enter = fadeIn(animationSpec = tween(durationMillis = 180)),
-                    exit = fadeOut(animationSpec = tween(durationMillis = 120)),
+                    contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (parentSeries == null) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier =
-                                Modifier.testTag("detail_overlay_title").semantics {
-                                    contentDescription = title
-                                },
+                    DetailOverlayTitle(
+                        title = title,
+                        parentSeries = parentSeries,
+                        visible = !backOnly && (showTitleWithoutScroll || scrolled),
+                        onOpenItem = onOpenItem,
+                    )
+                }
+                if (!backOnly && onCopyShareLink != null) {
+                    IconButton(
+                        onClick = onCopyShareLink,
+                        modifier = Modifier.testTag("detail_overlay_share"),
+                    ) {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_share_2),
+                            stringResource(R.string.copy_share_link),
                         )
-                    } else {
-                        TextButton(
-                            onClick = { onOpenItem(parentSeries) },
-                            modifier = Modifier.testTag("detail_overlay_title"),
-                            contentPadding = PaddingValues(0.dp),
-                        ) {
-                            Text(
-                                parentSeries.name,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White,
-                                modifier =
-                                    Modifier.semantics {
-                                        contentDescription = parentSeries.name
-                                    },
-                            )
-                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailOverlayTitle(
+    title: String,
+    parentSeries: MediaItem?,
+    visible: Boolean,
+    onOpenItem: (MediaItem) -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = Modifier.fillMaxWidth(),
+        enter = fadeIn(animationSpec = tween(durationMillis = 180)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 120)),
+    ) {
+        if (parentSeries == null) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier.testTag("detail_overlay_title").semantics {
+                        contentDescription = title
+                    },
+            )
+        } else {
+            TextButton(
+                onClick = { onOpenItem(parentSeries) },
+                modifier = Modifier.testTag("detail_overlay_title"),
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                Text(
+                    parentSeries.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = parentSeries.name
+                        },
+                )
             }
         }
     }

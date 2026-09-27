@@ -50,6 +50,32 @@ class OrchestratorApiHttpTest {
     }
 
     @Test
+    fun fetchesConfiguredPublicWebUrlWithoutAuthentication() = runBlocking {
+        server.enqueue(MockResponse().setBody("{\"publicWebUrl\":\" https://web.example.com/ \"}"))
+
+        val result =
+            OrchestratorApi(OkHttpClient())
+                .fetchPublicWebUrl(server.url("/").toString().trimEnd('/'))
+
+        assertEquals("https://web.example.com", result)
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/api/config/public-web-url", request.path)
+        assertNull(request.getHeader("Authorization"))
+    }
+
+    @Test
+    fun returnsNoPublicWebUrlWhenNotConfigured() = runBlocking {
+        server.enqueue(MockResponse().setBody("{\"publicWebUrl\":\" \"}"))
+
+        val result =
+            OrchestratorApi(OkHttpClient())
+                .fetchPublicWebUrl(server.url("/").toString().trimEnd('/'))
+
+        assertNull(result)
+    }
+
+    @Test
     fun repositoryClearsOnlyUnauthorizedOrchestratorSessions() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store =

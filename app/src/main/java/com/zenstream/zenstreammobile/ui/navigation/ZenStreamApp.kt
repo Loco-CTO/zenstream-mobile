@@ -3,6 +3,8 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -103,6 +105,7 @@ import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
+import com.zenstream.zenstreammobile.ui.detailShareUrl
 import com.zenstream.zenstreammobile.ui.screens.AudioMiniPlayer
 import com.zenstream.zenstreammobile.ui.screens.DetailScreen
 import com.zenstream.zenstreammobile.ui.screens.FavoritesScreen
@@ -285,6 +288,44 @@ private fun MainScaffold(
     val queueSnackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val videoHandoffError = stringResource(R.string.audio_video_handoff_failed)
+    val linkCopiedMessage = stringResource(R.string.link_copied)
+    val copyLinkFailedMessage = stringResource(R.string.copy_link_failed)
+    val copyShareLinkLabel = stringResource(R.string.copy_share_link)
+    val shareLinkUnavailableMessage = stringResource(R.string.share_link_unavailable)
+    val copyShareLink: (String) -> Unit = { path ->
+        scope.launch {
+            val publicWebUrl =
+                try {
+                    repository.fetchPublicWebUrl(session)
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    queueSnackbarHostState.showSnackbar(copyLinkFailedMessage)
+                    return@launch
+                }
+            val shareUrl = detailShareUrl(publicWebUrl, path)
+            if (shareUrl == null) {
+                queueSnackbarHostState.showSnackbar(shareLinkUnavailableMessage)
+                return@launch
+            }
+            try {
+                val clipboard =
+                    context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        ?: error("Clipboard service is unavailable")
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText(
+                        copyShareLinkLabel,
+                        shareUrl,
+                    )
+                )
+                queueSnackbarHostState.showSnackbar(linkCopiedMessage)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                queueSnackbarHostState.showSnackbar(copyLinkFailedMessage)
+            }
+        }
+    }
     val onAudioFavorite: (MediaItem) -> Unit = { item ->
         val favorite = !item.favorite
         audio.updateFavorite(item.id, favorite)
@@ -670,6 +711,7 @@ private fun MainScaffold(
                                     }
                                 },
                                 onScrollabilityChanged = onContentScrollabilityChanged,
+                                onCopyShareLink = copyShareLink,
                             )
                         }
                         composable(
@@ -709,6 +751,7 @@ private fun MainScaffold(
                                 },
                                 onShuffleTracks = { tracks -> audio.playTracks(tracks, 0, true) },
                                 onScrollabilityChanged = onContentScrollabilityChanged,
+                                onCopyShareLink = copyShareLink,
                             )
                         }
                         composable(NOW_PLAYING) {
@@ -766,6 +809,7 @@ private fun MainScaffold(
                                         }
                                     }
                                 },
+                                onCopyShareLink = copyShareLink,
                             )
                         }
                     }
