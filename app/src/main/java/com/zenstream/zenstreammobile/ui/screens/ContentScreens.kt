@@ -307,6 +307,14 @@ internal fun FeaturedHero(
                                 )
                             )
                     )
+                    Box(
+                        Modifier.align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .background(
+                                Brush.verticalGradient(listOf(Color(0xFF080808), Color.Transparent))
+                            )
+                    )
                     Column(
                         modifier = Modifier.align(Alignment.BottomStart).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -1042,9 +1042,10 @@ internal fun HomeTopBarSlot(
         )
     StatusBarAwareTopBarSlot(
         visibilityFraction = visibilityFraction,
-        modifier =
-            modifier.testTag("home_top_bar_slot").background(Color.Black.copy(alpha = scrimAlpha)),
+        modifier = modifier.testTag("home_top_bar_slot"),
         statusBarInsets = statusBarInsets,
+        statusBarColor = Color.Black.copy(alpha = scrimAlpha),
+        toolbarModifier = Modifier.background(Color.Black.copy(alpha = scrimAlpha)),
         content = content,
     )
 }
@@ -1184,14 +1185,20 @@ internal fun StatusBarAwareTopBarSlot(
     visibilityFraction: Float,
     modifier: Modifier = Modifier,
     statusBarInsets: WindowInsets = WindowInsets.statusBarsIgnoringVisibility,
+    statusBarColor: Color? = null,
+    toolbarModifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {
         Column(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(statusBarInsets))
+            Spacer(
+                Modifier.fillMaxWidth()
+                    .windowInsetsTopHeight(statusBarInsets)
+                    .background(statusBarColor ?: Color.Transparent)
+            )
             ChromeVisibilitySlot(
                 visibilityFraction = visibilityFraction,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().then(toolbarModifier),
                 content = content,
             )
         }
