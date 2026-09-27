@@ -142,6 +142,7 @@ import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
 import com.zenstream.zenstreammobile.ui.navigation.REVEAL_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.ScrollVisibilityController
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -150,6 +151,7 @@ fun HomeScreen(
     padding: PaddingValues,
     bottomContentPadding: Dp = 20.dp,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    onHomeScrolledChanged: (Boolean) -> Unit = {},
     onItemClick: (MediaItem) -> Unit,
 ) {
     val vm: HomeViewModel =
@@ -163,6 +165,7 @@ fun HomeScreen(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
     )
+    ObserveDetailScroll(listState, onHomeScrolledChanged)
     when {
         state.error ->
             ErrorState(
@@ -179,7 +182,8 @@ fun HomeScreen(
             PullToRefreshLayout(
                 isRefreshing = state.loading,
                 onRefresh = vm::refresh,
-                modifier = Modifier.padding(padding),
+                modifier =
+                    Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()),
             ) {
                 LazyColumn(
                     state = listState,
@@ -246,33 +250,36 @@ internal fun FeaturedHero(
         return
     }
     val pagerState = rememberPagerState(pageCount = { items.size })
-    val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        val featureBarHeight = calculateFeatureBarHeight(maxWidth, screenHeightDp)
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp
+    val screenWidthDp = configuration.screenWidthDp
+    val currentItem = items[pagerState.currentPage]
+    val openDescription = stringResource(R.string.open_details_description, currentItem.name)
+    Column(
+        Modifier.fillMaxWidth()
+            .heightIn(
+                min = calculateFeatureBarHeight(screenHeightDp),
+                max = calculateFeatureBarMaxHeight(screenHeightDp),
+            )
+            .background(Color(0xFF080808))
+            .clickable { onItemClick(currentItem) }
+            .semantics {
+                role = Role.Button
+                contentDescription = openDescription
+            }
+            .testTag("featured_hero")
+    ) {
         Box(
             Modifier.fillMaxWidth()
-                .height(featureBarHeight)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.Black)
+                .height(calculateFeatureArtworkHeight(screenHeightDp, screenWidthDp))
+                .testTag("featured_hero_artwork")
         ) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val item = items[page]
-                val openDescription =
-                    stringResource(
-                        R.string.open_details_description,
-                        item.name,
-                    )
-                Box(
-                    Modifier.fillMaxSize()
-                        .clickable { onItemClick(item) }
-                        .semantics(mergeDescendants = true) {
-                            role = Role.Button
-                            contentDescription = openDescription
-                        }
-                ) {
+                Box(Modifier.fillMaxSize()) {
                     val url = imageUrl(session.serverUrl, item, "Backdrop", 1280, 720)
                     val request = url?.let {
                         authenticatedImageRequest(LocalContext.current, it, session)
@@ -287,7 +294,7 @@ internal fun FeaturedHero(
                                 item.name,
                             ),
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().alpha(.58f),
+                        modifier = Modifier.fillMaxSize().alpha(.72f),
                     )
                     Box(
                         Modifier.fillMaxSize()
@@ -331,42 +338,105 @@ internal fun FeaturedHero(
                                 modifier = Modifier.semantics { heading() },
                             )
                         }
-                        Text(
-                            itemSubtitle(item),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = .65f),
-                        )
                     }
                 }
             }
         }
-    }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        repeat(items.size) { index ->
-            Box(
-                Modifier.padding(horizontal = 3.dp)
-                    .size(if (index == pagerState.currentPage) 18.dp else 6.dp, 4.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(
-                        if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
-                        else Color.White.copy(alpha = .25f)
-                    )
-            )
+
+        val item = currentItem
+        val runtimeMinutes =
+            item.runtimeTicks
+                ?.takeIf { it > 0L }
+                ?.let { (it / 600_000_000.0).roundToInt() }
+                ?.takeIf { it > 0 }
+        val runtime = runtimeMinutes?.let { stringResource(R.string.runtime_minutes, it) }
+        val metadata =
+            listOfNotNull(
+                    item.productionYear?.toString(),
+                    item.type?.takeIf(String::isNotBlank),
+                    runtime,
+                )
+                .joinToString(" · ")
+                .ifBlank { itemSubtitle(item) }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (metadata.isNotBlank()) {
+                Text(
+                    metadata,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = .7f),
+                )
+            }
+            item.overview?.takeIf(String::isNotBlank)?.let { overview ->
+                Text(
+                    overview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = .78f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                .testTag("featured_hero_page_indicators"),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            repeat(items.size) { index ->
+                Box(
+                    Modifier.padding(horizontal = 3.dp)
+                        .size(if (index == pagerState.currentPage) 18.dp else 6.dp, 4.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(
+                            if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary
+                            else Color.White.copy(alpha = .25f)
+                        )
+                        .testTag("featured_hero_page_indicator_$index")
+                )
+            }
         }
     }
 }
 
-internal const val FEATURE_BAR_ASPECT_RATIO = 16f / 9f
-internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.4f
+internal const val FEATURE_BAR_SCREEN_HEIGHT_FRACTION = 0.5f
+internal const val FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION = 0.9f
+internal const val FEATURE_ARTWORK_SCREEN_HEIGHT_FRACTION = 0.4f
+internal const val FEATURE_BAR_MIN_HEIGHT_DP = 320f
+internal const val FEATURE_ARTWORK_MIN_HEIGHT_DP = 200f
+internal const val FEATURE_ARTWORK_TABLET_WIDTH_DP = 600f
+internal const val FEATURE_ARTWORK_WIDE_ASPECT_RATIO = 3f
+internal const val FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION = 0.8f
 
-internal fun featureBarMaxHeight(screenHeightDp: Int) =
-    screenHeightDp.toFloat().dp * FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION
+internal fun calculateFeatureBarHeight(screenHeightDp: Int) =
+    maxOf(
+        screenHeightDp.toFloat().dp * FEATURE_BAR_SCREEN_HEIGHT_FRACTION,
+        FEATURE_BAR_MIN_HEIGHT_DP.dp,
+    )
 
-internal fun calculateFeatureBarHeight(maxWidth: Dp, screenHeightDp: Int) =
-    minOf(maxWidth / FEATURE_BAR_ASPECT_RATIO, featureBarMaxHeight(screenHeightDp))
+internal fun calculateFeatureBarMaxHeight(screenHeightDp: Int) =
+    maxOf(
+        screenHeightDp.toFloat().dp * FEATURE_BAR_MAX_SCREEN_HEIGHT_FRACTION,
+        FEATURE_BAR_MIN_HEIGHT_DP.dp,
+    )
+
+internal fun calculateFeatureArtworkHeight(screenHeightDp: Int, screenWidthDp: Int) =
+    maxOf(
+        maxOf(
+            screenHeightDp.toFloat().dp * FEATURE_ARTWORK_SCREEN_HEIGHT_FRACTION,
+            FEATURE_ARTWORK_MIN_HEIGHT_DP.dp,
+        ),
+        if (screenWidthDp >= FEATURE_ARTWORK_TABLET_WIDTH_DP) {
+            minOf(
+                screenWidthDp.toFloat().dp / FEATURE_ARTWORK_WIDE_ASPECT_RATIO,
+                screenHeightDp.toFloat().dp * FEATURE_ARTWORK_MAX_SCREEN_HEIGHT_FRACTION,
+            )
+        } else {
+            0.dp
+        },
+    )
 
 @Composable
 fun SearchOverlayScreen(
