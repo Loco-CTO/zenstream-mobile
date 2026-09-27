@@ -70,7 +70,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -294,7 +293,7 @@ internal fun FeaturedHero(
                                 item.name,
                             ),
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().alpha(.72f),
+                        modifier = Modifier.fillMaxSize(),
                     )
                     Box(
                         Modifier.fillMaxSize()
