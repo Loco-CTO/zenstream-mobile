@@ -1,8 +1,12 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,10 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,6 +37,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,10 +55,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Tab
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -74,6 +80,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -1047,7 +1054,6 @@ private fun SearchField(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun FavoritesScreen(
     repository: FavoritesDataSource,
     session: AuthSession,
@@ -1058,28 +1064,67 @@ fun FavoritesScreen(
 ) {
     var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
+    val tabScrollState = rememberScrollState()
+    var tabWidths by remember { mutableStateOf(List(tabs.size) { 0 }) }
+    val density = LocalDensity.current
+    val indicatorOffset by animateDpAsState(
+        targetValue = with(density) { tabWidths.take(selectedTab).sum().toDp() },
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "my-lists-tab-indicator-offset",
+    )
+    val indicatorWidth by animateDpAsState(
+        targetValue = with(density) { tabWidths.getOrElse(selectedTab) { 0 }.toDp() },
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "my-lists-tab-indicator-width",
+    )
     Column(Modifier.fillMaxSize().padding(padding)) {
-        Text(
-            stringResource(R.string.my_lists),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
-        )
-        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 12.dp) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
-                    text = {
-                        Text(
-                            stringResource(title),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                    },
-                )
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .horizontalScroll(tabScrollState),
+            ) {
+                Box(Modifier.wrapContentWidth(unbounded = true).fillMaxHeight()) {
+                    Row(
+                        modifier = Modifier.align(Alignment.TopStart),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        tabs.forEachIndexed { index, title ->
+                            val isSelected = selectedTab == index
+                            Text(
+                                stringResource(title),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.45f),
+                                modifier = Modifier
+                                    .onSizeChanged { size ->
+                                        if (tabWidths[index] != size.width) {
+                                            tabWidths = tabWidths.toMutableList().also { it[index] = size.width }
+                                        }
+                                    }
+                                    .selectable(
+                                        selected = isSelected,
+                                        role = Role.Tab,
+                                        onClick = { selectedTab = index },
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .offset(x = indicatorOffset)
+                            .width(indicatorWidth)
+                            .height(2.dp)
+                            .background(Color.White),
+                    )
+                }
             }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
         }
         when (selectedTab) {
             0 -> WatchlistContent(repository, session, onItemClick, onScrollabilityChanged)
