@@ -127,6 +127,7 @@ import com.zenstream.zenstreammobile.ui.components.itemSubtitle
 import com.zenstream.zenstreammobile.ui.components.musicAlbumArtist
 import com.zenstream.zenstreammobile.ui.components.musicReleaseYear
 import com.zenstream.zenstreammobile.ui.components.musicSubtitle
+import com.zenstream.zenstreammobile.ui.components.progressPercent
 import com.zenstream.zenstreammobile.ui.navigation.ChromeVisibilitySlot
 import com.zenstream.zenstreammobile.ui.navigation.HIDE_DISTANCE_DP
 import com.zenstream.zenstreammobile.ui.navigation.MainNavigationBar
