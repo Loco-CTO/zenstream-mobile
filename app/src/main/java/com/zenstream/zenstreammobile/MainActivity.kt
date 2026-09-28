@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zenstream.zenstreammobile.data.AuthLifecycleLog
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthLifecycleLog.processCreated(android.os.Process.myPid())
         appViewModel.handleNativeAppLink(intent?.data?.toString())
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -63,6 +65,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AuthLifecycleLog.appResumed()
+    }
+
+    override fun onStop() {
+        AuthLifecycleLog.appBackgrounded()
+        super.onStop()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

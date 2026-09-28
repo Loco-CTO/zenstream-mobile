@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zenstream.zenstreammobile.data.AppUpdate
+import com.zenstream.zenstreammobile.data.AuthLifecycleLog
+import com.zenstream.zenstreammobile.data.AuthPhase
+import com.zenstream.zenstreammobile.data.AuthState
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.FavoritesDataSource
@@ -13,8 +16,10 @@ import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.NativeAppDeepLink
 import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.StoredSessionState
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
+import com.zenstream.zenstreammobile.data.deriveAuthState
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
 import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -59,6 +64,7 @@ data class AppUiState(
     val orchestratorUrl: String? = null,
     val serverUrl: String? = null,
     val session: AuthSession? = null,
+    val authState: AuthState = AuthState(AuthPhase.RESTORING),
     val locale: String = com.zenstream.zenstreammobile.data.ENGLISH_LOCALE,
     val availableUpdate: AppUpdate? = null,
     val pendingDeepLink: NativeAppDeepLink? = null,
@@ -68,10 +74,24 @@ data class AppUiState(
         get() = !loading && (orchestratorUrl.isNullOrBlank() || serverUrl.isNullOrBlank())
 
     val showLogin
-        get() = !loading && !showSetup && session == null
+        get() =
+            !loading &&
+                !showSetup &&
+                authState.phase in setOf(AuthPhase.LOGGED_OUT, AuthPhase.REJECTED)
 
     val showMain
-        get() = !loading && !showSetup && session != null
+        get() =
+            !loading &&
+                !showSetup &&
+                session != null &&
+                authState.phase in setOf(AuthPhase.AUTHENTICATED, AuthPhase.TEMPORARILY_UNAVAILABLE)
+
+    val showAuthRecovery
+        get() =
+            !loading &&
+                !showSetup &&
+                session == null &&
+                authState.phase == AuthPhase.TEMPORARILY_UNAVAILABLE
 }
 
 class AppViewModel(
@@ -82,20 +102,41 @@ class AppViewModel(
     private val _availableUpdate = MutableStateFlow<AppUpdate?>(null)
     private val _pendingDeepLink = MutableStateFlow<NativeAppDeepLink?>(null)
     private val _serverSwitchRequest = MutableStateFlow<NativeAppDeepLink?>(null)
+    private val lastKnownSession = MutableStateFlow<AuthSession?>(null)
+
+    val authState: StateFlow<AuthState> =
+        combine(repository.sessionState, repository.authRefreshState, lastKnownSession) {
+                stored,
+                refresh,
+                lastSession ->
+                deriveAuthState(stored, refresh, lastSession, System.currentTimeMillis())
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                AuthState(AuthPhase.RESTORING),
+            )
 
     val uiState: StateFlow<AppUiState> =
         combine(
                 repository.orchestratorUrl,
                 repository.serverUrl,
-                repository.session,
                 repository.locale,
                 _availableUpdate,
-            ) { orchestrator, server, session, locale, availableUpdate ->
+                authState,
+            ) { orchestrator, server, locale, availableUpdate, auth ->
                 AppUiState(
-                    loading = false,
+                    loading =
+                        auth.phase in
+                            setOf(
+                                AuthPhase.RESTORING,
+                                AuthPhase.ACCESS_EXPIRED_REFRESHABLE,
+                                AuthPhase.REFRESHING,
+                            ),
                     orchestratorUrl = orchestrator,
                     serverUrl = server,
-                    session = session,
+                    session = auth.session,
+                    authState = auth,
                     locale = locale,
                     availableUpdate = availableUpdate,
                 )
@@ -110,20 +151,51 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            repository.session.collect { session ->
-                if (session == null) {
-                    accountRefreshToken = null
-                    return@collect
+            authState.collect { state ->
+                AuthLifecycleLog.event(
+                    "auth_state_changed",
+                    state.session,
+                    detail = state.phase.name.lowercase(),
+                )
+            }
+        }
+        viewModelScope.launch {
+            repository.sessionState.collect { stored ->
+                when (stored) {
+                    StoredSessionState.Loading -> Unit
+                    is StoredSessionState.TemporarilyUnavailable -> Unit
+                    is StoredSessionState.Loaded -> {
+                        val session = stored.session
+                        lastKnownSession.value = session
+                        if (session == null) {
+                            accountRefreshToken = null
+                            return@collect
+                        }
+                        if (accountRefreshToken != session.token) {
+                            // Account data is refreshed once per bearer token so avatar
+                            // changes made on another client appear without creating a
+                            // startup request loop when the session is persisted again.
+                            accountRefreshToken = session.token
+                            val restored =
+                                try {
+                                    repository.refreshCurrentAccount()
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    AuthLifecycleLog.event(
+                                        "session_restoration_retryable_failure",
+                                        session,
+                                        errorType = error::class.java.simpleName,
+                                    )
+                                    return@collect
+                                }
+                            lastKnownSession.value = restored
+                            accountRefreshToken = restored.token
+                            runCatching { repository.syncInterfaceLocale(restored) }
+                            runCatching { repository.loadWatchHistoryPreference() }
+                        }
+                    }
                 }
-                if (accountRefreshToken != session.token) {
-                    // Account data is refreshed once per bearer token so avatar
-                    // changes made on another client appear without creating a
-                    // startup request loop when the session is persisted again.
-                    accountRefreshToken = session.token
-                    runCatching { repository.refreshCurrentAccount() }
-                }
-                runCatching { repository.syncInterfaceLocale(session) }
-                runCatching { repository.loadWatchHistoryPreference() }
             }
         }
         viewModelScope.launch {
@@ -138,6 +210,33 @@ class AppViewModel(
 
     fun dismissAvailableUpdate() {
         _availableUpdate.value = null
+    }
+
+    fun retryAuthentication() {
+        viewModelScope.launch {
+            val session = authState.value.session
+            if (session == null) {
+                repository.retrySessionRestore()
+                return@launch
+            }
+            try {
+                val restored = repository.refreshCurrentAccount()
+                lastKnownSession.value = restored
+                accountRefreshToken = restored.token
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // The repository publishes a retryable auth state and retains the session.
+            }
+        }
+    }
+
+    fun useSignInInstead() {
+        viewModelScope.launch {
+            repository.clearSession("user_requested_sign_in")
+            lastKnownSession.value = null
+            accountRefreshToken = null
+        }
     }
 
     suspend fun configureServer(value: String) {

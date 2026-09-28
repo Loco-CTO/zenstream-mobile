@@ -81,6 +81,9 @@
     <string name="logout">Log out</string>
     <string name="loading">Loading…</string>
     <string name="retry">Retry</string>
+    <string name="auth_restore_unavailable">Saved session could not be read. Your credentials have been kept.</string>
+    <string name="auth_temporarily_unavailable">Connection unavailable. Your session is saved.</string>
+    <string name="auth_use_sign_in">Clear saved session and sign in</string>
     <string name="empty_library">Your library is empty</string>
     <string name="empty_library_hint">Add media and refresh this page.</string>
     <string name="search_placeholder">Search movies and series</string>

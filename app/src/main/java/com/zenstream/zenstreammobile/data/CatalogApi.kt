@@ -177,15 +177,8 @@ class CatalogApi(
 
     suspend fun refreshAccount(session: AuthSession): AuthSession =
         withContext(Dispatchers.IO) {
-            var active = session
-            var response: JSONObject?
-            try {
-                response = authBootstrap(active.serverUrl, active.token)
-            } catch (error: CatalogException) {
-                if (error.statusCode != 401 && error.statusCode != 403) throw error
-                active = refreshAccessToken(active)
-                response = authBootstrap(active.serverUrl, active.token)
-            }
+            val active = session
+            val response = authBootstrap(active.serverUrl, active.token)
             val payload = response ?: requestJson(active, "/api/auth/me")
             val user =
                 payload.optJSONObject("user")
@@ -218,25 +211,33 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             val refreshToken =
                 session.refreshToken?.takeIf { it.isNotBlank() }
-                    ?: throw CatalogException(401, "Refresh token is unavailable")
+                    ?: return@withContext refreshAccount(session)
             val json =
                 requestJson(
                     server = session.serverUrl,
                     path = "/api/auth/refresh",
                     token = null,
                     method = "POST",
-                    body = JSONObject().put("refreshToken", refreshToken).toString(),
+                    body =
+                        JSONObject()
+                            .put("refreshToken", refreshToken)
+                            .apply {
+                                session.refreshAttemptId?.let { put("refreshAttemptId", it) }
+                            }
+                            .toString(),
                 )
             val token =
                 json.optString("token").takeIf { it.isNotBlank() }
-                    ?: throw CatalogException(401, "Server did not return an access token")
+                    ?: throw CatalogException(502, "Server did not return an access token")
+            val rotatedRefreshToken =
+                json.optString("refreshToken").takeIf { it.isNotBlank() }
+                    ?: throw CatalogException(502, "Server did not return a refresh token")
             val user = json.optJSONObject("user")
             session.copy(
                 token = token,
                 username = user?.optString("username")?.ifBlank { null } ?: session.username,
                 avatarVersion = user?.optNullableString("avatarVersion") ?: session.avatarVersion,
-                refreshToken =
-                    json.optString("refreshToken").takeIf { it.isNotBlank() } ?: refreshToken,
+                refreshToken = rotatedRefreshToken,
                 accessExpiresAtMillis =
                     json.optInstantMillis("expiresAt") ?: session.accessExpiresAtMillis,
                 refreshExpiresAtMillis =
