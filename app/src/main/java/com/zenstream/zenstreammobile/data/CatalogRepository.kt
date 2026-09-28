@@ -964,9 +964,18 @@ class CatalogRepository(
         itemId: String,
         sourceId: String,
         playbackSessionId: String? = null,
+        playbackAccessMode: String? = null,
+        playbackLeaseToken: String? = null,
     ) =
         authenticatedCatalogRequest(session) { current ->
-            api.refreshPlaybackAccess(current, itemId, sourceId, playbackSessionId)
+            api.refreshPlaybackAccess(
+                current,
+                itemId,
+                sourceId,
+                playbackSessionId,
+                playbackAccessMode,
+                playbackLeaseToken,
+            )
         }
 
     suspend fun bazarrStatus(session: AuthSession, itemId: String, sourceId: String): BazarrStatus =

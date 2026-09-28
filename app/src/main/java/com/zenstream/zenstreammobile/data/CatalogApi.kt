@@ -88,9 +88,16 @@ data class EpisodeNeighbors(
 )
 
 data class PlaybackAccess(
-    val ticket: String,
+    val ticket: String?,
     val expiresInSeconds: Long,
+    val playbackAccessMode: String? = null,
+    val expiresAt: String? = null,
 )
+
+internal fun isStablePlaybackLeaseRenewal(
+    currentAccessMode: String?,
+    renewedAccessMode: String?,
+): Boolean = currentAccessMode == "lease-v1" && renewedAccessMode == "lease-v1"
 
 internal const val HOME_FEATURED_LIST_LIMIT = 25
 internal const val HOME_FEATURED_ITEM_LIMIT = 5
@@ -402,6 +409,8 @@ class CatalogApi(
                 startPositionSeconds = json.optDoubleOrNull("startPositionSeconds") ?: 0.0,
                 expiresAt = json.optString("expiresAt").ifBlank { null },
                 accessExpiresIn = json.optLongOrNull("accessExpiresIn"),
+                playbackAccessMode = json.optString("playbackAccessMode").ifBlank { null },
+                playbackLeaseToken = json.optString("playbackLeaseToken").ifBlank { null },
                 errorCode = json.optString("errorCode").ifBlank { null },
                 errorDetail = json.optString("errorDetail").ifBlank { null },
             )
@@ -422,11 +431,17 @@ class CatalogApi(
         itemId: String,
         sourceId: String,
         playbackSessionId: String? = null,
+        playbackAccessMode: String? = null,
+        playbackLeaseToken: String? = null,
     ): PlaybackAccess =
         withContext(Dispatchers.IO) {
             val body =
                 JSONObject().put("sourceId", sourceId).apply {
                     playbackSessionId?.let { put("sessionId", it) }
+                    if (playbackAccessMode == "lease-v1" && !playbackLeaseToken.isNullOrBlank()) {
+                        put("playbackAccessMode", playbackAccessMode)
+                        put("playbackLeaseToken", playbackLeaseToken)
+                    }
                 }
             val json =
                 requestJson(
@@ -435,15 +450,20 @@ class CatalogApi(
                     method = "POST",
                     body = body.toString(),
                 )
+            val responseAccessMode = json.optString("playbackAccessMode").ifBlank { null }
             val ticket =
                 json
                     .optString("ticket")
                     .ifBlank { json.optString("access") }
                     .takeIf { it.isNotBlank() }
-                    ?: throw CatalogException(502, "Server did not return a playback ticket")
+            if (responseAccessMode != "lease-v1" && ticket == null) {
+                throw CatalogException(502, "Server did not return a playback ticket")
+            }
             PlaybackAccess(
                 ticket = ticket,
                 expiresInSeconds = json.optLongOrNull("expiresIn")?.coerceAtLeast(1L) ?: 900L,
+                playbackAccessMode = responseAccessMode,
+                expiresAt = json.optString("expiresAt").ifBlank { null },
             )
         }
 
@@ -2881,6 +2901,7 @@ internal fun playbackNegotiationBody(
     options: PlaybackOptions,
 ): JSONObject =
     JSONObject()
+        .put("playbackAccessMode", "lease-v1")
         .put("engine", capabilities.engine)
         .put("device", device)
         .put("sourceId", options.sourceId)

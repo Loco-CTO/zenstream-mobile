@@ -19,6 +19,14 @@ import org.junit.Test
 
 class PlaybackParsingTest {
     @Test
+    fun onlyAConfirmedLeaseRenewalKeepsTheActiveSourceUntouched() {
+        assertTrue(isStablePlaybackLeaseRenewal("lease-v1", "lease-v1"))
+        assertFalse(isStablePlaybackLeaseRenewal(null, null))
+        assertFalse(isStablePlaybackLeaseRenewal("lease-v1", null))
+        assertFalse(isStablePlaybackLeaseRenewal(null, "lease-v1"))
+    }
+
+    @Test
     fun parsesSessionFreeSourceMetadataTracks() {
         val source =
             parseMediaSource(

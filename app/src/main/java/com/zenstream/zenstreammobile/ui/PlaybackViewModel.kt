@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.data.PlaybackPreference
 import com.zenstream.zenstreammobile.data.SyncplayManager
 import com.zenstream.zenstreammobile.data.activeSubtitleCues
 import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
+import com.zenstream.zenstreammobile.data.isStablePlaybackLeaseRenewal
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackMimeType
 import com.zenstream.zenstreammobile.data.playbackUrl
@@ -705,8 +706,6 @@ class PlaybackViewModel(
                 ) {
                     return@launch
                 }
-                val position = currentPlayerPositionSeconds()
-                val shouldPlay = _uiState.value.engine.isPlaying
                 val refreshed =
                     try {
                         repository.refreshPlaybackAccess(
@@ -714,6 +713,8 @@ class PlaybackViewModel(
                             currentItemId,
                             sourceId,
                             current.sessionId,
+                            current.playbackAccessMode,
+                            current.playbackLeaseToken,
                         )
                     } catch (error: CancellationException) {
                         throw error
@@ -729,12 +730,33 @@ class PlaybackViewModel(
                 if (latest?.item?.id != currentItemId || latest.source.id != sourceId) {
                     return@launch
                 }
+                if (
+                    isStablePlaybackLeaseRenewal(
+                        latest.playbackAccessMode,
+                        refreshed.playbackAccessMode,
+                    )
+                ) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            playback = latest.copy(accessExpiresIn = refreshed.expiresInSeconds)
+                        )
+                    expiresInSeconds = refreshed.expiresInSeconds
+                    continue
+                }
+                val refreshedTicket = refreshed.ticket
+                if (refreshedTicket.isNullOrBlank()) {
+                    Log.w(PLAYBACK_TAG, "legacy playback access refresh returned no ticket")
+                    delay(30_000L)
+                    continue
+                }
+                val position = currentPlayerPositionSeconds()
+                val shouldPlay = _uiState.value.engine.isPlaying
                 val nextUrl =
                     playbackUrlWithAccess(
                         session,
                         currentItemId,
                         latest.source,
-                        refreshed.ticket,
+                        refreshedTicket,
                     )
                 val nextSource = latest.source.copy(url = nextUrl)
                 val nextPlayback =

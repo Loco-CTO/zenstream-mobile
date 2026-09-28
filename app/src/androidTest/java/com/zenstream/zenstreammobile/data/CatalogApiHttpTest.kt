@@ -395,6 +395,7 @@ class CatalogApiHttpTest {
         val playback = CatalogApi(deviceId = "device-id").playback(session, "episode-1")
 
         assertEquals("direct", playback.mode)
+        assertNull(playback.playbackAccessMode)
         assertEquals("/api/catalog/items/episode-1", server.takeRequest().path)
         assertEquals("/api/playback/items/episode-1/negotiate", server.takeRequest().path)
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
@@ -418,6 +419,8 @@ class CatalogApiHttpTest {
                     JSONObject()
                         .put("mode", "direct")
                         .put("sessionState", "ready")
+                        .put("playbackAccessMode", "lease-v1")
+                        .put("playbackLeaseToken", "pl1_opaque")
                         .put("url", "/api/playback/items/episode-1/stream?access=lease")
                         .put("source", JSONObject().put("streams", JSONArray()))
                         .toString()
@@ -435,10 +438,52 @@ class CatalogApiHttpTest {
                 )
 
         assertEquals("direct", playback.mode)
+        assertEquals("lease-v1", playback.playbackAccessMode)
+        assertEquals("pl1_opaque", playback.playbackLeaseToken)
         server.takeRequest()
         val negotiation = server.takeRequest()
-        assertEquals("media3", JSONObject(negotiation.body.readUtf8()).getString("engine"))
+        val payload = JSONObject(negotiation.body.readUtf8())
+        assertEquals("media3", payload.getString("engine"))
+        assertEquals("lease-v1", payload.getString("playbackAccessMode"))
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun playbackAccessRenewalSendsTheStableLeaseAndAcceptsExpiryOnlyResponse() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    JSONObject()
+                        .put("playbackAccessMode", "lease-v1")
+                        .put("expiresIn", 900)
+                        .put("expiresAt", "2026-09-28T12:00:00+00:00")
+                        .toString()
+                )
+        )
+        val session =
+            AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
+
+        val access =
+            CatalogApi(deviceId = "device-id")
+                .refreshPlaybackAccess(
+                    session = session,
+                    itemId = "episode-1",
+                    sourceId = "source-1",
+                    playbackSessionId = "worker-1",
+                    playbackAccessMode = "lease-v1",
+                    playbackLeaseToken = "pl1_opaque",
+                )
+
+        val request = server.takeRequest()
+        val payload = JSONObject(request.body.readUtf8())
+        assertEquals("POST", request.method)
+        assertEquals("/api/playback/items/episode-1/access", request.path)
+        assertEquals("lease-v1", payload.getString("playbackAccessMode"))
+        assertEquals("pl1_opaque", payload.getString("playbackLeaseToken"))
+        assertEquals("worker-1", payload.getString("sessionId"))
+        assertNull(access.ticket)
+        assertEquals("lease-v1", access.playbackAccessMode)
+        assertEquals(900L, access.expiresInSeconds)
     }
 
     @Test
