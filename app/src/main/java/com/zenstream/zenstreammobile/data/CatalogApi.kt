@@ -452,7 +452,9 @@ class CatalogApi(
                 )
             val responseAccessMode = json.optString("playbackAccessMode").ifBlank { null }
             val ticket =
-                json.optString("ticket").ifBlank { json.optString("access") }
+                json
+                    .optString("ticket")
+                    .ifBlank { json.optString("access") }
                     .takeIf { it.isNotBlank() }
             if (responseAccessMode != "lease-v1" && ticket == null) {
                 throw CatalogException(502, "Server did not return a playback ticket")

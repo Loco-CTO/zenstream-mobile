@@ -464,14 +464,15 @@ class CatalogApiHttpTest {
             AuthSession(server.url("/").toString().trimEnd('/'), "test-token", "user-1", "Test")
 
         val access =
-            CatalogApi(deviceId = "device-id").refreshPlaybackAccess(
-                session = session,
-                itemId = "episode-1",
-                sourceId = "source-1",
-                playbackSessionId = "worker-1",
-                playbackAccessMode = "lease-v1",
-                playbackLeaseToken = "pl1_opaque",
-            )
+            CatalogApi(deviceId = "device-id")
+                .refreshPlaybackAccess(
+                    session = session,
+                    itemId = "episode-1",
+                    sourceId = "source-1",
+                    playbackSessionId = "worker-1",
+                    playbackAccessMode = "lease-v1",
+                    playbackLeaseToken = "pl1_opaque",
+                )
 
         val request = server.takeRequest()
         val payload = JSONObject(request.body.readUtf8())
