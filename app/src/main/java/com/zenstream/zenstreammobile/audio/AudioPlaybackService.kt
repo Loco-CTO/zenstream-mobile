@@ -43,6 +43,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.data.audioQueueScope
 import com.zenstream.zenstreammobile.data.audioQueueSnapshotFromJson
+import com.zenstream.zenstreammobile.data.isStablePlaybackLeaseRenewal
 import com.zenstream.zenstreammobile.data.playbackUrlWithAccess
 import com.zenstream.zenstreammobile.data.withPrimaryArtworkFallback
 import com.zenstream.zenstreammobile.model.AudioPlayerState
@@ -917,6 +918,8 @@ class AudioPlaybackService : MediaLibraryService() {
                             entry.track.id,
                             sourceId,
                             data.sessionId,
+                            data.playbackAccessMode,
+                            data.playbackLeaseToken,
                         )
                     } catch (error: kotlinx.coroutines.CancellationException) {
                         throw error
@@ -928,6 +931,21 @@ class AudioPlaybackService : MediaLibraryService() {
                         delay(30_000L)
                         continue
                     }
+                if (
+                    isStablePlaybackLeaseRenewal(
+                        data.playbackAccessMode,
+                        refreshed.playbackAccessMode,
+                    )
+                ) {
+                    expiresInSeconds = refreshed.expiresInSeconds
+                    continue
+                }
+                val refreshedTicket = refreshed.ticket
+                if (refreshedTicket.isNullOrBlank()) {
+                    Log.w(AUDIO_TAG, "legacy audio access refresh returned no ticket")
+                    delay(30_000L)
+                    continue
+                }
                 val positionMs = observedPlayerPositionMs()
                 val shouldPlay = player.isPlaying
                 val nextUrl =
@@ -935,7 +953,7 @@ class AudioPlaybackService : MediaLibraryService() {
                         account,
                         entry.track.id,
                         data.source,
-                        refreshed.ticket,
+                        refreshedTicket,
                     )
                 val nextSource =
                     normalizeAudioSource(

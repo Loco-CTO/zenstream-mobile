@@ -525,6 +525,7 @@ class CatalogApiTest {
 
         assertEquals(
             setOf(
+                "playbackAccessMode",
                 "engine",
                 "device",
                 "sourceId",
