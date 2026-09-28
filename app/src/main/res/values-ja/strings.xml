@@ -81,6 +81,9 @@
     <string name="logout">ログアウト</string>
     <string name="loading">読み込み中…</string>
     <string name="retry">再試行</string>
+    <string name="auth_restore_unavailable">保存されたセッションを読み込めませんでした。認証情報は保持されています。</string>
+    <string name="auth_temporarily_unavailable">接続できません。セッションは保存されています。</string>
+    <string name="auth_use_sign_in">保存されたセッションをクリアしてサインイン</string>
     <string name="empty_library">ライブラリは空です</string>
     <string name="empty_library_hint">メディアを追加して、このページを更新してください。</string>
     <string name="search_placeholder">映画とシリーズを検索</string>
