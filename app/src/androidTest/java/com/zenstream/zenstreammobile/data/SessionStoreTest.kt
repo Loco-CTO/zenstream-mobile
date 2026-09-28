@@ -13,7 +13,9 @@ import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -49,6 +51,79 @@ class SessionStoreTest {
         assertEquals("https://orchestrator.example", store.orchestratorUrl.first())
         store.clearAll()
         assertNull(store.orchestratorUrl.first())
+    }
+
+    @Test
+    fun pendingRefreshAttemptSurvivesStoreRecreationAndRotationClearsItAtomically() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_refresh_${UUID.randomUUID()}"
+        val store = SessionStore(context, dataStoreName = name)
+        val original =
+            AuthSession(
+                "https://orchestrator.example",
+                "access-before",
+                "user-1",
+                "User",
+                refreshToken = "refresh-before",
+                accessExpiresAtMillis = 1L,
+                refreshExpiresAtMillis = System.currentTimeMillis() + 60_000,
+            )
+        val attemptId = UUID.randomUUID().toString()
+        store.saveSession(original)
+
+        val pending = store.beginRefreshAttempt(original, attemptId)!!
+        assertEquals(attemptId, store.session.first()?.refreshAttemptId)
+
+        // A newly constructed store reads the same durable DataStore file, as a cold process does.
+        val recreatedStore = SessionStore(context, dataStoreName = name)
+        val restored = recreatedStore.session.first()!!
+        assertEquals(attemptId, restored.refreshAttemptId)
+        assertEquals("refresh-before", restored.refreshToken)
+
+        val rotated =
+            restored.copy(
+                token = "access-after",
+                refreshToken = "refresh-after",
+                accessExpiresAtMillis = System.currentTimeMillis() + 900_000,
+                refreshExpiresAtMillis = System.currentTimeMillis() + 86_400_000,
+                refreshAttemptId = null,
+            )
+        assertTrue(recreatedStore.saveRefreshedSessionIfCurrent(pending, rotated))
+
+        val saved = store.session.first()!!
+        assertEquals("access-after", saved.token)
+        assertEquals("refresh-after", saved.refreshToken)
+        assertNull(saved.refreshAttemptId)
+        assertFalse(store.clearSessionIfCurrent(pending, "stale_refresh_rejection"))
+        assertEquals("access-after", store.session.first()?.token)
+        store.clearAll()
+    }
+
+    @Test
+    fun staleClearCannotDeleteSessionWithNewPendingAttempt() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store =
+            SessionStore(
+                context,
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_refresh_cas_${UUID.randomUUID()}",
+            )
+        val original =
+            AuthSession(
+                "https://orchestrator.example",
+                "access-before",
+                "user-1",
+                "User",
+                refreshToken = "refresh-before",
+            )
+        store.saveSession(original)
+        val pending = store.beginRefreshAttempt(original, UUID.randomUUID().toString())!!
+
+        assertFalse(store.clearSessionIfCurrent(original, "stale_401"))
+        assertEquals(pending.refreshAttemptId, store.session.first()?.refreshAttemptId)
+        assertTrue(store.clearSessionIfCurrent(pending, "refresh_rejected"))
+        assertNull(store.session.first())
+        store.clearAll()
     }
 
     @Test

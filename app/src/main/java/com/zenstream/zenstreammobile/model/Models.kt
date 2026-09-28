@@ -11,6 +11,7 @@ data class AuthSession(
     val refreshToken: String? = null,
     val accessExpiresAtMillis: Long? = null,
     val refreshExpiresAtMillis: Long? = null,
+    val refreshAttemptId: String? = null,
 )
 
 data class MediaChapter(

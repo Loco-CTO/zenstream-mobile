@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -32,11 +33,21 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
 import org.json.JSONObject
 
 internal const val DEFAULT_SESSION_DATA_STORE_NAME = "zenstream_session"
 internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrumentation"
+
+sealed interface StoredSessionState {
+    data object Loading : StoredSessionState
+
+    data class Loaded(val session: AuthSession?) : StoredSessionState
+
+    data class TemporarilyUnavailable(val errorType: String) : StoredSessionState
+}
 
 private val sessionDataStores = ConcurrentHashMap<String, DataStore<Preferences>>()
 
@@ -68,6 +79,7 @@ class SessionStore(
         val artworkTicket = stringPreferencesKey("encrypted_artwork_ticket")
         val accessExpiresAtMillis = longPreferencesKey("access_expires_at_millis")
         val refreshExpiresAtMillis = longPreferencesKey("refresh_expires_at_millis")
+        val refreshAttemptId = stringPreferencesKey("refresh_attempt_id")
         val userId = stringPreferencesKey("user_id")
         val username = stringPreferencesKey("username")
         val avatarVersion = stringPreferencesKey("avatar_version")
@@ -175,35 +187,14 @@ class SessionStore(
             }
             .distinctUntilChanged()
 
-    val session: Flow<AuthSession?> =
+    private val storedSession: Flow<AuthSession?> =
         dataStore.data
             .map { prefs ->
-                val server = prefs[Keys.orchestratorUrl] ?: prefs[Keys.serverUrl]
-                val encryptedToken = prefs[Keys.token]
-                val userId = prefs[Keys.userId]
-                if (
-                    server.isNullOrBlank() ||
-                        encryptedToken.isNullOrBlank() ||
-                        userId.isNullOrBlank()
-                ) {
-                    return@map null
-                }
-                AuthSession(
-                    serverUrl = server,
-                    token = cipher.decrypt(encryptedToken),
-                    userId = userId,
-                    username = prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
-                    resourceTicket = prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
-                    avatarVersion = prefs[Keys.avatarVersion],
-                    artworkTicket = prefs[Keys.artworkTicket]?.let { cipher.decrypt(it) },
-                    refreshToken = prefs[Keys.refreshToken]?.let { cipher.decrypt(it) },
-                    accessExpiresAtMillis = prefs[Keys.accessExpiresAtMillis],
-                    refreshExpiresAtMillis = prefs[Keys.refreshExpiresAtMillis],
-                )
+                decodeSession(prefs)
             }
             // Android Keystore can be briefly unavailable while the device is
             // restoring/unlocking. Do not turn that transient condition into a
-            // logged-out state; retry the read before falling back to no session.
+            // logged-out state; retry the read before exposing an unavailable state.
             .retryWhen { cause, attempt ->
                 val retryable = cause is KeyStoreException || cause is UnrecoverableKeyException
                 if (retryable && attempt < 4) {
@@ -213,8 +204,53 @@ class SessionStore(
                     false
                 }
             }
-            .catch { emit(null) }
             .distinctUntilChanged()
+
+    val sessionState: Flow<StoredSessionState> =
+        storedSession
+            .map<AuthSession?, StoredSessionState> { StoredSessionState.Loaded(it) }
+            .catch { emit(StoredSessionState.TemporarilyUnavailable(it::class.java.simpleName)) }
+            .onStart { emit(StoredSessionState.Loading) }
+            .distinctUntilChanged()
+            .onEach { state ->
+                when (state) {
+                    StoredSessionState.Loading -> AuthLifecycleLog.event("session_load_started")
+                    is StoredSessionState.Loaded ->
+                        AuthLifecycleLog.event("session_loaded", state.session)
+                    is StoredSessionState.TemporarilyUnavailable ->
+                        AuthLifecycleLog.event(
+                            "session_load_unavailable",
+                            errorType = state.errorType,
+                        )
+                }
+            }
+
+    val session: Flow<AuthSession?> =
+        sessionState
+            .map { state -> (state as? StoredSessionState.Loaded)?.session }
+            .distinctUntilChanged()
+
+    private fun decodeSession(prefs: Preferences): AuthSession? {
+        val server = prefs[Keys.orchestratorUrl] ?: prefs[Keys.serverUrl]
+        val encryptedToken = prefs[Keys.token]
+        val userId = prefs[Keys.userId]
+        if (server.isNullOrBlank() || encryptedToken.isNullOrBlank() || userId.isNullOrBlank()) {
+            return null
+        }
+        return AuthSession(
+            serverUrl = server,
+            token = cipher.decrypt(encryptedToken),
+            userId = userId,
+            username = prefs[Keys.username].orEmpty().ifBlank { "ZenStream" },
+            resourceTicket = prefs[Keys.resourceTicket]?.let { cipher.decrypt(it) },
+            avatarVersion = prefs[Keys.avatarVersion],
+            artworkTicket = prefs[Keys.artworkTicket]?.let { cipher.decrypt(it) },
+            refreshToken = prefs[Keys.refreshToken]?.let { cipher.decrypt(it) },
+            accessExpiresAtMillis = prefs[Keys.accessExpiresAtMillis],
+            refreshExpiresAtMillis = prefs[Keys.refreshExpiresAtMillis],
+            refreshAttemptId = prefs[Keys.refreshAttemptId],
+        )
+    }
 
     suspend fun saveServerUrl(server: String) {
         dataStore.edit { it[Keys.serverUrl] = normalizeServerUrl(server) }
@@ -235,30 +271,121 @@ class SessionStore(
 
     suspend fun saveSession(session: AuthSession) {
         dataStore.edit {
-            it[Keys.serverUrl] = session.serverUrl
-            it[Keys.token] = cipher.encrypt(session.token)
-            session.refreshToken?.let { token ->
-                it[Keys.refreshToken] = cipher.encrypt(token)
-            } ?: it.remove(Keys.refreshToken)
-            session.accessExpiresAtMillis?.let { expiresAt ->
-                it[Keys.accessExpiresAtMillis] = expiresAt
-            } ?: it.remove(Keys.accessExpiresAtMillis)
-            session.refreshExpiresAtMillis?.let { expiresAt ->
-                it[Keys.refreshExpiresAtMillis] = expiresAt
-            } ?: it.remove(Keys.refreshExpiresAtMillis)
-            session.resourceTicket?.let { ticket ->
-                it[Keys.resourceTicket] = cipher.encrypt(ticket)
-            } ?: it.remove(Keys.resourceTicket)
-            session.artworkTicket?.let { ticket ->
-                it[Keys.artworkTicket] = cipher.encrypt(ticket)
-            } ?: it.remove(Keys.artworkTicket)
-            it[Keys.userId] = session.userId
-            it[Keys.username] = session.username
-            session.avatarVersion?.let { version ->
-                it[Keys.avatarVersion] = version
-            } ?: it.remove(Keys.avatarVersion)
+            writeSession(it, session)
         }
+        AuthLifecycleLog.event("credentials_persisted", session)
     }
+
+    suspend fun beginRefreshAttempt(expected: AuthSession, attemptId: String): AuthSession? {
+        var result: AuthSession? = null
+        dataStore.edit { prefs ->
+            val current = decodeSession(prefs)
+            if (!sameSessionGeneration(current, expected)) return@edit
+            val activeAttempt = current?.refreshAttemptId ?: attemptId
+            prefs[Keys.refreshAttemptId] = activeAttempt
+            result = current?.copy(refreshAttemptId = activeAttempt)
+        }
+        result?.let { AuthLifecycleLog.event("refresh_attempt_persisted", it) }
+        return result
+    }
+
+    suspend fun saveRefreshedSessionIfCurrent(
+        expected: AuthSession,
+        refreshed: AuthSession,
+    ): Boolean {
+        var saved = false
+        dataStore.edit { prefs ->
+            val current = decodeSession(prefs)
+            if (
+                sameSessionGeneration(current, expected) &&
+                    current?.refreshAttemptId == expected.refreshAttemptId
+            ) {
+                writeSession(prefs, refreshed.copy(refreshAttemptId = null))
+                saved = true
+            }
+        }
+        if (saved) AuthLifecycleLog.event("rotated_credentials_persisted", refreshed)
+        return saved
+    }
+
+    suspend fun saveSessionIfCurrent(expected: AuthSession, updated: AuthSession): Boolean {
+        var saved = false
+        dataStore.edit { prefs ->
+            val current = decodeSession(prefs)
+            if (sameSessionGeneration(current, expected)) {
+                writeSession(prefs, updated.copy(refreshAttemptId = current?.refreshAttemptId))
+                saved = true
+            }
+        }
+        if (saved) AuthLifecycleLog.event("credentials_updated", updated)
+        return saved
+    }
+
+    suspend fun clearSessionIfCurrent(session: AuthSession, reason: String): Boolean {
+        var cleared = false
+        dataStore.edit { prefs ->
+            val current = decodeSession(prefs)
+            if (
+                sameSessionGeneration(current, session) &&
+                    current?.refreshAttemptId == session.refreshAttemptId
+            ) {
+                removeSession(prefs)
+                cleared = true
+            }
+        }
+        if (cleared) AuthLifecycleLog.event("credentials_cleared", session, detail = reason)
+        return cleared
+    }
+
+    private fun writeSession(prefs: MutablePreferences, session: AuthSession) {
+        prefs[Keys.serverUrl] = session.serverUrl
+        prefs[Keys.token] = cipher.encrypt(session.token)
+        session.refreshToken?.let { token ->
+            prefs[Keys.refreshToken] = cipher.encrypt(token)
+        } ?: prefs.remove(Keys.refreshToken)
+        session.accessExpiresAtMillis?.let { expiresAt ->
+            prefs[Keys.accessExpiresAtMillis] = expiresAt
+        } ?: prefs.remove(Keys.accessExpiresAtMillis)
+        session.refreshExpiresAtMillis?.let { expiresAt ->
+            prefs[Keys.refreshExpiresAtMillis] = expiresAt
+        } ?: prefs.remove(Keys.refreshExpiresAtMillis)
+        session.refreshAttemptId?.let { prefs[Keys.refreshAttemptId] = it }
+            ?: prefs.remove(Keys.refreshAttemptId)
+        session.resourceTicket?.let { ticket ->
+            prefs[Keys.resourceTicket] = cipher.encrypt(ticket)
+        } ?: prefs.remove(Keys.resourceTicket)
+        session.artworkTicket?.let { ticket ->
+            prefs[Keys.artworkTicket] = cipher.encrypt(ticket)
+        } ?: prefs.remove(Keys.artworkTicket)
+        prefs[Keys.userId] = session.userId
+        prefs[Keys.username] = session.username
+        session.avatarVersion?.let { version ->
+            prefs[Keys.avatarVersion] = version
+        } ?: prefs.remove(Keys.avatarVersion)
+    }
+
+    private fun removeSession(prefs: MutablePreferences) {
+        prefs.remove(Keys.token)
+        prefs.remove(Keys.refreshToken)
+        prefs.remove(Keys.resourceTicket)
+        prefs.remove(Keys.artworkTicket)
+        prefs.remove(Keys.accessExpiresAtMillis)
+        prefs.remove(Keys.refreshExpiresAtMillis)
+        prefs.remove(Keys.refreshAttemptId)
+        prefs.remove(Keys.userId)
+        prefs.remove(Keys.username)
+        prefs.remove(Keys.avatarVersion)
+    }
+
+    private fun sameSessionGeneration(
+        current: AuthSession?,
+        expected: AuthSession,
+    ): Boolean =
+        current != null &&
+            current.serverUrl == expected.serverUrl &&
+            current.userId == expected.userId &&
+            current.token == expected.token &&
+            current.refreshToken == expected.refreshToken
 
     suspend fun saveInterfaceLocaleMode(mode: InterfaceLocaleMode) {
         dataStore.edit { it[Keys.interfaceLocaleMode] = mode.storageValue }
@@ -405,7 +532,7 @@ class SessionStore(
         return legacy
     }
 
-    suspend fun clearSession() {
+    suspend fun clearSession(reason: String = "explicit") {
         // Player engine, time display mode, and subtitle style are device-local
         // preferences. They intentionally survive logout and account changes.
         val current = dataStore.data.first()
@@ -417,21 +544,14 @@ class SessionStore(
             snapshots?.remove(audioQueueScope(server, userId))
         }
         dataStore.edit {
-            it.remove(Keys.token)
-            it.remove(Keys.refreshToken)
-            it.remove(Keys.resourceTicket)
-            it.remove(Keys.artworkTicket)
-            it.remove(Keys.accessExpiresAtMillis)
-            it.remove(Keys.refreshExpiresAtMillis)
-            it.remove(Keys.userId)
-            it.remove(Keys.username)
-            it.remove(Keys.avatarVersion)
+            removeSession(it)
             it.remove(Keys.locale)
             it.remove(Keys.metadataLanguage)
             it.remove(Keys.watchHistoryEnabled)
             if (snapshots == null || snapshots.length() == 0) it.remove(Keys.audioQueueSnapshots)
             else it[Keys.audioQueueSnapshots] = snapshots.toString()
         }
+        AuthLifecycleLog.event("credentials_cleared", detail = reason)
     }
 
     suspend fun clearAll() {
@@ -447,6 +567,7 @@ class SessionStore(
             it.remove(Keys.artworkTicket)
             it.remove(Keys.accessExpiresAtMillis)
             it.remove(Keys.refreshExpiresAtMillis)
+            it.remove(Keys.refreshAttemptId)
             it.remove(Keys.userId)
             it.remove(Keys.username)
             it.remove(Keys.avatarVersion)
@@ -456,6 +577,7 @@ class SessionStore(
             it.remove(Keys.librarySorts)
             it.remove(Keys.audioQueueSnapshots)
         }
+        AuthLifecycleLog.event("credentials_cleared", detail = "server_or_account_change")
     }
 
     suspend fun currentServerUrl(): String? = serverUrl.first()
