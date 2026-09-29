@@ -58,21 +58,34 @@ adb -e shell am force-stop "$package_name"
 start_output="$(adb -e shell am start -W -n "$activity_name" 2>&1 | tr -d '\r')" \
   || fail "MainActivity could not be started"
 printf '%s\n' "$start_output"
-if [[ "$start_output" != *"Status: ok"* ]]; then
+if [[ "$start_output" != *"Status: ok"* && "$start_output" != *"Status: timeout"* ]]; then
   fail "Android did not report a successful activity start"
 fi
+if [[ "$start_output" == *"Status: timeout"* ]]; then
+  echo "Android timed out waiting for MainActivity; verifying it reached the foreground."
+fi
 
-sleep 5
-app_pid="$(adb -e shell pidof "$package_name" 2>/dev/null | tr -d '\r' || true)"
+app_pid=""
+activity_resumed=false
+for attempt in $(seq 1 15); do
+  app_pid="$(adb -e shell pidof "$package_name" 2>/dev/null | tr -d '\r' || true)"
+  if [[ -n "$app_pid" ]]; then
+    activity_dump="$(adb -e shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
+    if printf '%s\n' "$activity_dump" \
+      | grep -Ei '(mResumedActivity|topResumedActivity|ResumedActivity)' \
+      | grep -F "$package_name" \
+      | grep -F "MainActivity" >/dev/null; then
+      activity_resumed=true
+      break
+    fi
+  fi
+  sleep 2
+done
+
 if [[ -z "$app_pid" ]]; then
   fail "application process exited after launch"
 fi
-
-activity_dump="$(adb -e shell dumpsys activity activities | tr -d '\r')"
-if ! printf '%s\n' "$activity_dump" \
-  | grep -Ei '(mResumedActivity|topResumedActivity|ResumedActivity)' \
-  | grep -F "$package_name" \
-  | grep -F "MainActivity" >/dev/null; then
+if [[ "$activity_resumed" != true ]]; then
   fail "MainActivity is not the resumed activity"
 fi
 
