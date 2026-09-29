@@ -86,7 +86,6 @@ internal fun markQueueEntryPlayed(
 internal fun nextQueueSelection(
     state: AudioPlayerState,
     force: Boolean,
-    random: Random = Random.Default,
 ): QueueAdvanceSelection? {
     if (state.queue.isEmpty()) return null
     val currentIndex = state.currentIndex.coerceIn(0, state.queue.lastIndex)
@@ -98,25 +97,16 @@ internal fun nextQueueSelection(
 
     val unplayed = state.queue.indices.filter { state.queue[it].entryId !in playedEntryIds }
     if (state.shuffle) {
-        val candidates = unplayed.filterNot { it == currentIndex }.ifEmpty { unplayed }
-        if (candidates.isNotEmpty()) {
-            return QueueAdvanceSelection(
-                candidates[random.nextInt(candidates.size)],
-                playedEntryIds,
-            )
-        }
+        val orderedAfterCurrent =
+            ((currentIndex + 1)..state.queue.lastIndex).toList() + (0 until currentIndex).toList()
+        val nextUnplayed = orderedAfterCurrent.firstOrNull { it in unplayed }
+        if (nextUnplayed != null) return QueueAdvanceSelection(nextUnplayed, playedEntryIds)
         if (state.queue[currentIndex].entryId !in playedEntryIds) {
             return QueueAdvanceSelection(currentIndex, playedEntryIds)
         }
         if (state.repeatMode == AudioRepeatMode.Queue) {
-            val resetCandidates =
-                state.queue.indices
-                    .filterNot { it == currentIndex }
-                    .ifEmpty {
-                        state.queue.indices.toList()
-                    }
             return QueueAdvanceSelection(
-                index = resetCandidates[random.nextInt(resetCandidates.size)],
+                index = orderedAfterCurrent.firstOrNull() ?: currentIndex,
                 playedEntryIds = emptySet(),
                 resetPlayed = true,
             )
