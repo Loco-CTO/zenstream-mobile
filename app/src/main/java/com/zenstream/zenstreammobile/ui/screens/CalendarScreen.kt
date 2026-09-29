@@ -95,7 +95,7 @@ internal fun CalendarScreen(
 ) {
     val viewModel: CalendarViewModel =
         viewModel(
-            key = "calendar-${session.userId}-${session.token}",
+            key = "calendar-${session.serverUrl}-${session.userId}",
             factory = CalendarViewModel.Factory(repository, session),
         )
     val state by viewModel.uiState.collectAsStateWithLifecycle()

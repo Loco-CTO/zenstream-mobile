@@ -148,6 +148,43 @@ class OrchestratorApiHttpTest {
     }
 
     @Test
+    fun retainedSessionRequestUsesLatestStoredAccessTokenWithoutAnotherRefresh() = runBlocking {
+        val original =
+            AuthSession(server.url("/").toString().trimEnd('/'), "access-before", "user-1", "Test")
+        val (repository, store) = createRepository("latest_request_token", original)
+        store.saveSession(original.copy(token = "access-after", refreshToken = "refresh-after"))
+        server.enqueue(
+            MockResponse().setBody(JSONObject().put("latestItems", org.json.JSONArray()).toString())
+        )
+
+        assertTrue(repository.homeFeatured(original).isEmpty())
+
+        val request = server.takeRequest()
+        assertEquals("Bearer access-after", request.getHeader("Authorization"))
+        assertEquals(1, server.requestCount)
+        store.clearAll()
+    }
+
+    @Test
+    fun retainedAvatarActionPreservesRotatedCredentialsWhenSavingAccountMetadata() = runBlocking {
+        val original =
+            AuthSession(server.url("/").toString().trimEnd('/'), "access-before", "user-1", "Test")
+        val (repository, store) = createRepository("avatar_after_rotation", original)
+        store.saveSession(original.copy(token = "access-after", refreshToken = "refresh-after"))
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val updated = repository.removeAvatar(original)
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("Bearer access-after", request.getHeader("Authorization"))
+        assertEquals("access-after", updated.token)
+        assertEquals("access-after", store.session.first()?.token)
+        assertNull(updated.avatarVersion)
+        store.clearAll()
+    }
+
+    @Test
     fun transientRefreshFailureRetainsCredentialsAndReusesTheSameAttempt() = runBlocking {
         val session = refreshableSession(server.url("/").toString().trimEnd('/'))
         val (repository, store) = createRepository("refresh_retry", session)

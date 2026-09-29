@@ -2,7 +2,9 @@ package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AuthStateTest {
@@ -97,5 +99,16 @@ class AuthStateTest {
 
         assertEquals(AuthPhase.REJECTED, rejected.phase)
         assertEquals(AuthPhase.LOGGED_OUT, loggedOut.phase)
+    }
+
+    @Test
+    fun initialAuthResolutionWaitsOnlyForStartupRestoreAndRefresh() {
+        assertTrue(isInitialAuthResolutionPending(AuthPhase.RESTORING))
+        assertTrue(isInitialAuthResolutionPending(AuthPhase.ACCESS_EXPIRED_REFRESHABLE))
+        assertTrue(isInitialAuthResolutionPending(AuthPhase.REFRESHING))
+        assertFalse(isInitialAuthResolutionPending(AuthPhase.AUTHENTICATED))
+        assertFalse(isInitialAuthResolutionPending(AuthPhase.TEMPORARILY_UNAVAILABLE))
+        assertFalse(isInitialAuthResolutionPending(AuthPhase.REJECTED))
+        assertFalse(isInitialAuthResolutionPending(AuthPhase.LOGGED_OUT))
     }
 }

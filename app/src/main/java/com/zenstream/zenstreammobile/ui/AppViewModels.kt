@@ -20,6 +20,7 @@ import com.zenstream.zenstreammobile.data.StoredSessionState
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
 import com.zenstream.zenstreammobile.data.deriveAuthState
+import com.zenstream.zenstreammobile.data.isInitialAuthResolutionPending
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
 import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -84,7 +85,13 @@ data class AppUiState(
             !loading &&
                 !showSetup &&
                 session != null &&
-                authState.phase in setOf(AuthPhase.AUTHENTICATED, AuthPhase.TEMPORARILY_UNAVAILABLE)
+                authState.phase in
+                    setOf(
+                        AuthPhase.AUTHENTICATED,
+                        AuthPhase.ACCESS_EXPIRED_REFRESHABLE,
+                        AuthPhase.REFRESHING,
+                        AuthPhase.TEMPORARILY_UNAVAILABLE,
+                    )
 
     val showAuthRecovery
         get() =
@@ -103,6 +110,7 @@ class AppViewModel(
     private val _pendingDeepLink = MutableStateFlow<NativeAppDeepLink?>(null)
     private val _serverSwitchRequest = MutableStateFlow<NativeAppDeepLink?>(null)
     private val lastKnownSession = MutableStateFlow<AuthSession?>(null)
+    private val initialAuthResolutionComplete = MutableStateFlow(false)
 
     val authState: StateFlow<AuthState> =
         combine(repository.sessionState, repository.authRefreshState, lastKnownSession) {
@@ -126,13 +134,6 @@ class AppViewModel(
                 authState,
             ) { orchestrator, server, locale, availableUpdate, auth ->
                 AppUiState(
-                    loading =
-                        auth.phase in
-                            setOf(
-                                AuthPhase.RESTORING,
-                                AuthPhase.ACCESS_EXPIRED_REFRESHABLE,
-                                AuthPhase.REFRESHING,
-                            ),
                     orchestratorUrl = orchestrator,
                     serverUrl = server,
                     session = auth.session,
@@ -140,6 +141,9 @@ class AppViewModel(
                     locale = locale,
                     availableUpdate = availableUpdate,
                 )
+            }
+            .combine(initialAuthResolutionComplete) { state, resolved ->
+                state.copy(loading = !resolved)
             }
             .combine(_pendingDeepLink) { state, pendingDeepLink ->
                 state.copy(pendingDeepLink = pendingDeepLink)
@@ -152,6 +156,9 @@ class AppViewModel(
     init {
         viewModelScope.launch {
             authState.collect { state ->
+                if (!isInitialAuthResolutionPending(state.phase)) {
+                    initialAuthResolutionComplete.value = true
+                }
                 AuthLifecycleLog.event(
                     "auth_state_changed",
                     state.session,
