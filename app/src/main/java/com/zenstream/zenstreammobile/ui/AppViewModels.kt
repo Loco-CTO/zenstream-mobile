@@ -19,6 +19,7 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.StoredSessionState
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
+import com.zenstream.zenstreammobile.data.checkForUpdateBestEffort
 import com.zenstream.zenstreammobile.data.deriveAuthState
 import com.zenstream.zenstreammobile.data.isInitialAuthResolutionPending
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
@@ -208,7 +209,7 @@ class AppViewModel(
         viewModelScope.launch {
             if (!repository.checkForUpdatesOnStartup.first()) return@launch
             try {
-                _availableUpdate.value = updateSource.checkForUpdate()
+                _availableUpdate.value = checkForUpdateBestEffort(updateSource)
             } catch (error: CancellationException) {
                 throw error
             }

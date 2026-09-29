@@ -13,26 +13,178 @@ on:
           - minor
           - major
       retry_version:
-        description: Existing release version to retry without bumping
+        description: Candidate or published release version to retry without bumping
         required: false
         type: string
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
-  group: zenstream-mobile-main-write
+  group: zenstream-mobile-release
   cancel-in-progress: false
 
 jobs:
-  release:
+  candidate:
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      tag: ${{ steps.prepare.outputs.tag }}
+      sha: ${{ steps.prepare.outputs.sha }}
+      candidate_ref: ${{ steps.prepare.outputs.candidate_ref }}
+      candidate_ref_present: ${{ steps.prepare.outputs.candidate_ref_present }}
+      base_main: ${{ steps.prepare.outputs.base_main }}
     steps:
       - name: Check out main
         uses: actions/checkout@v7
         with:
           ref: main
+          fetch-depth: 0
+
+      - name: Prepare or reuse release candidate
+        id: prepare
+        env:
+          BUMP: ${{ inputs.bump }}
+          RETRY_VERSION: ${{ inputs.retry_version }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/release-candidate.sh
+          git fetch origin main
+
+          if [[ -n "$RETRY_VERSION" ]]; then
+            version="${RETRY_VERSION#v}"
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "retry_version must be a semantic version such as 1.6.4 or v1.6.4." >&2
+              exit 1
+            }
+            tag="v$version"
+            candidate_ref="refs/heads/release-candidate/$tag"
+            tag_ref="refs/tags/$tag"
+            candidate_ref_sha="$(remote_ref_sha "$candidate_ref")"
+            candidate_ref_present=false
+            if [[ -n "$candidate_ref_sha" ]]; then
+              candidate_ref_present=true
+            fi
+            published=false
+            if gh release view "$tag" --json isDraft --jq '.isDraft' >"$RUNNER_TEMP/release-is-draft" 2>/dev/null; then
+              if [[ "$(cat "$RUNNER_TEMP/release-is-draft")" == "false" ]]; then
+                published=true
+              fi
+            fi
+            sha="$(resolve_retry_candidate "$candidate_ref" "$tag_ref" "$published")"
+            if [[ -n "$candidate_ref_sha" ]]; then
+              git fetch origin "$candidate_ref:refs/remotes/origin/release-candidate/$version"
+            else
+              git fetch origin "$tag_ref:refs/tags/$tag"
+            fi
+            git checkout --detach "$sha"
+            actual_version="$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)"
+            [[ "$actual_version" == "$version" ]] || {
+              echo "Candidate $sha contains version $actual_version, not requested version $version." >&2
+              exit 1
+            }
+            base_main="$(release_trailer "$sha" main)"
+            if [[ -z "$base_main" ]]; then
+              [[ "$(remote_ref_sha refs/heads/main)" == "$sha" ]] || {
+                echo "This published tag has no recorded main base and is not already promoted to main." >&2
+                exit 1
+              }
+              base_main="$sha"
+            else
+              [[ "$(git rev-parse "$sha^")" == "$base_main" ]] || {
+                echo "Candidate $sha does not have its recorded main base $base_main as its parent." >&2
+                exit 1
+              }
+            fi
+            echo "Reusing candidate SHA $sha for $tag."
+          else
+            base_main="$(remote_ref_sha refs/heads/main)"
+            [[ -n "$base_main" ]] || {
+              echo "main must exist before an Android release." >&2
+              exit 1
+            }
+            [[ "$(git rev-parse HEAD)" == "$base_main" ]] || {
+              echo "main moved while the release candidate was being prepared." >&2
+              exit 1
+            }
+            current_version="$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)"
+            [[ -n "$current_version" ]] || {
+              echo "Could not read mobile version." >&2
+              exit 1
+            }
+            IFS=. read -r major minor fix <<< "$current_version"
+            case "$BUMP" in
+              major) major=$((major + 1)); minor=0; fix=0 ;;
+              minor) minor=$((minor + 1)); fix=0 ;;
+              fix) fix=$((fix + 1)) ;;
+              *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
+            esac
+            version="$major.$minor.$fix"
+            version_code=$((major * 1000000 + minor * 1000 + fix))
+            if (( minor > 999 || fix > 999 || version_code < 1 || version_code > 2100000000 )); then
+              echo "Release version $version cannot be represented by Android versionCode." >&2
+              exit 1
+            fi
+            tag="v$version"
+            candidate_ref="refs/heads/release-candidate/$tag"
+            tag_ref="refs/tags/$tag"
+            [[ -z "$(remote_ref_sha "$candidate_ref")" ]] || {
+              echo "Candidate $candidate_ref already exists; retry it with retry_version=$version." >&2
+              exit 1
+            }
+            [[ -z "$(remote_tag_commit_sha "$tag_ref")" ]] || {
+              echo "Release tag $tag already exists; retry it with retry_version=$version." >&2
+              exit 1
+            }
+            sed -i -E "s/^version=.*/version=$version/" version.properties
+            printf '{\n  "main": 0\n}\n' > .main-version.json
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add version.properties .main-version.json
+            git commit -m "chore: release $tag" -m "release-base-main: $base_main"
+            sha="$(git rev-parse HEAD)"
+            git push origin "$sha:$candidate_ref"
+            [[ "$(remote_ref_sha "$candidate_ref")" == "$sha" ]] || {
+              echo "Release candidate ref did not settle at $sha." >&2
+              exit 1
+            }
+            candidate_ref_present=true
+          fi
+
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Resolved release candidate is not a full Git SHA: $sha" >&2
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_ref=$candidate_ref" >> "$GITHUB_OUTPUT"
+          echo "candidate_ref_present=$candidate_ref_present" >> "$GITHUB_OUTPUT"
+          echo "base_main=$base_main" >> "$GITHUB_OUTPUT"
+
+      - name: Test release candidate and workflow guards
+        run: |
+          bash scripts/release-candidate.test.sh
+          python3 scripts/release-workflow.test.py
+
+  validate:
+    needs: candidate
+    uses: ./.github/workflows/ci.yml
+    with:
+      candidate_sha: ${{ needs.candidate.outputs.sha }}
+      skip_coverage_upload: true
+
+  publish:
+    needs: [candidate, validate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.candidate.outputs.sha }}
           fetch-depth: 0
 
       - name: Set up Java
@@ -52,69 +204,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Bump mobile version
-        id: version
+      - name: Verify branch refs before publishing
         env:
-          BUMP: ${{ inputs.bump }}
-          RETRY_VERSION: ${{ inputs.retry_version }}
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+          CANDIDATE_SHA: ${{ needs.candidate.outputs.sha }}
+          CANDIDATE_REF: ${{ needs.candidate.outputs.candidate_ref }}
+          CANDIDATE_REF_PRESENT: ${{ needs.candidate.outputs.candidate_ref_present }}
+          BASE_MAIN: ${{ needs.candidate.outputs.base_main }}
         run: |
-          set -euo pipefail
-          version=$(sed -nE 's/^version=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' version.properties)
-          [ -n "$version" ] || { echo 'Could not read mobile version.' >&2; exit 1; }
-
-          if [ -n "$RETRY_VERSION" ]; then
-            retry_version="${RETRY_VERSION#v}"
-            [[ "$retry_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-              echo "Retry version must be a semantic version such as 1.5.7." >&2
-              exit 1
-            }
-            [ "$retry_version" = "$version" ] || {
-              echo "Retry version $retry_version must match version.properties ($version)." >&2
-              exit 1
-            }
-            tag="v$retry_version"
-            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 || {
-              echo "Release tag $tag does not exist; retry_version is only for an existing release." >&2
-              exit 1
-            }
-            gh release view "$tag" --json tagName >/dev/null || {
-              echo "GitHub release $tag does not exist; retry_version is only for an existing release." >&2
-              exit 1
-            }
-            echo "Retrying existing release $tag without changing the version."
-            echo "version=$retry_version" >> "$GITHUB_OUTPUT"
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
-            echo "main=0" >> "$GITHUB_OUTPUT"
-            echo "reuse_existing=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          IFS=. read -r major minor fix <<< "$version"
-          case "$BUMP" in
-            major) major=$((major + 1)); minor=0; fix=0 ;;
-            minor) minor=$((minor + 1)); fix=0 ;;
-            fix) fix=$((fix + 1)) ;;
-            *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
-          esac
-          new_version="$major.$minor.$fix"
-          version_code=$((major * 1000000 + minor * 1000 + fix))
-          if (( minor > 999 || fix > 999 || version_code < 1 || version_code > 2100000000 )); then
-            echo "Release version $new_version cannot be represented by Android versionCode." >&2
-            exit 1
-          fi
-          tag="v$new_version"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Release tag $tag already exists." >&2
-            exit 1
-          fi
-          sed -i -E "s/^version=.*/version=$new_version/" version.properties
-          printf '{\n  "main": 0\n}\n' > .main-version.json
-          echo "version=$new_version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "main=0" >> "$GITHUB_OUTPUT"
-          echo "reuse_existing=false" >> "$GITHUB_OUTPUT"
+          source scripts/release-candidate.sh
+          assert_candidate_ref_state "$CANDIDATE_REF" "$CANDIDATE_SHA" "$CANDIDATE_REF_PRESENT"
+          assert_ref_state refs/heads/main "$BASE_MAIN" "$CANDIDATE_SHA"
 
       - name: Prepare release signing key
         env:
@@ -125,143 +224,105 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "$KEYSTORE_BASE64" ] || { echo 'ANDROID_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
-          [ -n "$KEYSTORE_PASSWORD" ] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
-          [ -n "$KEY_ALIAS" ] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
-          [ -n "$KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
+          [[ -n "$KEYSTORE_BASE64" ]] || { echo 'ANDROID_KEYSTORE_BASE64 is not configured.' >&2; exit 1; }
+          [[ -n "$KEYSTORE_PASSWORD" ]] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
+          [[ -n "$KEY_ALIAS" ]] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
+          [[ -n "$KEY_PASSWORD" ]] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-release.jks"
           test -s "$RUNNER_TEMP/zenstream-release.jks"
-
-      - name: Commit and push release version
-        id: commit
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          REUSE_EXISTING: ${{ steps.version.outputs.reuse_existing }}
-        run: |
-          set -euo pipefail
-          if [ "$REUSE_EXISTING" = "true" ]; then
-            echo "Reusing existing release version v$VERSION; no version commit needed."
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add version.properties .main-version.json
-          git commit -m "chore: release v$VERSION"
-          git push origin HEAD:main
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "ANDROID_RELEASE_STORE_FILE=$RUNNER_TEMP/zenstream-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
         env:
+          VERSION: ${{ needs.candidate.outputs.version }}
           ANDROID_RELEASE_STORE_FILE: ${{ runner.temp }}/zenstream-release.jks
           ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "$ANDROID_RELEASE_STORE_PASSWORD" ] || { echo 'ANDROID_KEYSTORE_PASSWORD is not configured.' >&2; exit 1; }
-          [ -n "$ANDROID_RELEASE_KEY_ALIAS" ] || { echo 'ANDROID_KEY_ALIAS is not configured.' >&2; exit 1; }
-          [ -n "$ANDROID_RELEASE_KEY_PASSWORD" ] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
           bash ./gradlew assembleRelease \
             -PzenstreamVersion="$VERSION" \
-            -PzenstreamMain="${{ steps.version.outputs.main }}" \
+            -PzenstreamMain=0 \
             -PzenstreamRelease=true
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
+          apk="$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$apk"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$apk" | grep -F "versionName='$VERSION'"
+          echo "APK_PATH=$apk" >> "$GITHUB_ENV"
+          echo "APK_NAME=$(basename "$apk")" >> "$GITHUB_ENV"
+          (cd "$RUNNER_TEMP" && sha256sum "$(basename "$apk")" > SHA256SUMS.txt)
 
-      - name: Install and launch signed release APK on emulator
+      - name: Install and launch the signed APK in an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: >-
-            bash ./scripts/smoke-release-apk.sh
-            "${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk"
+          profile: pixel_6
+          script: bash scripts/smoke-release-apk.sh "$APK_PATH"
 
-      - name: Ensure GitHub release exists
-        uses: actions/github-script@v9
+      - name: Create or reuse draft GitHub release
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TARGET_SHA: ${{ steps.commit.outputs.sha }}
-        with:
-          script: |
-            const tag = `v${process.env.VERSION}`;
-            try {
-              await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag,
-              });
-              core.info(`GitHub release ${tag} already exists; reusing it.`);
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: tag,
-                target_commitish: process.env.TARGET_SHA,
-                generate_release_notes: true,
-                name: tag,
-              });
-              core.info(`Created GitHub release ${tag}.`);
-            }
-
-      - name: Upload APK to GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk
-          TAG: v${{ steps.version.outputs.version }}
-        shell: bash
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.candidate.outputs.tag }}
+          CANDIDATE_SHA: ${{ needs.candidate.outputs.sha }}
         run: |
           set -euo pipefail
-          test -f "$APK_PATH" || {
-            echo "APK not found at $APK_PATH" >&2
+          source scripts/release-candidate.sh
+          if ! gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$CANDIDATE_SHA" --draft --title "$TAG" --generate-notes
+          fi
+          [[ "$(remote_tag_commit_sha "refs/tags/$TAG")" == "$CANDIDATE_SHA" ]] || {
+            echo "Release tag $TAG does not point to candidate $CANDIDATE_SHA." >&2
             exit 1
           }
 
-          asset_name="$(basename "$APK_PATH")"
-          release_view_timeout_seconds=60
-          upload_timeout_seconds=600
-          echo "APK path: $APK_PATH"
-          echo "APK file size: $(stat -c '%s bytes' "$APK_PATH")"
-          ls -lh "$APK_PATH"
-          echo "Release tag: $TAG"
-          echo "Upload timeout per attempt: ${upload_timeout_seconds}s"
+      - name: Upload and verify signed release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.candidate.outputs.tag }}
+          APK_PATH: ${{ runner.temp }}/zenstream-mobile-v${{ needs.candidate.outputs.version }}.apk
+          APK_NAME: zenstream-mobile-v${{ needs.candidate.outputs.version }}.apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$APK_PATH"
+          test -s "$RUNNER_TEMP/SHA256SUMS.txt"
+          gh release upload "$TAG" "$APK_PATH" "$RUNNER_TEMP/SHA256SUMS.txt" --clobber
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          gh release download "$TAG" --pattern "$APK_NAME" --dir "$RUNNER_TEMP/release-assets"
+          gh release download "$TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-assets"
+          cmp "$APK_PATH" "$RUNNER_TEMP/release-assets/$APK_NAME"
+          cmp "$RUNNER_TEMP/SHA256SUMS.txt" "$RUNNER_TEMP/release-assets/SHA256SUMS.txt"
+          (cd "$RUNNER_TEMP/release-assets" && sha256sum --check SHA256SUMS.txt)
+          gh release edit "$TAG" --draft=false
+          test "$(gh release view "$TAG" --json isDraft --jq '.isDraft')" = false
 
-          if asset_names="$(timeout --foreground --kill-after=10s "${release_view_timeout_seconds}s" gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null)"; then
-            if grep -Fqx "$asset_name" <<< "$asset_names"; then
-              echo "Existing release asset $asset_name found; it will be replaced with --clobber."
-            else
-              echo "No existing release asset named $asset_name; uploading it as new."
-            fi
-          else
-            echo "Could not inspect existing release assets; --clobber will replace a matching asset if present."
-          fi
+  promote:
+    needs: [candidate, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact release candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.candidate.outputs.sha }}
+          fetch-depth: 0
 
-          for attempt in 1 2 3; do
-            echo "Uploading $asset_name to release $TAG (attempt $attempt/3)..."
-            if timeout --foreground --kill-after=30s "${upload_timeout_seconds}s" \
-              gh release upload "$TAG" "$APK_PATH" --clobber; then
-              echo "Successfully uploaded $asset_name to release $TAG."
-              exit 0
-            else
-              upload_status=$?
-              if [ "$upload_status" -eq 124 ]; then
-                echo "Upload attempt $attempt timed out after ${upload_timeout_seconds}s." >&2
-              else
-                echo "Upload attempt $attempt failed with exit code $upload_status." >&2
-              fi
-            fi
-
-            if [ "$attempt" -lt 3 ]; then
-              delay=$((attempt * 10))
-              echo "Retrying in ${delay}s."
-              sleep "$delay"
-            fi
-          done
-
-          echo "Release asset upload failed after 3 attempts." >&2
-          exit 1
+      - name: Promote main with compare-and-swap
+        env:
+          CANDIDATE_SHA: ${{ needs.candidate.outputs.sha }}
+          CANDIDATE_REF: ${{ needs.candidate.outputs.candidate_ref }}
+          CANDIDATE_REF_PRESENT: ${{ needs.candidate.outputs.candidate_ref_present }}
+          BASE_MAIN: ${{ needs.candidate.outputs.base_main }}
+        run: |
+          source scripts/release-candidate.sh
+          assert_candidate_ref_state "$CANDIDATE_REF" "$CANDIDATE_SHA" "$CANDIDATE_REF_PRESENT"
+          assert_ref_state refs/heads/main "$BASE_MAIN" "$CANDIDATE_SHA"
+          promote_ref refs/heads/main "$BASE_MAIN" "$CANDIDATE_SHA"
+          delete_candidate_ref "$CANDIDATE_REF" "$CANDIDATE_SHA"
