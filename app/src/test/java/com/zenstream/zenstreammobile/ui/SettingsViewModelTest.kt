@@ -150,6 +150,20 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun automaticPictureInPicturePreferenceIsPersistedAndReflectedInState() = runTest {
+        val source = FakeSettingsDataSource()
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.automaticPictureInPicture)
+        viewModel.setAutomaticPictureInPicture(false)
+        advanceUntilIdle()
+
+        assertFalse(source.automaticPictureInPicture.value)
+        assertFalse(viewModel.uiState.value.automaticPictureInPicture)
+    }
+
+    @Test
     fun mpvRenderingSettingsArePersistedAndReflectedInState() = runTest {
         val source = FakeSettingsDataSource()
         val viewModel = SettingsViewModel(source)
@@ -197,6 +211,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override val mpvVideoScaler = MutableStateFlow(MpvVideoScaler.BILINEAR)
     override val showDebugIcon = MutableStateFlow(false)
     override val autoplayNextEpisode = MutableStateFlow(true)
+    override val automaticPictureInPicture = MutableStateFlow(true)
     override val checkForUpdatesOnStartup = MutableStateFlow(true)
     override val watchHistoryEnabled = MutableStateFlow(true)
     var metadataPreference = MetadataPreference(listOf("en", "ja"), null, "en")
@@ -239,6 +254,10 @@ private class FakeSettingsDataSource : SettingsDataSource {
 
     override suspend fun saveAutoplayNextEpisode(enabled: Boolean) {
         autoplayNextEpisode.value = enabled
+    }
+
+    override suspend fun saveAutomaticPictureInPicture(enabled: Boolean) {
+        automaticPictureInPicture.value = enabled
     }
 
     override suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {

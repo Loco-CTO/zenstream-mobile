@@ -68,4 +68,12 @@ class PlaybackActivityContractTest {
         assertFalse(shouldPausePlaybackForBackground(false, false, true, false))
         assertFalse(shouldPausePlaybackForBackground(false, false, false, true))
     }
+
+    @Test
+    fun automaticPictureInPictureRequiresEnabledSettingAndActivePlayback() {
+        assertTrue(shouldAutomaticallyEnterPictureInPicture(true, true))
+        assertFalse(shouldAutomaticallyEnterPictureInPicture(false, true))
+        assertFalse(shouldAutomaticallyEnterPictureInPicture(true, false))
+        assertFalse(shouldAutomaticallyEnterPictureInPicture(false, false))
+    }
 }
