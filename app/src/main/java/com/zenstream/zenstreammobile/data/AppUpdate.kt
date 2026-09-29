@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -17,10 +18,10 @@ interface UpdateSource {
     suspend fun checkForUpdate(): AppUpdate?
 }
 
-internal suspend fun UpdateSource.checkForUpdateSafely(): AppUpdate? =
+internal suspend fun checkForUpdateBestEffort(updateSource: UpdateSource): AppUpdate? =
     try {
-        checkForUpdate()
-    } catch (error: kotlinx.coroutines.CancellationException) {
+        updateSource.checkForUpdate()
+    } catch (error: CancellationException) {
         throw error
     } catch (_: Exception) {
         null

@@ -2,39 +2,42 @@ package com.zenstream.zenstreammobile.data
 
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdateTest {
     @Test
-    fun updateCheckNetworkFailureIsIgnored() = runBlocking {
-        val source =
+    fun startupUpdateCheckTreatsNetworkFailureAsNoUpdate() = runTest {
+        val updateSource =
             object : UpdateSource {
-                override suspend fun checkForUpdate(): AppUpdate? {
-                    throw IOException("network unavailable")
-                }
+                override suspend fun checkForUpdate(): AppUpdate? = throw IOException("offline")
             }
 
-        assertNull(source.checkForUpdateSafely())
+        assertNull(checkForUpdateBestEffort(updateSource))
     }
 
-    @Test(expected = CancellationException::class)
-    fun updateCheckCancellationIsRethrown() {
-        runBlocking {
-            val source =
-                object : UpdateSource {
-                    override suspend fun checkForUpdate(): AppUpdate? {
-                        throw CancellationException("cancelled")
-                    }
-                }
+    @Test
+    fun startupUpdateCheckStillPropagatesCancellation() = runTest {
+        val cancellation = CancellationException("cancel update check")
+        val updateSource =
+            object : UpdateSource {
+                override suspend fun checkForUpdate(): AppUpdate? = throw cancellation
+            }
+        val caught =
+            try {
+                checkForUpdateBestEffort(updateSource)
+                null
+            } catch (error: CancellationException) {
+                error
+            }
 
-            source.checkForUpdateSafely()
-        }
+        assertSame(cancellation, caught)
     }
 
     @Test
