@@ -170,6 +170,17 @@ jobs:
             -PzenstreamRelease=true
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
 
+      - name: Install and launch signed release APK on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: >-
+            bash ./scripts/smoke-release-apk.sh
+            "${{ runner.temp }}/zenstream-mobile-v${{ steps.version.outputs.version }}.apk"
+
       - name: Ensure GitHub release exists
         uses: actions/github-script@v9
         env:
