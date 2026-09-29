@@ -186,7 +186,7 @@ class ContentScreensTest {
     }
 
     private fun capturePosterGridBounds(
-        items: List<MediaItem>,
+        items: List<MediaItem>
     ): List<androidx.compose.ui.unit.DpRect> {
         composeRule.waitForIdle()
         return items.map { item ->
