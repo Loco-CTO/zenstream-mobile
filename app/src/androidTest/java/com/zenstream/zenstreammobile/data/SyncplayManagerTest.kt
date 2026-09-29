@@ -22,7 +22,6 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -59,16 +58,25 @@ class SyncplayManagerTest {
         val firstSocketOpenLatch = CountDownLatch(1)
         val secondSocketOpenLatch = CountDownLatch(1)
         val firstPresenceLatch = CountDownLatch(1)
-        var firstSocket: WebSocket? = null
+        val sockets = CopyOnWriteArrayList<WebSocket>()
+        val closedSockets = CopyOnWriteArrayList<WebSocket>()
         val socketListener =
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
-                    if (firstSocket == null) {
-                        firstSocket = webSocket
+                    sockets.add(webSocket)
+                    if (sockets.size == 1) {
                         firstSocketOpenLatch.countDown()
                     } else {
                         secondSocketOpenLatch.countDown()
                     }
+                }
+
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    closedSockets.add(webSocket)
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    closedSockets.add(webSocket)
                 }
             }
         val payload = { groupPayload(participantId) }
@@ -120,10 +128,9 @@ class SyncplayManagerTest {
                 }
             )
             assertTrue(presenceBodies[0].getLong("presenceSequence") >= 41L)
-            assertNotNull(firstSocket)
 
             val initialPresenceCount = presenceBodies.size
-            firstSocket?.close(1000, "test reconnect")
+            assertTrue(sockets.first().close(1000, "Reconnect for test"))
             assertTrue(
                 withContext(Dispatchers.IO) {
                     secondSocketOpenLatch.await(12, TimeUnit.SECONDS)
@@ -139,6 +146,10 @@ class SyncplayManagerTest {
             assertTrue(server.requestCount >= 4)
         } finally {
             manager.stop()
+            sockets.forEach { it.close(1000, "Test complete") }
+            withTimeout(5_000) {
+                while (sockets.any { socket -> !closedSockets.contains(socket) }) delay(20)
+            }
             store.clearAll()
         }
     }
@@ -180,6 +191,9 @@ class SyncplayManagerTest {
             val retainedManager = SyncplaySession.manager(rotated, store)
 
             assertSame(manager, retainedManager)
+            withTimeout(5_000) {
+                while (retainedManager.state.value.participantId.isNullOrBlank()) delay(20)
+            }
             retainedManager.refresh()
             assertTrue(
                 withContext(Dispatchers.IO) {

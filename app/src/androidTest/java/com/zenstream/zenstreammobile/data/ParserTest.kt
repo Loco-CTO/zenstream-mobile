@@ -42,7 +42,7 @@ class ParserTest {
         val playlist =
             parsePlaylist(
                 JSONObject(
-                    """{"id":"playlist-1","name":"Road Trip","description":"Long drives","isPrivate":false,"shareToken":"share-token","itemCount":2,"isOwner":true,"artworkItems":[{"Id":"track-a","Name":"Track A","Type":"Audio"}],"items":[{"entryId":"entry-a","position":0,"addedAt":"2026-09-01T12:00:00Z","item":{"Id":"track-a","Name":"Track A","Type":"Audio"}},{"entryId":"entry-b","position":1,"addedAt":"2026-09-01T12:01:00Z","item":{"Id":"track-b","Name":"Track B","Type":"Audio"}}]}"""
+                    """{"id":"playlist-1","name":"Road Trip","description":"Long drives","isPrivate":false,"shareToken":"share-token","itemCount":2,"isOwner":true,"artworkItems":[{"id":"track-a","type":"track","metadata":{"title":"Track A"}}],"items":[{"entryId":"entry-a","position":0,"addedAt":"2026-09-01T12:00:00Z","item":{"id":"track-a","type":"track","metadata":{"title":"Track A"}}},{"entryId":"entry-b","position":1,"addedAt":"2026-09-01T12:01:00Z","item":{"id":"track-b","type":"track","metadata":{"title":"Track B"}}}]}"""
                 )
             )
 

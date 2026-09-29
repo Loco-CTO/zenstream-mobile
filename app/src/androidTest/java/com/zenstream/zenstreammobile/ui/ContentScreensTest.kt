@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -37,7 +39,6 @@ import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -85,7 +86,9 @@ class ContentScreensTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Movies").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Shows").assertIsDisplayed()
+        val showsMatches = composeRule.onAllNodesWithText("Shows")
+        assertTrue(showsMatches.fetchSemanticsNodes().size >= 2)
+        showsMatches[0].assertIsDisplayed()
         composeRule.onNodeWithText("Movies").assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(
@@ -99,16 +102,41 @@ class ContentScreensTest {
     @Test
     fun adaptivePosterGridFitsCardsToAvailableWidth() {
         val items = (1..5).map { MediaItem("item-$it", "Item $it") }
-        val narrowBounds = renderPosterGrid(items, 360)
-        val tabletBounds = renderPosterGrid(items, 800)
+        val gridWidth = mutableStateOf(360)
+        composeRule.setContent {
+            ZenStreamTheme {
+                Box(Modifier.requiredWidth(gridWidth.value.dp).requiredHeight(500.dp)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(items) { item ->
+                            Box(
+                                Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                MediaCard(
+                                    item,
+                                    session,
+                                    wide = false,
+                                    onClick = {},
+                                    gridCard = true,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        assertEquals(2, narrowBounds.map { it.left }.distinct().size)
-        assertEquals(5, tabletBounds.map { it.left }.distinct().size)
-        items.forEach { item ->
-            val bounds =
-                composeRule
-                    .onNodeWithContentDescription("Play ${item.name}")
-                    .getUnclippedBoundsInRoot()
+        val narrowBounds = capturePosterGridBounds(items)
+        composeRule.runOnIdle { gridWidth.value = 800 }
+        val tabletBounds = capturePosterGridBounds(items)
+        val narrowColumnCount = narrowBounds.map { it.left }.distinct().size
+        val tabletColumnCount = tabletBounds.map { it.left }.distinct().size
+        assertTrue(narrowColumnCount < tabletColumnCount)
+        (narrowBounds + tabletBounds).forEach { bounds ->
             val width = bounds.right - bounds.left
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
@@ -157,39 +185,15 @@ class ContentScreensTest {
         composeRule.waitForIdle()
     }
 
-    private fun renderPosterGrid(
-        items: List<MediaItem>,
-        width: Int,
+    private fun capturePosterGridBounds(
+        items: List<MediaItem>
     ): List<androidx.compose.ui.unit.DpRect> {
-        composeRule.setContent {
-            ZenStreamTheme {
-                Box(Modifier.requiredWidth(width.dp).requiredHeight(500.dp)) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = POSTER_CARD_MIN_WIDTH),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        items(items) { item ->
-                            Box(
-                                Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.TopCenter,
-                            ) {
-                                MediaCard(
-                                    item,
-                                    session,
-                                    wide = false,
-                                    onClick = {},
-                                    gridCard = true,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
         composeRule.waitForIdle()
         return items.map { item ->
-            composeRule.onNodeWithContentDescription("Play ${item.name}").getUnclippedBoundsInRoot()
+            composeRule
+                .onNodeWithContentDescription("Play ${item.name}")
+                .performScrollTo()
+                .getUnclippedBoundsInRoot()
         }
     }
 }

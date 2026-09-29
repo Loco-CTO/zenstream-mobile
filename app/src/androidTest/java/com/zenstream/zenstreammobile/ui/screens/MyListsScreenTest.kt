@@ -1,7 +1,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -63,5 +62,8 @@ private class EmptyListsDataSource : FavoritesDataSource {
 
     override suspend fun watchlist(session: AuthSession): List<MediaItem> = emptyList()
 
-    override suspend fun playlists(session: AuthSession): List<PlaylistSummary> = emptyList()
+    override suspend fun playlists(
+        session: AuthSession,
+        membershipSourceId: String?,
+    ): List<PlaylistSummary> = emptyList()
 }
