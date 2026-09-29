@@ -134,7 +134,7 @@ class SyncplayManagerTest {
             assertNotNull(firstSocket)
 
             val initialPresenceCount = presenceBodies.size
-            firstSocket?.cancel()
+            assertTrue(firstSocket?.close(1000, "Reconnect for test") == true)
             assertTrue(
                 withContext(Dispatchers.IO) {
                     secondSocketOpenLatch.await(12, TimeUnit.SECONDS)
