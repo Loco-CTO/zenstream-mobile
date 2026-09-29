@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
@@ -42,7 +43,13 @@ import org.junit.Test
 class SearchOverlayTest {
     @get:Rule val composeRule = createComposeRule()
 
-    private val session = AuthSession("https://example.test", "token", "user", "Test")
+    private val session =
+        AuthSession(
+            "https://example.test",
+            "token",
+            "search-test-${java.util.UUID.randomUUID()}",
+            "Test",
+        )
 
     @Test
     fun openingOverlayFocusesTheSearchField() {
@@ -305,10 +312,15 @@ class SearchOverlayTest {
                 .fetchSemanticsNodes()
                 .isEmpty()
         )
-        composeRule.onNodeWithTag("search-result-row-album").assertIsDisplayed()
-
         val feature = composeRule.onNodeWithTag("search-featured-panel").getUnclippedBoundsInRoot()
-        val music = composeRule.onNodeWithTag("search-artwork-album").getUnclippedBoundsInRoot()
+        composeRule
+            .onNodeWithTag("search-result-row-album", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        val music =
+            composeRule
+                .onNodeWithTag("search-artwork-album", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
         assertEquals(
             16f / 9f,
             (feature.right - feature.left) / (feature.bottom - feature.top),
@@ -345,16 +357,22 @@ class SearchOverlayTest {
         composeRule.onNode(hasSetTextAction()).performTextInput("movie")
         composeRule.waitUntil(5_000) {
             composeRule
-                .onAllNodesWithTag("search-result-row-movie")
+                .onAllNodesWithTag("search-result-row-movie", useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
         assertTrue(
             composeRule.onAllNodesWithTag("search-featured-panel").fetchSemanticsNodes().isEmpty()
         )
-        composeRule.onNodeWithTag("search-result-row-movie").assertIsDisplayed()
+        composeRule
+            .onNodeWithTag("search-result-row-movie", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
 
-        val poster = composeRule.onNodeWithTag("search-artwork-movie").getUnclippedBoundsInRoot()
+        val poster =
+            composeRule
+                .onNodeWithTag("search-artwork-movie", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
         assertEquals(2f / 3f, (poster.right - poster.left) / (poster.bottom - poster.top), 0.05f)
     }
 

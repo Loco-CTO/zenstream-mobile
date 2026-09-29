@@ -31,7 +31,7 @@ class PlayerEngineTest {
 
         assertNotNull(playerView?.subtitleView)
         assertEquals(View.GONE, playerView?.subtitleView?.visibility)
-        engine.release()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { engine.release() }
     }
 
     @Test

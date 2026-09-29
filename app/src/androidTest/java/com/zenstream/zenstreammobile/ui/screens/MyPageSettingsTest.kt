@@ -6,11 +6,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
@@ -136,9 +136,10 @@ class MyPageSettingsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule
             .onNodeWithText(context.getString(R.string.automatic_picture_in_picture))
-            .performScrollTo()
             .assertIsDisplayed()
-            .performClick()
+        val switches = composeRule.onAllNodes(isToggleable())
+        assertEquals(3, switches.fetchSemanticsNodes().size)
+        switches[1].performClick()
         composeRule.runOnIdle { assertFalse(state.automaticPictureInPicture) }
     }
 

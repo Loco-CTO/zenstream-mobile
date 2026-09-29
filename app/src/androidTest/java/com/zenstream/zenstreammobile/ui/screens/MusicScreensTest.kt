@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -108,12 +107,11 @@ class MusicScreensTest {
         }
 
         composeRule
-            .onNodeWithContentDescription(
-                "${album.name}: ${context.getString(R.string.add_to_playlist)}"
-            )
+            .onNodeWithContentDescription(context.getString(R.string.show_more))
             .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.add_to_playlist)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.create_playlist)).performClick()
-        composeRule.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Road Trip")
+        composeRule.onAllNodes(hasSetTextAction())[0].performTextInput("Road Trip")
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) { repository.createdEntityId == album.id }
@@ -168,7 +166,10 @@ private class FakeMusicDataSource(
 
     override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) = Unit
 
-    override suspend fun playlists(session: AuthSession): List<PlaylistSummary> = emptyList()
+    override suspend fun playlists(
+        session: AuthSession,
+        membershipSourceId: String?,
+    ): List<PlaylistSummary> = emptyList()
 
     override suspend fun createPlaylist(
         session: AuthSession,
