@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: android-ci-${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Check out source
@@ -82,19 +84,41 @@ jobs:
       - name: Build release APK for emulator smoke
         run: bash ./gradlew assembleRelease -PzenstreamMain=0 -PzenstreamRelease=true
 
-      - name: Install and launch release APK on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Upload release APK for emulator smoke
+        uses: actions/upload-artifact@v4
         with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          # This smoke only checks installation and launch; avoiding the action's
-          # post-boot settings calls keeps slow hosted emulators from failing ADB.
-          disable-animations: false
-          script: bash ./scripts/smoke-release-apk.sh app/build/outputs/apk/release/app-release.apk
+          name: signed-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Install DeepSource CLI
         run: curl -fsSL https://cli.deepsource.com/install | BINDIR=./bin sh
 
       - name: Upload Kotlin coverage
         run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/report.xml --use-oidc
+
+  release-smoke:
+    needs: build
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Download release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-release-apk
+          path: _artifacts
+
+      - name: Install and launch release APK on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: false
+          script: bash ./scripts/smoke-release-apk.sh _artifacts/app-release.apk
