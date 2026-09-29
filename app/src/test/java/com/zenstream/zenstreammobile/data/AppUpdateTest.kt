@@ -1,13 +1,45 @@
 package com.zenstream.zenstreammobile.data
 
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdateTest {
+    @Test
+    fun startupUpdateCheckTreatsNetworkFailureAsNoUpdate() = runTest {
+        val updateSource =
+            object : UpdateSource {
+                override suspend fun checkForUpdate(): AppUpdate? = throw IOException("offline")
+            }
+
+        assertNull(checkForUpdateBestEffort(updateSource))
+    }
+
+    @Test
+    fun startupUpdateCheckStillPropagatesCancellation() = runTest {
+        val cancellation = CancellationException("cancel update check")
+        val updateSource =
+            object : UpdateSource {
+                override suspend fun checkForUpdate(): AppUpdate? = throw cancellation
+            }
+        val caught =
+            try {
+                checkForUpdateBestEffort(updateSource)
+                null
+            } catch (error: CancellationException) {
+                error
+            }
+
+        assertSame(cancellation, caught)
+    }
+
     @Test
     fun newerStableReleaseWithTheExpectedApkIsReturned() {
         val update = parseLatestReleaseUpdate(releaseJson(), "1.1.0-main.4")
