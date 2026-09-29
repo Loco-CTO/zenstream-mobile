@@ -237,6 +237,8 @@
     <string name="player_show_debug_icon_description">Show playback diagnostics in the player controls.</string>
     <string name="autoplay_next_episode">Autoplay next episode</string>
     <string name="autoplay_next_episode_description">Start the next episode automatically when this one ends.</string>
+    <string name="automatic_picture_in_picture">Automatic picture-in-picture</string>
+    <string name="automatic_picture_in_picture_description">Open a playing video in a floating window when you leave the app.</string>
     <string name="player_debug">Playback diagnostics</string>
     <string name="player_debug_mode">Mode</string>
     <string name="player_debug_session">Session</string>

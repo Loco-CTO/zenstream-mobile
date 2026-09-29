@@ -183,10 +183,10 @@ fun ZenStreamApp(
             )
 
         appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
-        appState.session != null ->
+        appState.showMain ->
             MainScaffold(
                 repository = repository,
-                session = appState.session,
+                session = requireNotNull(appState.session),
                 authState = appState.authState,
                 onRetryAuthentication = appViewModel::retryAuthentication,
                 pendingDeepLink = appState.pendingDeepLink,
@@ -335,16 +335,19 @@ private fun MainScaffold(
     onAvatarPickerResultConsumed: () -> Unit,
 ) {
     val context = LocalContext.current
-    val audio = remember(session.token) { AudioPlayerCoordinator(context, session) }
+    val audio =
+        remember(session.serverUrl, session.userId) { AudioPlayerCoordinator(context, session) }
     val audioState by audio.state.collectAsStateWithLifecycle()
     DisposableEffect(audio) {
         onDispose { audio.release() }
     }
-    val syncplay = remember(session.token) { repository.syncplayManager(session) }
+    val syncplay =
+        remember(session.serverUrl, session.userId) { repository.syncplayManager(session) }
+    LaunchedEffect(syncplay, session.token) { syncplay.updateSession(session) }
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val notificationsViewModel: NotificationsViewModel =
         viewModel(
-            key = "notifications-${session.userId}-${session.token}",
+            key = "notifications-${session.serverUrl}-${session.userId}",
             factory = NotificationsViewModel.Factory(repository, session),
         )
     val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
@@ -411,7 +414,7 @@ private fun MainScaffold(
         }
     }
     val navController = rememberNavController()
-    LaunchedEffect(pendingDeepLink, session.token) {
+    LaunchedEffect(pendingDeepLink, session.serverUrl, session.userId) {
         val link = pendingDeepLink ?: return@LaunchedEffect
         if (!sameNativeAppServer(session.serverUrl, link.serverUrl)) {
             return@LaunchedEffect
@@ -514,7 +517,7 @@ private fun MainScaffold(
         topBarVisibilityFraction = topBarVisibility.resetForRoute()
         if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
     }
-    LaunchedEffect(session.token) { notificationsViewModel.refresh() }
+    LaunchedEffect(session.serverUrl, session.userId) { notificationsViewModel.refresh() }
 
     val detailRoute =
         mainRoute in

@@ -155,13 +155,14 @@ fun PlaybackScreen(
     shouldPauseForBackground: () -> Boolean,
     onBack: () -> Unit,
     pipInstanceId: String? = null,
-    onPictureInPicturePlaybackChanged: (Boolean) -> Unit = {},
+    onPictureInPicturePlaybackChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
+    isInPictureInPictureMode: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel =
         viewModel(
-            key = "playback-${session.userId}-${session.token}-$itemId",
+            key = "playback-${session.serverUrl}-${session.userId}-$itemId",
             factory =
                 PlaybackViewModel.Factory(
                     repository,
@@ -175,6 +176,8 @@ fun PlaybackScreen(
                 ),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val automaticPictureInPicture by
+        repository.automaticPictureInPicture.collectAsStateWithLifecycle(initialValue = false)
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
     val latestState by rememberUpdatedState(state)
     val playbackScope = rememberCoroutineScope()
@@ -207,8 +210,22 @@ fun PlaybackScreen(
     LaunchedEffect(state.showDebugIcon) {
         if (!state.showDebugIcon) debugOpen = false
     }
-    LaunchedEffect(state.engine.isPlaying) {
-        onPictureInPicturePlaybackChanged(state.engine.isPlaying)
+    LaunchedEffect(state.engine.isPlaying, automaticPictureInPicture) {
+        onPictureInPicturePlaybackChanged(
+            state.engine.isPlaying,
+            automaticPictureInPicture,
+        )
+    }
+    LaunchedEffect(isInPictureInPictureMode) {
+        if (isInPictureInPictureMode) {
+            controlsVisible = false
+            controlsLocked = false
+            sheet = null
+            seekFeedback = null
+            timelineScrub = null
+            surfaceDragPosition = null
+            debugOpen = false
+        }
     }
     LaunchedEffect(vm, pipInstanceId) {
         val instanceId = pipInstanceId ?: return@LaunchedEffect
@@ -298,9 +315,8 @@ fun PlaybackScreen(
                     )
                 }
                 Lifecycle.Event.ON_PAUSE -> {
-                    if (shouldPauseForBackground()) {
-                        pauseForBackground()
-                    }
+                    // PiP activities are paused while remaining visible. Defer background
+                    // pausing until ON_STOP so automatic PiP entry can keep video running.
                     vm.flushProgress()
                 }
                 Lifecycle.Event.ON_STOP -> {
@@ -415,37 +431,40 @@ fun PlaybackScreen(
             )
         }
 
-        PlaybackGestureLayer(
-            modifier = Modifier.fillMaxSize(),
-            controlsLocked = controlsLocked,
-            positionSeconds = state.engine.positionSeconds,
-            durationSeconds = state.engine.durationSeconds,
-            onToggleControls = { controlsVisible = !controlsVisible },
-            onSeekBy = { delta -> vm.syncplaySeekBy(syncplay, delta) },
-            onSeekFeedback = { seekFeedback = it },
-            onSurfaceDragStart = {
-                seekFeedback = null
-                surfacePreviewUnavailable = false
-                surfaceDragPosition = it
-            },
-            onSurfaceDragChanged = {
-                seekFeedback = null
-                surfaceDragPosition = it
-            },
-            onSurfaceDragEnd = {
-                vm.syncplaySeekTo(syncplay, it)
-                surfaceDragPosition = null
-            },
-            onSurfaceDragCancel = { surfaceDragPosition = null },
-        )
-
-        seekFeedback?.let { feedback ->
-            SeekFeedbackOverlay(
-                feedback = feedback,
-                modifier =
-                    Modifier.align(Alignment.Center).offset(y = SEEK_FEEDBACK_VERTICAL_OFFSET),
+        if (!isInPictureInPictureMode) {
+            PlaybackGestureLayer(
+                modifier = Modifier.fillMaxSize(),
+                controlsLocked = controlsLocked,
+                positionSeconds = state.engine.positionSeconds,
+                durationSeconds = state.engine.durationSeconds,
+                onToggleControls = { controlsVisible = !controlsVisible },
+                onSeekBy = { delta -> vm.syncplaySeekBy(syncplay, delta) },
+                onSeekFeedback = { seekFeedback = it },
+                onSurfaceDragStart = {
+                    seekFeedback = null
+                    surfacePreviewUnavailable = false
+                    surfaceDragPosition = it
+                },
+                onSurfaceDragChanged = {
+                    seekFeedback = null
+                    surfaceDragPosition = it
+                },
+                onSurfaceDragEnd = {
+                    vm.syncplaySeekTo(syncplay, it)
+                    surfaceDragPosition = null
+                },
+                onSurfaceDragCancel = { surfaceDragPosition = null },
             )
         }
+
+        if (!isInPictureInPictureMode)
+            seekFeedback?.let { feedback ->
+                SeekFeedbackOverlay(
+                    feedback = feedback,
+                    modifier =
+                        Modifier.align(Alignment.Center).offset(y = SEEK_FEEDBACK_VERTICAL_OFFSET),
+                )
+            }
 
         SubtitleOverlay(
             cues = state.activeCuesAt(subtitlePositionSeconds),
@@ -454,7 +473,7 @@ fun PlaybackScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 
-        if (debugOpen) {
+        if (!isInPictureInPictureMode && debugOpen) {
             PlaybackDiagnosticsPanel(
                 state = state,
                 modifier =
@@ -473,7 +492,7 @@ fun PlaybackScreen(
                 positionSeconds = state.engine.positionSeconds,
                 durationSeconds = state.engine.durationSeconds,
             )
-        if (nextUpVisible && nextEpisode != null) {
+        if (!isInPictureInPictureMode && nextUpVisible && nextEpisode != null) {
             NextUpOverlay(
                 episode = nextEpisode,
                 session = session,
@@ -486,13 +505,13 @@ fun PlaybackScreen(
             )
         }
 
-        if (showPlayerLoading) {
+        if (!isInPictureInPictureMode && showPlayerLoading) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Center).testTag("player-loading"),
             )
         }
-        if (state.error != null && !state.loading) {
+        if (!isInPictureInPictureMode && state.error != null && !state.loading) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -507,7 +526,7 @@ fun PlaybackScreen(
             }
         }
 
-        if (controlsVisible || controlsLocked) {
+        if (!isInPictureInPictureMode && (controlsVisible || controlsLocked)) {
             Box(
                 modifier =
                     Modifier.fillMaxWidth()
@@ -740,7 +759,7 @@ fun PlaybackScreen(
             }
         }
 
-        if (!controlsLocked) {
+        if (!isInPictureInPictureMode && !controlsLocked) {
             state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
                 Surface(
                     onClick = { vm.syncplaySeekTo(syncplay, segment.endSeconds) },
@@ -778,61 +797,65 @@ fun PlaybackScreen(
             }
         }
 
-        surfaceDragPosition?.let { targetPosition ->
-            val preview =
-                trickplayPreview(
-                        source = state.playback?.source,
-                        timeSeconds = state.mediaOriginSeconds + targetPosition,
-                    )
-                    .takeUnless { surfacePreviewUnavailable }
-            SurfaceTrickplayOverlay(
+        if (!isInPictureInPictureMode)
+            surfaceDragPosition?.let { targetPosition ->
+                val preview =
+                    trickplayPreview(
+                            source = state.playback?.source,
+                            timeSeconds = state.mediaOriginSeconds + targetPosition,
+                        )
+                        .takeUnless { surfacePreviewUnavailable }
+                SurfaceTrickplayOverlay(
+                    session = session,
+                    positionSeconds = targetPosition,
+                    durationSeconds = state.engine.durationSeconds,
+                    preview = preview,
+                    onPreviewError = { surfacePreviewUnavailable = true },
+                    modifier = Modifier.align(Alignment.Center).zIndex(20f),
+                )
+            }
+
+        if (!isInPictureInPictureMode)
+            PlayerBottomSheet(
+                sheet = sheet,
+                selectedSubtitle = state.selectedSubtitle,
+                selectedAudio = state.selectedAudio,
+                selectedQuality = state.selectedQuality,
+                audio = state.playback?.audioTracks.orEmpty(),
+                subtitles = state.playback?.subtitles.orEmpty(),
+                qualities = state.playback?.qualities.orEmpty(),
+                speed = state.engine.speed,
+                onDismiss = { sheet = null },
+                onSubtitle = {
+                    vm.chooseSubtitle(it)
+                    sheet = null
+                },
+                onAudio = {
+                    vm.chooseAudio(it)
+                    sheet = null
+                },
+                onQuality = {
+                    vm.chooseQuality(it)
+                    sheet = null
+                },
+                onSpeed = {
+                    vm.setSpeed(it)
+                    sheet = null
+                },
+            )
+        if (!isInPictureInPictureMode) {
+            SyncplayToastNotifications(
+                manager = syncplay,
+                repository = repository,
                 session = session,
-                positionSeconds = targetPosition,
-                durationSeconds = state.engine.durationSeconds,
-                preview = preview,
-                onPreviewError = { surfacePreviewUnavailable = true },
-                modifier = Modifier.align(Alignment.Center).zIndex(20f),
+                toast = toast,
+            )
+            ToastHost(
+                state = toast,
+                playerContext = true,
+                modifier = Modifier.zIndex(50f),
             )
         }
-
-        PlayerBottomSheet(
-            sheet = sheet,
-            selectedSubtitle = state.selectedSubtitle,
-            selectedAudio = state.selectedAudio,
-            selectedQuality = state.selectedQuality,
-            audio = state.playback?.audioTracks.orEmpty(),
-            subtitles = state.playback?.subtitles.orEmpty(),
-            qualities = state.playback?.qualities.orEmpty(),
-            speed = state.engine.speed,
-            onDismiss = { sheet = null },
-            onSubtitle = {
-                vm.chooseSubtitle(it)
-                sheet = null
-            },
-            onAudio = {
-                vm.chooseAudio(it)
-                sheet = null
-            },
-            onQuality = {
-                vm.chooseQuality(it)
-                sheet = null
-            },
-            onSpeed = {
-                vm.setSpeed(it)
-                sheet = null
-            },
-        )
-        SyncplayToastNotifications(
-            manager = syncplay,
-            repository = repository,
-            session = session,
-            toast = toast,
-        )
-        ToastHost(
-            state = toast,
-            playerContext = true,
-            modifier = Modifier.zIndex(50f),
-        )
     }
 }
 

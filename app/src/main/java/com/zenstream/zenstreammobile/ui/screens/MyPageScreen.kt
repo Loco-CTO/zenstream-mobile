@@ -296,6 +296,8 @@ fun MyPageScreen(
                             onMpvVideoScalerChange = settingsViewModel::setMpvVideoScaler,
                             onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
                             onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
+                            onAutomaticPictureInPictureChange =
+                                settingsViewModel::setAutomaticPictureInPicture,
                             onCheckForUpdatesOnStartupChange =
                                 settingsViewModel::setCheckForUpdatesOnStartup,
                             onWatchHistoryChange = settingsViewModel::setWatchHistoryEnabled,

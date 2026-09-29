@@ -89,7 +89,7 @@ fun NotificationsScreen(
 ) {
     val vm: NotificationsViewModel =
         viewModel(
-            key = "notifications-${session.userId}-${session.token}",
+            key = "notifications-${session.serverUrl}-${session.userId}",
             factory = NotificationsViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()

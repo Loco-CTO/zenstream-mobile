@@ -116,7 +116,7 @@ fun DetailScreen(
 ) {
     val vm: DetailViewModel =
         viewModel(
-            key = "detail-${session.userId}-${session.token}-$itemId",
+            key = "detail-${session.serverUrl}-${session.userId}-$itemId",
             factory = DetailViewModel.Factory(repository, session, itemId),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()

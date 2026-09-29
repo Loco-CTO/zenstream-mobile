@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +31,10 @@ import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.data.AuthPhase
+import com.zenstream.zenstreammobile.data.AuthState
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.ui.AppUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -347,5 +351,51 @@ class MainNavigationTest {
             .performClick()
         composeRule.onNodeWithText("Home content").assertIsDisplayed()
         composeRule.onNodeWithText("Search content").assertDoesNotExist()
+    }
+
+    @Test
+    fun tokenRotationDuringRefreshKeepsTheCurrentAuthenticatedRoute() {
+        composeRule.setContent {
+            ZenStreamTheme {
+                val navController = rememberNavController()
+                val token = androidx.compose.runtime.remember { mutableStateOf("before") }
+                val phase =
+                    androidx.compose.runtime.remember { mutableStateOf(AuthPhase.AUTHENTICATED) }
+                val currentSession = session.copy(token = token.value)
+                val appState =
+                    AppUiState(
+                        loading = false,
+                        orchestratorUrl = currentSession.serverUrl,
+                        serverUrl = currentSession.serverUrl,
+                        session = currentSession,
+                        authState = AuthState(phase.value, currentSession),
+                    )
+
+                LaunchedEffect(navController) { navController.navigate("detail") }
+                Column {
+                    if (appState.showMain) {
+                        NavHost(navController = navController, startDestination = "home") {
+                            composable("home") { Text("Home content") }
+                            composable("detail") { Text("Detail page remains open") }
+                        }
+                    } else {
+                        Text("Loading app")
+                    }
+                    Button(
+                        onClick = {
+                            token.value = "after"
+                            phase.value = AuthPhase.REFRESHING
+                        }
+                    ) {
+                        Text("Rotate token")
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Detail page remains open").assertIsDisplayed()
+        composeRule.onNodeWithText("Rotate token").performClick()
+        composeRule.onNodeWithText("Detail page remains open").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading app").assertDoesNotExist()
     }
 }

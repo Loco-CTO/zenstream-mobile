@@ -6,6 +6,7 @@ import android.app.RemoteAction
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +15,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -125,6 +129,11 @@ internal fun shouldPausePlaybackForBackground(
         !isInPictureInPictureMode &&
         !enteringPictureInPicture
 
+internal fun shouldAutomaticallyEnterPictureInPicture(
+    enabled: Boolean,
+    isPlaying: Boolean,
+): Boolean = enabled && isPlaying
+
 fun playbackIntent(
     context: Context,
     itemId: String,
@@ -182,6 +191,8 @@ class PlaybackActivity : ComponentActivity() {
     private var ownsPlaybackLaunch = false
     private val pipInstanceId = UUID.randomUUID().toString()
     private var pipPlaybackIsPlaying = false
+    private var automaticPictureInPictureEligible = false
+    private var isInPictureInPicture by mutableStateOf(false)
 
     private val repository by lazy {
         val dataStoreName =
@@ -256,7 +267,8 @@ class PlaybackActivity : ComponentActivity() {
                             hasInitialSubtitleSelection = args.hasSubtitleSelection,
                             enterPictureInPicture = ::enterPictureInPicture,
                             pipInstanceId = pipInstanceId,
-                            onPictureInPicturePlaybackChanged = ::updatePictureInPictureActions,
+                            onPictureInPicturePlaybackChanged = ::updatePictureInPictureState,
+                            isInPictureInPictureMode = isInPictureInPicture,
                             shouldPauseForBackground = ::shouldPauseForBackground,
                             onBack = ::finish,
                         )
@@ -269,7 +281,21 @@ class PlaybackActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         enteringPictureInPicture = false
+        isInPictureInPicture = isInPictureInPictureMode
         applyImmersiveMode()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                isInPictureInPictureMode ||
+                !automaticPictureInPictureEligible
+        ) {
+            return
+        }
+        isInPictureInPicture = true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) enterPictureInPicture()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -284,6 +310,7 @@ class PlaybackActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         enteringPictureInPicture = false
+        this.isInPictureInPicture = isInPictureInPictureMode
         immersiveModeApplied = false
         if (!isInPictureInPictureMode && hasWindowFocus()) applyImmersiveMode()
     }
@@ -301,47 +328,63 @@ class PlaybackActivity : ComponentActivity() {
     private fun enterPictureInPicture(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || isInPictureInPictureMode) return false
         enteringPictureInPicture = true
+        isInPictureInPicture = true
         return enterPictureInPictureMode(pictureInPictureParams().build()).also { entered ->
-            if (!entered) enteringPictureInPicture = false
+            if (!entered) {
+                enteringPictureInPicture = false
+                isInPictureInPicture = isInPictureInPictureMode
+            }
         }
     }
 
-    private fun updatePictureInPictureActions(isPlaying: Boolean) {
+    private fun updatePictureInPictureState(
+        isPlaying: Boolean,
+        automaticEntryEnabled: Boolean,
+    ) {
         pipPlaybackIsPlaying = isPlaying
+        automaticPictureInPictureEligible =
+            shouldAutomaticallyEnterPictureInPicture(automaticEntryEnabled, isPlaying)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         setPictureInPictureParams(pictureInPictureParams().build())
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun pictureInPictureParams(): PictureInPictureParams.Builder =
-        PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .setActions(
-                listOf(
-                    pipAction(
-                        PlaybackPipActionReceiver.ACTION_PREVIOUS,
-                        LucideR.drawable.lucide_ic_skip_back,
-                        getString(R.string.player_previous),
-                    ),
-                    pipAction(
-                        PlaybackPipActionReceiver.ACTION_TOGGLE,
-                        if (pipPlaybackIsPlaying) LucideR.drawable.lucide_ic_pause
-                        else LucideR.drawable.lucide_ic_play,
-                        if (pipPlaybackIsPlaying) getString(R.string.pause)
-                        else getString(R.string.play),
-                    ),
-                    pipAction(
-                        PlaybackPipActionReceiver.ACTION_NEXT,
-                        LucideR.drawable.lucide_ic_skip_forward,
-                        getString(R.string.player_next),
-                    ),
-                    pipAction(
-                        PlaybackPipActionReceiver.ACTION_CLOSE,
-                        LucideR.drawable.lucide_ic_x,
-                        getString(R.string.player_close),
-                    ),
-                )
+    private fun pictureInPictureParams(): PictureInPictureParams.Builder {
+        val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        val sourceRect = Rect()
+        if (window.decorView.getGlobalVisibleRect(sourceRect)) {
+            builder.setSourceRectHint(sourceRect)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(automaticPictureInPictureEligible)
+        }
+        return builder.setActions(
+            listOf(
+                pipAction(
+                    PlaybackPipActionReceiver.ACTION_PREVIOUS,
+                    LucideR.drawable.lucide_ic_skip_back,
+                    getString(R.string.player_previous),
+                ),
+                pipAction(
+                    PlaybackPipActionReceiver.ACTION_TOGGLE,
+                    if (pipPlaybackIsPlaying) LucideR.drawable.lucide_ic_pause
+                    else LucideR.drawable.lucide_ic_play,
+                    if (pipPlaybackIsPlaying) getString(R.string.pause)
+                    else getString(R.string.play),
+                ),
+                pipAction(
+                    PlaybackPipActionReceiver.ACTION_NEXT,
+                    LucideR.drawable.lucide_ic_skip_forward,
+                    getString(R.string.player_next),
+                ),
+                pipAction(
+                    PlaybackPipActionReceiver.ACTION_CLOSE,
+                    LucideR.drawable.lucide_ic_x,
+                    getString(R.string.player_close),
+                ),
             )
+        )
+    }
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun pipAction(action: String, iconResource: Int, label: String): RemoteAction {

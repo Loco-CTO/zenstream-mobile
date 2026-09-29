@@ -12,6 +12,14 @@ enum class AuthPhase {
     LOGGED_OUT,
 }
 
+internal fun isInitialAuthResolutionPending(phase: AuthPhase): Boolean =
+    phase in
+        setOf(
+            AuthPhase.RESTORING,
+            AuthPhase.ACCESS_EXPIRED_REFRESHABLE,
+            AuthPhase.REFRESHING,
+        )
+
 data class AuthState(
     val phase: AuthPhase,
     val session: AuthSession? = null,

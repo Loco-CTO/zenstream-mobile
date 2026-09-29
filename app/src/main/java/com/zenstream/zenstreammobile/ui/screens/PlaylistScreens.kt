@@ -476,12 +476,12 @@ fun WatchlistContent(
     onScrollabilityChanged: (Boolean) -> Unit,
 ) {
     var items by
-        remember(session.userId, session.token) { mutableStateOf<List<MediaItem>>(emptyList()) }
-    var loading by remember(session.userId, session.token) { mutableStateOf(true) }
-    var error by remember(session.userId, session.token) { mutableStateOf(false) }
-    var refresh by remember(session.userId, session.token) { mutableIntStateOf(0) }
-    var busyItemId by remember(session.userId, session.token) { mutableStateOf<String?>(null) }
-    var actionError by remember(session.userId, session.token) { mutableStateOf(false) }
+        remember(session.serverUrl, session.userId) { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var loading by remember(session.serverUrl, session.userId) { mutableStateOf(true) }
+    var error by remember(session.serverUrl, session.userId) { mutableStateOf(false) }
+    var refresh by remember(session.serverUrl, session.userId) { mutableIntStateOf(0) }
+    var busyItemId by remember(session.serverUrl, session.userId) { mutableStateOf<String?>(null) }
+    var actionError by remember(session.serverUrl, session.userId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -496,7 +496,7 @@ fun WatchlistContent(
         canScroll = { listState.canScrollForward || listState.canScrollBackward },
         onScrollabilityChanged = onScrollabilityChanged,
     )
-    LaunchedEffect(session.userId, session.token, refresh) {
+    LaunchedEffect(session.serverUrl, session.userId, refresh) {
         loading = true
         try {
             items = repository.watchlist(session)
@@ -694,15 +694,15 @@ fun PlaylistLibraryContent(
     outerPadding: PaddingValues = PaddingValues(),
 ) {
     var summaries by
-        remember(session.userId, session.token) {
+        remember(session.serverUrl, session.userId) {
             mutableStateOf<List<PlaylistSummary>>(emptyList())
         }
     var selectedId by
-        remember(session.userId, session.token, initialPlaylistId) {
+        remember(session.serverUrl, session.userId, initialPlaylistId) {
             mutableStateOf(initialPlaylistId)
         }
     var detail by remember { mutableStateOf<PlaylistData?>(null) }
-    var loading by remember(session.userId, session.token) { mutableStateOf(true) }
+    var loading by remember(session.serverUrl, session.userId) { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
     var pageBusy by remember { mutableStateOf(false) }
     var pageError by remember { mutableStateOf(false) }
@@ -722,7 +722,7 @@ fun PlaylistLibraryContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(session.userId, session.token, selectedId, revision) {
+    LaunchedEffect(session.serverUrl, session.userId, selectedId, revision) {
         loading = true
         pageError = false
         try {
