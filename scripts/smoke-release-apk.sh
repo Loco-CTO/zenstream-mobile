@@ -4,12 +4,34 @@ set -euo pipefail
 apk_path="${1:?Usage: smoke-release-apk.sh <signed-apk-path>}"
 package_name="com.zenstream.zenstreammobile"
 activity_name="$package_name/.MainActivity"
+log_file=""
+logcat_pid=""
 
 fail() {
   echo "Android release APK smoke failed: $1" >&2
-  adb -e logcat -d -t 5000 -s AndroidRuntime:E ActivityTaskManager:E >&2 || true
+  echo "--- Android crash buffer ---" >&2
+  adb -e logcat -d -b crash -v threadtime 2>&1 | tail -n 300 >&2 || true
+  if [[ -n "$log_file" && -s "$log_file" ]]; then
+    echo "--- Captured app startup logcat ---" >&2
+    grep -E -C 12 \
+      'AndroidRuntime|FATAL EXCEPTION|Fatal signal|tombstoned|com\.zenstream\.zenstreammobile|Exception|Error' \
+      "$log_file" | tail -n 500 >&2 || true
+  fi
+  echo "--- Crash report from DropBox ---" >&2
+  adb -e shell dumpsys dropbox --print data_app_crash 2>&1 | tail -n 300 >&2 || true
   exit 1
 }
+
+cleanup() {
+  if [[ -n "$logcat_pid" ]]; then
+    kill "$logcat_pid" 2>/dev/null || true
+    wait "$logcat_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$log_file" ]]; then
+    rm -f "$log_file"
+  fi
+}
+trap cleanup EXIT
 
 if [[ ! -s "$apk_path" ]]; then
   fail "APK is missing or empty at $apk_path"
@@ -28,6 +50,10 @@ if [[ "$booted" != true ]]; then
 fi
 
 adb -e install -r "$apk_path" || fail "APK installation failed"
+adb -e logcat -b all -c || fail "could not clear emulator logcat before launch"
+log_file="$(mktemp)"
+adb -e logcat -b all -v threadtime >"$log_file" 2>&1 &
+logcat_pid=$!
 adb -e shell am force-stop "$package_name"
 start_output="$(adb -e shell am start -W -n "$activity_name" 2>&1 | tr -d '\r')" \
   || fail "MainActivity could not be started"
