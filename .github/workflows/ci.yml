@@ -115,7 +115,8 @@ jobs:
 
   release-smoke:
     needs: build
-    runs-on: macos-15-intel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out source
@@ -129,13 +130,21 @@ jobs:
           name: signed-release-apk
           path: _artifacts
 
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Install and launch release APK on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
-          disable-animations: false
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: bash ./scripts/smoke-release-apk.sh _artifacts/app-release.apk
 
   instrumentation:
