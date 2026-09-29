@@ -263,6 +263,7 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
+          disable-animations: true
           profile: pixel_6
           script: bash scripts/smoke-release-apk.sh "$APK_PATH"
 
