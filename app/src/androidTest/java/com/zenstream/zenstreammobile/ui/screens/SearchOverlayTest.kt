@@ -313,10 +313,7 @@ class SearchOverlayTest {
                 .isEmpty()
         )
         val feature = composeRule.onNodeWithTag("search-featured-panel").getUnclippedBoundsInRoot()
-        composeRule
-            .onNodeWithTag("search-result-row-album")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("search-result-row-album").performScrollTo().assertIsDisplayed()
         val music = composeRule.onNodeWithTag("search-artwork-album").getUnclippedBoundsInRoot()
         assertEquals(
             16f / 9f,

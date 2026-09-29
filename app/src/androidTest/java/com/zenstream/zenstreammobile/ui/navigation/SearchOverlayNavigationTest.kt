@@ -104,11 +104,11 @@ class SearchOverlayNavigationTest {
                     .performClick()
                 composeRule.waitUntil(5_000) {
                     runCatching {
-                        composeRule
-                            .onAllNodesWithTag("search-dialog")
-                            .fetchSemanticsNodes()
-                            .isEmpty()
-                    }
+                            composeRule
+                                .onAllNodesWithTag("search-dialog")
+                                .fetchSemanticsNodes()
+                                .isEmpty()
+                        }
                         .getOrDefault(false)
                 }
                 composeRule.onNodeWithText(content).assertIsDisplayed()
@@ -153,8 +153,8 @@ class SearchOverlayNavigationTest {
         }
         composeRule.waitUntil(5_000) {
             runCatching {
-                composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
-            }
+                    composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
+                }
                 .getOrDefault(false)
         }
         composeRule.onNodeWithText("Home content").assertIsDisplayed()

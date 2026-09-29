@@ -543,7 +543,7 @@ fun SearchOverlayScreen(
     var bottomBarVisibilityFraction by remember { mutableStateOf(1f) }
 
     LaunchedEffect(Unit) {
-        withFrameNanos { }
+        withFrameNanos {}
         searchFocusRequester.requestFocus()
         bottomBarVisibilityFraction = bottomBarVisibility.resetForRoute()
     }
