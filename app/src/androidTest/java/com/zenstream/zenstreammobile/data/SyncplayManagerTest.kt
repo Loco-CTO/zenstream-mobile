@@ -59,10 +59,12 @@ class SyncplayManagerTest {
         val firstSocketOpenLatch = CountDownLatch(1)
         val secondSocketOpenLatch = CountDownLatch(1)
         val firstPresenceLatch = CountDownLatch(1)
+        val sockets = CopyOnWriteArrayList<WebSocket>()
         var firstSocket: WebSocket? = null
         val socketListener =
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
+                    sockets.add(webSocket)
                     if (firstSocket == null) {
                         firstSocket = webSocket
                         firstSocketOpenLatch.countDown()
@@ -139,6 +141,7 @@ class SyncplayManagerTest {
             assertTrue(server.requestCount >= 4)
         } finally {
             manager.stop()
+            sockets.forEach { it.cancel() }
             store.clearAll()
         }
     }

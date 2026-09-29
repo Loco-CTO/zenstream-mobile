@@ -313,8 +313,14 @@ class SearchOverlayTest {
                 .isEmpty()
         )
         val feature = composeRule.onNodeWithTag("search-featured-panel").getUnclippedBoundsInRoot()
-        composeRule.onNodeWithTag("search-result-row-album").performScrollTo().assertIsDisplayed()
-        val music = composeRule.onNodeWithTag("search-artwork-album").getUnclippedBoundsInRoot()
+        composeRule
+            .onNodeWithTag("search-result-row-album", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        val music =
+            composeRule
+                .onNodeWithTag("search-artwork-album", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
         assertEquals(
             16f / 9f,
             (feature.right - feature.left) / (feature.bottom - feature.top),
@@ -351,16 +357,22 @@ class SearchOverlayTest {
         composeRule.onNode(hasSetTextAction()).performTextInput("movie")
         composeRule.waitUntil(5_000) {
             composeRule
-                .onAllNodesWithTag("search-result-row-movie")
+                .onAllNodesWithTag("search-result-row-movie", useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
         assertTrue(
             composeRule.onAllNodesWithTag("search-featured-panel").fetchSemanticsNodes().isEmpty()
         )
-        composeRule.onNodeWithTag("search-result-row-movie").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithTag("search-result-row-movie", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
 
-        val poster = composeRule.onNodeWithTag("search-artwork-movie").getUnclippedBoundsInRoot()
+        val poster =
+            composeRule
+                .onNodeWithTag("search-artwork-movie", useUnmergedTree = true)
+                .getUnclippedBoundsInRoot()
         assertEquals(2f / 3f, (poster.right - poster.left) / (poster.bottom - poster.top), 0.05f)
     }
 

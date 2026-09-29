@@ -1,5 +1,8 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
+import android.content.Context
+import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -143,9 +146,17 @@ class SearchOverlayNavigationTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.activity.runOnUiThread {
-            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        val activity = composeRule.activity
+        activity.runOnUiThread {
+            val inputMethodManager =
+                activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            inputMethodManager.hideSoftInputFromWindow(
+                activity.window.decorView.windowToken,
+                0,
+            )
         }
+        composeRule.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         composeRule.waitUntil(5_000) {
             isSearchDialogDismissed()
         }

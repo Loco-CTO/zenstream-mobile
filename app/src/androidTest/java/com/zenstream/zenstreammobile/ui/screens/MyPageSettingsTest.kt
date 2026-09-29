@@ -6,7 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -136,7 +138,9 @@ class MyPageSettingsTest {
         composeRule
             .onNodeWithText(context.getString(R.string.automatic_picture_in_picture))
             .assertIsDisplayed()
-            .performClick()
+        val switches = composeRule.onAllNodes(isToggleable())
+        assertEquals(3, switches.fetchSemanticsNodes().size)
+        switches[1].performClick()
         composeRule.runOnIdle { assertFalse(state.automaticPictureInPicture) }
     }
 
