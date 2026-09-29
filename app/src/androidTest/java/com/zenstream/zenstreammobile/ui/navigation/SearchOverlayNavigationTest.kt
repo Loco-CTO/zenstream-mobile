@@ -103,13 +103,7 @@ class SearchOverlayNavigationTest {
                     )
                     .performClick()
                 composeRule.waitUntil(5_000) {
-                    runCatching {
-                            composeRule
-                                .onAllNodesWithTag("search-dialog")
-                                .fetchSemanticsNodes()
-                                .isEmpty()
-                        }
-                        .getOrDefault(false)
+                    isSearchDialogDismissed()
                 }
                 composeRule.onNodeWithText(content).assertIsDisplayed()
             }
@@ -152,13 +146,17 @@ class SearchOverlayNavigationTest {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
         composeRule.waitUntil(5_000) {
-            runCatching {
-                    composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
-                }
-                .getOrDefault(false)
+            isSearchDialogDismissed()
         }
         composeRule.onNodeWithText("Home content").assertIsDisplayed()
     }
+
+    private fun isSearchDialogDismissed(): Boolean =
+        try {
+            composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
+        } catch (_: IllegalStateException) {
+            false
+        }
 }
 
 private object EmptySearchDataSource : SearchDataSource {
