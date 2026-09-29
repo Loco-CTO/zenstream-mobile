@@ -1,15 +1,22 @@
 package com.zenstream.zenstreammobile.ui.navigation
 
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.window.DialogProperties
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.dialog
@@ -21,53 +28,69 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class SearchOverlayNavigationTest {
     @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    private val session = AuthSession("https://example.test", "token", "user", "Test")
+    private val session =
+        AuthSession(
+            "https://example.test",
+            "token",
+            "search-navigation-${java.util.UUID.randomUUID()}",
+            "Test",
+        )
 
     @Test
     fun dialogLeavesHomeFavoritesAndLibraryVisibleUnderSearch() {
+        var currentRoute by mutableStateOf("home")
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            ZenStreamTheme {
+                navController = rememberNavController()
+                NavHost(navController = navController, startDestination = "home") {
+                    composable("home") { Text("Home content") }
+                    composable("favorites") { Text("Favorites content") }
+                    composable("library") { Text("Library content") }
+                    dialog(
+                        "search",
+                        dialogProperties =
+                            DialogProperties(
+                                usePlatformDefaultWidth = false,
+                                decorFitsSystemWindows = false,
+                                dismissOnClickOutside = false,
+                            ),
+                    ) {
+                        SearchOverlayScreen(
+                            repository = EmptySearchDataSource,
+                            session = session,
+                            currentRoute = currentRoute,
+                            onDestinationClick = {},
+                            onDismiss = { navController.popBackStack() },
+                            onItemClick = {},
+                        )
+                    }
+                }
+            }
+        }
+
         listOf(
                 "home" to "Home content",
                 "favorites" to "Favorites content",
                 "library" to "Library content",
             )
             .forEach { (route, content) ->
-                composeRule.setContent {
-                    ZenStreamTheme {
-                        val navController = rememberNavController()
-                        NavHost(navController = navController, startDestination = route) {
-                            composable("home") { Text("Home content") }
-                            composable("favorites") { Text("Favorites content") }
-                            composable("library") { Text("Library content") }
-                            dialog(
-                                "search",
-                                dialogProperties =
-                                    DialogProperties(
-                                        usePlatformDefaultWidth = false,
-                                        decorFitsSystemWindows = false,
-                                        dismissOnClickOutside = false,
-                                    ),
-                            ) {
-                                SearchOverlayScreen(
-                                    repository = EmptySearchDataSource,
-                                    session = session,
-                                    currentRoute = route,
-                                    onDestinationClick = {},
-                                    onDismiss = { navController.popBackStack() },
-                                    onItemClick = {},
-                                )
-                            }
-                        }
-                        LaunchedEffect(route) { navController.navigate("search") }
+                composeRule.runOnIdle {
+                    currentRoute = route
+                    if (navController.currentDestination?.route != route) {
+                        navController.navigate(route)
                     }
                 }
-
+                composeRule.waitUntil(5_000) {
+                    composeRule.onAllNodesWithText(content).fetchSemanticsNodes().isNotEmpty()
+                }
+                composeRule.runOnIdle { navController.navigate("search") }
                 composeRule.waitUntil(5_000) {
                     composeRule
                         .onAllNodesWithTag("search-dialog")
@@ -83,11 +106,8 @@ class SearchOverlayNavigationTest {
                     )
                     .performClick()
                 composeRule.waitUntil(5_000) {
-                    composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
+                    isSearchDialogDismissed()
                 }
-                assertTrue(
-                    composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
-                )
                 composeRule.onNodeWithText(content).assertIsDisplayed()
             }
     }
@@ -125,14 +145,27 @@ class SearchOverlayNavigationTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.activity.runOnUiThread {
-            composeRule.activity.onBackPressedDispatcher.onBackPressed()
-        }
+        composeRule
+            .onNodeWithText(
+                InstrumentationRegistry.getInstrumentation()
+                    .targetContext
+                    .getString(R.string.search_placeholder)
+            )
+            .performImeAction()
+        composeRule.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
+            isSearchDialogDismissed()
         }
         composeRule.onNodeWithText("Home content").assertIsDisplayed()
     }
+
+    private fun isSearchDialogDismissed(): Boolean =
+        try {
+            composeRule.onAllNodesWithTag("search-dialog").fetchSemanticsNodes().isEmpty()
+        } catch (_: IllegalStateException) {
+            false
+        }
 }
 
 private object EmptySearchDataSource : SearchDataSource {

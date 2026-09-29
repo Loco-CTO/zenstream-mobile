@@ -530,6 +530,10 @@ class SyncplayManager(
             }
         }
 
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            webSocket.close(code, reason)
+        }
+
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (socket === webSocket && connectionGeneration.get() == generation) {
                 socket = null

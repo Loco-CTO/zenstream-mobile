@@ -56,7 +56,7 @@ class CatalogApiHttpTest {
 
         val request = server.takeRequest()
         assertEquals("PATCH", request.method)
-        assertEquals("/api/catalog/items/item-1/state", request.path)
+        assertEquals("/api/catalog/items/item-1/progress", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
         val payload = JSONObject(request.body.readUtf8())
         assertEquals(12.5, payload.getDouble("positionSeconds"), 0.001)
@@ -398,6 +398,10 @@ class CatalogApiHttpTest {
         assertNull(playback.playbackAccessMode)
         assertEquals("/api/catalog/items/episode-1", server.takeRequest().path)
         assertEquals("/api/playback/items/episode-1/negotiate", server.takeRequest().path)
+        assertEquals(
+            "/api/playback/items/episode-1/segments?sourceId=source-1",
+            server.takeRequest().path,
+        )
         assertNull(server.takeRequest(250, TimeUnit.MILLISECONDS))
     }
 

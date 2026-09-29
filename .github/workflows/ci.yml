@@ -86,3 +86,69 @@ jobs:
 
       - name: Upload Kotlin coverage
         run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/report.xml --use-oidc
+
+  instrumentation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-37.0
+            build-tools;37.0.0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Select Android 37 compatible command-line tools
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ ! -d "$SDK/cmdline-tools/22.0" ]; then
+            echo "Android command-line tools 22.0 were not installed" >&2
+            exit 1
+          fi
+          rm -rf "$SDK/cmdline-tools/latest"
+          ln -s "$SDK/cmdline-tools/22.0" "$SDK/cmdline-tools/latest"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --version
+          "$SDK/cmdline-tools/latest/bin/avdmanager" list device >/dev/null
+
+      - name: Run connected instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: '37.0'
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest
+
+      - name: Upload instrumentation test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-instrumentation-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14

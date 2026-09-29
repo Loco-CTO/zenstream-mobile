@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -370,15 +371,24 @@ class OrchestratorApiHttpTest {
         assertEquals("access-before", pending.token)
         assertEquals("refresh-before", pending.refreshToken)
         assertTrue(!attemptId.isNullOrBlank())
+        assertEquals(
+            "/api/preferences/watch-history",
+            server.takeRequest().path?.substringBefore('?'),
+        )
 
         server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(refreshResponse("access-after", "refresh-after"))
         server.enqueue(MockResponse().setBody("{\"enabled\":true}"))
         assertEquals(true, repository.loadWatchHistoryPreference())
-        server.takeRequest() // The next protected request.
+        assertEquals(
+            "/api/preferences/watch-history",
+            server.takeRequest().path?.substringBefore('?'),
+        )
+        val refreshRequest = server.takeRequest()
+        assertEquals("/api/auth/refresh", refreshRequest.path?.substringBefore('?'))
         assertEquals(
             attemptId,
-            JSONObject(server.takeRequest().body.readUtf8()).getString("refreshAttemptId"),
+            JSONObject(refreshRequest.body.readUtf8()).getString("refreshAttemptId"),
         )
         assertEquals("access-after", store.session.first()?.token)
         store.clearAll()
@@ -509,7 +519,7 @@ class OrchestratorApiHttpTest {
                     }
             }
 
-        val protectedRequest = async { repository.loadWatchHistoryPreference() }
+        val protectedRequest = async(Dispatchers.IO) { repository.loadWatchHistoryPreference() }
         assertTrue(refreshStarted.await(5, TimeUnit.SECONDS))
         val logoutStarted = CompletableDeferred<Unit>()
         val logout = launch {
@@ -551,7 +561,7 @@ class OrchestratorApiHttpTest {
                     }
             }
 
-        val protectedRequest = async { repository.loadWatchHistoryPreference() }
+        val protectedRequest = async(Dispatchers.IO) { repository.loadWatchHistoryPreference() }
         assertTrue(refreshStarted.await(5, TimeUnit.SECONDS))
         val newerSession =
             original.copy(
