@@ -53,6 +53,18 @@ class CandidateFirstWorkflowTest(unittest.TestCase):
         self.assertRegex(ci, r"ref:.*inputs\.candidate_sha")
         self.assertNotRegex(ci, r"spotlessApply")
 
+    def test_publish_smokes_signed_apk_with_kvm_enabled(self) -> None:
+        workflow = RELEASE.read_text(encoding="utf-8")
+        publish = job_block(workflow, "publish")
+        self.assertRegex(publish, r"runs-on:\s*ubuntu-latest")
+        self.assertIn("name: Enable KVM", publish)
+        self.assertIn("sudo udevadm trigger --name-match=kvm", publish)
+        self.assertIn("ram-size: 4096M", publish)
+        self.assertIn(
+            "emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none",
+            publish,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
