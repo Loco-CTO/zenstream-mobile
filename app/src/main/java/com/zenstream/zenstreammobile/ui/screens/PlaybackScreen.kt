@@ -161,7 +161,7 @@ fun PlaybackScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel =
         viewModel(
-            key = "playback-${session.userId}-${session.token}-$itemId",
+            key = "playback-${session.serverUrl}-${session.userId}-$itemId",
             factory =
                 PlaybackViewModel.Factory(
                     repository,

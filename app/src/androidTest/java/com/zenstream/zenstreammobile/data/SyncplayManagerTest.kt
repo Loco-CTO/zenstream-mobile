@@ -23,6 +23,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -138,6 +139,55 @@ class SyncplayManagerTest {
             assertTrue(server.requestCount >= 4)
         } finally {
             manager.stop()
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun managerKeepsItsConnectionAndUsesRotatedCredentialsForLaterRequests() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store =
+            SessionStore(
+                context,
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_syncplay_refresh_${UUID.randomUUID()}",
+            )
+        val updatedCredentialRequest = CountDownLatch(1)
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    when {
+                        request.path == "/api/syncplay/groups" -> {
+                            if (request.getHeader("Authorization") == "Bearer access-after") {
+                                updatedCredentialRequest.countDown()
+                            }
+                            MockResponse().setBody("{\"groups\":[]}")
+                        }
+                        request.path == "/api/auth/socket-ticket" ->
+                            MockResponse().setBody("{\"ticket\":\"ticket\"}")
+                        request.path?.startsWith("/api/ws/syncplay") == true ->
+                            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {})
+                        else -> MockResponse().setResponseCode(404)
+                    }
+            }
+
+        val serverUrl = server.url("/").toString().trimEnd('/')
+        val original = AuthSession(serverUrl, "access-before", "user-1", "Alex")
+        val rotated = original.copy(token = "access-after", refreshToken = "refresh-after")
+        SyncplaySession.clear()
+        try {
+            val manager = SyncplaySession.manager(original, store)
+            val retainedManager = SyncplaySession.manager(rotated, store)
+
+            assertSame(manager, retainedManager)
+            retainedManager.refresh()
+            assertTrue(
+                withContext(Dispatchers.IO) {
+                    updatedCredentialRequest.await(10, TimeUnit.SECONDS)
+                }
+            )
+        } finally {
+            SyncplaySession.clear()
             store.clearAll()
         }
     }

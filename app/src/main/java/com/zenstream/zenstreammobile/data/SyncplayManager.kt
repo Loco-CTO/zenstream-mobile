@@ -33,7 +33,7 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 
 class SyncplayManager(
-    private val session: AuthSession,
+    @Volatile private var session: AuthSession,
     private val sessionStore: SessionStore,
     private val api: SyncplayApi = SyncplayApi(),
     private val socketClient: OkHttpClient = syncplaySocketClient(),
@@ -65,6 +65,12 @@ class SyncplayManager(
 
     init {
         scope.launch { start() }
+    }
+
+    fun updateSession(updated: AuthSession): Boolean {
+        if (updated.serverUrl != session.serverUrl || updated.userId != session.userId) return false
+        session = updated
+        return true
     }
 
     fun serverNow(): Double = System.currentTimeMillis() / 1000.0 + serverOffsetSeconds
@@ -786,22 +792,20 @@ internal fun syncplaySocketClient(): OkHttpClient =
 
 object SyncplaySession {
     private var current: SyncplayManager? = null
-    private var token: String? = null
 
     @Synchronized
     fun manager(session: AuthSession, store: SessionStore): SyncplayManager {
-        if (token != session.token) {
-            current?.stop()
-            current = SyncplayManager(session, store)
-            token = session.token
+        val manager = current
+        if (manager == null || !manager.updateSession(session)) {
+            manager?.stop()
+            return SyncplayManager(session, store).also { current = it }
         }
-        return requireNotNull(current)
+        return manager
     }
 
     @Synchronized
     fun clear() {
         current?.stop()
         current = null
-        token = null
     }
 }

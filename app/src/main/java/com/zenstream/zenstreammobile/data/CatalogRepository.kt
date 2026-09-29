@@ -506,16 +506,12 @@ class CatalogRepository(
             authenticatedCatalogRequest(session) { current ->
                 api.uploadAvatar(current, resolver, uri, crop)
             }
-        val updated = session.copy(avatarVersion = version)
-        saveSessionIfCurrent(session, updated)
-        return updated
+        return updateAvatarVersionIfCurrent(session, version)
     }
 
     suspend fun removeAvatar(session: AuthSession): AuthSession {
         authenticatedCatalogRequest(session) { current -> api.deleteAvatar(current) }
-        val updated = session.copy(avatarVersion = null)
-        saveSessionIfCurrent(session, updated)
-        return updated
+        return updateAvatarVersionIfCurrent(session, null)
     }
 
     suspend fun changePassword(
@@ -761,14 +757,15 @@ class CatalogRepository(
     private suspend fun <T> authenticatedOrchestratorRequest(
         current: AuthSession,
         block: suspend (AuthSession) -> T,
-    ): T =
-        try {
-            AuthLifecycleLog.firstProtectedRequest(current)
-            block(current).also { clearRetryableAuthState(current) }
+    ): T {
+        val requestSession = currentSessionForRequest(current)
+        return try {
+            AuthLifecycleLog.firstProtectedRequest(requestSession)
+            block(requestSession).also { clearRetryableAuthState(requestSession) }
         } catch (error: OrchestratorException) {
             if (error.statusCode != 401) throw error
-            AuthLifecycleLog.event("protected_request_401", current, statusCode = 401)
-            val refreshed = refreshAfterUnauthorized(current) ?: throw error
+            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
+            val refreshed = refreshAfterUnauthorized(requestSession) ?: throw error
             try {
                 block(refreshed).also { clearRetryableAuthState(refreshed) }
             } catch (retryError: OrchestratorException) {
@@ -778,18 +775,20 @@ class CatalogRepository(
                 throw retryError
             }
         }
+    }
 
     private suspend fun <T> authenticatedCatalogRequest(
         current: AuthSession,
         block: suspend (AuthSession) -> T,
-    ): T =
-        try {
-            AuthLifecycleLog.firstProtectedRequest(current)
-            block(current).also { clearRetryableAuthState(current) }
+    ): T {
+        val requestSession = currentSessionForRequest(current)
+        return try {
+            AuthLifecycleLog.firstProtectedRequest(requestSession)
+            block(requestSession).also { clearRetryableAuthState(requestSession) }
         } catch (error: CatalogException) {
             if (error.statusCode != 401) throw error
-            AuthLifecycleLog.event("protected_request_401", current, statusCode = 401)
-            val refreshed = refreshAfterUnauthorized(current) ?: throw error
+            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
+            val refreshed = refreshAfterUnauthorized(requestSession) ?: throw error
             try {
                 block(refreshed).also { clearRetryableAuthState(refreshed) }
             } catch (retryError: CatalogException) {
@@ -799,6 +798,16 @@ class CatalogRepository(
                 throw retryError
             }
         }
+    }
+
+    private suspend fun currentSessionForRequest(expected: AuthSession): AuthSession {
+        val latest =
+            (sessionState.first { it !is StoredSessionState.Loading } as? StoredSessionState.Loaded)
+                ?.session
+        return latest?.takeIf {
+            it.serverUrl == expected.serverUrl && it.userId == expected.userId
+        } ?: expected
+    }
 
     private fun clearRetryableAuthState(session: AuthSession) {
         val unavailable = _authRefreshState.value as? AuthRefreshState.TemporarilyUnavailable
@@ -811,8 +820,17 @@ class CatalogRepository(
         }
     }
 
-    private suspend fun saveSessionIfCurrent(expected: AuthSession, updated: AuthSession) {
-        sessionStore.saveSessionIfCurrent(expected, updated)
+    private suspend fun updateAvatarVersionIfCurrent(
+        expected: AuthSession,
+        avatarVersion: String?,
+    ): AuthSession {
+        val latest = currentSessionForRequest(expected)
+        val updated = latest.copy(avatarVersion = avatarVersion)
+        return if (sessionStore.saveSessionIfCurrent(latest, updated)) {
+            updated
+        } else {
+            expected.copy(avatarVersion = avatarVersion)
+        }
     }
 
     private suspend fun clearSessionLocalStateIfCurrent(

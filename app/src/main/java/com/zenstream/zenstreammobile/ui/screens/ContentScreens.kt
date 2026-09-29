@@ -157,7 +157,7 @@ fun HomeScreen(
 ) {
     val vm: HomeViewModel =
         viewModel(
-            key = "home-${session.userId}-${session.token}",
+            key = "home-${session.serverUrl}-${session.userId}",
             factory = HomeViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -525,7 +525,7 @@ fun SearchOverlayScreen(
     BackHandler(onBack = onDismiss)
     val vm: SearchViewModel =
         viewModel(
-            key = "search-overlay-${session.userId}-${session.token}",
+            key = "search-overlay-${session.serverUrl}-${session.userId}",
             factory = SearchViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -1211,7 +1211,7 @@ fun FavoritesScreen(
     onPlayTracks: (List<MediaItem>, Int, Boolean?, Boolean) -> Unit = { _, _, _, _ -> },
     onOpenPlaylist: (String) -> Unit = {},
 ) {
-    var selectedTab by remember(session.userId, session.token) { mutableIntStateOf(0) }
+    var selectedTab by remember(session.serverUrl, session.userId) { mutableIntStateOf(0) }
     val tabs = listOf(R.string.watchlist, R.string.favorites, R.string.playlists)
     val tabScrollState = rememberScrollState()
     var tabWidths by remember { mutableStateOf(List(tabs.size) { 0 }) }
@@ -1308,7 +1308,7 @@ private fun FavoritesTabContent(
 ) {
     val vm: FavoritesViewModel =
         viewModel(
-            key = "favorites-${session.userId}-${session.token}",
+            key = "favorites-${session.serverUrl}-${session.userId}",
             factory = FavoritesViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -1580,7 +1580,7 @@ fun LibraryScreen(
 ) {
     val vm: LibraryViewModel =
         viewModel(
-            key = "library-${session.userId}-${session.token}",
+            key = "library-${session.serverUrl}-${session.userId}",
             factory = LibraryViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()

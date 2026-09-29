@@ -167,7 +167,7 @@ fun MusicAlbumScreen(
 ) {
     val vm: MusicAlbumViewModel =
         viewModel(
-            key = "music-album-${session.userId}-${session.token}-$albumId",
+            key = "music-album-${session.serverUrl}-${session.userId}-$albumId",
             factory = MusicAlbumViewModel.Factory(repository, session, albumId),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -636,7 +636,7 @@ fun MusicArtistScreen(
 ) {
     val vm: MusicArtistViewModel =
         viewModel(
-            key = "music-artist-${session.userId}-${session.token}-$artistId",
+            key = "music-artist-${session.serverUrl}-${session.userId}-$artistId",
             factory = MusicArtistViewModel.Factory(repository, session, artistId),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
