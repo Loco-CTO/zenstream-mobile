@@ -72,7 +72,7 @@ class AudioQueueLogicTest {
                 playedEntryIds = setOf("a", "b"),
             )
 
-        val selection = nextQueueSelection(state, force = true, random = Random(7))
+        val selection = nextQueueSelection(state, force = true)
 
         assertEquals(2, selection?.index)
         assertEquals(setOf("a", "b"), selection?.playedEntryIds)
@@ -80,7 +80,6 @@ class AudioQueueLogicTest {
             nextQueueSelection(
                 state.copy(playedEntryIds = setOf("a", "b", "c")),
                 force = true,
-                random = Random(7),
             )
         )
     }
@@ -96,12 +95,45 @@ class AudioQueueLogicTest {
                 playedEntryIds = setOf("a", "b", "c"),
             )
 
-        val selection = nextQueueSelection(state, force = true, random = Random(7))
+        val selection = nextQueueSelection(state, force = true)
 
         assertNotNull(selection)
         assertTrue(selection?.resetPlayed ?: false)
         assertEquals(emptySet<String>(), selection?.playedEntryIds)
         assertTrue(selection?.index != 2)
+    }
+
+    @Test
+    fun shuffledPlaybackAdvancesInTheVisibleQueueOrderAcrossPasses() {
+        val first =
+            AudioPlayerState(
+                queue = queue,
+                currentIndex = 0,
+                shuffle = true,
+                repeatMode = AudioRepeatMode.Queue,
+                playedEntryIds = setOf("a"),
+            )
+
+        val second = nextQueueSelection(first, force = true)
+        assertEquals(1, second?.index)
+
+        val third =
+            nextQueueSelection(
+                first.copy(currentIndex = 1, playedEntryIds = setOf("a", "b")),
+                force = true,
+            )
+        assertEquals(2, third?.index)
+
+        val nextPass =
+            nextQueueSelection(
+                first.copy(
+                    currentIndex = 2,
+                    playedEntryIds = setOf("a", "b", "c"),
+                ),
+                force = true,
+            )
+        assertEquals(0, nextPass?.index)
+        assertEquals(emptySet<String>(), nextPass?.playedEntryIds)
     }
 
     @Test
