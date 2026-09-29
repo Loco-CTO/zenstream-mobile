@@ -255,6 +255,25 @@ class SessionStoreTest {
     }
 
     @Test
+    fun automaticPictureInPictureDefaultsOnAndSurvivesSessionClears() = runBlocking {
+        val store =
+            SessionStore(
+                InstrumentationRegistry.getInstrumentation().targetContext,
+                dataStoreName =
+                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_auto_pip_${UUID.randomUUID()}",
+            )
+
+        assertTrue(store.automaticPictureInPicture.first())
+        store.saveAutomaticPictureInPicture(false)
+        assertFalse(store.automaticPictureInPicture.first())
+
+        store.clearSession()
+        assertFalse(store.automaticPictureInPicture.first())
+        store.clearAll()
+        assertFalse(store.automaticPictureInPicture.first())
+    }
+
+    @Test
     fun syncplayPresenceSequenceIsMonotonicAndDeviceLocal() = runBlocking {
         val store =
             SessionStore(

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
@@ -24,6 +25,7 @@ import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.ui.SettingsUiState
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -75,6 +77,9 @@ class MyPageSettingsTest {
                     onMpvVideoScalerChange = { state = state.copy(mpvVideoScaler = it) },
                     onShowDebugIconChange = {},
                     onAutoplayNextEpisodeChange = {},
+                    onAutomaticPictureInPictureChange = {
+                        state = state.copy(automaticPictureInPicture = it)
+                    },
                     onCheckForUpdatesOnStartupChange = {},
                     onWatchHistoryChange = {},
                     onClearWatchHistory = {},
@@ -98,6 +103,43 @@ class MyPageSettingsTest {
         composeRule
             .onNodeWithText(context.getString(R.string.player_mpv_advanced_warning))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun automaticPictureInPictureSettingCanBeTurnedOff() {
+        var state by mutableStateOf(SettingsUiState(playerEngine = PlayerEngine.MEDIA3))
+        composeRule.setContent {
+            ZenStreamTheme {
+                MyPageSettingsContent(
+                    section = MyPageSettingsSection.Player,
+                    state = state,
+                    onInterfaceLocaleChange = {},
+                    onMetadataLanguageChange = {},
+                    onPlaybackPreferenceChange = { _, _ -> },
+                    onPlayerEngineChange = {},
+                    onMpvVideoOutputChange = {},
+                    onMpvVideoProfileChange = {},
+                    onMpvVideoScalerChange = {},
+                    onShowDebugIconChange = {},
+                    onAutoplayNextEpisodeChange = {},
+                    onAutomaticPictureInPictureChange = {
+                        state = state.copy(automaticPictureInPicture = it)
+                    },
+                    onCheckForUpdatesOnStartupChange = {},
+                    onWatchHistoryChange = {},
+                    onClearWatchHistory = {},
+                    onSubtitleChange = {},
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule
+            .onNodeWithText(context.getString(R.string.automatic_picture_in_picture))
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertFalse(state.automaticPictureInPicture) }
     }
 
     @Test

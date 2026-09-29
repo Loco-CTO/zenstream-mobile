@@ -94,6 +94,7 @@ class SessionStore(
         val playbackTimeDisplayMode = stringPreferencesKey("playback_time_display_mode")
         val showDebugIcon = booleanPreferencesKey("show_debug_icon")
         val autoplayNextEpisode = booleanPreferencesKey("autoplay_next_episode")
+        val automaticPictureInPicture = booleanPreferencesKey("automatic_picture_in_picture")
         val checkForUpdatesOnStartup = booleanPreferencesKey("check_for_updates_on_startup")
         val watchHistoryEnabled = booleanPreferencesKey("watch_history_enabled")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
@@ -162,6 +163,9 @@ class SessionStore(
 
     val autoplayNextEpisode: Flow<Boolean> =
         dataStore.data.map { it[Keys.autoplayNextEpisode] ?: true }.distinctUntilChanged()
+
+    val automaticPictureInPicture: Flow<Boolean> =
+        dataStore.data.map { it[Keys.automaticPictureInPicture] ?: true }.distinctUntilChanged()
 
     val checkForUpdatesOnStartup: Flow<Boolean> =
         dataStore.data.map { it[Keys.checkForUpdatesOnStartup] ?: true }.distinctUntilChanged()
@@ -426,6 +430,10 @@ class SessionStore(
 
     suspend fun saveAutoplayNextEpisode(enabled: Boolean) {
         dataStore.edit { it[Keys.autoplayNextEpisode] = enabled }
+    }
+
+    suspend fun saveAutomaticPictureInPicture(enabled: Boolean) {
+        dataStore.edit { it[Keys.automaticPictureInPicture] = enabled }
     }
 
     suspend fun saveCheckForUpdatesOnStartup(enabled: Boolean) {
