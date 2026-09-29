@@ -25,6 +25,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Check out Orchestrator contract fixtures
+        uses: actions/checkout@v7
+        with:
+          repository: Loco-CTO/zenstream-orchestrator
+          ref: main
+          path: _contracts/zenstream-orchestrator
+          sparse-checkout: contracts/fixtures
+
       - name: Set up Java
         uses: actions/setup-java@v6
         with:
@@ -47,6 +55,8 @@ jobs:
         run: bash ./gradlew spotlessApply
 
       - name: Run formatting, lint, unit tests, coverage, and debug build
+        env:
+          ZENSTREAM_API_FIXTURE_ROOT: ${{ github.workspace }}/_contracts/zenstream-orchestrator/contracts/fixtures
         run: bash ./gradlew spotlessCheck lint :app:koverXmlReport assembleDebug
 
       - name: Generate temporary release signing key
