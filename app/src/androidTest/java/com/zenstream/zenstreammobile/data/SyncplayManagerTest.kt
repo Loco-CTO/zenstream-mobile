@@ -60,6 +60,7 @@ class SyncplayManagerTest {
         val secondSocketOpenLatch = CountDownLatch(1)
         val firstPresenceLatch = CountDownLatch(1)
         val sockets = CopyOnWriteArrayList<WebSocket>()
+        val closedSockets = CopyOnWriteArrayList<WebSocket>()
         var firstSocket: WebSocket? = null
         val socketListener =
             object : WebSocketListener() {
@@ -71,6 +72,14 @@ class SyncplayManagerTest {
                     } else {
                         secondSocketOpenLatch.countDown()
                     }
+                }
+
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    closedSockets.add(webSocket)
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    closedSockets.add(webSocket)
                 }
             }
         val payload = { groupPayload(participantId) }
@@ -141,7 +150,10 @@ class SyncplayManagerTest {
             assertTrue(server.requestCount >= 4)
         } finally {
             manager.stop()
-            sockets.forEach { it.cancel() }
+            sockets.forEach { it.close(1000, "Test complete") }
+            withTimeout(5_000) {
+                while (sockets.any { socket -> !closedSockets.contains(socket) }) delay(20)
+            }
             store.clearAll()
         }
     }
