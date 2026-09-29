@@ -107,10 +107,9 @@ class MusicScreensTest {
         }
 
         composeRule
-            .onNodeWithContentDescription(
-                "${album.name}: ${context.getString(R.string.add_to_playlist)}"
-            )
+            .onNodeWithContentDescription(context.getString(R.string.show_more))
             .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.add_to_playlist)).performClick()
         composeRule.onNodeWithText(context.getString(R.string.create_playlist)).performClick()
         composeRule.onAllNodes(hasSetTextAction())[0].performTextInput("Road Trip")
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()

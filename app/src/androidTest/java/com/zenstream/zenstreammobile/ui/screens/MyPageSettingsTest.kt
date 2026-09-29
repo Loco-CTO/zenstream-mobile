@@ -10,7 +10,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
@@ -136,7 +135,6 @@ class MyPageSettingsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule
             .onNodeWithText(context.getString(R.string.automatic_picture_in_picture))
-            .performScrollTo()
             .assertIsDisplayed()
             .performClick()
         composeRule.runOnIdle { assertFalse(state.automaticPictureInPicture) }

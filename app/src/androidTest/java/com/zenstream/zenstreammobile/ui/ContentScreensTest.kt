@@ -17,6 +17,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -85,7 +86,9 @@ class ContentScreensTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Movies").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Shows").assertIsDisplayed()
+        val showsMatches = composeRule.onAllNodesWithText("Shows")
+        assertTrue(showsMatches.fetchSemanticsNodes().size >= 2)
+        showsMatches[0].assertIsDisplayed()
         composeRule.onNodeWithText("Movies").assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(
@@ -189,7 +192,10 @@ class ContentScreensTest {
         }
         composeRule.waitForIdle()
         return items.map { item ->
-            composeRule.onNodeWithContentDescription("Play ${item.name}").getUnclippedBoundsInRoot()
+            composeRule
+                .onNodeWithContentDescription("Play ${item.name}")
+                .performScrollTo()
+                .getUnclippedBoundsInRoot()
         }
     }
 }

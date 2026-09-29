@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
@@ -351,7 +352,7 @@ class DetailScreensTest {
         val showMore = context.getString(R.string.show_more)
         val showLess = context.getString(R.string.show_less)
         composeRule.onNodeWithText(showMore).assertIsDisplayed().performClick()
-        composeRule.onNodeWithText(showLess).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(showLess).performScrollTo().assertIsDisplayed().performClick()
         composeRule.onNodeWithText(showMore).assertIsDisplayed()
     }
 
@@ -700,10 +701,9 @@ class DetailScreensTest {
         composeRule.onNodeWithText(context.getString(R.string.subtitle_track)).performClick()
         val subtitlesOffTop =
             composeRule
-                .onNodeWithText(context.getString(R.string.subtitles_off))
-                .fetchSemanticsNode()
-                .boundsInRoot
-                .top
+                .onAllNodesWithText(context.getString(R.string.subtitles_off))
+                .fetchSemanticsNodes()
+                .maxOf { it.boundsInRoot.top }
         val downloaderTop =
             composeRule
                 .onNodeWithText(context.getString(R.string.bazarr_find_subtitles))

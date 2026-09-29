@@ -123,7 +123,7 @@ class SyncplayManagerTest {
             assertNotNull(firstSocket)
 
             val initialPresenceCount = presenceBodies.size
-            firstSocket?.close(1000, "test reconnect")
+            firstSocket?.cancel()
             assertTrue(
                 withContext(Dispatchers.IO) {
                     secondSocketOpenLatch.await(12, TimeUnit.SECONDS)
@@ -180,6 +180,9 @@ class SyncplayManagerTest {
             val retainedManager = SyncplaySession.manager(rotated, store)
 
             assertSame(manager, retainedManager)
+            withTimeout(5_000) {
+                while (retainedManager.state.value.participantId.isNullOrBlank()) delay(20)
+            }
             retainedManager.refresh()
             assertTrue(
                 withContext(Dispatchers.IO) {

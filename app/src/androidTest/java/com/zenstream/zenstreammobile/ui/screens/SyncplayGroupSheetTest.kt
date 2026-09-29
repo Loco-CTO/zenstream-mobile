@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -126,9 +127,10 @@ class SyncplayGroupSheetTest {
             }
         }
 
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.syncplay_host))
-            .assertIsDisplayed()
+        val hostLabels =
+            composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.syncplay_host))
+        assertEquals(2, hostLabels.fetchSemanticsNodes().size)
+        hostLabels[0].assertIsDisplayed()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.syncplay_remove))
             .performClick()
