@@ -22,7 +22,6 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -61,13 +60,11 @@ class SyncplayManagerTest {
         val firstPresenceLatch = CountDownLatch(1)
         val sockets = CopyOnWriteArrayList<WebSocket>()
         val closedSockets = CopyOnWriteArrayList<WebSocket>()
-        var firstSocket: WebSocket? = null
         val socketListener =
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     sockets.add(webSocket)
-                    if (firstSocket == null) {
-                        firstSocket = webSocket
+                    if (sockets.size == 1) {
                         firstSocketOpenLatch.countDown()
                     } else {
                         secondSocketOpenLatch.countDown()
@@ -131,10 +128,9 @@ class SyncplayManagerTest {
                 }
             )
             assertTrue(presenceBodies[0].getLong("presenceSequence") >= 41L)
-            assertNotNull(firstSocket)
 
             val initialPresenceCount = presenceBodies.size
-            assertTrue(firstSocket?.close(1000, "Reconnect for test") == true)
+            assertTrue(sockets.first().close(1000, "Reconnect for test"))
             assertTrue(
                 withContext(Dispatchers.IO) {
                     secondSocketOpenLatch.await(12, TimeUnit.SECONDS)
