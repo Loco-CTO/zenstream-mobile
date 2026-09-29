@@ -88,7 +88,9 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          disable-animations: true
+          # This smoke only checks installation and launch; avoiding the action's
+          # post-boot settings calls keeps slow hosted emulators from failing ADB.
+          disable-animations: false
           script: bash ./scripts/smoke-release-apk.sh app/build/outputs/apk/release/app-release.apk
 
       - name: Install DeepSource CLI
