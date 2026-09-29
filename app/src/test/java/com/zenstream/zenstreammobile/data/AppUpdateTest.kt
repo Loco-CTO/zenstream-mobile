@@ -1,5 +1,8 @@
 package com.zenstream.zenstreammobile.data
 
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -8,6 +11,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdateTest {
+    @Test
+    fun updateCheckNetworkFailureIsIgnored() = runBlocking {
+        val source =
+            object : UpdateSource {
+                override suspend fun checkForUpdate(): AppUpdate? {
+                    throw IOException("network unavailable")
+                }
+            }
+
+        assertNull(source.checkForUpdateSafely())
+    }
+
+    @Test(expected = CancellationException::class)
+    fun updateCheckCancellationIsRethrown() {
+        runBlocking {
+            val source =
+                object : UpdateSource {
+                    override suspend fun checkForUpdate(): AppUpdate? {
+                        throw CancellationException("cancelled")
+                    }
+                }
+
+            source.checkForUpdateSafely()
+        }
+    }
+
     @Test
     fun newerStableReleaseWithTheExpectedApkIsReturned() {
         val update = parseLatestReleaseUpdate(releaseJson(), "1.1.0-main.4")

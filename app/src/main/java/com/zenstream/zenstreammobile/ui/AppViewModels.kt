@@ -19,6 +19,7 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.StoredSessionState
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
+import com.zenstream.zenstreammobile.data.checkForUpdateSafely
 import com.zenstream.zenstreammobile.data.deriveAuthState
 import com.zenstream.zenstreammobile.data.isInitialAuthResolutionPending
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
@@ -207,11 +208,7 @@ class AppViewModel(
         }
         viewModelScope.launch {
             if (!repository.checkForUpdatesOnStartup.first()) return@launch
-            try {
-                _availableUpdate.value = updateSource.checkForUpdate()
-            } catch (error: CancellationException) {
-                throw error
-            }
+            _availableUpdate.value = updateSource.checkForUpdateSafely()
         }
     }
 

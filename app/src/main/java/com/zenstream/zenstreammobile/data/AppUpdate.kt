@@ -17,6 +17,15 @@ interface UpdateSource {
     suspend fun checkForUpdate(): AppUpdate?
 }
 
+internal suspend fun UpdateSource.checkForUpdateSafely(): AppUpdate? =
+    try {
+        checkForUpdate()
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
 class GitHubUpdateChecker(
     private val httpClient: OkHttpClient = OkHttpClient(),
     private val currentVersion: String = BuildConfig.ZENSTREAM_VERSION,

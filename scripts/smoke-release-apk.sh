@@ -7,7 +7,8 @@ activity_name="$package_name/.MainActivity"
 
 fail() {
   echo "Android release APK smoke failed: $1" >&2
-  adb -e logcat -d -t 5000 -s AndroidRuntime:E ActivityTaskManager:E >&2 || true
+  adb -e logcat -d -t 1000 --format=threadtime \
+    | grep -A80 -B20 -E 'FATAL EXCEPTION|Process: com\.zenstream\.zenstreammobile' >&2 || true
   exit 1
 }
 
