@@ -22,6 +22,36 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SessionStoreTest {
     @Test
+    fun firstSessionReadWaitsForInitialDataStoreLoad() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_cold_${UUID.randomUUID()}"
+        val store = SessionStore(context, dataStoreName = name)
+        val savedSession =
+            AuthSession(
+                "https://orchestrator.example",
+                "cold-access-token",
+                "user-1",
+                "User",
+            )
+        store.saveSession(savedSession)
+
+        val recreatedStore = SessionStore(context, dataStoreName = name)
+        assertEquals(savedSession, recreatedStore.session.first())
+
+        val loggedOutName =
+            "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_logged_out_${UUID.randomUUID()}"
+        val loggedOutStore = SessionStore(context, dataStoreName = loggedOutName)
+        assertEquals(
+            StoredSessionState.Loaded(null),
+            loggedOutStore.sessionState.first { it !is StoredSessionState.Loading },
+        )
+        assertNull(loggedOutStore.session.first())
+
+        store.clearAll()
+        loggedOutStore.clearAll()
+    }
+
+    @Test
     fun persistsEncryptedSessionAndClearsIdentity() = runBlocking {
         val store =
             SessionStore(

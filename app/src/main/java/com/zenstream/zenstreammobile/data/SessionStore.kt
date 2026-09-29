@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -227,6 +228,7 @@ class SessionStore(
 
     val session: Flow<AuthSession?> =
         sessionState
+            .filterNot { it is StoredSessionState.Loading }
             .map { state -> (state as? StoredSessionState.Loaded)?.session }
             .distinctUntilChanged()
 
