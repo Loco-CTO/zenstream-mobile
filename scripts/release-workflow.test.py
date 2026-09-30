@@ -65,6 +65,28 @@ class CandidateFirstWorkflowTest(unittest.TestCase):
             publish,
         )
 
+    def test_publish_tags_candidate_before_creating_draft_release(self) -> None:
+        workflow = RELEASE.read_text(encoding="utf-8")
+        publish = job_block(workflow, "publish")
+        ensure_position = publish.index(
+            "Ensure the release tag references the verified candidate"
+        )
+        create_position = publish.index("Create or reuse draft GitHub release")
+        self.assertLess(ensure_position, create_position)
+
+        ensure_step = publish[ensure_position:create_position]
+        self.assertIn('git push origin "$CANDIDATE_SHA:$tag_ref"', ensure_step)
+        self.assertIn('[[ "$tag_sha" == "$CANDIDATE_SHA" ]]', ensure_step)
+
+        create_step = publish[create_position:].split(
+            "      - name: Upload and verify signed release assets", 1
+        )[0]
+        self.assertIn(
+            'gh release create "$TAG" --verify-tag --draft',
+            create_step,
+        )
+        self.assertNotIn('gh release create "$TAG" --target', create_step)
+
 
 if __name__ == "__main__":
     unittest.main()

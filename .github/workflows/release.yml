@@ -275,6 +275,24 @@ jobs:
           profile: pixel_6
           script: bash scripts/smoke-release-apk.sh "$APK_PATH"
 
+      - name: Ensure the release tag references the verified candidate
+        env:
+          TAG: ${{ needs.candidate.outputs.tag }}
+          CANDIDATE_SHA: ${{ needs.candidate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          source scripts/release-candidate.sh
+          tag_ref="refs/tags/$TAG"
+          tag_sha="$(remote_tag_commit_sha "$tag_ref")"
+          if [[ -z "$tag_sha" ]]; then
+            git push origin "$CANDIDATE_SHA:$tag_ref"
+            tag_sha="$(remote_tag_commit_sha "$tag_ref")"
+          fi
+          [[ "$tag_sha" == "$CANDIDATE_SHA" ]] || {
+            echo "Release tag $TAG points to ${tag_sha:-<missing>}, not candidate $CANDIDATE_SHA." >&2
+            exit 1
+          }
+
       - name: Create or reuse draft GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -284,7 +302,7 @@ jobs:
           set -euo pipefail
           source scripts/release-candidate.sh
           if ! gh release view "$TAG" --json tagName >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$CANDIDATE_SHA" --draft --title "$TAG" --generate-notes
+            gh release create "$TAG" --verify-tag --draft --title "$TAG" --generate-notes
           fi
           [[ "$(remote_tag_commit_sha "refs/tags/$TAG")" == "$CANDIDATE_SHA" ]] || {
             echo "Release tag $TAG does not point to candidate $CANDIDATE_SHA." >&2
