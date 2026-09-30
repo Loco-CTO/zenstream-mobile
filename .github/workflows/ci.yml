@@ -98,7 +98,7 @@ jobs:
         run: bash ./gradlew assembleRelease -PzenstreamMain=0 -PzenstreamRelease=true
 
       - name: Upload release APK for emulator smoke
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: signed-release-apk
           path: app/build/outputs/apk/release/app-release.apk
