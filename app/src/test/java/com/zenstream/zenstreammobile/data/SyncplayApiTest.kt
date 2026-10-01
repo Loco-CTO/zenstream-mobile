@@ -10,6 +10,28 @@ import org.junit.Test
 
 class SyncplayApiTest {
     @Test
+    fun recoveryBackoffIsBoundedAndOnlyTransientHttpFailuresRetry() {
+        assertEquals(
+            listOf(500L, 1_000L, 2_000L, 4_000L, 8_000L, 10_000L, 10_000L),
+            (0..6).map(::syncplayRecoveryRetryMillis),
+        )
+        listOf(429, 500, 503).forEach {
+            assertTrue(syncplayFailureIsRetryable(SyncplayException(it, "failure")))
+        }
+        listOf(401, 403, 404, 409, 410).forEach {
+            assertFalse(syncplayFailureIsRetryable(SyncplayException(it, "failure")))
+        }
+    }
+
+    @Test
+    fun oldSnapshotsCannotRemoveMembershipEstablishedDuringTheRequest() {
+        val group = parseSyncplayGroup(JSONObject().put("id", "room").put("revision", 4))
+        assertFalse(syncplaySnapshotCanRemove(null, group))
+        assertFalse(syncplaySnapshotCanRemove(group, group.copy(revision = 5)))
+        assertTrue(syncplaySnapshotCanRemove(group, group))
+    }
+
+    @Test
     fun parsesCanonicalGroupTimelineAndMembers() {
         val group =
             parseSyncplayGroup(

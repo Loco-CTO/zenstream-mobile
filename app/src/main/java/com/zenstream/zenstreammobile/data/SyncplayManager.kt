@@ -8,22 +8,29 @@ import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,7 +52,7 @@ class SyncplayManager(
     val state: StateFlow<SyncplayUiState> = _state.asStateFlow()
     private val _notifications = MutableSharedFlow<SyncplayNotification>(extraBufferCapacity = 32)
     val notifications: SharedFlow<SyncplayNotification> = _notifications.asSharedFlow()
-    private var socket: WebSocket? = null
+    @Volatile private var socket: WebSocket? = null
     @Volatile private var stopped = false
     private val connectionGeneration = AtomicLong(0)
     private var connectionJob: Job? = null
@@ -61,7 +68,10 @@ class SyncplayManager(
     private var pendingPresence: PresenceReport? = null
     private val pendingCriticalPresence = ArrayDeque<PresenceReport>()
     private var presenceWorker: Job? = null
-    private var lastPresenceIntent: PresenceIntent? = null
+    private var lastPresenceIntent: PresenceReport? = null
+    private var activePresence: PresenceReport? = null
+    private val presenceGeneration = AtomicLong(0)
+    private var recoveryJob: Job? = null
 
     init {
         scope.launch { start() }
@@ -69,7 +79,9 @@ class SyncplayManager(
 
     fun updateSession(updated: AuthSession): Boolean {
         if (updated.serverUrl != session.serverUrl || updated.userId != session.userId) return false
+        val changed = session.token != updated.token
         session = updated
+        if (changed && _state.value.participantId.isNotBlank()) requestRecovery()
         return true
     }
 
@@ -85,27 +97,154 @@ class SyncplayManager(
             presenceSequenceReady.completeExceptionally(error)
             throw error
         }
-        runCatching { refresh() }
-            .onFailure { error ->
-                Log.w(
-                    SYNCPLAY_LOG_TAG,
-                    "Initial Syncplay snapshot failed: ${error.javaClass.simpleName}",
-                )
-            }
+        requestRecovery()
         connect()
     }
 
-    suspend fun refresh() = mutex.withLock {
+    suspend fun refresh() {
+        val membership = presenceGeneration.get()
+        val requested = _state.value.active
         val groups = api.groups(session, participant())
-        adoptGroups(groups, emitNotifications = true)
+        mutex.withLock {
+            if (!stopped && membership == presenceGeneration.get()) {
+                adoptGroups(
+                    groups,
+                    emitNotifications = true,
+                    authoritative = syncplaySnapshotCanRemove(requested, _state.value.active),
+                )
+            }
+        }
     }
 
-    private suspend fun refreshConnectionSnapshot() = mutex.withLock {
+    private suspend fun refreshConnectionSnapshot(isCurrent: () -> Boolean) {
+        val requested = _state.value.active
         val groups = api.groups(session, participant())
-        adoptGroups(groups, emitNotifications = false)
+        mutex.withLock {
+            if (!isCurrent()) return
+            adoptGroups(
+                groups,
+                emitNotifications = false,
+                authoritative = syncplaySnapshotCanRemove(requested, _state.value.active),
+            )
+            _state.update { it.copy(recoveryEpoch = it.recoveryEpoch + 1) }
+        }
+    }
+
+    private fun requestRecovery(webSocket: WebSocket? = socket, replace: Boolean = false) {
+        synchronized(presenceLock) {
+            if (stopped) return
+            if (replace) {
+                recoveryJob?.cancel()
+                recoveryJob = null
+            }
+            if (recoveryJob?.isActive == true) return
+            val generation = connectionGeneration.get()
+            val membership = presenceGeneration.get()
+            fun isCurrent() =
+                !stopped &&
+                    presenceGeneration.get() == membership &&
+                    (webSocket == null ||
+                        (socket === webSocket && connectionGeneration.get() == generation))
+            val job =
+                scope.launch(start = CoroutineStart.LAZY) {
+                    try {
+                        var attempt = 0
+                        while (isCurrent()) {
+                            try {
+                                refreshConnectionSnapshot(::isCurrent)
+                                if (!isCurrent()) return@launch
+                                yield()
+                                val delivery =
+                                    withTimeout(8_000) { replayLatestPresence()?.await() }
+                                if (delivery == PresenceDelivery.SUPERSEDED && isCurrent()) {
+                                    val intent = synchronized(presenceLock) { lastPresenceIntent }
+                                    if (
+                                        intent != null &&
+                                            intent.isSendable(_state.value.active ?: return@launch)
+                                    ) {
+                                        error("Presence was not acknowledged")
+                                    }
+                                }
+                                if (isCurrent())
+                                    Log.d(
+                                        SYNCPLAY_LOG_TAG,
+                                        "Syncplay recovery complete generation=$generation",
+                                    )
+                                return@launch
+                            } catch (error: CancellationException) {
+                                currentCoroutineContext().ensureActive()
+                                Log.d(SYNCPLAY_LOG_TAG, "Syncplay recovery request timed out")
+                            } catch (error: Exception) {
+                                if (
+                                    error is SyncplayException &&
+                                        (error.statusCode in listOf(404, 410) ||
+                                            (error.statusCode == 403 &&
+                                                error.message == "Join this group first."))
+                                ) {
+                                    mutex.withLock {
+                                        _state.value.active?.let { end(it.id, Int.MAX_VALUE) }
+                                    }
+                                    return@launch
+                                }
+                                if (!syncplayFailureIsRetryable(error)) {
+                                    Log.w(
+                                        SYNCPLAY_LOG_TAG,
+                                        "Syncplay recovery stopped: ${error.javaClass.simpleName}",
+                                    )
+                                    return@launch
+                                }
+                                Log.d(
+                                    SYNCPLAY_LOG_TAG,
+                                    "Syncplay recovery retry: ${error.javaClass.simpleName}",
+                                )
+                            }
+                            delay(syncplayRecoveryRetryMillis(attempt++))
+                        }
+                    } finally {
+                        val owner = currentCoroutineContext()[Job]
+                        synchronized(presenceLock) {
+                            if (recoveryJob === owner) recoveryJob = null
+                        }
+                    }
+                }
+            recoveryJob = job
+            job.start()
+        }
+    }
+
+    private fun replayLatestPresence(): CompletableDeferred<PresenceDelivery>? {
+        val intent = synchronized(presenceLock) { lastPresenceIntent } ?: return null
+        val active = _state.value.active ?: return null
+        if (!intent.isSendable(active)) return null
+        return queuePresence(
+            intent.copy(
+                immediate = true,
+                sequence = 0L,
+                operationId = java.util.UUID.randomUUID().toString(),
+                delivery = CompletableDeferred(),
+            )
+        )
+    }
+
+    private fun invalidatePresence() {
+        synchronized(presenceLock) {
+            presenceGeneration.incrementAndGet()
+            pendingPresence?.delivery?.complete(PresenceDelivery.SUPERSEDED)
+            pendingCriticalPresence.forEach { it.delivery.complete(PresenceDelivery.SUPERSEDED) }
+            activePresence?.delivery?.complete(PresenceDelivery.SUPERSEDED)
+            pendingPresence = null
+            pendingCriticalPresence.clear()
+            activePresence = null
+            lastPresenceIntent = null
+            presenceWorker?.cancel()
+            presenceWorker = null
+            recoveryJob?.cancel()
+            recoveryJob = null
+        }
     }
 
     suspend fun create(): SyncplayGroup = mutex.withLock {
+        invalidatePresence()
         try {
             api.create(session, participant()).also(::adopt).also {
                 notify(SyncplayNotification.GroupCreated)
@@ -125,11 +264,15 @@ class SyncplayManager(
     }
 
     suspend fun join(id: String): SyncplayGroup = mutex.withLock {
+        invalidatePresence()
         try {
             val known = _state.value.groups.firstOrNull { it.id == id }
-            api.join(session, participant(), id, known?.revision ?: 0).also(::adopt).also { group ->
-                notify(SyncplayNotification.JoinedGroup(group.name))
-            }
+            api.join(session, participant(), id, known?.revision ?: 0)
+                .also { endedRevisions.remove(id) }
+                .also(::adopt)
+                .also { group ->
+                    notify(SyncplayNotification.JoinedGroup(group.name))
+                }
         } catch (error: Exception) {
             notify(
                 SyncplayNotification.Failure(
@@ -146,8 +289,10 @@ class SyncplayManager(
 
     suspend fun leave() = mutex.withLock {
         val active = _state.value.active ?: return@withLock
+        invalidatePresence()
         try {
             api.leave(session, participant(), active)
+            endedRevisions[active.id] = Int.MAX_VALUE
             _state.value =
                 _state.value.copy(
                     active = null,
@@ -166,6 +311,7 @@ class SyncplayManager(
                 notify(SyncplayNotification.GroupEnded(active.name))
                 return@withLock
             }
+            requestRecovery()
             notify(SyncplayNotification.Failure(SyncplayFailure.LEAVE))
             throw error
         }
@@ -195,9 +341,7 @@ class SyncplayManager(
 
     suspend fun setWatchingTogether(watching: Boolean) = mutex.withLock {
         _state.value.active?.let { group ->
-            if (!watching) {
-                synchronized(presenceLock) { lastPresenceIntent = null }
-            }
+            if (!watching) invalidatePresence()
             adopt(
                 group.copy(
                     members =
@@ -273,21 +417,38 @@ class SyncplayManager(
     private suspend fun presence(report: PresenceReport): Boolean {
         val active =
             mutex.withLock { _state.value.active }?.takeIf(report::isSendable) ?: return false
+        if (report.membership != presenceGeneration.get() || report.delivery.isCompleted)
+            return false
         val result =
             api.presence(
                 session,
                 participant(),
-                active,
+                if (report.isCritical) active else report.room,
                 report.viewing,
                 report.loading,
                 report.sequence,
                 report.pauseRoom,
                 report.operationId,
             )
-        mutex.withLock {
-            if (_state.value.active?.id == active.id) adopt(result)
+        return mutex.withLock {
+            if (
+                report.membership != presenceGeneration.get() ||
+                    report.delivery.isCompleted ||
+                    _state.value.active?.let(report::isSendable) != true
+            )
+                return@withLock false
+            adopt(result)
+            if (!report.isSendable(result)) return@withLock false
+            val member = result.members.firstOrNull { it.participantId == participant() }
+            val expectedLoading = if (report.pauseRoom) result.itemId != null else report.loading
+            member != null &&
+                member.viewing == report.viewing &&
+                member.loading == expectedLoading &&
+                (!report.viewing ||
+                    (result.itemId == report.room.itemId &&
+                        result.mediaGeneration == report.room.mediaGeneration &&
+                        (expectedLoading || member.readyGeneration == report.room.mediaGeneration)))
         }
-        return true
     }
 
     fun reportPresence(
@@ -297,82 +458,128 @@ class SyncplayManager(
         pauseRoom: Boolean = false,
     ) {
         val room = _state.value.active ?: return
-        val effectiveLoading = loading && viewing
         val report =
             PresenceReport(
                 room = room,
                 viewing = viewing,
-                loading = effectiveLoading,
+                loading = loading && viewing,
                 immediate = immediate,
                 sequence = 0L,
                 pauseRoom = pauseRoom,
                 operationId = java.util.UUID.randomUUID().toString(),
+                membership = presenceGeneration.get(),
             )
-        synchronized(presenceLock) {
-            lastPresenceIntent =
-                PresenceIntent(
-                    groupId = room.id,
-                    itemId = room.itemId,
-                    viewing = viewing,
-                    loading = effectiveLoading,
-                    pauseRoom = pauseRoom,
-                )
-            if (report.isCritical) {
-                pendingCriticalPresence.addLast(report)
-            } else {
-                pendingPresence = report
-            }
-            startPresenceWorkerLocked()
-        }
+        if (
+            !viewing ||
+                room.members.firstOrNull { it.participantId == participant() }?.watchingTogether !=
+                    false
+        )
+            queuePresence(report)
     }
+
+    private fun queuePresence(report: PresenceReport): CompletableDeferred<PresenceDelivery> =
+        synchronized(presenceLock) {
+            if (stopped || report.membership != presenceGeneration.get()) {
+                report.delivery.complete(PresenceDelivery.SUPERSEDED)
+                return@synchronized report.delivery
+            }
+            lastPresenceIntent = report
+            val existing = pendingPresence ?: pendingCriticalPresence.peekLast() ?: activePresence
+            if (existing != null && !existing.delivery.isCompleted && existing.sameIntent(report)) {
+                return@synchronized existing.delivery
+            }
+            pendingPresence?.delivery?.complete(PresenceDelivery.SUPERSEDED)
+            pendingPresence = null
+            activePresence
+                ?.takeIf { !it.isCritical }
+                ?.delivery
+                ?.complete(PresenceDelivery.SUPERSEDED)
+            if (report.isCritical) pendingCriticalPresence.addLast(report)
+            else pendingPresence = report
+            startPresenceWorkerLocked()
+            return@synchronized report.delivery
+        }
 
     private fun startPresenceWorkerLocked() {
         check(Thread.holdsLock(presenceLock))
         if (presenceWorker != null || stopped) return
-        presenceWorker = scope.launch {
-            try {
-                while (true) {
-                    val next =
-                        synchronized(presenceLock) {
-                            if (pendingCriticalPresence.isNotEmpty()) {
-                                pendingCriticalPresence.removeFirst()
-                            } else {
-                                pendingPresence.also { pendingPresence = null }
-                            }
-                        } ?: break
-                    if (!next.immediate) {
-                        delay(if (next.loading) 750 else 300)
-                        val superseded =
+        val worker =
+            scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    while (!stopped) {
+                        val next =
                             synchronized(presenceLock) {
-                                pendingCriticalPresence.isNotEmpty() || pendingPresence != null
-                            }
-                        if (superseded) continue
+                                val value =
+                                    if (pendingCriticalPresence.isNotEmpty())
+                                        pendingCriticalPresence.removeFirst()
+                                    else pendingPresence.also { pendingPresence = null }
+                                activePresence = value
+                                value
+                            } ?: break
+                        if (!next.immediate) delay(if (next.loading) 750 else 300)
+                        sendPresence(next)
+                        synchronized(presenceLock) {
+                            if (activePresence === next) activePresence = null
+                        }
                     }
-                    sendPresence(next)
-                }
-            } finally {
-                synchronized(presenceLock) {
-                    presenceWorker = null
-                    if (pendingCriticalPresence.isNotEmpty() || pendingPresence != null) {
-                        startPresenceWorkerLocked()
+                } finally {
+                    val owner = currentCoroutineContext()[Job]
+                    synchronized(presenceLock) {
+                        if (presenceWorker === owner) {
+                            presenceWorker = null
+                            if (pendingCriticalPresence.isNotEmpty() || pendingPresence != null)
+                                startPresenceWorkerLocked()
+                        }
                     }
                 }
             }
-        }
+        presenceWorker = worker
+        worker.start()
     }
 
     private suspend fun sendPresence(report: PresenceReport) {
         presenceSequenceReady.await()
-        val sequencedReport = report.copy(sequence = nextPresenceSequence())
-        val attempts = if (report.isCritical) CRITICAL_PRESENCE_ATTEMPTS else 1
-        repeat(attempts) { attempt ->
+        val sequenced = report.copy(sequence = nextPresenceSequence())
+        var attempt = 0
+        while (
+            !stopped &&
+                report.membership == presenceGeneration.get() &&
+                !report.delivery.isCompleted
+        ) {
+            val active = _state.value.active
+            if (active == null || !report.isSendable(active)) break
             try {
-                if (presence(sequencedReport)) return
-            } catch (error: kotlinx.coroutines.CancellationException) {
+                if (presence(sequenced)) {
+                    report.delivery.complete(PresenceDelivery.ACKNOWLEDGED)
+                    return
+                }
+                if (!report.delivery.isCompleted) requestRecovery()
+                break
+            } catch (error: CancellationException) {
                 throw error
+            } catch (error: Exception) {
+                if (
+                    error is SyncplayException &&
+                        (error.statusCode in listOf(404, 410) ||
+                            (error.statusCode == 403 && error.message == "Join this group first."))
+                ) {
+                    mutex.withLock { end(report.room.id, Int.MAX_VALUE) }
+                    break
+                }
+                if (!syncplayFailureIsRetryable(error)) {
+                    Log.w(
+                        SYNCPLAY_LOG_TAG,
+                        "Syncplay presence stopped: ${error.javaClass.simpleName}",
+                    )
+                    report.delivery.complete(PresenceDelivery.SUPERSEDED)
+                    return
+                }
+                Log.d(SYNCPLAY_LOG_TAG, "Syncplay presence retry sequence=${sequenced.sequence}")
+                requestRecovery()
+                delay(syncplayRecoveryRetryMillis(attempt++))
             }
-            if (attempt + 1 < attempts) delay(CRITICAL_PRESENCE_RETRY_MILLIS * (attempt + 1))
         }
+        report.delivery.complete(PresenceDelivery.SUPERSEDED)
     }
 
     private suspend fun nextPresenceSequence(): Long {
@@ -394,13 +601,7 @@ class SyncplayManager(
     fun stop() {
         stopped = true
         connectionGeneration.incrementAndGet()
-        synchronized(presenceLock) {
-            pendingPresence = null
-            pendingCriticalPresence.clear()
-            lastPresenceIntent = null
-            presenceWorker?.cancel()
-            presenceWorker = null
-        }
+        invalidatePresence()
         if (!presenceSequenceReady.isCompleted) presenceSequenceReady.cancel()
         socket?.close(1000, "Session ended")
         socket = null
@@ -415,6 +616,7 @@ class SyncplayManager(
             while (!stopped) {
                 val generation = connectionGeneration.incrementAndGet()
                 val ended = CompletableDeferred<Unit>()
+                val opened = CompletableDeferred<Unit>()
                 connectionEnded = ended
                 try {
                     val ticket = api.socketTicket(session)
@@ -424,7 +626,7 @@ class SyncplayManager(
                     val webSocket =
                         socketClient.newWebSocket(
                             Request.Builder().url(url.toHttpUrl()).build(),
-                            SocketEvents(ended, generation),
+                            SocketEvents(ended, opened, generation),
                         )
                     socket = webSocket
                     if (stopped || connectionGeneration.get() != generation) {
@@ -432,8 +634,18 @@ class SyncplayManager(
                         webSocket.close(1000, "Session ended")
                         return@launch
                     }
-                    ended.await()
+                    try {
+                        withTimeout(10_000) { opened.await() }
+                        ended.await()
+                    } finally {
+                        webSocket.cancel()
+                        if (socket === webSocket) {
+                            socket = null
+                            _state.update { it.copy(connected = false) }
+                        }
+                    }
                 } catch (error: Exception) {
+                    currentCoroutineContext().ensureActive()
                     if (!stopped) {
                         Log.w(
                             SYNCPLAY_LOG_TAG,
@@ -450,6 +662,7 @@ class SyncplayManager(
 
     private inner class SocketEvents(
         private val ended: CompletableDeferred<Unit>,
+        private val opened: CompletableDeferred<Unit>,
         private val generation: Long,
     ) : WebSocketListener() {
         private fun isCurrent(webSocket: WebSocket): Boolean =
@@ -457,20 +670,10 @@ class SyncplayManager(
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
             if (!isCurrent(webSocket)) return
-            _state.value = _state.value.copy(connected = true, error = null)
+            _state.update { it.copy(connected = true, error = null) }
+            opened.complete(Unit)
             Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket connected")
-            scope.launch {
-                runCatching {
-                        refreshConnectionSnapshot()
-                        if (isCurrent(webSocket)) replayLatestPresence()
-                    }
-                    .onFailure { error ->
-                        Log.w(
-                            SYNCPLAY_LOG_TAG,
-                            "Syncplay reconnect snapshot failed: ${error.javaClass.simpleName}",
-                        )
-                    }
-            }
+            requestRecovery(webSocket, replace = true)
             syncClock(webSocket)
             scope.launch {
                 while (!stopped && _state.value.connected && socket === webSocket) {
@@ -478,18 +681,6 @@ class SyncplayManager(
                     if (_state.value.connected && socket === webSocket) syncClock(webSocket)
                 }
             }
-        }
-
-        private fun replayLatestPresence() {
-            val intent = synchronized(presenceLock) { lastPresenceIntent } ?: return
-            val active = _state.value.active ?: return
-            if (active.id != intent.groupId || active.itemId != intent.itemId) return
-            reportPresence(
-                viewing = intent.viewing,
-                loading = intent.loading,
-                immediate = true,
-                pauseRoom = intent.pauseRoom,
-            )
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -500,7 +691,9 @@ class SyncplayManager(
                     val groups = value.optJSONArray("groups").toGroups()
                     Log.d(SYNCPLAY_LOG_TAG, "Syncplay socket groups count=${groups.size}")
                     scope.launch {
-                        mutex.withLock { adoptGroups(groups, emitNotifications = false) }
+                        mutex.withLock {
+                            if (isCurrent(webSocket)) adoptGroups(groups, emitNotifications = false)
+                        }
                     }
                 }
                 "group" ->
@@ -510,15 +703,19 @@ class SyncplayManager(
                             SYNCPLAY_LOG_TAG,
                             "Syncplay socket group id=${group.id} revision=${group.revision} timeline=${group.timelineRevision} state=${group.playbackState}",
                         )
-                        scope.launch { mutex.withLock { adopt(group) } }
+                        scope.launch { mutex.withLock { if (isCurrent(webSocket)) adopt(group) } }
                     }
                 "group-ended" ->
                     scope.launch {
-                        mutex.withLock { end(value.optString("id"), value.optInt("revision")) }
+                        mutex.withLock {
+                            if (isCurrent(webSocket))
+                                end(value.optString("id"), value.optInt("revision"))
+                        }
                     }
                 "participant-replaced" ->
                     scope.launch {
                         mutex.withLock {
+                            if (!isCurrent(webSocket)) return@withLock
                             end(
                                 value.optString("id"),
                                 Int.MAX_VALUE,
@@ -537,17 +734,19 @@ class SyncplayManager(
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (socket === webSocket && connectionGeneration.get() == generation) {
                 socket = null
-                _state.value = _state.value.copy(connected = false)
+                _state.update { it.copy(connected = false) }
             }
+            opened.completeExceptionally(IllegalStateException("Socket closed before opening"))
             ended.complete(Unit)
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             if (socket === webSocket && connectionGeneration.get() == generation) {
                 socket = null
-                _state.value = _state.value.copy(connected = false)
+                _state.update { it.copy(connected = false) }
                 Log.w(SYNCPLAY_LOG_TAG, "Syncplay socket failed: ${t.javaClass.simpleName}")
             }
+            opened.completeExceptionally(t)
             ended.complete(Unit)
         }
     }
@@ -570,7 +769,11 @@ class SyncplayManager(
         }
     }
 
-    private fun adoptGroups(groups: List<SyncplayGroup>, emitNotifications: Boolean) {
+    private fun adoptGroups(
+        groups: List<SyncplayGroup>,
+        emitNotifications: Boolean,
+        authoritative: Boolean = false,
+    ) {
         val previous = _state.value
         val latestGroups = groups.mapNotNull { incoming ->
             if (incoming.revision <= (endedRevisions[incoming.id] ?: -1)) return@mapNotNull null
@@ -578,19 +781,29 @@ class SyncplayManager(
                 .firstOrNull { it.id == incoming.id }
                 .let { known -> latestSyncplayGroup(known, incoming) } ?: incoming
         }
+        if (
+            authoritative &&
+                previous.active != null &&
+                latestGroups.none { it.id == previous.active.id }
+        ) {
+            endedRevisions[previous.active.id] = Int.MAX_VALUE
+        }
         val active =
-            previous.active?.let { current ->
-                latestGroups
-                    .firstOrNull { it.id == current.id }
-                    .let { candidate -> latestSyncplayGroup(current, candidate) } ?: current
-            }
+            previous.active
+                ?.takeUnless { authoritative && latestGroups.none { group -> group.id == it.id } }
+                ?.let { current ->
+                    latestGroups
+                        .firstOrNull { it.id == current.id }
+                        .let { candidate -> latestSyncplayGroup(current, candidate) } ?: current
+                }
                 ?: latestGroups.firstOrNull { group ->
                     group.members.any { it.participantId == participant() }
                 }
         val next = active?.takeIf { group ->
             group.members.any { it.participantId == participant() }
         }
-        _state.value = previous.copy(groups = latestGroups, active = next)
+        if (previous.active != null && previous.active.id != next?.id) invalidatePresence()
+        _state.update { it.copy(groups = latestGroups, active = next) }
         if (emitNotifications) announceChanges(previous.active, next)
         hydrated = true
     }
@@ -622,7 +835,8 @@ class SyncplayManager(
                 isMember -> group
                 else -> previous.active
             }
-        _state.value = previous.copy(groups = groups, active = active)
+        if (previous.active != null && previous.active.id != active?.id) invalidatePresence()
+        _state.update { it.copy(groups = groups, active = active) }
         announceChanges(previous.active, active)
     }
 
@@ -634,7 +848,10 @@ class SyncplayManager(
         if (revision <= maxOf(knownRevision, endedRevisions[id] ?: -1)) return
         endedRevisions[id] = revision
         val active = current.active?.takeIf { it.id != id }
-        _state.value = current.copy(groups = current.groups.filter { it.id != id }, active = active)
+        if (current.active?.id == id) invalidatePresence()
+        _state.update {
+            it.copy(groups = current.groups.filter { group -> group.id != id }, active = active)
+        }
         if (hydrated && current.active?.id == id) {
             notifyOnce(
                 "group:$id:$revision:ended",
@@ -719,26 +936,40 @@ class SyncplayManager(
         val sequence: Long,
         val pauseRoom: Boolean,
         val operationId: String,
+        val membership: Long,
+        val delivery: CompletableDeferred<PresenceDelivery> = CompletableDeferred(),
     ) {
         val isCritical: Boolean
             get() = syncplayPresenceReportIsCritical(viewing, pauseRoom)
+
+        fun sameIntent(other: PresenceReport): Boolean =
+            viewing == other.viewing &&
+                loading == other.loading &&
+                pauseRoom == other.pauseRoom &&
+                syncplayPresenceReportIsCurrent(room, other.room)
 
         fun isSendable(active: SyncplayGroup): Boolean =
             syncplayPresenceReportCanSend(room, active, isCritical)
     }
 
-    private data class PresenceIntent(
-        val groupId: String,
-        val itemId: String?,
-        val viewing: Boolean,
-        val loading: Boolean,
-        val pauseRoom: Boolean,
-    )
+    private enum class PresenceDelivery {
+        ACKNOWLEDGED,
+        SUPERSEDED,
+    }
 }
 
 private const val SYNCPLAY_LOG_TAG = "ZenStreamSyncplay"
-private const val CRITICAL_PRESENCE_ATTEMPTS = 3
-private const val CRITICAL_PRESENCE_RETRY_MILLIS = 250L
+
+internal fun syncplayRecoveryRetryMillis(attempt: Int): Long =
+    minOf(10_000L, 500L * (1L shl attempt.coerceIn(0, 5)))
+
+internal fun syncplaySnapshotCanRemove(
+    requested: SyncplayGroup?,
+    current: SyncplayGroup?,
+): Boolean = requested?.id == current?.id && requested?.revision == current?.revision
+
+internal fun syncplayFailureIsRetryable(error: Exception): Boolean =
+    error !is SyncplayException || error.statusCode == 429 || error.statusCode >= 500
 
 internal fun syncplayPresenceReportIsCritical(viewing: Boolean, pauseRoom: Boolean): Boolean =
     pauseRoom || !viewing

@@ -373,6 +373,7 @@ fun PlaybackScreen(
         syncplayState.active?.itemId,
         syncplayState.active?.mediaGeneration,
         syncplayState.active?.timelineRevision,
+        syncplayState.recoveryEpoch,
         state.itemId,
         playerVisible,
         state.error,

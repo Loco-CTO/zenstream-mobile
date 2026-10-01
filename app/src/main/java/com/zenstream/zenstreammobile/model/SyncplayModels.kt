@@ -44,6 +44,7 @@ data class SyncplayUiState(
     val active: SyncplayGroup? = null,
     val participantId: String = "",
     val connected: Boolean = false,
+    val recoveryEpoch: Long = 0,
     val error: String? = null,
 ) {
     fun currentMember(): SyncplayMember? =
