@@ -94,9 +94,21 @@ class SyncplayManagerTest {
                                         .toString()
                                 )
                         request.path == "/api/syncplay/groups/room-1/presence" -> {
-                            presenceBodies.add(JSONObject(request.body.readUtf8()))
+                            val body = JSONObject(request.body.readUtf8())
+                            presenceBodies.add(body)
                             firstPresenceLatch.countDown()
-                            MockResponse().setBody(payload().toString())
+                            MockResponse()
+                                .setBody(
+                                    payload()
+                                        .apply {
+                                            getJSONArray("members")
+                                                .getJSONObject(0)
+                                                .put("viewing", body.getBoolean("viewing"))
+                                                .put("loading", body.getBoolean("loading"))
+                                                .put("readyGeneration", 1)
+                                        }
+                                        .toString()
+                                )
                         }
                         request.path?.startsWith("/api/ws/syncplay") == true ->
                             MockResponse().withWebSocketUpgrade(socketListener)
@@ -177,7 +189,18 @@ class SyncplayManagerTest {
                         request.path == "/api/auth/socket-ticket" ->
                             MockResponse().setBody("{\"ticket\":\"ticket\"}")
                         request.path?.startsWith("/api/ws/syncplay") == true ->
-                            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {})
+                            MockResponse()
+                                .withWebSocketUpgrade(
+                                    object : WebSocketListener() {
+                                        override fun onClosing(
+                                            webSocket: WebSocket,
+                                            code: Int,
+                                            reason: String,
+                                        ) {
+                                            webSocket.close(code, reason)
+                                        }
+                                    }
+                                )
                         else -> MockResponse().setResponseCode(404)
                     }
             }
