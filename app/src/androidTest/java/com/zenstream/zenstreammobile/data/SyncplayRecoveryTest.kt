@@ -174,10 +174,11 @@ class SyncplayRecoveryTest {
                 MockResponse().setBody("{\"groups\":[]}").setBodyDelay(30, TimeUnit.SECONDS)
             )
             val started = System.nanoTime()
-            val error = runCatching {
-                SyncplayApi().groups(session, "participant")
-            }
-                .exceptionOrNull()
+            val error =
+                runCatching {
+                        SyncplayApi().groups(session, "participant")
+                    }
+                    .exceptionOrNull()
             assertNotNull(error)
             assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) in 7_000..10_000)
             val cancelled = AtomicInteger()
