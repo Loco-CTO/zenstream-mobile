@@ -74,6 +74,45 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun recommendationsRenderAsAnIndependentHomeRow() = runTest {
+        val source =
+            FakeHomeDataSource(
+                recommendationsRequest = { listOf(MediaItem("recommended", "Recommended")) }
+            )
+        val viewModel = HomeViewModel(source, session)
+
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(RowTitle.Recommendations),
+            viewModel.uiState.value.data?.rows?.map { it.title },
+        )
+        assertFalse(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun unsupportedRecommendationsDoNotFailTheOtherHomeSections() = runTest {
+        val source =
+            FakeHomeDataSource(
+                featuredRequest = {
+                    listOf(MediaItem("featured", "Featured", backdropImageTags = listOf("tag")))
+                },
+                recommendationsRequest = { error("recommendations unsupported") },
+            )
+        val viewModel = HomeViewModel(source, session)
+
+        advanceUntilIdle()
+
+        assertEquals("Featured", viewModel.uiState.value.data?.featured?.single()?.name)
+        assertTrue(
+            viewModel.uiState.value.data?.rows.orEmpty().none {
+                it.title == RowTitle.Recommendations
+            }
+        )
+        assertFalse(viewModel.uiState.value.error)
+    }
+
+    @Test
     fun libraryRowsAppearAsEachLibraryRequestCompletes() = runTest {
         val first = Library("first", "First", "movies")
         val second = Library("second", "Second", "movies")
@@ -192,6 +231,7 @@ private class FakeHomeDataSource(
     var featuredRequest: suspend () -> List<MediaItem> = { emptyList() },
     var continueWatchingRequest: suspend () -> List<MediaItem> = { emptyList() },
     var nextUpRequest: suspend () -> List<MediaItem> = { emptyList() },
+    var recommendationsRequest: suspend () -> List<MediaItem> = { emptyList() },
     var derivedRequest: suspend () -> DerivedHomeData = { DerivedHomeData() },
     var librariesRequest: suspend () -> List<Library> = { emptyList() },
     var libraryDataRequest: suspend (Library) -> LibraryData = { LibraryData(it, emptyList()) },
@@ -209,6 +249,9 @@ private class FakeHomeDataSource(
         continueWatchingRequest()
 
     override suspend fun homeNextUp(session: AuthSession): List<MediaItem> = nextUpRequest()
+
+    override suspend fun homeRecommendations(session: AuthSession): List<MediaItem> =
+        recommendationsRequest()
 
     override suspend fun homeDerived(session: AuthSession): DerivedHomeData = derivedRequest()
 

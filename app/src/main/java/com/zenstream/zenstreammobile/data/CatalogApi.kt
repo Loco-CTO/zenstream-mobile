@@ -903,6 +903,11 @@ class CatalogApi(
             catalogItems(homeSection(session, "nextUp"), "nextUp")
         }
 
+    suspend fun fetchHomeRecommendations(session: AuthSession): List<MediaItem> =
+        withContext(Dispatchers.IO) {
+            catalogItems(homeSection(session, "recommendations"), "recommendations")
+        }
+
     suspend fun fetchHomeDerived(session: AuthSession): DerivedHomeData =
         withContext(Dispatchers.IO) {
             parseDerivedHomeData(homeSection(session, "derived"))
@@ -1033,16 +1038,7 @@ class CatalogApi(
                     null
                 }
             val parsed = dedicated?.let { parseHomeLibraryData(it, library) }
-            if (parsed != null && parsed.rows.isNotEmpty()) {
-                return@withContext parsed
-            }
-            val aggregate =
-                requestJson(
-                    session,
-                    "/api/catalog/home",
-                    requestTimeoutMillis = requestTimeoutMillis,
-                )
-            parseHomeLibraryData(aggregate, library)
+            parsed ?: LibraryData(library, emptyList())
         }
 
     suspend fun fetchLibraryPage(
@@ -2119,6 +2115,9 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
             catalogItems(payload, "nextUp")
                 .takeIf { it.isNotEmpty() }
                 ?.let { MediaRow(RowTitle.NextUp, items = it, wide = true) },
+            catalogItems(payload, "recommendations")
+                .takeIf { it.isNotEmpty() }
+                ?.let { MediaRow(RowTitle.Recommendations, items = it) },
         )
     val libraryRows =
         jsonArray(payload, "libraryRows").mapNotNull { row ->

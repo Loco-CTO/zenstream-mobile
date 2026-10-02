@@ -70,6 +70,7 @@
     <string name="notifications_remove">通知を削除</string>
     <string name="continue_watching">視聴を続ける</string>
     <string name="next_up">次に見る</string>
+    <string name="recommendations_for_you">あなたへのおすすめ</string>
     <string name="newly_added">新着</string>
     <string name="play_next">次のエピソードを再生</string>
     <string name="stop_playing">再生を停止</string>

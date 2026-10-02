@@ -148,6 +148,8 @@ interface HomeDataSource : CatalogRefreshSource {
 
     suspend fun homeNextUp(session: AuthSession): List<MediaItem>
 
+    suspend fun homeRecommendations(session: AuthSession): List<MediaItem>
+
     suspend fun homeDerived(session: AuthSession): DerivedHomeData
 
     suspend fun homeLibraries(session: AuthSession): List<Library>
@@ -911,6 +913,9 @@ class CatalogRepository(
 
     override suspend fun homeNextUp(session: AuthSession) =
         authenticatedCatalogRequest(session) { current -> api.fetchHomeNextUp(current) }
+
+    override suspend fun homeRecommendations(session: AuthSession) =
+        authenticatedCatalogRequest(session) { current -> api.fetchHomeRecommendations(current) }
 
     override suspend fun homeDerived(session: AuthSession) =
         authenticatedCatalogRequest(session) { current -> api.fetchHomeDerived(current) }
