@@ -104,7 +104,11 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Featured", viewModel.uiState.value.data?.featured?.single()?.name)
-        assertTrue(viewModel.uiState.value.data?.rows.orEmpty().none { it.title == RowTitle.Recommendations })
+        assertTrue(
+            viewModel.uiState.value.data?.rows.orEmpty().none {
+                it.title == RowTitle.Recommendations
+            }
+        )
         assertFalse(viewModel.uiState.value.error)
     }
 

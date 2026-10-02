@@ -691,10 +691,11 @@ class CatalogApiTest {
     fun aggregateHomeParsingIncludesRecommendations() {
         val home =
             parseHomeData(
-                JSONObject().put(
-                    "recommendations",
-                    JSONArray().put(catalogItem("recommended", "Recommended")),
-                )
+                JSONObject()
+                    .put(
+                        "recommendations",
+                        JSONArray().put(catalogItem("recommended", "Recommended")),
+                    )
             )
 
         assertEquals(listOf(RowTitle.Recommendations), home.rows.map { it.title })
