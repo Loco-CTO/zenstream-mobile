@@ -127,6 +127,7 @@ enum class RowVariant {
 enum class RowTitle {
     ContinueWatching,
     NextUp,
+    Recommendations,
     MyList,
     Genre,
     NewlyAdded,
@@ -167,12 +168,13 @@ fun orderedHomeRows(rows: List<MediaRow>): List<MediaRow> = rows.sortedBy { row 
     when {
         row.title == RowTitle.ContinueWatching -> 0
         row.title == RowTitle.NextUp -> 1
-        row.title == RowTitle.NewlyAdded -> 2
-        row.title == RowTitle.TopRated -> 3
-        row.title == RowTitle.MyList -> 4
-        row.title == RowTitle.FavoriteMusic -> 5
-        row.title == RowTitle.Genre -> 6
-        else -> 6
+        row.title == RowTitle.Recommendations -> 2
+        row.title == RowTitle.NewlyAdded -> 3
+        row.title == RowTitle.TopRated -> 4
+        row.title == RowTitle.MyList -> 5
+        row.title == RowTitle.FavoriteMusic -> 6
+        row.title == RowTitle.Genre -> 7
+        else -> 7
     }
 }
 

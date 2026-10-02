@@ -75,6 +75,7 @@ fun MediaRowView(
         when (row.title) {
             RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
             RowTitle.NextUp -> stringResource(R.string.next_up)
+            RowTitle.Recommendations -> stringResource(R.string.recommendations_for_you)
             RowTitle.MyList -> stringResource(R.string.favorites)
             RowTitle.FavoriteMusic -> stringResource(R.string.favorite_music)
             RowTitle.Genre -> row.label.orEmpty()

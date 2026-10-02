@@ -70,6 +70,7 @@
     <string name="notifications_remove">Remove notification</string>
     <string name="continue_watching">Continue Watching</string>
     <string name="next_up">Next Up</string>
+    <string name="recommendations_for_you">Recommended for you</string>
     <string name="newly_added">Newly Added</string>
     <string name="play_next">Play next</string>
     <string name="stop_playing">Stop playing</string>

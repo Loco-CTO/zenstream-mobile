@@ -512,7 +512,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
     private var loadingJob: Job? = null
 
     private companion object {
-        const val INITIAL_SECTION_COUNT = 5
+        const val INITIAL_SECTION_COUNT = 6
     }
 
     init {
@@ -566,6 +566,14 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                 }
                 launch {
                     loadSection(
+                        request = { repository.homeRecommendations(session) },
+                        apply = { data, items ->
+                            data.withRow(RowTitle.Recommendations, items, wide = false)
+                        },
+                    )
+                }
+                launch {
+                    loadSection(
                         request = { repository.homeDerived(session) },
                         apply = { data, derived -> data.withDerivedRows(derived.rows()) },
                     )
@@ -583,18 +591,22 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
             if (libraries.isNotEmpty()) addPendingSections(libraries.size)
             completeSection(success = true)
             if (libraries.isEmpty()) return
-            libraries
-                .map { library ->
-                    launch {
-                        loadSection(
-                            request = { repository.homeLibraryData(session, library) },
-                            apply = { data, libraryData ->
-                                data.withLibraryData(libraries, libraryData)
-                            },
-                        )
+            libraries.chunked(3).forEach { batch ->
+                batch
+                    .map { library ->
+                        launch {
+                            loadSection(
+                                request = {
+                                    repository.homeLibraryData(session, library)
+                                },
+                                apply = { data, libraryData ->
+                                    data.withLibraryData(libraries, libraryData)
+                                },
+                            )
+                        }
                     }
-                }
-                .joinAll()
+                    .joinAll()
+            }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             handleFailure(error)

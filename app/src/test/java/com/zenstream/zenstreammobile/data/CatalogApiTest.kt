@@ -680,6 +680,28 @@ class CatalogApiTest {
     }
 
     @Test
+    fun recommendationsHomeSectionUsesTheSharedOptionalEndpoint() {
+        assertEquals(
+            "/api/catalog/home?section=recommendations&limit=18",
+            homeSectionPath("recommendations", 18, encode = { it }),
+        )
+    }
+
+    @Test
+    fun aggregateHomeParsingIncludesRecommendations() {
+        val home =
+            parseHomeData(
+                JSONObject().put(
+                    "recommendations",
+                    JSONArray().put(catalogItem("recommended", "Recommended")),
+                )
+            )
+
+        assertEquals(listOf(RowTitle.Recommendations), home.rows.map { it.title })
+        assertEquals("recommended", home.rows.single().items.single().id)
+    }
+
+    @Test
     fun aggregateHomeParsingCapsFeaturedItemsAfterLoadingTheFullList() {
         val payload =
             JSONObject()
