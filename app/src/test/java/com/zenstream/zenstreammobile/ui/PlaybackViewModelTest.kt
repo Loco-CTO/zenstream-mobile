@@ -447,6 +447,40 @@ class PlaybackViewModelTest {
         )
     }
 
+    @Test
+    fun alreadySettledTimelineCanClearLoadingWithoutAnotherEngineUpdate() {
+        val room =
+            syncplayRoom(
+                playbackState = "paused",
+                anchorPosition = 45.0,
+            )
+        val engine =
+            EngineState(
+                positionSeconds = 45.0,
+                durationSeconds = 120.0,
+                ready = true,
+            )
+
+        assertTrue(
+            shouldCompleteSyncplaySettling(
+                settling = true,
+                room = room,
+                itemId = "item-1",
+                engine = engine,
+                serverNow = 110.0,
+            )
+        )
+        assertFalse(
+            shouldCompleteSyncplaySettling(
+                settling = false,
+                room = room,
+                itemId = "item-1",
+                engine = engine,
+                serverNow = 110.0,
+            )
+        )
+    }
+
     private fun syncplayRoom(
         playbackState: String,
         effectiveAt: Double = 0.0,

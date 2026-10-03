@@ -1,5 +1,11 @@
 package com.zenstream.zenstreammobile.data
 
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -9,6 +15,69 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncplayApiTest {
+    @Test
+    fun unauthorizedRequestsRetryWithTheRefreshedSession() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(401)
+                    .setBody("""{"detail":"Authentication required."}""")
+            )
+            server.enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"groups":[]}""")
+            )
+
+            val session =
+                com.zenstream.zenstreammobile.model.AuthSession(
+                    serverUrl = server.url("/").toString().removeSuffix("/"),
+                    token = "expired",
+                    userId = "user-1",
+                    username = "Ada",
+                )
+            val refreshed = session.copy(token = "rotated")
+            val api =
+                SyncplayApi(
+                    httpClient = OkHttpClient(),
+                    requestAuthenticator =
+                        SyncplayRequestAuthenticator { expected, request ->
+                            try {
+                                request(expected)
+                            } catch (error: SyncplayException) {
+                                if (error.statusCode != 401) throw error
+                                request(refreshed)
+                            }
+                        },
+                )
+
+            assertTrue(api.groups(session, "participant-1").isEmpty())
+            assertEquals(
+                "Bearer expired",
+                server.takeRequest(1, TimeUnit.SECONDS)?.getHeader("Authorization"),
+            )
+            assertEquals(
+                "Bearer rotated",
+                server.takeRequest(1, TimeUnit.SECONDS)?.getHeader("Authorization"),
+            )
+        }
+    }
+
+    @Test
+    fun failedUserActionsAreContainedAndCancellationStillPropagates() = runBlocking {
+        assertNull(runSyncplayAction { throw SyncplayException(401, "Authentication required") })
+
+        val cancellation = CancellationException("cancelled")
+        try {
+            runSyncplayAction<Unit> { throw cancellation }
+        } catch (error: CancellationException) {
+            assertTrue(error === cancellation)
+            return@runBlocking
+        }
+        throw AssertionError("Cancellation must propagate")
+    }
+
     @Test
     fun recoveryBackoffIsBoundedAndOnlyTransientHttpFailuresRetry() {
         assertEquals(

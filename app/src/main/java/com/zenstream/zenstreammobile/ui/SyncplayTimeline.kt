@@ -48,6 +48,14 @@ internal fun syncplayTimelineIsSettled(
     return abs(engine.positionSeconds - target) <= SYNCPLAY_SETTLE_TOLERANCE_SECONDS
 }
 
+internal fun shouldCompleteSyncplaySettling(
+    settling: Boolean,
+    room: SyncplayGroup?,
+    itemId: String,
+    engine: EngineState,
+    serverNow: Double,
+): Boolean = settling && syncplayTimelineIsSettled(room, itemId, engine, serverNow)
+
 internal fun sameSyncplayTimeline(left: SyncplayGroup, right: SyncplayGroup): Boolean =
     left.id == right.id &&
         left.itemId == right.itemId &&

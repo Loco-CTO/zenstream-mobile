@@ -18,6 +18,7 @@ import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackMimeType
 import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.data.playbackUrlWithAccess
+import com.zenstream.zenstreammobile.data.runSyncplayAction
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaStream
@@ -304,18 +305,7 @@ class PlaybackViewModel(
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
                 val manager = syncplay
                 val room = manager?.state?.value?.active
-                if (
-                    _uiState.value.syncplaySettling &&
-                        syncplayTimelineIsSettled(
-                            room,
-                            currentItemId,
-                            state,
-                            manager?.serverNow() ?: 0.0,
-                        )
-                ) {
-                    _uiState.value = _uiState.value.copy(syncplaySettling = false)
-                    manager?.reportPresence(viewing = true, loading = false)
-                }
+                settleSyncplayTimelineIfReady(room, state, manager?.serverNow() ?: 0.0)
                 if (state.error != null) {
                     Log.w(
                         PLAYBACK_TAG,
@@ -885,12 +875,14 @@ class PlaybackViewModel(
         if (room != null) {
             if (!manager.state.value.canControl(session.userId)) return
             viewModelScope.launch {
-                manager.command(
-                    if (_uiState.value.engine.isPlaying) "pause" else "play",
-                    currentPlayerPositionSeconds(),
-                    !_uiState.value.engine.isPlaying,
-                    currentItemId,
-                )
+                runSyncplayAction {
+                    manager.command(
+                        if (_uiState.value.engine.isPlaying) "pause" else "play",
+                        currentPlayerPositionSeconds(),
+                        !_uiState.value.engine.isPlaying,
+                        currentItemId,
+                    )
+                }
             }
         } else togglePlay()
     }
@@ -905,7 +897,9 @@ class PlaybackViewModel(
             if (!manager.state.value.canControl(session.userId)) return
             viewModelScope.launch {
                 val shouldResume = room.playbackState == "playing" || room.resumeWhenReady
-                manager.command("seek", target, shouldResume, currentItemId)
+                runSyncplayAction {
+                    manager.command("seek", target, shouldResume, currentItemId)
+                }
             }
         } else seekTo(target)
     }
@@ -920,8 +914,31 @@ class PlaybackViewModel(
         if (target == null) return
         if (manager.state.value.active != null) {
             if (!manager.state.value.canControl(session.userId)) return
-            viewModelScope.launch { manager.command("media", 0.0, true, target.id) }
+            viewModelScope.launch {
+                runSyncplayAction { manager.command("media", 0.0, true, target.id) }
+            }
         } else transitionTo(target)
+    }
+
+    private fun settleSyncplayTimelineIfReady(
+        room: SyncplayGroup?,
+        engine: EngineState,
+        serverNow: Double,
+    ) {
+        val current = _uiState.value
+        if (
+            !shouldCompleteSyncplaySettling(
+                current.syncplaySettling,
+                room,
+                current.itemId,
+                engine,
+                serverNow,
+            )
+        ) {
+            return
+        }
+        _uiState.value = current.copy(syncplaySettling = false)
+        syncplay?.reportPresence(viewing = true, loading = false)
     }
 
     fun applySyncplayRoom(room: SyncplayGroup, serverNow: Double) {
@@ -947,6 +964,7 @@ class PlaybackViewModel(
         if (newTimeline || (timeline.shouldPlay && kotlin.math.abs(current - position) > 1.5))
             playbackEngine?.seekTo(position)
         if (timeline.shouldPlay) playbackEngine?.play() else playbackEngine?.pause()
+        settleSyncplayTimelineIfReady(room, _uiState.value.engine, serverNow)
     }
 
     private fun transitionToSyncplay(itemId: String, position: Double) {
@@ -1096,7 +1114,9 @@ class PlaybackViewModel(
         val manager = syncplay
         if (manager?.state?.value?.active != null) {
             if (manager.state.value.active?.hostUserId != session.userId) return
-            viewModelScope.launch { manager.command("media", 0.0, true, target.id) }
+            viewModelScope.launch {
+                runSyncplayAction { manager.command("media", 0.0, true, target.id) }
+            }
         } else {
             transitionTo(target)
         }
@@ -1107,7 +1127,9 @@ class PlaybackViewModel(
         transitionInProgress = true
         pendingCompletionGeneration = null
         viewModelScope.launch {
-            syncplay?.setWatchingTogether(false)
+            syncplay?.let { manager ->
+                runSyncplayAction { manager.setWatchingTogether(false) }
+            }
             val outgoing = _uiState.value.playback
             reportProgress(playbackProgressSnapshot())
             invalidateActivePlaybackLoad()

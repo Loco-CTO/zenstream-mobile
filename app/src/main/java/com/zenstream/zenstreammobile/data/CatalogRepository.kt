@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
 
 private data class AudioLyricsCacheKey(
     val serverUrl: String,
@@ -806,6 +807,37 @@ class CatalogRepository(
         }
     }
 
+    internal suspend fun authenticatedSyncplayRequest(
+        current: AuthSession,
+        block: suspend (AuthSession) -> JSONObject,
+    ): JSONObject {
+        val requestSession = currentSessionForRequest(current)
+        return try {
+            AuthLifecycleLog.firstProtectedRequest(requestSession)
+            block(requestSession).also { clearRetryableAuthState(requestSession) }
+        } catch (error: SyncplayException) {
+            if (error.statusCode != 401) throw error
+            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
+            val refreshed =
+                try {
+                    refreshAfterUnauthorized(requestSession)
+                } catch (refreshError: CatalogException) {
+                    throw SyncplayException(
+                        refreshError.statusCode,
+                        refreshError.message ?: "Authentication refresh failed",
+                    )
+                } ?: throw error
+            try {
+                block(refreshed).also { clearRetryableAuthState(refreshed) }
+            } catch (retryError: SyncplayException) {
+                if (retryError.statusCode == 401) {
+                    AuthLifecycleLog.event("protected_retry_401", refreshed, statusCode = 401)
+                }
+                throw retryError
+            }
+        }
+    }
+
     private suspend fun currentSessionForRequest(expected: AuthSession): AuthSession {
         val latest =
             (sessionState.first { it !is StoredSessionState.Loading } as? StoredSessionState.Loaded)
@@ -1388,7 +1420,13 @@ class CatalogRepository(
         sessionStore.saveCheckForUpdatesOnStartup(enabled)
 
     fun syncplayManager(session: AuthSession): SyncplayManager =
-        SyncplaySession.manager(session, sessionStore)
+        SyncplaySession.manager(
+            session,
+            sessionStore,
+            SyncplayApi(
+                requestAuthenticator = SyncplayRequestAuthenticator(::authenticatedSyncplayRequest)
+            ),
+        )
 
     override suspend fun loadSubtitleStyle(): SubtitleStyle {
         return sessionStore.cachedSubtitleStyle() ?: DEFAULT_SUBTITLE_STYLE
