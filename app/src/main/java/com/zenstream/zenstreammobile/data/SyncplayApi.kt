@@ -20,7 +20,17 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
-class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
+fun interface SyncplayRequestAuthenticator {
+    suspend fun execute(
+        expected: AuthSession,
+        request: suspend (AuthSession) -> JSONObject,
+    ): JSONObject
+}
+
+class SyncplayApi(
+    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val requestAuthenticator: SyncplayRequestAuthenticator? = null,
+) {
     suspend fun groups(session: AuthSession, participantId: String): List<SyncplayGroup> =
         request(session, participantId, "groups").optJSONArray("groups").toGroups()
 
@@ -155,13 +165,17 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         )
 
     suspend fun socketTicket(session: AuthSession): String {
-        val request =
-            Request.Builder()
-                .url("${session.serverUrl}/api/auth/socket-ticket".toHttpUrl())
-                .header("Authorization", "Bearer ${session.token}")
-                .post("{}".toRequestBody(JSON))
-                .build()
-        return execute(request).optString("ticket").ifBlank { error("Socket ticket was empty") }
+        return authenticatedRequest(session) { current ->
+                val request =
+                    Request.Builder()
+                        .url("${current.serverUrl}/api/auth/socket-ticket".toHttpUrl())
+                        .header("Authorization", "Bearer ${current.token}")
+                        .post("{}".toRequestBody(JSON))
+                        .build()
+                execute(request)
+            }
+            .optString("ticket")
+            .ifBlank { error("Socket ticket was empty") }
     }
 
     private suspend fun request(
@@ -170,20 +184,27 @@ class SyncplayApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         path: String,
         method: String = "GET",
         body: JSONObject? = null,
-    ): JSONObject {
-        val request =
-            Request.Builder()
-                .url("${session.serverUrl}/api/syncplay/$path".toHttpUrl())
-                .header("Accept", "application/json")
-                .header("Authorization", "Bearer ${session.token}")
-                .header("X-ZenStream-Participant", participantId)
-                .method(
-                    method,
-                    if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody(JSON),
-                )
-                .build()
-        return execute(request)
-    }
+    ): JSONObject =
+        authenticatedRequest(session) { current ->
+            val request =
+                Request.Builder()
+                    .url("${current.serverUrl}/api/syncplay/$path".toHttpUrl())
+                    .header("Accept", "application/json")
+                    .header("Authorization", "Bearer ${current.token}")
+                    .header("X-ZenStream-Participant", participantId)
+                    .method(
+                        method,
+                        if (method == "GET") null
+                        else (body?.toString() ?: "{}").toRequestBody(JSON),
+                    )
+                    .build()
+            execute(request)
+        }
+
+    private suspend fun authenticatedRequest(
+        session: AuthSession,
+        request: suspend (AuthSession) -> JSONObject,
+    ): JSONObject = requestAuthenticator?.execute(session, request) ?: request(session)
 
     private suspend fun execute(request: Request): JSONObject =
         suspendCancellableCoroutine { continuation ->

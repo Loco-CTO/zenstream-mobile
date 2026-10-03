@@ -96,6 +96,7 @@ import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.NativeAppDeepLink
 import com.zenstream.zenstreammobile.data.NativeAppDestination
 import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.data.runSyncplayAction
 import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -871,7 +872,16 @@ private fun MainScaffold(
                                                 syncplay.state.value.canControl(session.userId)
                                         ) {
                                             if (active != null) {
-                                                syncplay.command("media", 0.0, true, item.id)
+                                                val commandSucceeded =
+                                                    runSyncplayAction {
+                                                        syncplay.command(
+                                                            "media",
+                                                            0.0,
+                                                            true,
+                                                            item.id,
+                                                        )
+                                                    } != null
+                                                if (!commandSucceeded) return@launch
                                                 syncplay.state.value.active?.let { updated ->
                                                     followedGeneration =
                                                         updated.mediaItemId()?.let { itemId ->

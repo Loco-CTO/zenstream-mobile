@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.data.runSyncplayAction
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
@@ -85,20 +86,25 @@ fun SyncplayGroupMenu(
             session = session,
             playerContext = playerContext,
             onDismiss = { expanded = false },
-            onCreate = { scope.launch { manager.create() } },
+            onCreate = { scope.launch { runSyncplayAction { manager.create() } } },
             onJoin = { groupId ->
-                scope.launch { manager.join(groupId) }
+                scope.launch { runSyncplayAction { manager.join(groupId) } }
             },
-            onRemoveMember = { memberId -> scope.launch { manager.removeMember(memberId) } },
-            onControlsChanged = { enabled -> scope.launch { manager.setControls(enabled) } },
+            onRemoveMember = { memberId ->
+                scope.launch { runSyncplayAction { manager.removeMember(memberId) } }
+            },
+            onControlsChanged = { enabled ->
+                scope.launch { runSyncplayAction { manager.setControls(enabled) } }
+            },
             onReturnToView = { group ->
                 scope.launch {
-                    manager.setWatchingTogether(true)
+                    if (runSyncplayAction { manager.setWatchingTogether(true) } == null)
+                        return@launch
                     expanded = false
                     onReturnToView(group)
                 }
             },
-            onLeave = { scope.launch { manager.leave() } },
+            onLeave = { scope.launch { runSyncplayAction { manager.leave() } } },
         )
     }
 }

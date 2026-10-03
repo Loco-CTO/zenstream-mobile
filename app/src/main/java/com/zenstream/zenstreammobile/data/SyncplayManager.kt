@@ -408,7 +408,15 @@ class SyncplayManager(
                     )
                 mutex.withLock { adopt(result) }
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
+            if (
+                syncplayFailureIsRetryable(error) ||
+                    (error is SyncplayException && error.statusCode in listOf(404, 409, 410))
+            ) {
+                requestRecovery()
+            }
             notify(SyncplayNotification.Failure(SyncplayFailure.PLAYBACK))
             throw error
         }
@@ -1029,11 +1037,15 @@ object SyncplaySession {
     private var current: SyncplayManager? = null
 
     @Synchronized
-    fun manager(session: AuthSession, store: SessionStore): SyncplayManager {
+    fun manager(
+        session: AuthSession,
+        store: SessionStore,
+        api: SyncplayApi = SyncplayApi(),
+    ): SyncplayManager {
         val manager = current
         if (manager == null || !manager.updateSession(session)) {
             manager?.stop()
-            return SyncplayManager(session, store).also { current = it }
+            return SyncplayManager(session, store, api).also { current = it }
         }
         return manager
     }
@@ -1044,3 +1056,12 @@ object SyncplaySession {
         current = null
     }
 }
+
+internal suspend fun <T> runSyncplayAction(action: suspend () -> T): T? =
+    try {
+        action()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
