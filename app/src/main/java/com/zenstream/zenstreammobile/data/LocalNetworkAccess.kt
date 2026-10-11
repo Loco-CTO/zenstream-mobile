@@ -11,6 +11,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 internal const val ACCESS_LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 private const val LOCAL_SERVER_DNS_TIMEOUT_MILLIS = 1_500L
+private val LOCAL_SERVER_HOST_SUFFIXES =
+    setOf("localhost", "local", "lan", "internal", "intranet", "home.arpa")
 
 internal enum class LocalNetworkPermissionStatus {
     RESOLVING,
@@ -76,23 +78,7 @@ internal suspend fun serverRequiresLocalNetworkPermission(
 internal fun isLocalNetworkServer(serverUrl: String): Boolean {
     val host = serverHost(serverUrl) ?: return false
 
-    if (
-        host == "localhost" ||
-            host.endsWith(".localhost") ||
-            host == "local" ||
-            host.endsWith(".local") ||
-            host == "lan" ||
-            host.endsWith(".lan") ||
-            host == "internal" ||
-            host.endsWith(".internal") ||
-            host == "intranet" ||
-            host.endsWith(".intranet") ||
-            host == "home.arpa" ||
-            host.endsWith(".home.arpa") ||
-            (!isAddressLiteral(host) && !host.contains('.'))
-    ) {
-        return true
-    }
+    if (isLocalServerHostname(host)) return true
 
     // Only parse numeric address literals here. Hostnames are resolved separately with a
     // bounded background lookup in serverRequiresLocalNetworkPermission.
@@ -101,6 +87,11 @@ internal fun isLocalNetworkServer(serverUrl: String): Boolean {
     val address = runCatching { InetAddress.getByName(host) }.getOrNull() ?: return false
     return isLocalAddress(address)
 }
+
+private fun isLocalServerHostname(host: String): Boolean =
+    !isAddressLiteral(host) &&
+        (LOCAL_SERVER_HOST_SUFFIXES.any { host == it || host.endsWith(".$it") } ||
+            !host.contains('.'))
 
 private fun serverHost(serverUrl: String): String? =
     runCatching { URI(normalizeServerUrl(serverUrl)).host }

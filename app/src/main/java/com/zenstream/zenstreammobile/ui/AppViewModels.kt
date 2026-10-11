@@ -43,6 +43,8 @@ import com.zenstream.zenstreammobile.model.SearchFacets
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.orderedHomeRows
+import java.io.IOException
+import java.security.GeneralSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import org.json.JSONException
 
 data class AppUiState(
     val loading: Boolean = true,
@@ -101,6 +104,27 @@ data class AppUiState(
                 session == null &&
                 authState.phase == AuthPhase.TEMPORARILY_UNAVAILABLE
 }
+
+internal suspend fun <T> captureSessionRefreshResult(refresh: suspend () -> T): Result<T> =
+    try {
+        Result.success(refresh())
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: CatalogException) {
+        Result.failure(error)
+    } catch (error: IOException) {
+        Result.failure(error)
+    } catch (error: JSONException) {
+        Result.failure(error)
+    } catch (error: SecurityException) {
+        Result.failure(error)
+    } catch (error: GeneralSecurityException) {
+        Result.failure(error)
+    } catch (error: IllegalStateException) {
+        Result.failure(error)
+    } catch (error: IllegalArgumentException) {
+        Result.failure(error)
+    }
 
 class AppViewModel(
     private val repository: CatalogRepository,
@@ -212,17 +236,18 @@ class AppViewModel(
         accountRefreshToken = session.token
         val restored =
             try {
-                repository.refreshCurrentAccount()
+                captureSessionRefreshResult { repository.refreshCurrentAccount() }
+                    .getOrElse { error ->
+                        AuthLifecycleLog.event(
+                            "session_restoration_retryable_failure",
+                            session,
+                            errorType = error::class.java.simpleName,
+                        )
+                        return
+                    }
             } catch (error: CancellationException) {
                 if (accountRefreshToken == session.token) accountRefreshToken = null
                 throw error
-            } catch (error: Exception) {
-                AuthLifecycleLog.event(
-                    "session_restoration_retryable_failure",
-                    session,
-                    errorType = error::class.java.simpleName,
-                )
-                return
             }
 
         val current = lastKnownSession.value

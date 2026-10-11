@@ -119,8 +119,9 @@ class AuthScreensTest {
             .assertIsDisplayed()
         composeRule
             .onNodeWithText(context.getString(R.string.local_network_permission_open_settings))
+            .assertIsDisplayed()
             .performClick()
-        assertTrue(openedSettings)
+        composeRule.runOnIdle { assertTrue(openedSettings) }
         composeRule.runOnIdle { localNetworkPermissionGranted.value = true }
         composeRule.waitForIdle()
         assertFalse(
