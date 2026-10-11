@@ -7,13 +7,18 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private const val LOCAL_SERVER_URL = "http://192.168.1.12:9090"
+private const val CUSTOM_DNS_SERVER_URL = "https://zso.example.org"
+private const val PUBLIC_DNS_ADDRESS = "8.8.8.8"
+private const val PUBLIC_ORCHESTRATOR_URL = "https://orchestrator.example"
+
 class LocalNetworkAccessTest {
     @Test
     fun recognizesPrivateAndLocalAddressForms() {
         listOf(
                 "http://10.0.0.12:9090",
                 "http://172.20.0.12:9090",
-                "http://192.168.1.12:9090",
+                LOCAL_SERVER_URL,
                 "http://169.254.10.2:9090",
                 "http://100.100.10.2:9090",
                 "http://[fd12::1]:9090",
@@ -34,20 +39,20 @@ class LocalNetworkAccessTest {
 
     @Test
     fun publicServerAddressesDoNotRequireLocalNetworkPermission() = runBlocking {
-        assertFalse(isLocalNetworkServer("https://orchestrator.example"))
-        assertFalse(isLocalNetworkServer("http://8.8.8.8:9090"))
+        assertFalse(isLocalNetworkServer(PUBLIC_ORCHESTRATOR_URL))
+        assertFalse(isLocalNetworkServer("http://$PUBLIC_DNS_ADDRESS:9090"))
         val publicIpv6Server = "http://[2606:4700:4700::1111]:9090"
         assertFalse(
             "A public IPv6 literal is not a local hostname",
             isLocalNetworkServer(publicIpv6Server),
         )
         assertFalse(serverRequiresLocalNetworkPermission(publicIpv6Server, sdkInt = 37))
-        assertFalse(serverRequiresLocalNetworkPermission("http://192.168.1.12:9090", sdkInt = 36))
+        assertFalse(serverRequiresLocalNetworkPermission(LOCAL_SERVER_URL, sdkInt = 36))
         assertFalse(
             serverRequiresLocalNetworkPermission(
-                "https://orchestrator.example",
+                PUBLIC_ORCHESTRATOR_URL,
                 sdkInt = 37,
-                resolveHost = { arrayOf(InetAddress.getByName("8.8.8.8")) },
+                resolveHost = { arrayOf(InetAddress.getByName(PUBLIC_DNS_ADDRESS)) },
             )
         )
         assertTrue(
@@ -60,7 +65,7 @@ class LocalNetworkAccessTest {
 
     @Test
     fun api37RequiresPermissionForLocalServerAndBlocksUntilGranted() = runBlocking {
-        val serverUrl = "http://192.168.1.12:9090"
+        val serverUrl = LOCAL_SERVER_URL
 
         assertTrue(serverRequiresLocalNetworkPermission(serverUrl, sdkInt = 37))
         assertFalse(
@@ -80,15 +85,14 @@ class LocalNetworkAccessTest {
     @Test
     fun api37RequestsPermissionForCustomDnsNamesThatResolveLocally() = runBlocking {
         val localAddress = InetAddress.getByName("192.168.1.25")
-        val initialStatus =
-            initialLocalNetworkPermissionStatus("https://zso.example.org", sdkInt = 37)
+        val initialStatus = initialLocalNetworkPermissionStatus(CUSTOM_DNS_SERVER_URL, sdkInt = 37)
 
         assertEquals(LocalNetworkPermissionStatus.RESOLVING, initialStatus)
         assertFalse(canUseServerWithLocalNetworkPermission(initialStatus, permissionGranted = true))
 
         assertTrue(
             serverRequiresLocalNetworkPermission(
-                "https://zso.example.org",
+                CUSTOM_DNS_SERVER_URL,
                 sdkInt = 37,
                 resolveHost = { arrayOf(localAddress) },
             )
@@ -112,7 +116,7 @@ class LocalNetworkAccessTest {
             serverRequiresLocalNetworkPermission(
                 publicHost,
                 sdkInt = 37,
-                resolveHost = { arrayOf(InetAddress.getByName("8.8.8.8")) },
+                resolveHost = { arrayOf(InetAddress.getByName(PUBLIC_DNS_ADDRESS)) },
             )
         )
         val resolvedStatus = resolvedLocalNetworkPermissionStatus(serverRequiresPermission = false)
@@ -130,7 +134,7 @@ class LocalNetworkAccessTest {
     fun api37DoesNotRequirePermissionWhenCustomHostnameResolutionFails() = runBlocking {
         assertFalse(
             serverRequiresLocalNetworkPermission(
-                "https://zso.example.org",
+                CUSTOM_DNS_SERVER_URL,
                 sdkInt = 37,
                 resolveHost = { throw java.net.UnknownHostException("test DNS failure") },
             )

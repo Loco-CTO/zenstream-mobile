@@ -105,26 +105,21 @@ data class AppUiState(
                 authState.phase == AuthPhase.TEMPORARILY_UNAVAILABLE
 }
 
-internal suspend fun <T> captureSessionRefreshResult(refresh: suspend () -> T): Result<T> =
-    try {
-        Result.success(refresh())
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: CatalogException) {
-        Result.failure(error)
-    } catch (error: IOException) {
-        Result.failure(error)
-    } catch (error: JSONException) {
-        Result.failure(error)
-    } catch (error: SecurityException) {
-        Result.failure(error)
-    } catch (error: GeneralSecurityException) {
-        Result.failure(error)
-    } catch (error: IllegalStateException) {
-        Result.failure(error)
-    } catch (error: IllegalArgumentException) {
-        Result.failure(error)
-    }
+internal suspend fun <T> captureSessionRefreshResult(refresh: suspend () -> T): Result<T> {
+    val result = runCatching { refresh() }
+    val error = result.exceptionOrNull() ?: return result
+    if (error is CancellationException || !error.isExpectedSessionRefreshFailure()) throw error
+    return result
+}
+
+private fun Throwable.isExpectedSessionRefreshFailure(): Boolean =
+    this is CatalogException ||
+        this is IOException ||
+        this is JSONException ||
+        this is SecurityException ||
+        this is GeneralSecurityException ||
+        this is IllegalStateException ||
+        this is IllegalArgumentException
 
 class AppViewModel(
     private val repository: CatalogRepository,

@@ -78,8 +78,10 @@ internal suspend fun serverRequiresLocalNetworkPermission(
 internal fun isLocalNetworkServer(serverUrl: String): Boolean {
     val host = serverHost(serverUrl) ?: return false
 
-    if (isLocalServerHostname(host)) return true
+    return isLocalServerHostname(host) || isLocalAddressLiteral(host)
+}
 
+private fun isLocalAddressLiteral(host: String): Boolean {
     // Only parse numeric address literals here. Hostnames are resolved separately with a
     // bounded background lookup in serverRequiresLocalNetworkPermission.
     if (!isAddressLiteral(host)) return false
