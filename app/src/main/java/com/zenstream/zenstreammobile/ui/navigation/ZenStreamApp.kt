@@ -93,11 +93,16 @@ import com.zenstream.zenstreammobile.data.AuthLifecycleLog
 import com.zenstream.zenstreammobile.data.AuthPhase
 import com.zenstream.zenstreammobile.data.AuthState
 import com.zenstream.zenstreammobile.data.CatalogRepository
+import com.zenstream.zenstreammobile.data.LocalNetworkPermissionStatus
 import com.zenstream.zenstreammobile.data.NativeAppDeepLink
 import com.zenstream.zenstreammobile.data.NativeAppDestination
 import com.zenstream.zenstreammobile.data.SyncplayManager
+import com.zenstream.zenstreammobile.data.canUseServerWithLocalNetworkPermission
+import com.zenstream.zenstreammobile.data.initialLocalNetworkPermissionStatus
+import com.zenstream.zenstreammobile.data.resolvedLocalNetworkPermissionStatus
 import com.zenstream.zenstreammobile.data.runSyncplayAction
 import com.zenstream.zenstreammobile.data.sameNativeAppServer
+import com.zenstream.zenstreammobile.data.serverRequiresLocalNetworkPermission
 import com.zenstream.zenstreammobile.launchPlayback
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -164,41 +169,92 @@ fun ZenStreamApp(
     appState: AppUiState,
     repository: CatalogRepository,
     appViewModel: AppViewModel,
+    localNetworkPermissionGranted: Boolean = true,
+    onRequestLocalNetworkPermission: ((Boolean) -> Unit) -> Unit = { result -> result(true) },
+    onOpenLocalNetworkSettings: () -> Unit = {},
     onPickAvatar: () -> Unit = {},
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val activeServerUrl = appState.session?.serverUrl ?: appState.serverUrl
+    val shouldGateServerAccess =
+        appState.showMain || appState.showLogin || appState.showAuthRecovery
+    var localNetworkPermissionStatus by
+        remember(activeServerUrl) {
+            mutableStateOf(initialLocalNetworkPermissionStatus(activeServerUrl))
+        }
+    LaunchedEffect(activeServerUrl) {
+        localNetworkPermissionStatus =
+            resolvedLocalNetworkPermissionStatus(
+                activeServerUrl?.let { serverRequiresLocalNetworkPermission(it) } == true
+            )
+    }
+    val canUseActiveServer =
+        canUseServerWithLocalNetworkPermission(
+            localNetworkPermissionStatus,
+            localNetworkPermissionGranted,
+        )
+
     when {
         appState.loading -> LoadingScreen()
         appState.showSetup ->
             ServerSetupScreen(
                 initialServerUrl = appState.pendingDeepLink?.serverUrl ?: appState.orchestratorUrl,
+                localNetworkPermissionGranted = localNetworkPermissionGranted,
+                onRequestLocalNetworkPermission = onRequestLocalNetworkPermission,
+                onOpenAppSettings = onOpenLocalNetworkSettings,
                 onConfigured = appViewModel::configureServer,
             )
 
         appState.showAuthRecovery ->
-            AuthRestoreUnavailableScreen(
-                onRetry = appViewModel::retryAuthentication,
-                onUseSignIn = appViewModel::useSignInInstead,
-            )
+            if (canUseActiveServer) {
+                AuthRestoreUnavailableScreen(
+                    onRetry = appViewModel::retryAuthentication,
+                    onUseSignIn = appViewModel::useSignInInstead,
+                )
+            } else {
+                LoadingScreen()
+            }
 
-        appState.showLogin -> LoginScreen(repository, appViewModel::changeServer)
-        appState.showMain ->
-            MainScaffold(
-                repository = repository,
-                session = requireNotNull(appState.session),
-                authState = appState.authState,
-                onRetryAuthentication = appViewModel::retryAuthentication,
-                pendingDeepLink = appState.pendingDeepLink,
-                onNativeAppLinkConsumed = appViewModel::consumeNativeAppLink,
-                onLogout = appViewModel::logout,
-                onPasswordChanged = appViewModel::passwordChanged,
-                onPickAvatar = onPickAvatar,
-                avatarPickerResult = avatarPickerResult,
-                onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
-            )
+        appState.showLogin ->
+            if (canUseActiveServer) {
+                LoginScreen(repository, appViewModel::changeServer)
+            } else {
+                LoadingScreen()
+            }
+
+        appState.showMain -> {
+            if (canUseActiveServer) {
+                MainScaffold(
+                    repository = repository,
+                    session = requireNotNull(appState.session),
+                    authState = appState.authState,
+                    onRetryAuthentication = appViewModel::retryAuthentication,
+                    pendingDeepLink = appState.pendingDeepLink,
+                    onNativeAppLinkConsumed = appViewModel::consumeNativeAppLink,
+                    onLogout = appViewModel::logout,
+                    onPasswordChanged = appViewModel::passwordChanged,
+                    onPickAvatar = onPickAvatar,
+                    avatarPickerResult = avatarPickerResult,
+                    onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
+                )
+            } else {
+                LoadingScreen()
+            }
+        }
         else -> LoadingScreen()
+    }
+
+    LaunchedEffect(
+        appState.showMain,
+        activeServerUrl,
+        localNetworkPermissionStatus,
+        localNetworkPermissionGranted,
+    ) {
+        if (appState.showMain && canUseActiveServer && activeServerUrl != null) {
+            appViewModel.onServerNetworkAccessReady(activeServerUrl)
+        }
     }
 
     LaunchedEffect(appState.showLogin) {
@@ -216,25 +272,60 @@ fun ZenStreamApp(
         )
     }
 
-    appState.serverSwitchRequest?.let { request ->
-        AlertDialog(
-            onDismissRequest = appViewModel::cancelNativeAppServerSwitch,
-            title = { Text(stringResource(R.string.native_app_switch_title)) },
-            text = {
-                Text(stringResource(R.string.native_app_switch_message, request.serverUrl))
-            },
-            confirmButton = {
-                TextButton(onClick = appViewModel::confirmNativeAppServerSwitch) {
-                    Text(stringResource(R.string.native_app_switch_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = appViewModel::cancelNativeAppServerSwitch) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
+    if (!shouldGateServerAccess || canUseActiveServer) {
+        appState.serverSwitchRequest?.let { request ->
+            AlertDialog(
+                onDismissRequest = appViewModel::cancelNativeAppServerSwitch,
+                title = { Text(stringResource(R.string.native_app_switch_title)) },
+                text = {
+                    Text(stringResource(R.string.native_app_switch_message, request.serverUrl))
+                },
+                confirmButton = {
+                    TextButton(onClick = appViewModel::confirmNativeAppServerSwitch) {
+                        Text(stringResource(R.string.native_app_switch_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = appViewModel::cancelNativeAppServerSwitch) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
+    }
+
+    if (
+        shouldGateServerAccess &&
+            localNetworkPermissionStatus == LocalNetworkPermissionStatus.REQUIRED &&
+            !localNetworkPermissionGranted
+    ) {
+        LocalNetworkPermissionDialog(
+            onRequestPermission = { onRequestLocalNetworkPermission {} },
+            onOpenSettings = onOpenLocalNetworkSettings,
         )
     }
+}
+
+@Composable
+private fun LocalNetworkPermissionDialog(
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.local_network_permission_required_title)) },
+        text = { Text(stringResource(R.string.local_network_permission_required_message)) },
+        confirmButton = {
+            TextButton(onClick = onRequestPermission) {
+                Text(stringResource(R.string.local_network_permission_allow))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onOpenSettings) {
+                Text(stringResource(R.string.local_network_permission_open_settings))
+            }
+        },
+    )
 }
 
 internal fun openReleasePage(context: Context, url: String): Boolean {

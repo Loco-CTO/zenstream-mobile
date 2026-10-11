@@ -8,6 +8,11 @@
     <string name="continue_label">Continue</string>
     <string name="server_url_required">Enter a server URL.</string>
     <string name="server_url_invalid">Use an HTTP or HTTPS server URL.</string>
+    <string name="local_network_permission_denied">Local network access was denied. Allow it in app settings, then tap Continue.</string>
+    <string name="local_network_permission_required_title">Local network access required</string>
+    <string name="local_network_permission_required_message">ZenStream needs Local network permission to connect to this server. If access was denied or revoked, allow it in this app’s Android settings.</string>
+    <string name="local_network_permission_allow">Allow access</string>
+    <string name="local_network_permission_open_settings">Open app settings</string>
     <string name="welcome">Welcome back</string>
     <string name="login_description">Sign in to your library.</string>
     <string name="username">Username</string>

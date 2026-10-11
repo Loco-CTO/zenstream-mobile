@@ -179,29 +179,6 @@ class AppViewModel(
                             accountRefreshToken = null
                             return@collect
                         }
-                        if (accountRefreshToken != session.token) {
-                            // Account data is refreshed once per bearer token so avatar
-                            // changes made on another client appear without creating a
-                            // startup request loop when the session is persisted again.
-                            accountRefreshToken = session.token
-                            val restored =
-                                try {
-                                    repository.refreshCurrentAccount()
-                                } catch (error: CancellationException) {
-                                    throw error
-                                } catch (error: Exception) {
-                                    AuthLifecycleLog.event(
-                                        "session_restoration_retryable_failure",
-                                        session,
-                                        errorType = error::class.java.simpleName,
-                                    )
-                                    return@collect
-                                }
-                            lastKnownSession.value = restored
-                            accountRefreshToken = restored.token
-                            runCatching { repository.syncInterfaceLocale(restored) }
-                            runCatching { repository.loadWatchHistoryPreference() }
-                        }
                     }
                 }
             }
@@ -218,6 +195,49 @@ class AppViewModel(
 
     fun dismissAvailableUpdate() {
         _availableUpdate.value = null
+    }
+
+    suspend fun onServerNetworkAccessReady(serverUrl: String) {
+        val session =
+            lastKnownSession.value?.takeIf { sameNativeAppServer(it.serverUrl, serverUrl) }
+                ?: return
+        refreshSessionAccountOnce(session)
+    }
+
+    private suspend fun refreshSessionAccountOnce(session: AuthSession) {
+        if (accountRefreshToken == session.token) return
+
+        // Wait for the UI to confirm this server's local-network classification and permission
+        // before sending any restored-session request to it.
+        accountRefreshToken = session.token
+        val restored =
+            try {
+                repository.refreshCurrentAccount()
+            } catch (error: CancellationException) {
+                if (accountRefreshToken == session.token) accountRefreshToken = null
+                throw error
+            } catch (error: Exception) {
+                AuthLifecycleLog.event(
+                    "session_restoration_retryable_failure",
+                    session,
+                    errorType = error::class.java.simpleName,
+                )
+                return
+            }
+
+        val current = lastKnownSession.value
+        if (
+            current == null ||
+                current.userId != session.userId ||
+                !sameNativeAppServer(current.serverUrl, session.serverUrl) ||
+                (current.token != session.token && current.token != restored.token)
+        ) {
+            return
+        }
+        lastKnownSession.value = restored
+        accountRefreshToken = restored.token
+        runCatching { repository.syncInterfaceLocale(restored) }
+        runCatching { repository.loadWatchHistoryPreference() }
     }
 
     fun retryAuthentication() {

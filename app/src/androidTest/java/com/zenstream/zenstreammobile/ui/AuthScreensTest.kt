@@ -24,9 +24,12 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
@@ -50,6 +53,7 @@ import com.zenstream.zenstreammobile.ui.screens.shouldExpandFeatureHero
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -77,6 +81,80 @@ class AuthScreensTest {
         }
 
         composeRule.onNodeWithText("https://orchestrator.example").assertIsDisplayed()
+    }
+
+    @Test
+    fun serverSetupExplainsLanPermissionDenialAndOffersAppSettings() {
+        var configuredServer: String? = null
+        var requestedPermission = false
+        var openedSettings = false
+        val localNetworkPermissionGranted = mutableStateOf(false)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                ServerSetupScreen(
+                    localNetworkPermissionGranted = localNetworkPermissionGranted.value,
+                    isLocalNetworkEndpoint = { true },
+                    onRequestLocalNetworkPermission = { onResult ->
+                        requestedPermission = true
+                        onResult(false)
+                    },
+                    onOpenAppSettings = { openedSettings = true },
+                    onConfigured = { configuredServer = it },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.orchestrator_url))
+            .performTextInput("http://192.168.1.20:9090")
+        composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(requestedPermission)
+        assertNull(configuredServer)
+        composeRule
+            .onNodeWithText(context.getString(R.string.local_network_permission_denied))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.local_network_permission_open_settings))
+            .performClick()
+        assertTrue(openedSettings)
+        composeRule.runOnIdle { localNetworkPermissionGranted.value = true }
+        composeRule.waitForIdle()
+        assertFalse(
+            composeRule
+                .onAllNodesWithText(context.getString(R.string.local_network_permission_denied))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        )
+    }
+
+    @Test
+    fun serverSetupDoesNotRequestLocalNetworkPermissionForPublicEndpoint() {
+        var configuredServer: String? = null
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                ServerSetupScreen(
+                    isLocalNetworkEndpoint = { false },
+                    onRequestLocalNetworkPermission = { _ ->
+                        throw AssertionError("Public server unexpectedly requested local access")
+                    },
+                    onConfigured = { configuredServer = it },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.orchestrator_url))
+            .performTextInput("https://orchestrator.example")
+        composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("https://orchestrator.example", configuredServer)
     }
 
     @Test
