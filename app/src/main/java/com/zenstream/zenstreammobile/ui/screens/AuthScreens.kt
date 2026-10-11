@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -46,21 +48,38 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.normalizeServerUrl
+import com.zenstream.zenstreammobile.data.serverRequiresLocalNetworkPermission
 import com.zenstream.zenstreammobile.ui.LoginViewModel
 import kotlinx.coroutines.launch
 
 @Composable
 fun ServerSetupScreen(
     initialServerUrl: String? = null,
+    localNetworkPermissionGranted: Boolean = true,
+    isLocalNetworkEndpoint: suspend (String) -> Boolean = {
+        serverRequiresLocalNetworkPermission(it)
+    },
+    onRequestLocalNetworkPermission: ((Boolean) -> Unit) -> Unit = { result -> result(true) },
+    onOpenAppSettings: () -> Unit = {},
     onConfigured: suspend (String) -> Unit,
 ) {
     var server by rememberSaveable { mutableStateOf(initialServerUrl.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var localNetworkPermissionDenied by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val invalidUrlMessage = stringResource(R.string.server_url_invalid)
+    val localNetworkPermissionDeniedMessage =
+        stringResource(R.string.local_network_permission_denied)
+    val focusManager = LocalFocusManager.current
     LaunchedEffect(initialServerUrl) {
         if (!initialServerUrl.isNullOrBlank()) server = initialServerUrl
+    }
+    LaunchedEffect(localNetworkPermissionGranted) {
+        if (localNetworkPermissionGranted && localNetworkPermissionDenied) {
+            localNetworkPermissionDenied = false
+            if (error == localNetworkPermissionDeniedMessage) error = null
+        }
     }
     AuthContainer {
         Icon(
@@ -85,6 +104,7 @@ fun ServerSetupScreen(
             onValueChange = {
                 server = it
                 error = null
+                localNetworkPermissionDenied = false
             },
             label = { Text(stringResource(R.string.orchestrator_url)) },
             placeholder = { Text(stringResource(R.string.server_url_hint)) },
@@ -102,16 +122,34 @@ fun ServerSetupScreen(
             onClick = {
                 scope.launch {
                     busy = true
-                    error =
-                        runCatching { normalizeServerUrl(server) }
-                            .exceptionOrNull()
-                            ?.let { invalidUrlMessage }
-                    if (error == null)
-                        runCatching { onConfigured(server) }
-                            .onFailure {
-                                error = invalidUrlMessage
+                    val normalizedServer = runCatching { normalizeServerUrl(server) }.getOrNull()
+                    if (normalizedServer == null) {
+                        error = invalidUrlMessage
+                        busy = false
+                        return@launch
+                    }
+                    error = null
+                    if (isLocalNetworkEndpoint(normalizedServer)) {
+                        focusManager.clearFocus()
+                        onRequestLocalNetworkPermission { granted ->
+                            if (granted) {
+                                scope.launch {
+                                    localNetworkPermissionDenied = false
+                                    runCatching { onConfigured(normalizedServer) }
+                                        .onFailure { error = invalidUrlMessage }
+                                    busy = false
+                                }
+                            } else {
+                                localNetworkPermissionDenied = true
+                                error = localNetworkPermissionDeniedMessage
+                                busy = false
                             }
-                    busy = false
+                        }
+                    } else {
+                        runCatching { onConfigured(normalizedServer) }
+                            .onFailure { error = invalidUrlMessage }
+                        busy = false
+                    }
                 }
             },
             enabled = !busy,
@@ -119,6 +157,11 @@ fun ServerSetupScreen(
         ) {
             AuthButtonContent(loading = busy) {
                 Text(stringResource(R.string.continue_label))
+            }
+        }
+        if (localNetworkPermissionDenied) {
+            TextButton(onClick = onOpenAppSettings, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.local_network_permission_open_settings))
             }
         }
     }

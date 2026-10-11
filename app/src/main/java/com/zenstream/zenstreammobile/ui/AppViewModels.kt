@@ -43,6 +43,8 @@ import com.zenstream.zenstreammobile.model.SearchFacets
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.orderedHomeRows
+import java.io.IOException
+import java.security.GeneralSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import org.json.JSONException
 
 data class AppUiState(
     val loading: Boolean = true,
@@ -101,6 +104,22 @@ data class AppUiState(
                 session == null &&
                 authState.phase == AuthPhase.TEMPORARILY_UNAVAILABLE
 }
+
+internal suspend fun <T> captureSessionRefreshResult(refresh: suspend () -> T): Result<T> {
+    val result = runCatching { refresh() }
+    val error = result.exceptionOrNull() ?: return result
+    if (error is CancellationException || !error.isExpectedSessionRefreshFailure()) throw error
+    return result
+}
+
+private fun Throwable.isExpectedSessionRefreshFailure(): Boolean =
+    this is CatalogException ||
+        this is IOException ||
+        this is JSONException ||
+        this is SecurityException ||
+        this is GeneralSecurityException ||
+        this is IllegalStateException ||
+        this is IllegalArgumentException
 
 class AppViewModel(
     private val repository: CatalogRepository,
@@ -179,29 +198,6 @@ class AppViewModel(
                             accountRefreshToken = null
                             return@collect
                         }
-                        if (accountRefreshToken != session.token) {
-                            // Account data is refreshed once per bearer token so avatar
-                            // changes made on another client appear without creating a
-                            // startup request loop when the session is persisted again.
-                            accountRefreshToken = session.token
-                            val restored =
-                                try {
-                                    repository.refreshCurrentAccount()
-                                } catch (error: CancellationException) {
-                                    throw error
-                                } catch (error: Exception) {
-                                    AuthLifecycleLog.event(
-                                        "session_restoration_retryable_failure",
-                                        session,
-                                        errorType = error::class.java.simpleName,
-                                    )
-                                    return@collect
-                                }
-                            lastKnownSession.value = restored
-                            accountRefreshToken = restored.token
-                            runCatching { repository.syncInterfaceLocale(restored) }
-                            runCatching { repository.loadWatchHistoryPreference() }
-                        }
                     }
                 }
             }
@@ -218,6 +214,50 @@ class AppViewModel(
 
     fun dismissAvailableUpdate() {
         _availableUpdate.value = null
+    }
+
+    suspend fun onServerNetworkAccessReady(serverUrl: String) {
+        val session =
+            lastKnownSession.value?.takeIf { sameNativeAppServer(it.serverUrl, serverUrl) }
+                ?: return
+        refreshSessionAccountOnce(session)
+    }
+
+    private suspend fun refreshSessionAccountOnce(session: AuthSession) {
+        if (accountRefreshToken == session.token) return
+
+        // Wait for the UI to confirm this server's local-network classification and permission
+        // before sending any restored-session request to it.
+        accountRefreshToken = session.token
+        val restored =
+            try {
+                captureSessionRefreshResult { repository.refreshCurrentAccount() }
+                    .getOrElse { error ->
+                        AuthLifecycleLog.event(
+                            "session_restoration_retryable_failure",
+                            session,
+                            errorType = error::class.java.simpleName,
+                        )
+                        return
+                    }
+            } catch (error: CancellationException) {
+                if (accountRefreshToken == session.token) accountRefreshToken = null
+                throw error
+            }
+
+        val current = lastKnownSession.value
+        if (
+            current == null ||
+                current.userId != session.userId ||
+                !sameNativeAppServer(current.serverUrl, session.serverUrl) ||
+                (current.token != session.token && current.token != restored.token)
+        ) {
+            return
+        }
+        lastKnownSession.value = restored
+        accountRefreshToken = restored.token
+        runCatching { repository.syncInterfaceLocale(restored) }
+        runCatching { repository.loadWatchHistoryPreference() }
     }
 
     fun retryAuthentication() {

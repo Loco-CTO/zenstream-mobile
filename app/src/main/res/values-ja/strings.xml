@@ -8,6 +8,11 @@
     <string name="continue_label">続行</string>
     <string name="server_url_required">サーバーURLを入力してください。</string>
     <string name="server_url_invalid">HTTPまたはHTTPSのサーバーURLを使用してください。</string>
+    <string name="local_network_permission_denied">ローカルネットワークへのアクセスが拒否されました。アプリの設定で許可してから「続行」をタップしてください。</string>
+    <string name="local_network_permission_required_title">ローカルネットワークへのアクセスが必要です</string>
+    <string name="local_network_permission_required_message">このサーバーに接続するには、ZenStreamにローカルネットワークの権限が必要です。アクセスを拒否または取り消した場合は、このアプリのAndroid設定で許可してください。</string>
+    <string name="local_network_permission_allow">アクセスを許可</string>
+    <string name="local_network_permission_open_settings">アプリの設定を開く</string>
     <string name="welcome">おかえりなさい</string>
     <string name="login_description">ライブラリにサインインします。</string>
     <string name="username">ユーザー名</string>

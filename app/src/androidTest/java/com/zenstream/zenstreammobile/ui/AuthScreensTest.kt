@@ -24,9 +24,12 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
@@ -50,9 +53,29 @@ import com.zenstream.zenstreammobile.ui.screens.shouldExpandFeatureHero
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+
+private const val TEST_ORCHESTRATOR_URL = "https://orchestrator.example"
+private const val TEST_SERVER_URL = "https://example.com"
+private const val TEST_AUTH_TOKEN = "token"
+private const val TEST_USER_ID = "user"
+private const val TEST_USER_NAME = "name"
+private const val TEST_MEDIA_ID = "1"
+private const val FEATURED_ITEM_NAME = "Example"
+private const val FEATURED_ITEM_OVERVIEW =
+    "A young hunter discovers a hidden world beneath the mountains."
+private const val MOVIE_TYPE = "Movie"
+private const val LOGO_IMAGE_TYPE = "Logo"
+private const val LOGO_IMAGE_TAG = "logo-tag"
+private const val BACKDROP_IMAGE_TAG = "backdrop-tag"
+private const val FEATURED_HERO_TAG = "featured_hero"
+private const val FEATURED_HERO_ARTWORK_TAG = "featured_hero_artwork"
+private const val FEATURED_HERO_PAGE_INDICATORS_TAG = "featured_hero_page_indicators"
+private const val FEATURED_HERO_TEST_ROOT_TAG = "featured_hero_test_root"
+private const val FEATURED_TEST_BOTTOM_NAVIGATION_TAG = "featured_test_bottom_navigation"
 
 class AuthScreensTest {
     @get:Rule val composeRule = createComposeRule()
@@ -72,27 +95,102 @@ class AuthScreensTest {
     fun serverSetupRestoresPreviouslyEnteredAddress() {
         composeRule.setContent {
             ZenStreamTheme {
-                ServerSetupScreen(initialServerUrl = "https://orchestrator.example") {}
+                ServerSetupScreen(initialServerUrl = TEST_ORCHESTRATOR_URL) {}
             }
         }
 
-        composeRule.onNodeWithText("https://orchestrator.example").assertIsDisplayed()
+        composeRule.onNodeWithText(TEST_ORCHESTRATOR_URL).assertIsDisplayed()
+    }
+
+    @Test
+    fun serverSetupExplainsLanPermissionDenialAndOffersAppSettings() {
+        var configuredServer: String? = null
+        var requestedPermission = false
+        var openedSettings = false
+        val localNetworkPermissionGranted = mutableStateOf(false)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                ServerSetupScreen(
+                    localNetworkPermissionGranted = localNetworkPermissionGranted.value,
+                    isLocalNetworkEndpoint = { true },
+                    onRequestLocalNetworkPermission = { onResult ->
+                        requestedPermission = true
+                        onResult(false)
+                    },
+                    onOpenAppSettings = { openedSettings = true },
+                    onConfigured = { configuredServer = it },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.orchestrator_url))
+            .performTextInput("http://192.168.1.20:9090")
+        composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(requestedPermission)
+        assertNull(configuredServer)
+        composeRule
+            .onNodeWithText(context.getString(R.string.local_network_permission_denied))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.local_network_permission_open_settings))
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertTrue(openedSettings) }
+        composeRule.runOnIdle { localNetworkPermissionGranted.value = true }
+        composeRule.waitForIdle()
+        assertFalse(
+            composeRule
+                .onAllNodesWithText(context.getString(R.string.local_network_permission_denied))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        )
+    }
+
+    @Test
+    fun serverSetupDoesNotRequestLocalNetworkPermissionForPublicEndpoint() {
+        var configuredServer: String? = null
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                ServerSetupScreen(
+                    isLocalNetworkEndpoint = { false },
+                    onRequestLocalNetworkPermission = { _ ->
+                        throw AssertionError("Public server unexpectedly requested local access")
+                    },
+                    onConfigured = { configuredServer = it },
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(context.getString(R.string.orchestrator_url))
+            .performTextInput(TEST_ORCHESTRATOR_URL)
+        composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(TEST_ORCHESTRATOR_URL, configuredServer)
     }
 
     @Test
     fun featuredHeroShowsLogoMetadataAndDescriptionWithoutActions() {
         val item =
             MediaItem(
-                id = "1",
-                name = "Example",
+                id = TEST_MEDIA_ID,
+                name = FEATURED_ITEM_NAME,
                 type = "Series",
                 productionYear = 2026,
                 runtimeTicks = 23L * 600_000_000L,
-                overview = "A young hunter discovers a hidden world beneath the mountains.",
-                imageTags = mapOf("Logo" to "/api/catalog/items/1/image/logo"),
-                backdropImageTags = listOf("backdrop-tag"),
+                overview = FEATURED_ITEM_OVERVIEW,
+                imageTags = mapOf(LOGO_IMAGE_TYPE to "/api/catalog/items/1/image/logo"),
+                backdropImageTags = listOf(BACKDROP_IMAGE_TAG),
             )
-        val session = AuthSession("https://example.com", "token", "user", "name")
+        val session = AuthSession(TEST_SERVER_URL, TEST_AUTH_TOKEN, TEST_USER_ID, TEST_USER_NAME)
 
         composeRule.setContent {
             ZenStreamTheme {
@@ -105,7 +203,7 @@ class AuthScreensTest {
         }
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val logoDescription = context.getString(R.string.logo_description, "Example")
+        val logoDescription = context.getString(R.string.logo_description, FEATURED_ITEM_NAME)
         val expectedMetadata = "2026 · Series · ${context.getString(R.string.runtime_minutes, 23)}"
         val screenWidthDp =
             InstrumentationRegistry.getInstrumentation()
@@ -141,7 +239,7 @@ class AuthScreensTest {
         )
         composeRule
             .onNodeWithText(
-                "A young hunter discovers a hidden world beneath the mountains.",
+                FEATURED_ITEM_OVERVIEW,
                 useUnmergedTree = true,
             )
             .assertIsDisplayed()
@@ -150,20 +248,20 @@ class AuthScreensTest {
         val overviewBounds =
             composeRule
                 .onNodeWithText(
-                    "A young hunter discovers a hidden world beneath the mountains.",
+                    FEATURED_ITEM_OVERVIEW,
                     useUnmergedTree = true,
                 )
                 .getUnclippedBoundsInRoot()
         val indicatorBounds =
             composeRule
-                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_PAGE_INDICATORS_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         assertTrue(
             "Expected spacing between the synopsis and slide indicators",
             (indicatorBounds.top - overviewBounds.bottom).value >= 16f,
         )
         composeRule
-            .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+            .onNodeWithTag(FEATURED_HERO_PAGE_INDICATORS_TAG, useUnmergedTree = true)
             .assertIsDisplayed()
         composeRule
             .onNodeWithTag("featured_hero_page_indicator_0", useUnmergedTree = true)
@@ -175,13 +273,13 @@ class AuthScreensTest {
     fun featuredHeroFillsTheWidthAndItsIndicatorsStayAboveBottomNavigation() {
         val item =
             MediaItem(
-                id = "1",
-                name = "Example",
-                type = "Movie",
-                imageTags = mapOf("Logo" to "logo-tag"),
-                backdropImageTags = listOf("backdrop-tag"),
+                id = TEST_MEDIA_ID,
+                name = FEATURED_ITEM_NAME,
+                type = MOVIE_TYPE,
+                imageTags = mapOf(LOGO_IMAGE_TYPE to LOGO_IMAGE_TAG),
+                backdropImageTags = listOf(BACKDROP_IMAGE_TAG),
             )
-        val session = AuthSession("https://example.com", "token", "user", "name")
+        val session = AuthSession(TEST_SERVER_URL, TEST_AUTH_TOKEN, TEST_USER_ID, TEST_USER_NAME)
         var expectedTopGradientHeightDp = 0f
 
         composeRule.setContent {
@@ -191,7 +289,7 @@ class AuthScreensTest {
                         WindowInsets.statusBarsIgnoringVisibility.getTop(this).toDp().value +
                             TopAppBarDefaults.TopAppBarExpandedHeight.value
                     }
-                Box(Modifier.fillMaxSize().testTag("featured_hero_test_root")) {
+                Box(Modifier.fillMaxSize().testTag(FEATURED_HERO_TEST_ROOT_TAG)) {
                     Column(Modifier.align(Alignment.TopCenter)) {
                         FeaturedHero(
                             items = listOf(item),
@@ -204,18 +302,18 @@ class AuthScreensTest {
                             .fillMaxWidth()
                             .height(80.dp)
                             .background(androidx.compose.ui.graphics.Color.Black)
-                            .testTag("featured_test_bottom_navigation")
+                            .testTag(FEATURED_TEST_BOTTOM_NAVIGATION_TAG)
                     )
                 }
             }
         }
 
         val rootBounds =
-            composeRule.onNodeWithTag("featured_hero_test_root").getUnclippedBoundsInRoot()
-        val heroBounds = composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+            composeRule.onNodeWithTag(FEATURED_HERO_TEST_ROOT_TAG).getUnclippedBoundsInRoot()
+        val heroBounds = composeRule.onNodeWithTag(FEATURED_HERO_TAG).getUnclippedBoundsInRoot()
         val artworkBounds =
             composeRule
-                .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_ARTWORK_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         val topGradientBounds =
             composeRule
@@ -223,10 +321,12 @@ class AuthScreensTest {
                 .getUnclippedBoundsInRoot()
         val indicatorBounds =
             composeRule
-                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_PAGE_INDICATORS_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         val bottomNavigationBounds =
-            composeRule.onNodeWithTag("featured_test_bottom_navigation").getUnclippedBoundsInRoot()
+            composeRule
+                .onNodeWithTag(FEATURED_TEST_BOTTOM_NAVIGATION_TAG)
+                .getUnclippedBoundsInRoot()
 
         assertEquals(rootBounds.left.value, heroBounds.left.value, 0.5f)
         assertEquals(rootBounds.right.value, heroBounds.right.value, 0.5f)
@@ -281,7 +381,7 @@ class AuthScreensTest {
 
     @Test
     fun emptyFeaturedLibraryStillShowsItsEmptyState() {
-        val session = AuthSession("https://example.com", "token", "user", "name")
+        val session = AuthSession(TEST_SERVER_URL, TEST_AUTH_TOKEN, TEST_USER_ID, TEST_USER_NAME)
 
         composeRule.setContent {
             ZenStreamTheme {
@@ -303,12 +403,12 @@ class AuthScreensTest {
             MediaItem(
                 id = "movie-1",
                 name = "Example Movie",
-                type = "Movie",
+                type = MOVIE_TYPE,
                 overview = "A short description of this movie.",
-                imageTags = mapOf("Logo" to "logo-tag"),
-                backdropImageTags = listOf("backdrop-tag"),
+                imageTags = mapOf(LOGO_IMAGE_TYPE to LOGO_IMAGE_TAG),
+                backdropImageTags = listOf(BACKDROP_IMAGE_TAG),
             )
-        val session = AuthSession("https://example.com", "token", "user", "name")
+        val session = AuthSession(TEST_SERVER_URL, TEST_AUTH_TOKEN, TEST_USER_ID, TEST_USER_NAME)
         var opened: MediaItem? = null
 
         composeRule.setContent {
@@ -355,11 +455,11 @@ class AuthScreensTest {
             MediaItem(
                 id = "tablet-feature",
                 name = "Tablet Feature",
-                type = "Movie",
+                type = MOVIE_TYPE,
                 productionYear = 2026,
                 overview = "A featured item with a short description.",
-                imageTags = mapOf("Logo" to "logo-tag"),
-                backdropImageTags = listOf("backdrop-tag"),
+                imageTags = mapOf(LOGO_IMAGE_TYPE to LOGO_IMAGE_TAG),
+                backdropImageTags = listOf(BACKDROP_IMAGE_TAG),
             )
         val longDescriptionItem =
             shortDescriptionItem.copy(
@@ -368,7 +468,7 @@ class AuthScreensTest {
                     "A longer featured item description that wraps to a second line on the " +
                         "available screen width so the slide selector must hold its position.",
             )
-        val session = AuthSession("https://example.com", "token", "user", "name")
+        val session = AuthSession(TEST_SERVER_URL, TEST_AUTH_TOKEN, TEST_USER_ID, TEST_USER_NAME)
         val tabletConfiguration =
             Configuration(
                     InstrumentationRegistry.getInstrumentation()
@@ -399,14 +499,14 @@ class AuthScreensTest {
             }
         }
 
-        val heroBounds = composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+        val heroBounds = composeRule.onNodeWithTag(FEATURED_HERO_TAG).getUnclippedBoundsInRoot()
         val artworkBounds =
             composeRule
-                .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_ARTWORK_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         val indicatorBounds =
             composeRule
-                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_PAGE_INDICATORS_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
 
         assertEquals(560f, (heroBounds.bottom - heroBounds.top).value, 1f)
@@ -421,14 +521,14 @@ class AuthScreensTest {
         )
 
         composeRule
-            .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+            .onNodeWithTag(FEATURED_HERO_ARTWORK_TAG, useUnmergedTree = true)
             .performTouchInput { swipeLeft() }
         composeRule.waitForIdle()
 
-        val nextHeroBounds = composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+        val nextHeroBounds = composeRule.onNodeWithTag(FEATURED_HERO_TAG).getUnclippedBoundsInRoot()
         val nextIndicatorBounds =
             composeRule
-                .onNodeWithTag("featured_hero_page_indicators", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_PAGE_INDICATORS_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         assertEquals(
             (heroBounds.bottom - heroBounds.top).value,
@@ -448,10 +548,10 @@ class AuthScreensTest {
         }
         composeRule.waitForIdle()
         val portraitHeroBounds =
-            composeRule.onNodeWithTag("featured_hero").getUnclippedBoundsInRoot()
+            composeRule.onNodeWithTag(FEATURED_HERO_TAG).getUnclippedBoundsInRoot()
         val portraitArtworkBounds =
             composeRule
-                .onNodeWithTag("featured_hero_artwork", useUnmergedTree = true)
+                .onNodeWithTag(FEATURED_HERO_ARTWORK_TAG, useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
         assertEquals(600f, (portraitHeroBounds.bottom - portraitHeroBounds.top).value, 1f)
         assertEquals(480f, (portraitArtworkBounds.bottom - portraitArtworkBounds.top).value, 1f)
