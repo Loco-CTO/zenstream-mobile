@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -390,7 +391,7 @@ class CatalogRepository(
     SettingsDataSource {
 
     suspend fun revokeSession(session: AuthSession) {
-        authenticatedCatalogRequest(session) { current -> api.logout(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.logout(current) }
     }
 
     private val homeMutex = Mutex()
@@ -398,7 +399,6 @@ class CatalogRepository(
     private val playbackPreferenceMutex = Mutex()
     private val sessionRestoreRevision = MutableStateFlow(0L)
     private val _authRefreshState = MutableStateFlow<AuthRefreshState>(AuthRefreshState.Idle)
-    val authRefreshState: StateFlow<AuthRefreshState> = _authRefreshState.asStateFlow()
     private var homeCache: Pair<Long, HomeData>? = null
     private var playbackPreferenceCache: Pair<Long, PlaybackPreference>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
@@ -427,6 +427,17 @@ class CatalogRepository(
     override val automaticPictureInPicture: Flow<Boolean> = sessionStore.automaticPictureInPicture
     override val checkForUpdatesOnStartup: Flow<Boolean> = sessionStore.checkForUpdatesOnStartup
     override val watchHistoryEnabled: Flow<Boolean> = sessionStore.watchHistoryEnabled
+
+    private val requestAuth = RequestAuth(sessionStore, api, sessionState, session)
+    val authRefreshState: StateFlow<AuthRefreshState> = requestAuth.authRefreshState
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    init {
+        scope.launch {
+            requestAuth.sessionClearedEvents.collect { clearedSession ->
+                clearSessionLocalState()
+            }
+        }
+    }
 
     fun retrySessionRestore() {
         sessionRestoreRevision.update { it + 1L }
@@ -463,7 +474,7 @@ class CatalogRepository(
         _authRefreshState.value = AuthRefreshState.Refreshing(current)
         return try {
             val refreshed =
-                authenticatedCatalogRequest(current) { value -> api.refreshAccount(value) }
+                requestAuth.authenticatedCatalogRequest(current) { value -> api.refreshAccount(value) }
             val saved =
                 sessionStore.saveSessionIfCurrent(current, refreshed) ||
                     sessionStore.saveSessionIfCurrent(refreshed, refreshed)
@@ -510,14 +521,14 @@ class CatalogRepository(
         crop: AvatarCrop,
     ): AuthSession {
         val version =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.uploadAvatar(current, resolver, uri, crop)
             }
         return updateAvatarVersionIfCurrent(session, version)
     }
 
     suspend fun removeAvatar(session: AuthSession): AuthSession {
-        authenticatedCatalogRequest(session) { current -> api.deleteAvatar(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.deleteAvatar(current) }
         return updateAvatarVersionIfCurrent(session, null)
     }
 
@@ -527,7 +538,7 @@ class CatalogRepository(
         newPassword: String,
         confirmNewPassword: String,
     ) {
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.changePassword(current, currentPassword, newPassword, confirmNewPassword)
         }
     }
@@ -536,13 +547,13 @@ class CatalogRepository(
         val mode = interfaceLocaleMode.first()
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
         val remoteLocale =
-            authenticatedOrchestratorRequest(current) { value ->
+            requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.fetchLocale(value.serverUrl, value.token)
             }
         var localeChanged = false
         if (remoteLocale != resolvedLocale) {
             val savedLocale =
-                authenticatedOrchestratorRequest(current) { value ->
+                requestAuth.authenticatedOrchestratorRequest(current) { value ->
                     orchestratorApi.setLocale(value.serverUrl, value.token, resolvedLocale)
                 }
             check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
@@ -569,7 +580,7 @@ class CatalogRepository(
         val current = session.first() ?: error("Authentication required")
         val resolvedLocale = sessionStore.resolveInterfaceLocale(mode)
         val savedLocale =
-            authenticatedOrchestratorRequest(current) { value ->
+            requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.setLocale(value.serverUrl, value.token, resolvedLocale)
             }
         check(savedLocale == resolvedLocale) { "Orchestrator returned a different locale" }
@@ -585,7 +596,7 @@ class CatalogRepository(
 
     private suspend fun loadMetadataPreferenceOrNull(current: AuthSession): MetadataPreference? =
         try {
-            authenticatedOrchestratorRequest(current) { value ->
+            requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.fetchMetadataPreference(value.serverUrl, value.token)
             }
         } catch (error: OrchestratorException) {
@@ -593,276 +604,11 @@ class CatalogRepository(
             null
         }
 
-    private suspend fun refreshAfterUnauthorized(expected: AuthSession): AuthSession? =
-        accountRefreshMutex.withLock {
-            val stored = sessionState.first { it !is StoredSessionState.Loading }
-            val current = (stored as? StoredSessionState.Loaded)?.session
-            if (current == null) {
-                if (stored is StoredSessionState.TemporarilyUnavailable) {
-                    _authRefreshState.value =
-                        AuthRefreshState.TemporarilyUnavailable(
-                            expected,
-                            stored.errorType,
-                        )
-                    AuthLifecycleLog.event(
-                        "refresh_skipped_storage_unavailable",
-                        expected,
-                        errorType = stored.errorType,
-                    )
-                } else {
-                    AuthLifecycleLog.event("refresh_skipped_no_session", expected)
-                }
-                return@withLock null
-            }
-            if (current.serverUrl != expected.serverUrl || current.userId != expected.userId) {
-                AuthLifecycleLog.event("refresh_skipped_session_identity_changed", current)
-                return@withLock null
-            }
-            if (current.token != expected.token || current.refreshToken != expected.refreshToken) {
-                AuthLifecycleLog.event("refresh_reused_newer_session", current)
-                return@withLock current
-            }
-            var pending =
-                try {
-                    sessionStore.beginRefreshAttempt(current, UUID.randomUUID().toString())
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    _authRefreshState.value =
-                        AuthRefreshState.TemporarilyUnavailable(
-                            current,
-                            error::class.java.simpleName,
-                        )
-                    AuthLifecycleLog.event(
-                        "refresh_attempt_persist_failed",
-                        current,
-                        errorType = error::class.java.simpleName,
-                    )
-                    throw error
-                } ?: return@withLock null
-            _authRefreshState.value = AuthRefreshState.Refreshing(pending)
-            AuthLifecycleLog.event("refresh_started", pending)
-            try {
-                repeat(MAX_CACHED_REFRESH_RECOVERIES) { recoveryIndex ->
-                    val refreshed = api.refreshAccessToken(pending)
-                    AuthLifecycleLog.event(
-                        "refresh_response_received",
-                        pending,
-                        statusCode = 200,
-                    )
-                    val saved = sessionStore.saveRefreshedSessionIfCurrent(pending, refreshed)
-                    if (!saved) {
-                        val latest = session.first()
-                        _authRefreshState.value = AuthRefreshState.Idle
-                        AuthLifecycleLog.event("refresh_result_discarded_session_changed", latest)
-                        return@withLock latest?.takeIf {
-                            it.serverUrl == expected.serverUrl && it.userId == expected.userId
-                        }
-                    }
-                    val persisted = refreshed.copy(refreshAttemptId = null)
-                    AuthLifecycleLog.event(
-                        "refresh_succeeded",
-                        persisted,
-                        attemptId = pending.refreshAttemptId,
-                    )
-                    val expiresAt = persisted.accessExpiresAtMillis
-                    if (
-                        expiresAt == null ||
-                            expiresAt > System.currentTimeMillis() + REFRESH_EXPIRY_SKEW_MILLIS
-                    ) {
-                        _authRefreshState.value = AuthRefreshState.Idle
-                        return@withLock persisted
-                    }
-                    if (recoveryIndex == MAX_CACHED_REFRESH_RECOVERIES - 1) {
-                        _authRefreshState.value =
-                            AuthRefreshState.TemporarilyUnavailable(
-                                persisted,
-                                "ExpiredRecoveredAccessToken",
-                            )
-                        throw CatalogException(
-                            502,
-                            "Refresh recovery returned an expired access token",
-                        )
-                    }
-                    pending =
-                        sessionStore.beginRefreshAttempt(
-                            persisted,
-                            UUID.randomUUID().toString(),
-                        )
-                            ?: run {
-                                _authRefreshState.value = AuthRefreshState.Idle
-                                return@withLock session.first()
-                            }
-                    _authRefreshState.value = AuthRefreshState.Refreshing(pending)
-                    AuthLifecycleLog.event("refresh_recovery_rotation_started", pending)
-                }
-                error("Refresh recovery loop completed without a result")
-            } catch (error: CatalogException) {
-                if (error.statusCode == 401) {
-                    _authRefreshState.value = AuthRefreshState.Rejected(pending)
-                    val cleared = clearSessionLocalStateIfCurrent(pending, "refresh_rejected")
-                    if (!cleared) {
-                        val latest = session.first()
-                        if (
-                            latest != null &&
-                                latest.serverUrl == expected.serverUrl &&
-                                latest.userId == expected.userId
-                        ) {
-                            // A newer login or session rotation won while this
-                            // refresh was in flight. Do not let its stale 401
-                            // turn that session into a login navigation.
-                            _authRefreshState.value = AuthRefreshState.Idle
-                            AuthLifecycleLog.event(
-                                "refresh_rejection_stale_session_preserved",
-                                latest,
-                            )
-                            return@withLock latest
-                        }
-                    }
-                } else {
-                    _authRefreshState.value =
-                        AuthRefreshState.TemporarilyUnavailable(
-                            session.first() ?: pending,
-                            error::class.java.simpleName,
-                        )
-                    AuthLifecycleLog.event(
-                        "refresh_failed_retryable",
-                        session.first() ?: pending,
-                        statusCode = error.statusCode,
-                        errorType = error::class.java.simpleName,
-                    )
-                    throw error
-                }
-                null
-            } catch (error: CancellationException) {
-                _authRefreshState.value =
-                    AuthRefreshState.TemporarilyUnavailable(
-                        session.first() ?: pending,
-                        "RefreshCancelled",
-                    )
-                AuthLifecycleLog.event(
-                    "refresh_cancelled_retryable",
-                    session.first() ?: pending,
-                    errorType = error::class.java.simpleName,
-                )
-                throw error
-            } catch (error: Exception) {
-                _authRefreshState.value =
-                    AuthRefreshState.TemporarilyUnavailable(
-                        session.first() ?: pending,
-                        error::class.java.simpleName,
-                    )
-                AuthLifecycleLog.event(
-                    "refresh_failed_retryable",
-                    session.first() ?: pending,
-                    errorType = error::class.java.simpleName,
-                )
-                throw error
-            }
-        }
-
-    private suspend fun <T> authenticatedOrchestratorRequest(
-        current: AuthSession,
-        block: suspend (AuthSession) -> T,
-    ): T {
-        val requestSession = currentSessionForRequest(current)
-        return try {
-            AuthLifecycleLog.firstProtectedRequest(requestSession)
-            block(requestSession).also { clearRetryableAuthState(requestSession) }
-        } catch (error: OrchestratorException) {
-            if (error.statusCode != 401) throw error
-            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
-            val refreshed = refreshAfterUnauthorized(requestSession) ?: throw error
-            try {
-                block(refreshed).also { clearRetryableAuthState(refreshed) }
-            } catch (retryError: OrchestratorException) {
-                if (retryError.statusCode == 401) {
-                    AuthLifecycleLog.event("protected_retry_401", refreshed, statusCode = 401)
-                }
-                throw retryError
-            }
-        }
-    }
-
-    private suspend fun <T> authenticatedCatalogRequest(
-        current: AuthSession,
-        block: suspend (AuthSession) -> T,
-    ): T {
-        val requestSession = currentSessionForRequest(current)
-        return try {
-            AuthLifecycleLog.firstProtectedRequest(requestSession)
-            block(requestSession).also { clearRetryableAuthState(requestSession) }
-        } catch (error: CatalogException) {
-            if (error.statusCode != 401) throw error
-            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
-            val refreshed = refreshAfterUnauthorized(requestSession) ?: throw error
-            try {
-                block(refreshed).also { clearRetryableAuthState(refreshed) }
-            } catch (retryError: CatalogException) {
-                if (retryError.statusCode == 401) {
-                    AuthLifecycleLog.event("protected_retry_401", refreshed, statusCode = 401)
-                }
-                throw retryError
-            }
-        }
-    }
-
-    internal suspend fun authenticatedSyncplayRequest(
-        current: AuthSession,
-        block: suspend (AuthSession) -> JSONObject,
-    ): JSONObject {
-        val requestSession = currentSessionForRequest(current)
-        return try {
-            AuthLifecycleLog.firstProtectedRequest(requestSession)
-            block(requestSession).also { clearRetryableAuthState(requestSession) }
-        } catch (error: SyncplayException) {
-            if (error.statusCode != 401) throw error
-            AuthLifecycleLog.event("protected_request_401", requestSession, statusCode = 401)
-            val refreshed =
-                try {
-                    refreshAfterUnauthorized(requestSession)
-                } catch (refreshError: CatalogException) {
-                    throw SyncplayException(
-                        refreshError.statusCode,
-                        refreshError.message ?: "Authentication refresh failed",
-                    )
-                } ?: throw error
-            try {
-                block(refreshed).also { clearRetryableAuthState(refreshed) }
-            } catch (retryError: SyncplayException) {
-                if (retryError.statusCode == 401) {
-                    AuthLifecycleLog.event("protected_retry_401", refreshed, statusCode = 401)
-                }
-                throw retryError
-            }
-        }
-    }
-
-    private suspend fun currentSessionForRequest(expected: AuthSession): AuthSession {
-        val latest =
-            (sessionState.first { it !is StoredSessionState.Loading } as? StoredSessionState.Loaded)
-                ?.session
-        return latest?.takeIf {
-            it.serverUrl == expected.serverUrl && it.userId == expected.userId
-        } ?: expected
-    }
-
-    private fun clearRetryableAuthState(session: AuthSession) {
-        val unavailable = _authRefreshState.value as? AuthRefreshState.TemporarilyUnavailable
-        if (
-            unavailable?.session?.serverUrl == session.serverUrl &&
-                unavailable.session.userId == session.userId
-        ) {
-            _authRefreshState.value = AuthRefreshState.Idle
-            AuthLifecycleLog.event("authenticated_request_recovered", session)
-        }
-    }
-
     private suspend fun updateAvatarVersionIfCurrent(
         expected: AuthSession,
         avatarVersion: String?,
     ): AuthSession {
-        val latest = currentSessionForRequest(expected)
+        val latest = requestAuth.currentSessionForRequest(expected)
         val updated = latest.copy(avatarVersion = avatarVersion)
         return if (sessionStore.saveSessionIfCurrent(latest, updated)) {
             updated
@@ -871,21 +617,9 @@ class CatalogRepository(
         }
     }
 
-    private suspend fun clearSessionLocalStateIfCurrent(
-        expected: AuthSession,
-        reason: String,
-    ): Boolean {
-        if (sessionStore.clearSessionIfCurrent(expected, reason)) {
-            clearSessionLocalState()
-            AuthLifecycleLog.event("refresh_rejected_session_cleared", expected, detail = reason)
-            return true
-        }
-        return false
-    }
-
     override suspend fun loadMetadataPreference(): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest(current) { value ->
+        return requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.fetchMetadataPreference(value.serverUrl, value.token)
             }
             .also { sessionStore.saveMetadataLanguage(it.effectiveLanguage) }
@@ -893,7 +627,7 @@ class CatalogRepository(
 
     override suspend fun saveMetadataPreference(language: String?): MetadataPreference {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest(current) { value ->
+        return requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.setMetadataPreference(value.serverUrl, value.token, language)
             }
             .also {
@@ -938,37 +672,37 @@ class CatalogRepository(
     }
 
     override suspend fun homeFeatured(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.fetchHomeFeatured(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchHomeFeatured(current) }
 
     override suspend fun homeContinueWatching(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.fetchHomeContinueWatching(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchHomeContinueWatching(current) }
 
     override suspend fun homeNextUp(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.fetchHomeNextUp(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchHomeNextUp(current) }
 
     override suspend fun homeRecommendations(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.fetchHomeRecommendations(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchHomeRecommendations(current) }
 
     override suspend fun homeDerived(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.fetchHomeDerived(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchHomeDerived(current) }
 
     override suspend fun homeLibraries(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.getLibraries(current, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
         }
 
     override suspend fun homeLibraryData(session: AuthSession, library: Library) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchHomeLibraryData(current, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
         }
 
     override suspend fun libraries(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.getLibraries(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.getLibraries(current) }
 
     suspend fun library(
         session: AuthSession,
         library: Library,
-    ) = authenticatedCatalogRequest(session) { current -> api.fetchLibraryData(current, library) }
+    ) = requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchLibraryData(current, library) }
 
     override suspend fun libraryPage(
         session: AuthSession,
@@ -977,19 +711,19 @@ class CatalogRepository(
         limit: Int,
         sort: LibrarySort,
     ): PagedLibrary =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchLibraryPage(current, library, startIndex, limit, sort)
         }
 
     override suspend fun search(session: AuthSession, query: String, page: Int) =
-        authenticatedCatalogRequest(session) { current -> api.search(current, query, page) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.search(current, query, page) }
 
     override suspend fun search(
         session: AuthSession,
         query: String,
         page: Int,
         filter: SearchFilter,
-    ) = authenticatedCatalogRequest(session) { current -> api.search(current, query, page, filter) }
+    ) = requestAuth.authenticatedCatalogRequest(session) { current -> api.search(current, query, page, filter) }
 
     override suspend fun favoritesPage(
         session: AuthSession,
@@ -997,18 +731,18 @@ class CatalogRepository(
         limit: Int,
         sort: FavoriteSort,
     ) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchFavoritesPage(current, startIndex, limit, sort)
         }
 
     override suspend fun watchlist(session: AuthSession): List<MediaItem> =
-        authenticatedCatalogRequest(session) { current -> api.fetchWatchlist(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.fetchWatchlist(current) }
 
     override suspend fun playlists(
         session: AuthSession,
         membershipSourceId: String?,
     ): List<PlaylistSummary> =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchPlaylists(current, membershipSourceId)
         }
 
@@ -1017,7 +751,7 @@ class CatalogRepository(
         playlistId: String,
         page: Int?,
     ): PlaylistData =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchPlaylist(current, playlistId, page)
         }
 
@@ -1026,7 +760,7 @@ class CatalogRepository(
         shareToken: String,
         page: Int?,
     ): PlaylistData =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.fetchSharedPlaylist(current, shareToken, page)
         }
 
@@ -1038,7 +772,7 @@ class CatalogRepository(
         entityId: String?,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.createPlaylist(current, name, description, isPrivate, entityId)
             }
         invalidateCatalogState()
@@ -1053,7 +787,7 @@ class CatalogRepository(
         isPrivate: Boolean,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.updatePlaylist(current, playlistId, name, description, isPrivate)
             }
         invalidateCatalogState()
@@ -1061,7 +795,7 @@ class CatalogRepository(
     }
 
     override suspend fun deletePlaylist(session: AuthSession, playlistId: String) {
-        authenticatedCatalogRequest(session) { current -> api.deletePlaylist(current, playlistId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.deletePlaylist(current, playlistId) }
         invalidateCatalogState()
     }
 
@@ -1071,7 +805,7 @@ class CatalogRepository(
         entityIds: List<String>,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.addPlaylistItems(current, playlistId, entityIds)
             }
         invalidateCatalogState()
@@ -1084,7 +818,7 @@ class CatalogRepository(
         entryId: String,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.removePlaylistEntry(current, playlistId, entryId)
             }
         invalidateCatalogState()
@@ -1097,7 +831,7 @@ class CatalogRepository(
         sourceId: String,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.removePlaylistSource(current, playlistId, sourceId)
             }
         invalidateCatalogState()
@@ -1112,7 +846,7 @@ class CatalogRepository(
         afterEntryId: String?,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.movePlaylistEntry(current, playlistId, entryId, beforeEntryId, afterEntryId)
             }
         invalidateCatalogState()
@@ -1125,7 +859,7 @@ class CatalogRepository(
         entryIds: List<String>,
     ): PlaylistData {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.reorderPlaylist(current, playlistId, entryIds)
             }
         invalidateCatalogState()
@@ -1133,20 +867,20 @@ class CatalogRepository(
     }
 
     override suspend fun musicAlbum(session: AuthSession, albumId: String): MusicAlbumData =
-        authenticatedCatalogRequest(session) { current -> api.musicAlbum(current, albumId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.musicAlbum(current, albumId) }
 
     override suspend fun musicArtist(session: AuthSession, artistId: String): MusicArtistData =
-        authenticatedCatalogRequest(session) { current -> api.musicArtist(current, artistId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.musicArtist(current, artistId) }
 
     override suspend fun musicArtistTracks(
         session: AuthSession,
         artistId: String,
     ): List<MediaItem> =
-        authenticatedCatalogRequest(session) { current -> api.musicArtistTracks(current, artistId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.musicArtistTracks(current, artistId) }
 
     override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
         AudioLyricsCache.getOrLoad(AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)) {
-            authenticatedCatalogRequest(session) { current -> api.audioLyrics(current, itemId) }
+            requestAuth.authenticatedCatalogRequest(session) { current -> api.audioLyrics(current, itemId) }
         }
 
     suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
@@ -1164,7 +898,7 @@ class CatalogRepository(
         itemId: String,
         playbackInstanceId: String,
     ) {
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.recordAudioPlayStart(current, itemId, playbackInstanceId)
         }
         invalidateCatalogState()
@@ -1183,31 +917,31 @@ class CatalogRepository(
         sessionStore.cacheLibrarySort(userId, libraryId, sort)
 
     suspend fun detail(session: AuthSession, itemId: String, seasonId: String? = null) =
-        authenticatedCatalogRequest(session) { current -> api.detail(current, itemId, seasonId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.detail(current, itemId, seasonId) }
 
     suspend fun catalogItem(
         session: AuthSession,
         itemId: String,
         requestTimeoutMillis: Long? = null,
     ): MediaItem =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.catalogItem(current, itemId, requestTimeoutMillis)
         }
 
     override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.setFavorite(current, itemId, favorite)
         }
         invalidateCatalogState()
     }
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) {
-        authenticatedCatalogRequest(session) { current -> api.setPlayed(current, itemId, played) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.setPlayed(current, itemId, played) }
         invalidateHomeCache()
     }
 
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.setFollowing(current, itemId, following)
         }
         invalidateCatalogState()
@@ -1218,7 +952,7 @@ class CatalogRepository(
         start: Instant,
         end: Instant,
     ): CalendarResponse =
-        authenticatedCatalogRequest(session) { current -> api.calendar(current, start, end) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.calendar(current, start, end) }
 
     override suspend fun setCalendarFollowing(
         session: AuthSession,
@@ -1226,7 +960,7 @@ class CatalogRepository(
         following: Boolean,
     ): Boolean {
         val result =
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                 api.setCalendarFollowing(current, eventId, following)
             }
         invalidateCatalogState()
@@ -1238,29 +972,29 @@ class CatalogRepository(
         limit: Int = 50,
         cursor: String? = null,
     ) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.notifications(current, limit, cursor)
         }
 
     suspend fun notificationSummary(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.notificationSummary(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.notificationSummary(current) }
 
     suspend fun setNotificationRead(
         session: AuthSession,
         notificationId: String,
         read: Boolean,
     ) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.setNotificationRead(current, notificationId, read)
         }
 
     suspend fun deleteNotification(session: AuthSession, notificationId: String) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.deleteNotification(current, notificationId)
         }
 
     suspend fun markAllNotificationsRead(session: AuthSession) =
-        authenticatedCatalogRequest(session) { current -> api.markAllNotificationsRead(current) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.markAllNotificationsRead(current) }
 
     suspend fun playback(
         session: AuthSession,
@@ -1268,13 +1002,13 @@ class CatalogRepository(
         options: PlaybackOptions = PlaybackOptions(),
     ): PlaybackData {
         api.setDeviceId(sessionStore.deviceId())
-        return authenticatedCatalogRequest(session) { current ->
+        return requestAuth.authenticatedCatalogRequest(session) { current ->
             api.playback(current, itemId, options)
         }
     }
 
     suspend fun playbackSource(session: AuthSession, itemId: String) =
-        authenticatedCatalogRequest(session) { current -> api.playbackSource(current, itemId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.playbackSource(current, itemId) }
 
     suspend fun refreshPlaybackAccess(
         session: AuthSession,
@@ -1284,7 +1018,7 @@ class CatalogRepository(
         playbackAccessMode: String? = null,
         playbackLeaseToken: String? = null,
     ) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.refreshPlaybackAccess(
                 current,
                 itemId,
@@ -1296,7 +1030,7 @@ class CatalogRepository(
         }
 
     suspend fun bazarrStatus(session: AuthSession, itemId: String, sourceId: String): BazarrStatus =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.bazarrStatus(current, itemId, sourceId)
         }
 
@@ -1305,7 +1039,7 @@ class CatalogRepository(
         itemId: String,
         sourceId: String,
     ): BazarrSearchResult =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.searchBazarrSubtitles(current, itemId, sourceId)
         }
 
@@ -1315,15 +1049,15 @@ class CatalogRepository(
         sourceId: String,
         matchId: String,
     ) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.downloadBazarrSubtitle(current, itemId, sourceId, matchId)
         }
 
     suspend fun episodeNeighbors(session: AuthSession, item: MediaItem): EpisodeNeighbors =
-        authenticatedCatalogRequest(session) { current -> api.episodeNeighbors(current, item) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.episodeNeighbors(current, item) }
 
     suspend fun cancelPlaybackSession(session: AuthSession, sessionId: String) =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.cancelPlaybackSession(current, sessionId)
         }
 
@@ -1337,7 +1071,7 @@ class CatalogRepository(
         commandAcks: List<ViewerCommandAck> = emptyList(),
     ): ViewerHeartbeat {
         api.setDeviceId(sessionStore.deviceId())
-        return authenticatedCatalogRequest(session) { current ->
+        return requestAuth.authenticatedCatalogRequest(session) { current ->
             api.heartbeatPlaybackViewer(
                 current,
                 viewerSessionId,
@@ -1354,12 +1088,12 @@ class CatalogRepository(
         session: AuthSession,
         viewerSessionId: String,
     ): ViewerEnd =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.endPlaybackViewer(current, viewerSessionId)
         }
 
     suspend fun trickplay(session: AuthSession, itemId: String, sourceId: String?) =
-        authenticatedCatalogRequest(session) { current -> api.trickplay(current, itemId, sourceId) }
+        requestAuth.authenticatedCatalogRequest(session) { current -> api.trickplay(current, itemId, sourceId) }
 
     suspend fun subtitleWebVtt(
         session: AuthSession,
@@ -1367,7 +1101,7 @@ class CatalogRepository(
         sourceId: String?,
         streamIndex: Int,
     ): String =
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.subtitleWebVtt(current, itemId, sourceId, streamIndex)
         }
 
@@ -1379,7 +1113,7 @@ class CatalogRepository(
         playSessionId: String?,
         durationSeconds: Double? = null,
     ) {
-        authenticatedCatalogRequest(session) { current ->
+        requestAuth.authenticatedCatalogRequest(session) { current ->
             api.reportPlayback(
                 current,
                 itemId,
@@ -1424,7 +1158,7 @@ class CatalogRepository(
             session,
             sessionStore,
             SyncplayApi(
-                requestAuthenticator = SyncplayRequestAuthenticator(::authenticatedSyncplayRequest)
+                requestAuthenticator = SyncplayRequestAuthenticator(requestAuth::authenticatedSyncplayRequest)
             ),
         )
 
@@ -1440,7 +1174,7 @@ class CatalogRepository(
 
     override suspend fun loadWatchHistoryPreference(): Boolean {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest(current) { value ->
+        return requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.fetchWatchHistoryPreference(value.serverUrl, value.token)
             }
             .also { sessionStore.saveWatchHistoryEnabled(it) }
@@ -1448,7 +1182,7 @@ class CatalogRepository(
 
     override suspend fun saveWatchHistoryPreference(enabled: Boolean): Boolean {
         val current = session.first() ?: error("Authentication required")
-        return authenticatedOrchestratorRequest(current) { value ->
+        return requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.setWatchHistoryPreference(
                     value.serverUrl,
                     value.token,
@@ -1460,7 +1194,7 @@ class CatalogRepository(
 
     override suspend fun clearWatchHistory() {
         val current = session.first() ?: error("Authentication required")
-        authenticatedOrchestratorRequest(current) { value ->
+        requestAuth.authenticatedOrchestratorRequest(current) { value ->
             orchestratorApi.clearWatchHistory(value.serverUrl, value.token)
         }
         invalidateCatalogState()
@@ -1473,7 +1207,7 @@ class CatalogRepository(
             if (cached != null && cached.first > System.currentTimeMillis() - 30_000) {
                 return@withLock cached.second
             }
-            authenticatedOrchestratorRequest(current) { value ->
+            requestAuth.authenticatedOrchestratorRequest(current) { value ->
                     orchestratorApi.fetchPlaybackPreference(value.serverUrl, value.token)
                 }
                 .also { playbackPreferenceCache = System.currentTimeMillis() to it }
@@ -1484,7 +1218,7 @@ class CatalogRepository(
         subtitleLanguage: String?,
     ): PlaybackPreference = playbackPreferenceMutex.withLock {
         val current = session.first() ?: error("Authentication required")
-        authenticatedOrchestratorRequest(current) { value ->
+        requestAuth.authenticatedOrchestratorRequest(current) { value ->
                 orchestratorApi.setPlaybackPreference(
                     value.serverUrl,
                     value.token,
@@ -1505,7 +1239,7 @@ class CatalogRepository(
             ) {
                 return@withLock cached.second
             }
-            authenticatedCatalogRequest(session) { current ->
+            requestAuth.authenticatedCatalogRequest(session) { current ->
                     api.fetchHome(current)
                 }
                 .also { homeCache = System.currentTimeMillis() to it }
