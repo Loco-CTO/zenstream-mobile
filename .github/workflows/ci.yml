@@ -111,7 +111,12 @@ jobs:
 
       - name: Upload Kotlin coverage
         if: ${{ !inputs.skip_coverage_upload }}
-        run: ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/report.xml --use-oidc
+        run: |
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "Skipping DeepSource coverage upload because OIDC is unavailable in this workflow context."
+            exit 0
+          fi
+          ./bin/deepsource report --analyzer test-coverage --key kotlin --value-file app/build/reports/kover/report.xml --use-oidc
 
   release-smoke:
     needs: build
