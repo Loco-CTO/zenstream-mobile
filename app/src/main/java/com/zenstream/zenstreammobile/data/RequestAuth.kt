@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.model.AuthSession
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -10,9 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.withLock
-import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 private const val REFRESH_EXPIRY_SKEW_MILLIS = 5_000L
@@ -23,7 +23,6 @@ class RequestAuth(
     private val api: CatalogApi,
     private val sessionState: Flow<StoredSessionState>,
     private val session: Flow<AuthSession?>,
-
 ) {
     private val _authRefreshState = MutableStateFlow<AuthRefreshState>(AuthRefreshState.Idle)
     val authRefreshState: StateFlow<AuthRefreshState> = _authRefreshState.asStateFlow()
@@ -31,9 +30,7 @@ class RequestAuth(
     val sessionClearedEvents: SharedFlow<AuthSession> = _sessionClearedEvents.asSharedFlow()
     val accountRefreshMutex = Mutex()
 
-     suspend fun refreshAfterUnauthorized(
-        expected: AuthSession,
-    ): AuthSession? =
+    suspend fun refreshAfterUnauthorized(expected: AuthSession): AuthSession? =
         accountRefreshMutex.withLock {
             val stored = sessionState.first { it !is StoredSessionState.Loading }
             val current = (stored as? StoredSessionState.Loaded)?.session
@@ -108,7 +105,7 @@ class RequestAuth(
                     val expiresAt = persisted.accessExpiresAtMillis
                     if (
                         expiresAt == null ||
-                        expiresAt > System.currentTimeMillis() + REFRESH_EXPIRY_SKEW_MILLIS
+                            expiresAt > System.currentTimeMillis() + REFRESH_EXPIRY_SKEW_MILLIS
                     ) {
                         _authRefreshState.value = AuthRefreshState.Idle
                         return@withLock persisted
@@ -145,8 +142,8 @@ class RequestAuth(
                         val latest = session.first()
                         if (
                             latest != null &&
-                            latest.serverUrl == expected.serverUrl &&
-                            latest.userId == expected.userId
+                                latest.serverUrl == expected.serverUrl &&
+                                latest.userId == expected.userId
                         ) {
                             // A newer login or session rotation won while this
                             // refresh was in flight. Do not let its stale 401
@@ -291,7 +288,7 @@ class RequestAuth(
         val unavailable = _authRefreshState.value as? AuthRefreshState.TemporarilyUnavailable
         if (
             unavailable?.session?.serverUrl == session.serverUrl &&
-            unavailable.session.userId == session.userId
+                unavailable.session.userId == session.userId
         ) {
             _authRefreshState.value = AuthRefreshState.Idle
             AuthLifecycleLog.event("authenticated_request_recovered", session)
@@ -315,6 +312,4 @@ class RequestAuth(
     }
 
     fun getState() = _authRefreshState.value
-
-
 }
