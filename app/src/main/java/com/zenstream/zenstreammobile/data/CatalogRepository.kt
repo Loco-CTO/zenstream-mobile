@@ -124,7 +124,6 @@ private object AudioLyricsCache {
     }
 }
 
-private val accountRefreshMutex = Mutex()
 private const val REFRESH_EXPIRY_SKEW_MILLIS = 5_000L
 private const val MAX_CACHED_REFRESH_RECOVERIES = 2
 
@@ -398,7 +397,6 @@ class CatalogRepository(
     private val interfaceLocaleMutex = Mutex()
     private val playbackPreferenceMutex = Mutex()
     private val sessionRestoreRevision = MutableStateFlow(0L)
-    private val _authRefreshState = MutableStateFlow<AuthRefreshState>(AuthRefreshState.Idle)
     private var homeCache: Pair<Long, HomeData>? = null
     private var playbackPreferenceCache: Pair<Long, PlaybackPreference>? = null
     private val _catalogRefreshRevision = MutableStateFlow(0L)
@@ -460,10 +458,10 @@ class CatalogRepository(
 
     suspend fun authenticate(username: String, password: String): AuthSession {
         val server = sessionStore.currentServerUrl() ?: error("Server URL is not configured")
-        return accountRefreshMutex.withLock {
+        return requestAuth.accountRefreshMutex.withLock {
             api.authenticate(server, username, password, sessionStore.deviceId()).also {
                 sessionStore.saveSession(it)
-                _authRefreshState.value = AuthRefreshState.Idle
+                requestAuth.setState(AuthRefreshState.Idle)
             }
         }
     }
@@ -471,7 +469,7 @@ class CatalogRepository(
     suspend fun refreshCurrentAccount(): AuthSession {
         val current = session.first() ?: error("Authentication required")
         AuthLifecycleLog.event("startup_account_refresh_started", current)
-        _authRefreshState.value = AuthRefreshState.Refreshing(current)
+        requestAuth.setState(AuthRefreshState.Refreshing(current))
         return try {
             val refreshed =
                 requestAuth.authenticatedCatalogRequest(current) { value -> api.refreshAccount(value) }
@@ -479,15 +477,16 @@ class CatalogRepository(
                 sessionStore.saveSessionIfCurrent(current, refreshed) ||
                     sessionStore.saveSessionIfCurrent(refreshed, refreshed)
             if (!saved) {
-                _authRefreshState.value = AuthRefreshState.Idle
+                requestAuth.setState(AuthRefreshState.Idle)
                 throw IllegalStateException("Authentication session changed during restoration")
             }
-            _authRefreshState.value = AuthRefreshState.Idle
+            requestAuth.setState(AuthRefreshState.Idle)
             AuthLifecycleLog.event("startup_account_refresh_completed", refreshed)
             refreshed
         } catch (error: CancellationException) {
-            _authRefreshState.value =
+            requestAuth.setState(
                 AuthRefreshState.TemporarilyUnavailable(current, "RefreshCancelled")
+            )
             AuthLifecycleLog.event(
                 "startup_account_refresh_cancelled",
                 current,
@@ -495,14 +494,15 @@ class CatalogRepository(
             )
             throw error
         } catch (error: Exception) {
-            if (_authRefreshState.value !is AuthRefreshState.Rejected) {
+            if (requestAuth.getState() !is AuthRefreshState.Rejected) {
                 val currentSession = session.first()
                 if (currentSession != null) {
-                    _authRefreshState.value =
+                    requestAuth.setState(
                         AuthRefreshState.TemporarilyUnavailable(
                             currentSession,
                             error::class.java.simpleName,
                         )
+                    )
                 }
             }
             AuthLifecycleLog.event(
@@ -639,16 +639,16 @@ class CatalogRepository(
     override suspend fun clearSession() = clearSession("explicit")
 
     suspend fun clearSession(reason: String) {
-        accountRefreshMutex.withLock {
+        requestAuth.accountRefreshMutex.withLock {
             clearSessionLocalState()
             sessionStore.clearSession(reason)
-            _authRefreshState.value = AuthRefreshState.Idle
+            requestAuth.setState(AuthRefreshState.Idle)
         }
     }
 
     override suspend fun clearSessionIfCurrent(session: AuthSession) {
-        accountRefreshMutex.withLock {
-            val rejected = _authRefreshState.value as? AuthRefreshState.Rejected
+        requestAuth.accountRefreshMutex.withLock {
+            val rejected = requestAuth.getState() as? AuthRefreshState.Rejected
             if (rejected?.session?.token != session.token) return@withLock
             if (sessionStore.clearSessionIfCurrent(rejected.session, "refresh_rejected")) {
                 clearSessionLocalState()
@@ -657,10 +657,10 @@ class CatalogRepository(
     }
 
     suspend fun clearAll() {
-        accountRefreshMutex.withLock {
+        requestAuth.accountRefreshMutex.withLock {
             clearSessionLocalState()
             sessionStore.clearAll()
-            _authRefreshState.value = AuthRefreshState.Idle
+            requestAuth.setState(AuthRefreshState.Idle)
         }
     }
 

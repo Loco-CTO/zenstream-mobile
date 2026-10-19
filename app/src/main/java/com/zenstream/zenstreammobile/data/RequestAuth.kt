@@ -25,11 +25,11 @@ class RequestAuth(
     private val session: Flow<AuthSession?>,
 
 ) {
-    private val accountRefreshMutex = Mutex()
     private val _authRefreshState = MutableStateFlow<AuthRefreshState>(AuthRefreshState.Idle)
     val authRefreshState: StateFlow<AuthRefreshState> = _authRefreshState.asStateFlow()
     private val _sessionClearedEvents = MutableSharedFlow<AuthSession>()
     val sessionClearedEvents: SharedFlow<AuthSession> = _sessionClearedEvents.asSharedFlow()
+    val accountRefreshMutex = Mutex()
 
      suspend fun refreshAfterUnauthorized(
         expected: AuthSession,
@@ -309,6 +309,12 @@ class RequestAuth(
         }
         return false
     }
+
+    fun setState(state: AuthRefreshState) {
+        _authRefreshState.value = state
+    }
+
+    fun getState() = _authRefreshState.value
 
 
 }
