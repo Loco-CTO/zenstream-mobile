@@ -1068,19 +1068,15 @@ class CatalogApiTest {
 
     @Test
     fun groupsConsecutiveEpisodesInAnyEpisodeOrderFromTheSameSeries() {
-        fun episode(
-            id: String,
-            episodeNumber: Int,
-            lastAddedAt: String,
-            seasonId: String,
-        ) =
+        fun episode(episodeNumber: Int, lastAddedAt: String) =
             MediaItem(
-                id = id,
-                name = id,
+                id = "unordered-$episodeNumber",
+                name = "Episode $episodeNumber",
                 type = "Episode",
-                seriesId = "series",
-                seasonId = seasonId,
-                parentIndexNumber = seasonId.removePrefix("season-").toInt(),
+                seriesId = "unordered-series",
+                seasonId =
+                    if (episodeNumber >= 4) "unordered-season-two" else "unordered-season-one",
+                parentIndexNumber = if (episodeNumber >= 4) 2 else 1,
                 indexNumber = episodeNumber,
                 lastAddedAt = lastAddedAt,
             )
@@ -1088,26 +1084,29 @@ class CatalogApiTest {
         val stacks =
             stackNewlyAdded(
                 listOf(
-                    episode("episode-5", 5, "2026-01-01T12:00:00Z", "season-2"),
-                    episode("episode-4", 4, "2026-01-01T11:45:00Z", "season-2"),
-                    episode("episode-1", 1, "2026-01-01T11:30:00Z", "season-1"),
-                    episode("episode-3", 3, "2026-01-01T11:15:00Z", "season-1"),
-                    episode("episode-2", 2, "2026-01-01T11:00:00Z", "season-1"),
+                    episode(5, "2026-01-01T12:00:00Z"),
+                    episode(4, "2026-01-01T11:45:00Z"),
+                    episode(1, "2026-01-01T11:30:00Z"),
+                    episode(3, "2026-01-01T11:15:00Z"),
+                    episode(2, "2026-01-01T11:00:00Z"),
                 )
             )
 
         assertEquals(
-            listOf(listOf("episode-5", "episode-4", "episode-1", "episode-3", "episode-2")),
-            stacks.map { stack -> stack.items.map { it.id } },
+            listOf(listOf(5, 4, 1, 3, 2)),
+            stacks.map { stack -> stack.items.map { it.indexNumber } },
         )
     }
 
     @Test
     fun startsANewEpisodeStackWhenAnotherSeriesInterruptsTheRun() {
-        fun episode(id: String, seriesId: String, episodeNumber: Int, lastAddedAt: String) =
+        val seriesA = "interrupted-series-a"
+        val seriesB = "interrupted-series-b"
+
+        fun episode(seriesId: String, episodeNumber: Int, lastAddedAt: String) =
             MediaItem(
-                id = id,
-                name = id,
+                id = "$seriesId-$episodeNumber",
+                name = "Episode $episodeNumber",
                 type = "Episode",
                 seriesId = seriesId,
                 seasonId = "season-1",
@@ -1119,20 +1118,20 @@ class CatalogApiTest {
         val stacks =
             stackNewlyAdded(
                 listOf(
-                    episode("series-1-episode-1", "series-1", 1, "2026-01-01T12:00:00Z"),
-                    episode("series-1-episode-3", "series-1", 3, "2026-01-01T11:45:00Z"),
-                    episode("series-2-episode-1", "series-2", 1, "2026-01-01T11:30:00Z"),
-                    episode("series-1-episode-5", "series-1", 5, "2026-01-01T11:15:00Z"),
+                    episode(seriesA, 1, "2026-01-01T12:00:00Z"),
+                    episode(seriesA, 3, "2026-01-01T11:45:00Z"),
+                    episode(seriesB, 1, "2026-01-01T11:30:00Z"),
+                    episode(seriesA, 5, "2026-01-01T11:15:00Z"),
                 )
             )
 
         assertEquals(
             listOf(
-                listOf("series-1-episode-1", "series-1-episode-3"),
-                listOf("series-2-episode-1"),
-                listOf("series-1-episode-5"),
+                listOf(seriesA to 1, seriesA to 3),
+                listOf(seriesB to 1),
+                listOf(seriesA to 5),
             ),
-            stacks.map { stack -> stack.items.map { it.id } },
+            stacks.map { stack -> stack.items.map { item -> item.seriesId to item.indexNumber } },
         )
     }
 
