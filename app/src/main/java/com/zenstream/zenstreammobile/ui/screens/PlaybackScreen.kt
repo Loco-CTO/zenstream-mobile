@@ -320,8 +320,8 @@ fun PlaybackScreen(
                     vm.flushProgress()
                 }
                 Lifecycle.Event.ON_STOP -> {
-                    // Some devices report ON_STOP without a preceding ON_PAUSE. Recheck the
-                    // activity boundary here, while keeping PiP and finishing paths local.
+                    // PiP remains active through ON_PAUSE, but ON_STOP means it is no longer
+                    // visible (including when the system close button dismisses the PiP window).
                     if (shouldPauseForBackground()) pauseForBackground()
                     vm.flushProgress()
                 }

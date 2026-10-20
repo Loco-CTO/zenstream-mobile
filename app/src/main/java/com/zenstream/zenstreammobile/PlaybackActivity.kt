@@ -119,15 +119,10 @@ internal class PlaybackActivityLaunchGate {
 private val playbackActivityLaunchGate = PlaybackActivityLaunchGate()
 
 internal fun shouldPausePlaybackForBackground(
-    isFinishing: Boolean,
     isChangingConfigurations: Boolean,
     isInPictureInPictureMode: Boolean,
     enteringPictureInPicture: Boolean,
-): Boolean =
-    !isFinishing &&
-        !isChangingConfigurations &&
-        !isInPictureInPictureMode &&
-        !enteringPictureInPicture
+): Boolean = !isChangingConfigurations && (isInPictureInPictureMode || !enteringPictureInPicture)
 
 internal fun shouldAutomaticallyEnterPictureInPicture(
     enabled: Boolean,
@@ -411,7 +406,6 @@ class PlaybackActivity : ComponentActivity() {
 
     private fun shouldPauseForBackground(): Boolean =
         shouldPausePlaybackForBackground(
-            isFinishing = isFinishing,
             isChangingConfigurations = isChangingConfigurations,
             isInPictureInPictureMode = isInPictureInPictureMode,
             enteringPictureInPicture = enteringPictureInPicture,

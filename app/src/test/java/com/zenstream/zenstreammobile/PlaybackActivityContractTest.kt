@@ -61,12 +61,11 @@ class PlaybackActivityContractTest {
     }
 
     @Test
-    fun backgroundPauseExcludesFinishingPiPAndConfigurationChanges() {
-        assertTrue(shouldPausePlaybackForBackground(false, false, false, false))
-        assertFalse(shouldPausePlaybackForBackground(true, false, false, false))
-        assertFalse(shouldPausePlaybackForBackground(false, true, false, false))
-        assertFalse(shouldPausePlaybackForBackground(false, false, true, false))
-        assertFalse(shouldPausePlaybackForBackground(false, false, false, true))
+    fun backgroundPauseStopsAfterPipDismissalButPreservesTransitions() {
+        assertTrue(shouldPausePlaybackForBackground(false, false, false))
+        assertTrue(shouldPausePlaybackForBackground(false, true, false))
+        assertFalse(shouldPausePlaybackForBackground(true, false, false))
+        assertFalse(shouldPausePlaybackForBackground(false, false, true))
     }
 
     @Test
