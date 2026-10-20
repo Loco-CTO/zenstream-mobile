@@ -1067,6 +1067,75 @@ class CatalogApiTest {
     }
 
     @Test
+    fun groupsConsecutiveEpisodesInAnyEpisodeOrderFromTheSameSeries() {
+        fun episode(episodeNumber: Int, lastAddedAt: String) =
+            MediaItem(
+                id = "unordered-$episodeNumber",
+                name = "Episode $episodeNumber",
+                type = "Episode",
+                seriesId = "unordered-series",
+                seasonId =
+                    if (episodeNumber >= 4) "unordered-season-two" else "unordered-season-one",
+                parentIndexNumber = if (episodeNumber >= 4) 2 else 1,
+                indexNumber = episodeNumber,
+                lastAddedAt = lastAddedAt,
+            )
+
+        val stacks =
+            stackNewlyAdded(
+                listOf(
+                    episode(5, "2026-02-01T12:00:00Z"),
+                    episode(4, "2026-02-01T11:45:00Z"),
+                    episode(1, "2026-02-01T11:30:00Z"),
+                    episode(3, "2026-02-01T11:15:00Z"),
+                    episode(2, "2026-02-01T11:00:00Z"),
+                )
+            )
+
+        assertEquals(
+            listOf(listOf(5, 4, 1, 3, 2)),
+            stacks.map { stack -> stack.items.map { it.indexNumber } },
+        )
+    }
+
+    @Test
+    fun startsANewEpisodeStackWhenAnotherSeriesInterruptsTheRun() {
+        val seriesA = "interrupted-series-a"
+        val seriesB = "interrupted-series-b"
+
+        fun episode(seriesId: String, episodeNumber: Int, lastAddedAt: String) =
+            MediaItem(
+                id = "$seriesId-$episodeNumber",
+                name = "Episode $episodeNumber",
+                type = "Episode",
+                seriesId = seriesId,
+                seasonId = "season-1",
+                parentIndexNumber = 1,
+                indexNumber = episodeNumber,
+                lastAddedAt = lastAddedAt,
+            )
+
+        val stacks =
+            stackNewlyAdded(
+                listOf(
+                    episode(seriesA, 1, "2026-02-02T12:00:00Z"),
+                    episode(seriesA, 3, "2026-02-02T11:45:00Z"),
+                    episode(seriesB, 1, "2026-02-02T11:30:00Z"),
+                    episode(seriesA, 5, "2026-02-02T11:15:00Z"),
+                )
+            )
+
+        assertEquals(
+            listOf(
+                listOf(seriesA to 1, seriesA to 3),
+                listOf(seriesB to 1),
+                listOf(seriesA to 5),
+            ),
+            stacks.map { stack -> stack.items.map { item -> item.seriesId to item.indexNumber } },
+        )
+    }
+
+    @Test
     fun prefersSeasonOneOverSpecialsWhenOpeningASeries() {
         val seasons =
             listOf(

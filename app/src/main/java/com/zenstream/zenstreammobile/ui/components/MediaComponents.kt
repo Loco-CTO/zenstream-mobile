@@ -166,12 +166,6 @@ private fun areBatchEpisodes(a: MediaItem, b: MediaItem): Boolean =
         b.type == "Episode" &&
         !a.seriesId.isNullOrBlank() &&
         a.seriesId == b.seriesId &&
-        !a.seasonId.isNullOrBlank() &&
-        a.seasonId == b.seasonId &&
-        a.parentIndexNumber == b.parentIndexNumber &&
-        a.indexNumber != null &&
-        b.indexNumber != null &&
-        kotlin.math.abs(a.indexNumber - b.indexNumber) == 1 &&
         addedWithinOneHour(a.lastAddedAt, b.lastAddedAt)
 
 private fun addedWithinOneHour(a: String?, b: String?): Boolean {
