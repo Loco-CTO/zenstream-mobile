@@ -989,13 +989,6 @@ private fun MainScaffold(
                         }
                     }
                 }
-                SyncplayToastNotifications(
-                    manager = syncplay,
-                    repository = repository,
-                    session = session,
-                    toast = toast,
-                )
-                ToastHost(state = toast)
             }
         }
         Column(
@@ -1065,6 +1058,13 @@ private fun MainScaffold(
                     .padding(bottom = if (detailRoute) 88.dp else 176.dp)
                     .zIndex(10f),
         )
+        SyncplayToastNotifications(
+            manager = syncplay,
+            repository = repository,
+            session = session,
+            toast = toast,
+        )
+        ToastHost(state = toast)
     }
 }
 
