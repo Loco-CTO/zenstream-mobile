@@ -1084,11 +1084,11 @@ class CatalogApiTest {
         val stacks =
             stackNewlyAdded(
                 listOf(
-                    episode(5, "2026-01-01T12:00:00Z"),
-                    episode(4, "2026-01-01T11:45:00Z"),
-                    episode(1, "2026-01-01T11:30:00Z"),
-                    episode(3, "2026-01-01T11:15:00Z"),
-                    episode(2, "2026-01-01T11:00:00Z"),
+                    episode(5, "2026-02-01T12:00:00Z"),
+                    episode(4, "2026-02-01T11:45:00Z"),
+                    episode(1, "2026-02-01T11:30:00Z"),
+                    episode(3, "2026-02-01T11:15:00Z"),
+                    episode(2, "2026-02-01T11:00:00Z"),
                 )
             )
 
@@ -1118,10 +1118,10 @@ class CatalogApiTest {
         val stacks =
             stackNewlyAdded(
                 listOf(
-                    episode(seriesA, 1, "2026-01-01T12:00:00Z"),
-                    episode(seriesA, 3, "2026-01-01T11:45:00Z"),
-                    episode(seriesB, 1, "2026-01-01T11:30:00Z"),
-                    episode(seriesA, 5, "2026-01-01T11:15:00Z"),
+                    episode(seriesA, 1, "2026-02-02T12:00:00Z"),
+                    episode(seriesA, 3, "2026-02-02T11:45:00Z"),
+                    episode(seriesB, 1, "2026-02-02T11:30:00Z"),
+                    episode(seriesA, 5, "2026-02-02T11:15:00Z"),
                 )
             )
 
