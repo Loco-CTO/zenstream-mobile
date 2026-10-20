@@ -2,9 +2,7 @@ package com.zenstream.zenstreammobile.ui.components
 
 import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -34,7 +32,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -102,16 +103,16 @@ fun ToastHost(
     modifier: Modifier = Modifier,
     playerContext: Boolean = false,
 ) {
-    // An empty host must not retain a pointer-input modifier over the bottom of the screen. That
-    // invisible scrollable region would intercept taps intended for controls underneath it.
     if (state.current.isNotEmpty()) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
+        // A non-focusable popup stays above app content and modal surfaces without blocking taps
+        // outside the toast itself.
+        Popup(
+            alignment = Alignment.BottomCenter,
+            properties = PopupProperties(focusable = false),
         ) {
             Column(
                 modifier =
-                    Modifier.fillMaxWidth()
+                    modifier
                         .widthIn(max = 384.dp)
                         .navigationBarsPadding()
                         .padding(horizontal = 12.dp, vertical = 16.dp)
@@ -150,6 +151,10 @@ private fun ToastCard(
         }
     val iconColor =
         if (toast.variant == ToastVariant.Success) Color(0xFFC4B5FD) else Color(0xFFFCA5A5)
+    val containerColor =
+        if (playerContext) Color(0xF21B1B20) else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor =
+        if (playerContext) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         modifier =
             Modifier.fillMaxWidth().semantics {
@@ -160,14 +165,14 @@ private fun ToastCard(
                         LiveRegionMode.Polite
                     }
             },
-        color = if (playerContext) Color(0xE6151519) else Color.Black.copy(alpha = .78f),
-        contentColor = Color.White,
+        color = containerColor,
+        contentColor = contentColor,
         shape = MaterialTheme.shapes.large,
         shadowElevation = 12.dp,
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 6.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
@@ -178,14 +183,15 @@ private fun ToastCard(
             )
             Text(
                 text = toast.message,
-                style = MaterialTheme.typography.bodyMedium,
+                style =
+                    MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.None),
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                 Icon(
                     painter = androidx.compose.ui.res.painterResource(LucideR.drawable.lucide_ic_x),
                     contentDescription = stringResource(R.string.toast_dismiss),
-                    tint = Color.White.copy(alpha = .65f),
+                    tint = contentColor.copy(alpha = .72f),
                     modifier = Modifier.size(18.dp),
                 )
             }
