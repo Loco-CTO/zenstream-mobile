@@ -130,6 +130,10 @@ internal class MpvEndFileGate {
         sourceLoaded = true
     }
 
+    fun onSourceReady() {
+        ignoreReplacementEnd = false
+    }
+
     fun shouldReportEndFile(): Boolean {
         if (ignoreReplacementEnd) {
             ignoreReplacementEnd = false
@@ -380,6 +384,7 @@ class MpvPlaybackEngine(
                 if (!released && sourceLoadPending && eventId in MPV_READY_EVENTS) {
                     sourceReady = true
                     sourceLoadPending = false
+                    endFileGate.onSourceReady()
                     Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
                     _state.value = _state.value.copy(ready = true, isBuffering = false)
                 }

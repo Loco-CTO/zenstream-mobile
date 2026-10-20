@@ -607,4 +607,16 @@ class PlaybackParsingTest {
         assertFalse(gate.shouldReportEndFile())
         assertTrue(gate.shouldReportEndFile())
     }
+
+    @Test
+    fun missingReplacementEndFileDoesNotSuppressTheNextPlaybackCompletion() {
+        val gate = MpvEndFileGate()
+
+        gate.onSourceLoading()
+        assertTrue(gate.shouldReportEndFile())
+
+        gate.onSourceLoading()
+        gate.onSourceReady()
+        assertTrue(gate.shouldReportEndFile())
+    }
 }
