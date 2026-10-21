@@ -134,7 +134,11 @@ internal class MpvEndFileGate {
         ignoreReplacementEnd = false
     }
 
-    fun shouldReportEndFile(): Boolean {
+    fun shouldReportEndFile(eofReached: Boolean? = null): Boolean {
+        if (eofReached != null) {
+            ignoreReplacementEnd = false
+            return eofReached
+        }
         if (ignoreReplacementEnd) {
             ignoreReplacementEnd = false
             return false
@@ -389,7 +393,14 @@ class MpvPlaybackEngine(
                     _state.value = _state.value.copy(ready = true, isBuffering = false)
                 }
                 if (!released && eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE) {
-                    if (endFileGate.shouldReportEndFile()) {
+                    // MPV also emits END_FILE when loadfile replaces the current source. That
+                    // stop event must not be mistaken for natural completion and advance Next Up.
+                    // With keep-open enabled, eof-reached distinguishes a real playback end from
+                    // those replacement events even if an earlier readiness event cleared the
+                    // one-shot suppression flag.
+                    val eofReached =
+                        runCatching { MPVLib.getPropertyBoolean("eof-reached") }.getOrNull() == true
+                    if (endFileGate.shouldReportEndFile(eofReached)) {
                         _state.value = _state.value.copy(ended = true)
                     }
                 }
