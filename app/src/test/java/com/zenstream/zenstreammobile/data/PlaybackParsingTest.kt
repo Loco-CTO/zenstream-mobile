@@ -619,4 +619,16 @@ class PlaybackParsingTest {
         gate.onSourceReady()
         assertTrue(gate.shouldReportEndFile())
     }
+
+    @Test
+    fun sourceReplacementEndFileIsIgnoredAfterTheNewSourceIsReady() {
+        val gate = MpvEndFileGate()
+
+        gate.onSourceLoading()
+        gate.onSourceLoading()
+        gate.onSourceReady()
+
+        assertFalse(gate.shouldReportEndFile(eofReached = false))
+        assertTrue(gate.shouldReportEndFile(eofReached = true))
+    }
 }
