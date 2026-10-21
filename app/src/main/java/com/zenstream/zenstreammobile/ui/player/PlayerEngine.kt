@@ -121,6 +121,12 @@ internal class InitialSeekController {
     }
 }
 
+internal fun mpvPlaybackEnded(
+    state: EngineState,
+    sourceReady: Boolean,
+    eofReached: Boolean?,
+): Boolean = state.ended || (sourceReady && eofReached == true)
+
 internal class MpvEndFileGate {
     private var sourceLoaded = false
     private var ignoreReplacementEnd = false
@@ -416,6 +422,10 @@ class MpvPlaybackEngine(
                 val duration =
                     runCatching { MPVLib.getPropertyDouble("duration") }.getOrNull() ?: 0.0
                 val paused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: true
+                // keep-open=always can pause at EOF without emitting END_FILE. Poll the
+                // EOF property too, but ignore the outgoing file while a source is loading.
+                val eofReached =
+                    runCatching { MPVLib.getPropertyBoolean("eof-reached") }.getOrNull()
                 if (duration > 0.0) {
                     initialSeek.consume()?.let {
                         MPVLib.command(arrayOf("seek", it.toString(), "absolute+exact"))
@@ -441,6 +451,7 @@ class MpvPlaybackEngine(
                             (runCatching { MPVLib.getPropertyDouble("speed") }.getOrNull() ?: 1.0)
                                 .toFloat(),
                         ready = sourceReady,
+                        ended = mpvPlaybackEnded(_state.value, sourceReady, eofReached),
                     )
                 handler.postDelayed(this, 250L)
             }
