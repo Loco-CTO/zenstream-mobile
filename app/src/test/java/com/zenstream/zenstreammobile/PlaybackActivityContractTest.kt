@@ -69,6 +69,50 @@ class PlaybackActivityContractTest {
     }
 
     @Test
+    fun finishesStoppedPlaybackActivityAfterPipDismissalOnly() {
+        assertTrue(
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = true,
+                activityStopped = true,
+                isInPictureInPictureMode = false,
+                isChangingConfigurations = false,
+            )
+        )
+        assertFalse(
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = true,
+                activityStopped = false,
+                isInPictureInPictureMode = false,
+                isChangingConfigurations = false,
+            )
+        )
+        assertFalse(
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = false,
+                activityStopped = true,
+                isInPictureInPictureMode = false,
+                isChangingConfigurations = false,
+            )
+        )
+        assertFalse(
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = true,
+                activityStopped = true,
+                isInPictureInPictureMode = true,
+                isChangingConfigurations = false,
+            )
+        )
+        assertFalse(
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = true,
+                activityStopped = true,
+                isInPictureInPictureMode = false,
+                isChangingConfigurations = true,
+            )
+        )
+    }
+
+    @Test
     fun automaticPictureInPictureRequiresEnabledSettingAndActivePlayback() {
         assertTrue(shouldAutomaticallyEnterPictureInPicture(true, true))
         assertFalse(shouldAutomaticallyEnterPictureInPicture(false, true))
