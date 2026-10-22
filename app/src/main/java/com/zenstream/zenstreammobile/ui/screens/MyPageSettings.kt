@@ -194,6 +194,7 @@ internal fun MyPageSettingsContent(
     onMpvVideoScalerChange: (MpvVideoScaler) -> Unit,
     onShowDebugIconChange: (Boolean) -> Unit,
     onAutoplayNextEpisodeChange: (Boolean) -> Unit,
+    onContinueVideoInMiniPlayerChange: (Boolean) -> Unit = {},
     onAutomaticPictureInPictureChange: (Boolean) -> Unit,
     onCheckForUpdatesOnStartupChange: (Boolean) -> Unit,
     onWatchHistoryChange: (Boolean) -> Unit,
@@ -286,6 +287,13 @@ internal fun MyPageSettingsContent(
                     supporting = stringResource(R.string.autoplay_next_episode_description),
                     checked = state.autoplayNextEpisode,
                     onCheckedChange = onAutoplayNextEpisodeChange,
+                )
+                Spacer(Modifier.height(16.dp))
+                SettingSwitchRow(
+                    title = stringResource(R.string.continue_video_in_miniplayer),
+                    supporting = stringResource(R.string.continue_video_in_miniplayer_description),
+                    checked = state.continueVideoInMiniPlayer,
+                    onCheckedChange = onContinueVideoInMiniPlayerChange,
                 )
                 Spacer(Modifier.height(16.dp))
                 SettingSwitchRow(

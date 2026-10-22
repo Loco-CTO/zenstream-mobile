@@ -30,6 +30,7 @@ data class SettingsUiState(
     val mpvVideoScaler: MpvVideoScaler = MpvVideoScaler.BILINEAR,
     val showDebugIcon: Boolean = false,
     val autoplayNextEpisode: Boolean = true,
+    val continueVideoInMiniPlayer: Boolean = true,
     val automaticPictureInPicture: Boolean = true,
     val checkForUpdatesOnStartup: Boolean = true,
     val watchHistoryEnabled: Boolean = true,
@@ -102,6 +103,11 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
         viewModelScope.launch {
             repository.autoplayNextEpisode.collectLatest { enabled ->
                 _uiState.value = _uiState.value.copy(autoplayNextEpisode = enabled)
+            }
+        }
+        viewModelScope.launch {
+            repository.continueVideoInMiniPlayer.collectLatest {
+                _uiState.value = _uiState.value.copy(continueVideoInMiniPlayer = it)
             }
         }
         viewModelScope.launch {
@@ -187,6 +193,10 @@ class SettingsViewModel(private val repository: SettingsDataSource) : ViewModel(
 
     fun setAutoplayNextEpisode(enabled: Boolean) {
         viewModelScope.launch { repository.saveAutoplayNextEpisode(enabled) }
+    }
+
+    fun setContinueVideoInMiniPlayer(enabled: Boolean) {
+        viewModelScope.launch { repository.saveContinueVideoInMiniPlayer(enabled) }
     }
 
     fun setAutomaticPictureInPicture(enabled: Boolean) {

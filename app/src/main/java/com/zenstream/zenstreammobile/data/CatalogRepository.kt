@@ -326,6 +326,8 @@ interface SettingsDataSource {
     val mpvVideoScaler: Flow<MpvVideoScaler>
     val showDebugIcon: Flow<Boolean>
     val autoplayNextEpisode: Flow<Boolean>
+    val continueVideoInMiniPlayer: Flow<Boolean>
+
     val automaticPictureInPicture: Flow<Boolean>
     val checkForUpdatesOnStartup: Flow<Boolean>
     val watchHistoryEnabled: Flow<Boolean>
@@ -347,6 +349,8 @@ interface SettingsDataSource {
     suspend fun saveShowDebugIcon(enabled: Boolean)
 
     suspend fun saveAutoplayNextEpisode(enabled: Boolean)
+
+    suspend fun saveContinueVideoInMiniPlayer(enabled: Boolean)
 
     suspend fun saveAutomaticPictureInPicture(enabled: Boolean)
 
@@ -424,6 +428,7 @@ class CatalogRepository(
         sessionStore.playbackTimeDisplayMode
     override val showDebugIcon: Flow<Boolean> = sessionStore.showDebugIcon
     override val autoplayNextEpisode: Flow<Boolean> = sessionStore.autoplayNextEpisode
+    override val continueVideoInMiniPlayer: Flow<Boolean> = sessionStore.continueVideoInMiniPlayer
     override val automaticPictureInPicture: Flow<Boolean> = sessionStore.automaticPictureInPicture
     override val checkForUpdatesOnStartup: Flow<Boolean> = sessionStore.checkForUpdatesOnStartup
     override val watchHistoryEnabled: Flow<Boolean> = sessionStore.watchHistoryEnabled
@@ -1412,6 +1417,9 @@ class CatalogRepository(
 
     override suspend fun saveAutoplayNextEpisode(enabled: Boolean) =
         sessionStore.saveAutoplayNextEpisode(enabled)
+
+    override suspend fun saveContinueVideoInMiniPlayer(enabled: Boolean) =
+        sessionStore.saveContinueVideoInMiniPlayer(enabled)
 
     override suspend fun saveAutomaticPictureInPicture(enabled: Boolean) =
         sessionStore.saveAutomaticPictureInPicture(enabled)

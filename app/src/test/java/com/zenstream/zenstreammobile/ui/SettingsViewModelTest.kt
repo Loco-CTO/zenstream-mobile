@@ -201,6 +201,18 @@ class SettingsViewModelTest {
         assertEquals(217f, viewModel.uiState.value.subtitleStyle.bottomSpacing)
         assertEquals(217f, saved.single().bottomSpacing)
     }
+
+    @Test
+    fun leavingPlayerPreferenceDefaultsToMiniAndPersistsStopChoice() = runTest {
+        val source = FakeSettingsDataSource()
+        val viewModel = SettingsViewModel(source)
+        advanceUntilIdle()
+        assertEquals(true, viewModel.uiState.value.continueVideoInMiniPlayer)
+        viewModel.setContinueVideoInMiniPlayer(false)
+        advanceUntilIdle()
+        assertEquals(false, source.continueVideoInMiniPlayer.value)
+        assertEquals(false, viewModel.uiState.value.continueVideoInMiniPlayer)
+    }
 }
 
 private class FakeSettingsDataSource : SettingsDataSource {
@@ -211,6 +223,7 @@ private class FakeSettingsDataSource : SettingsDataSource {
     override val mpvVideoScaler = MutableStateFlow(MpvVideoScaler.BILINEAR)
     override val showDebugIcon = MutableStateFlow(false)
     override val autoplayNextEpisode = MutableStateFlow(true)
+    override val continueVideoInMiniPlayer = MutableStateFlow(true)
     override val automaticPictureInPicture = MutableStateFlow(true)
     override val checkForUpdatesOnStartup = MutableStateFlow(true)
     override val watchHistoryEnabled = MutableStateFlow(true)
@@ -254,6 +267,10 @@ private class FakeSettingsDataSource : SettingsDataSource {
 
     override suspend fun saveAutoplayNextEpisode(enabled: Boolean) {
         autoplayNextEpisode.value = enabled
+    }
+
+    override suspend fun saveContinueVideoInMiniPlayer(enabled: Boolean) {
+        continueVideoInMiniPlayer.value = enabled
     }
 
     override suspend fun saveAutomaticPictureInPicture(enabled: Boolean) {

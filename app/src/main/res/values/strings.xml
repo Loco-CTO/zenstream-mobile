@@ -488,4 +488,7 @@
         <item quantity="one">Added %1$d song to queue</item>
         <item quantity="other">Added %1$d songs to queue</item>
     </plurals>
+    <string name="player_expand">Expand player</string>
+    <string name="continue_video_in_miniplayer">Continue in mini-player</string>
+    <string name="continue_video_in_miniplayer_description">Keep playing in a mini-player when leaving the video player. Turn off to stop playback instead.</string>
 </resources>

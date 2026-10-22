@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.ui.screens
 
 import android.os.Build
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -84,8 +85,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
@@ -95,6 +98,8 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.PlaybackPipAction
 import com.zenstream.zenstreammobile.PlaybackPipActionBus
 import com.zenstream.zenstreammobile.R
+import com.zenstream.zenstreammobile.VideoPlaybackSession
+import com.zenstream.zenstreammobile.VideoPlaybackSessions
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SyncplayManager
@@ -157,11 +162,16 @@ fun PlaybackScreen(
     pipInstanceId: String? = null,
     onPictureInPicturePlaybackChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
     isInPictureInPictureMode: Boolean = false,
+    miniPlayer: Boolean = false,
+    onMinimize: (() -> Unit)? = null,
+    onRestore: (() -> Unit)? = null,
+    playbackOwner: ViewModelStoreOwner? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel =
         viewModel(
+            viewModelStoreOwner = playbackOwner ?: checkNotNull(LocalViewModelStoreOwner.current),
             key = "playback-${session.serverUrl}-${session.userId}-$itemId",
             factory =
                 PlaybackViewModel.Factory(
@@ -175,7 +185,17 @@ fun PlaybackScreen(
                     syncplay,
                 ),
         )
+    DisposableEffect(vm, playbackOwner) {
+        (playbackOwner as? VideoPlaybackSession)?.playbackModel = vm
+        onDispose {}
+    }
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val continueInMiniPlayer by
+        repository.continueVideoInMiniPlayer.collectAsStateWithLifecycle(initialValue = true)
+    val navigateBack = {
+        if (continueInMiniPlayer && onMinimize != null) onMinimize() else vm.requestClose()
+    }
+    BackHandler(enabled = !miniPlayer) { navigateBack() }
     val automaticPictureInPicture by
         repository.automaticPictureInPicture.collectAsStateWithLifecycle(initialValue = false)
     val syncplayState by syncplay.state.collectAsStateWithLifecycle()
@@ -307,7 +327,9 @@ fun PlaybackScreen(
                 Lifecycle.Event.ON_RESUME -> {
                     backgroundPresenceSent = false
                     playerVisible = true
-                    val recoveryLoading = vm.recoverFromBackground()
+                    val recoveryLoading =
+                        if (VideoPlaybackSessions.active?.handingOff == true) false
+                        else vm.recoverFromBackground()
                     reportPresence(
                         viewing = true,
                         immediate = true,
@@ -322,7 +344,11 @@ fun PlaybackScreen(
                 Lifecycle.Event.ON_STOP -> {
                     // PiP remains active through ON_PAUSE, but ON_STOP means it is no longer
                     // visible (including when the system close button dismisses the PiP window).
-                    if (shouldPauseForBackground()) pauseForBackground()
+                    if (
+                        VideoPlaybackSessions.active?.handingOff != true &&
+                            shouldPauseForBackground()
+                    )
+                        pauseForBackground()
                     vm.flushProgress()
                 }
                 else -> Unit
@@ -332,7 +358,8 @@ fun PlaybackScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             timelineScheduler.cancel()
-            reportPresence(viewing = false, immediate = true, pauseRoom = false)
+            if (VideoPlaybackSessions.active?.handingOff != true)
+                reportPresence(viewing = false, immediate = true, pauseRoom = false)
             vm.flushProgress()
         }
     }
@@ -411,7 +438,7 @@ fun PlaybackScreen(
         }
     }
 
-    val playerView = vm.createView(context)
+    val playerView = vm.createView(context.applicationContext)
     val waitingForSyncplayMembers = syncplayWaitingForMembers(syncplayState.active, state.itemId)
     val showPlayerLoading =
         shouldShowPlayerLoading(
@@ -426,13 +453,29 @@ fun PlaybackScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         playerView?.let { view ->
             AndroidView(
-                factory = { view },
+                factory = {
+                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                    view
+                },
                 update = { it.keepScreenOn = state.engine.isPlaying },
                 modifier = Modifier.fillMaxSize(),
             )
         }
 
-        if (!isInPictureInPictureMode) {
+        if (miniPlayer) {
+            com.zenstream.zenstreammobile.ui.player.MiniVideoControls(
+                playing = state.engine.isPlaying,
+                canControl =
+                    syncplayState.active == null || syncplayState.canControl(session.userId),
+                positionSeconds = state.engine.positionSeconds,
+                durationSeconds = state.engine.durationSeconds,
+                onToggle = { vm.syncplayToggle(syncplay) },
+                onClose = vm::requestClose,
+                onExpand = { onRestore?.invoke() },
+            )
+        }
+
+        if (!isInPictureInPictureMode && !miniPlayer) {
             PlaybackGestureLayer(
                 modifier = Modifier.fillMaxSize(),
                 controlsLocked = controlsLocked,
@@ -458,7 +501,7 @@ fun PlaybackScreen(
             )
         }
 
-        if (!isInPictureInPictureMode)
+        if (!isInPictureInPictureMode && !miniPlayer)
             seekFeedback?.let { feedback ->
                 SeekFeedbackOverlay(
                     feedback = feedback,
@@ -469,12 +512,15 @@ fun PlaybackScreen(
 
         SubtitleOverlay(
             cues = state.activeCuesAt(subtitlePositionSeconds),
-            style = state.subtitleStyle,
-            bottomPadding = subtitleBottomPadding(state.subtitleStyle),
+            style =
+                if (miniPlayer)
+                    state.subtitleStyle.copy(textScale = (state.subtitleStyle.textScale * .65f))
+                else state.subtitleStyle,
+            bottomPadding = if (miniPlayer) 8.dp else subtitleBottomPadding(state.subtitleStyle),
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 
-        if (!isInPictureInPictureMode && debugOpen) {
+        if (!isInPictureInPictureMode && !miniPlayer && debugOpen) {
             PlaybackDiagnosticsPanel(
                 state = state,
                 modifier =
@@ -493,7 +539,7 @@ fun PlaybackScreen(
                 positionSeconds = state.engine.positionSeconds,
                 durationSeconds = state.engine.durationSeconds,
             )
-        if (!isInPictureInPictureMode && nextUpVisible && nextEpisode != null) {
+        if (!isInPictureInPictureMode && !miniPlayer && nextUpVisible && nextEpisode != null) {
             NextUpOverlay(
                 episode = nextEpisode,
                 session = session,
@@ -506,13 +552,13 @@ fun PlaybackScreen(
             )
         }
 
-        if (!isInPictureInPictureMode && showPlayerLoading) {
+        if (!isInPictureInPictureMode && !miniPlayer && showPlayerLoading) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Center).testTag("player-loading"),
             )
         }
-        if (!isInPictureInPictureMode && state.error != null && !state.loading) {
+        if (!isInPictureInPictureMode && !miniPlayer && state.error != null && !state.loading) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -527,7 +573,7 @@ fun PlaybackScreen(
             }
         }
 
-        if (!isInPictureInPictureMode && (controlsVisible || controlsLocked)) {
+        if (!isInPictureInPictureMode && !miniPlayer && (controlsVisible || controlsLocked)) {
             Box(
                 modifier =
                     Modifier.fillMaxWidth()
@@ -543,7 +589,7 @@ fun PlaybackScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    IconButton(onClick = vm::requestClose) {
+                    IconButton(onClick = navigateBack) {
                         Icon(
                             painterResource(LucideR.drawable.lucide_ic_arrow_left),
                             stringResourceCompat(R.string.back),
@@ -760,7 +806,7 @@ fun PlaybackScreen(
             }
         }
 
-        if (!isInPictureInPictureMode && !controlsLocked) {
+        if (!isInPictureInPictureMode && !miniPlayer && !controlsLocked) {
             state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
                 Surface(
                     onClick = { vm.syncplaySeekTo(syncplay, segment.endSeconds) },
@@ -798,7 +844,7 @@ fun PlaybackScreen(
             }
         }
 
-        if (!isInPictureInPictureMode)
+        if (!isInPictureInPictureMode && !miniPlayer)
             surfaceDragPosition?.let { targetPosition ->
                 val preview =
                     trickplayPreview(
@@ -816,7 +862,7 @@ fun PlaybackScreen(
                 )
             }
 
-        if (!isInPictureInPictureMode)
+        if (!isInPictureInPictureMode && !miniPlayer)
             PlayerBottomSheet(
                 sheet = sheet,
                 selectedSubtitle = state.selectedSubtitle,
@@ -844,7 +890,7 @@ fun PlaybackScreen(
                     sheet = null
                 },
             )
-        if (!isInPictureInPictureMode) {
+        if (!isInPictureInPictureMode && !miniPlayer) {
             SyncplayToastNotifications(
                 manager = syncplay,
                 repository = repository,
