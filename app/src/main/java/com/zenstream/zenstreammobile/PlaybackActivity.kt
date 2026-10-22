@@ -124,6 +124,17 @@ internal fun shouldPausePlaybackForBackground(
     enteringPictureInPicture: Boolean,
 ): Boolean = !isChangingConfigurations && (isInPictureInPictureMode || !enteringPictureInPicture)
 
+internal fun shouldFinishPlaybackAfterPictureInPictureDismissal(
+    hasEnteredPictureInPicture: Boolean,
+    activityStopped: Boolean,
+    isInPictureInPictureMode: Boolean,
+    isChangingConfigurations: Boolean,
+): Boolean =
+    hasEnteredPictureInPicture &&
+        activityStopped &&
+        !isInPictureInPictureMode &&
+        !isChangingConfigurations
+
 internal fun shouldAutomaticallyEnterPictureInPicture(
     enabled: Boolean,
     isPlaying: Boolean,
@@ -183,6 +194,8 @@ private tailrec fun Context.findActivity(): Activity? =
 class PlaybackActivity : ComponentActivity() {
     private var immersiveModeApplied = false
     private var enteringPictureInPicture = false
+    private var hasEnteredPictureInPicture = false
+    private var playbackActivityStopped = false
     private var ownsPlaybackLaunch = false
     private val pipInstanceId = UUID.randomUUID().toString()
     private var pipPlaybackIsPlaying = false
@@ -277,7 +290,19 @@ class PlaybackActivity : ComponentActivity() {
         super.onResume()
         enteringPictureInPicture = false
         isInPictureInPicture = isInPictureInPictureMode
+        hasEnteredPictureInPicture = isInPictureInPictureMode
         applyImmersiveMode()
+    }
+
+    override fun onStart() {
+        playbackActivityStopped = false
+        super.onStart()
+    }
+
+    override fun onStop() {
+        playbackActivityStopped = true
+        super.onStop()
+        finishIfPictureInPictureWasDismissed()
     }
 
     override fun onUserLeaveHint() {
@@ -306,7 +331,9 @@ class PlaybackActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         enteringPictureInPicture = false
         this.isInPictureInPicture = isInPictureInPictureMode
+        if (isInPictureInPictureMode) hasEnteredPictureInPicture = true
         immersiveModeApplied = false
+        finishIfPictureInPictureWasDismissed()
         if (!isInPictureInPictureMode && hasWindowFocus()) applyImmersiveMode()
     }
 
@@ -324,11 +351,26 @@ class PlaybackActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || isInPictureInPictureMode) return false
         enteringPictureInPicture = true
         isInPictureInPicture = true
+        hasEnteredPictureInPicture = true
         return enterPictureInPictureMode(pictureInPictureParams().build()).also { entered ->
             if (!entered) {
                 enteringPictureInPicture = false
                 isInPictureInPicture = isInPictureInPictureMode
+                hasEnteredPictureInPicture = isInPictureInPictureMode
             }
+        }
+    }
+
+    private fun finishIfPictureInPictureWasDismissed() {
+        if (
+            shouldFinishPlaybackAfterPictureInPictureDismissal(
+                hasEnteredPictureInPicture = hasEnteredPictureInPicture,
+                activityStopped = playbackActivityStopped,
+                isInPictureInPictureMode = isInPictureInPictureMode,
+                isChangingConfigurations = isChangingConfigurations,
+            ) && !isFinishing
+        ) {
+            finish()
         }
     }
 
