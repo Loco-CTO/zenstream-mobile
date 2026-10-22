@@ -138,8 +138,8 @@ class MyPageSettingsTest {
             .onNodeWithText(context.getString(R.string.automatic_picture_in_picture))
             .assertIsDisplayed()
         val switches = composeRule.onAllNodes(isToggleable())
-        assertEquals(3, switches.fetchSemanticsNodes().size)
-        switches[1].performClick()
+        assertEquals(4, switches.fetchSemanticsNodes().size)
+        switches[2].performClick()
         composeRule.runOnIdle { assertFalse(state.automaticPictureInPicture) }
     }
 

@@ -484,4 +484,7 @@
     <plurals name="queue_added_tracks">
         <item quantity="other">%1$d曲をキューに追加しました</item>
     </plurals>
+    <string name="player_expand">プレーヤーを拡大</string>
+    <string name="continue_video_in_miniplayer">ミニプレーヤーで再生を続ける</string>
+    <string name="continue_video_in_miniplayer_description">動画プレーヤーを離れても再生を続けます。オフにすると再生を停止します。</string>
 </resources>

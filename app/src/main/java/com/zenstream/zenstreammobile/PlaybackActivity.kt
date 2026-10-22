@@ -192,6 +192,8 @@ private tailrec fun Context.findActivity(): Activity? =
     }
 
 class PlaybackActivity : ComponentActivity() {
+    private var minimizing = false
+    private var videoSession: VideoPlaybackSession? = null
     private var immersiveModeApplied = false
     private var enteringPictureInPicture = false
     private var hasEnteredPictureInPicture = false
@@ -260,6 +262,7 @@ class PlaybackActivity : ComponentActivity() {
                 finish()
                 return@launch
             }
+            videoSession = VideoPlaybackSessions.open(args, session)
             val locale = repository.locale.first()
             setContent {
                 ZenStreamTheme {
@@ -278,6 +281,8 @@ class PlaybackActivity : ComponentActivity() {
                             onPictureInPicturePlaybackChanged = ::updatePictureInPictureState,
                             isInPictureInPictureMode = isInPictureInPicture,
                             shouldPauseForBackground = ::shouldPauseForBackground,
+                            onMinimize = ::minimizePlayback,
+                            playbackOwner = videoSession,
                             onBack = ::finish,
                         )
                     }
@@ -345,6 +350,18 @@ class PlaybackActivity : ComponentActivity() {
     override fun onDestroy() {
         if (ownsPlaybackLaunch) playbackActivityLaunchGate.releaseActivity()
         super.onDestroy()
+        val current = videoSession
+        if (current != null && VideoPlaybackSessions.active === current) {
+            if (minimizing) current.presentation = VideoPresentation.MINI
+            else if (!isChangingConfigurations) VideoPlaybackSessions.close()
+        }
+    }
+
+    private fun minimizePlayback() {
+        minimizing = true
+        videoSession?.presentation = VideoPresentation.TO_MINI
+        restoreSystemBars()
+        finish()
     }
 
     private fun enterPictureInPicture(): Boolean {
