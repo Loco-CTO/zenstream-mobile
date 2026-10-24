@@ -24,8 +24,8 @@ fun normalizeArtistCredits(vararg sources: List<ArtistCredit>?): List<ArtistCred
             val nameMatchesDifferentId =
                 nameIndex != null &&
                     id != null &&
-                    credits[nameIndex]?.id != null &&
-                    credits[nameIndex]?.id != id
+                    credits[nameIndex].id != null &&
+                    credits[nameIndex].id != id
             val existingIndex = idIndex ?: nameIndex?.takeUnless { nameMatchesDifferentId }
 
             if (existingIndex != null) {

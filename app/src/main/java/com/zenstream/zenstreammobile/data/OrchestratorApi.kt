@@ -38,7 +38,7 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                         it.code,
                         "Orchestrator request failed with ${it.code}",
                     )
-                JSONObject(it.body?.string().orEmpty())
+                JSONObject(it.body.string().orEmpty())
                     .optString("publicWebUrl")
                     .trim()
                     .trimEnd('/')
@@ -62,7 +62,7 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
                         it.code,
                         "Orchestrator request failed with ${it.code}",
                     )
-                parseProxyConfig(it.body?.string().orEmpty())
+                parseProxyConfig(it.body.string().orEmpty())
             }
         }
 
@@ -228,7 +228,7 @@ class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
         httpClient.newCall(request).execute().use {
             if (!it.isSuccessful)
                 throw OrchestratorException(it.code, "Orchestrator request failed with ${it.code}")
-            return JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
+            return JSONObject(it.body.string().orEmpty().ifBlank { "{}" })
         }
     }
 }

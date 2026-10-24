@@ -2642,19 +2642,6 @@ class AudioPlaybackService : MediaLibraryService() {
             return result
         }
 
-        override fun onPlayerCommandRequest(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            playerCommand: Int,
-        ): Int =
-            when (playerCommand) {
-                Player.COMMAND_STOP -> {
-                    serviceScope.launch { clearQueue(commandSequence = 0L) }
-                    Player.COMMAND_INVALID
-                }
-                else -> super.onPlayerCommandRequest(session, controller, playerCommand)
-            }
-
         override fun onAddMediaItems(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,

@@ -304,7 +304,7 @@ class CatalogApi(
                 if (!it.isSuccessful) {
                     throw CatalogException(it.code, "Avatar upload failed with ${it.code}")
                 }
-                JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
+                JSONObject(it.body.string().orEmpty().ifBlank { "{}" })
                     .optNullableString("avatarVersion")
                     ?: error("Server did not return an avatar version")
             }
@@ -749,7 +749,7 @@ class CatalogApi(
                         it.code,
                         "Subtitle request failed with ${it.code}",
                     )
-                it.body?.string().orEmpty()
+                it.body.string().orEmpty()
             }
         }
 
@@ -1748,8 +1748,8 @@ class CatalogApi(
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(
             object : Callback {
-                override fun onFailure(call: Call, error: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(error)
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
                 }
 
                 override fun onResponse(call: Call, response: Response) {

@@ -135,7 +135,6 @@ internal class AudioSessionPlayer(
                 .addIf(Player.COMMAND_SEEK_TO_PREVIOUS, hasQueue)
                 .addIf(Player.COMMAND_SEEK_BACK, hasQueue)
                 .addIf(Player.COMMAND_SEEK_FORWARD, hasQueue)
-                .remove(Player.COMMAND_SET_MEDIA_ITEMS_METADATA)
                 .remove(Player.COMMAND_SET_PLAYLIST_METADATA)
                 .build()
         val currentIndex =
