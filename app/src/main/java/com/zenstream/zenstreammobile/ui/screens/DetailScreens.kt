@@ -842,6 +842,7 @@ private fun DetailOverlayTitle(
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                 modifier =
                     Modifier.testTag("detail_overlay_title").semantics {
                         contentDescription = title
@@ -850,7 +851,7 @@ private fun DetailOverlayTitle(
         } else {
             TextButton(
                 onClick = { onOpenItem(parentSeries) },
-                modifier = Modifier.testTag("detail_overlay_title"),
+                modifier = Modifier.fillMaxWidth().testTag("detail_overlay_title"),
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Text(
@@ -860,8 +861,9 @@ private fun DetailOverlayTitle(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                     modifier =
-                        Modifier.semantics {
+                        Modifier.fillMaxWidth().semantics {
                             contentDescription = parentSeries.name
                         },
                 )
