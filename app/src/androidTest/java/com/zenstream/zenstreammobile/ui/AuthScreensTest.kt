@@ -51,6 +51,7 @@ import com.zenstream.zenstreammobile.ui.screens.calculateFeatureBarMaxHeight
 import com.zenstream.zenstreammobile.ui.screens.calculateFeatureLogoWidth
 import com.zenstream.zenstreammobile.ui.screens.shouldExpandFeatureHero
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -105,7 +106,7 @@ class AuthScreensTest {
     @Test
     fun serverSetupExplainsLanPermissionDenialAndOffersAppSettings() {
         var configuredServer: String? = null
-        var requestedPermission = false
+        val requestedPermission = AtomicBoolean(false)
         var openedSettings = false
         val localNetworkPermissionGranted = mutableStateOf(false)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -116,7 +117,7 @@ class AuthScreensTest {
                     localNetworkPermissionGranted = localNetworkPermissionGranted.value,
                     isLocalNetworkEndpoint = { true },
                     onRequestLocalNetworkPermission = { onResult ->
-                        requestedPermission = true
+                        requestedPermission.set(true)
                         onResult(false)
                     },
                     onOpenAppSettings = { openedSettings = true },
@@ -129,9 +130,10 @@ class AuthScreensTest {
             .onNodeWithText(context.getString(R.string.orchestrator_url))
             .performTextInput("http://192.168.1.20:9090")
         composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) { requestedPermission.get() }
         composeRule.waitForIdle()
 
-        assertTrue(requestedPermission)
+        assertTrue(requestedPermission.get())
         assertNull(configuredServer)
         composeRule
             .onNodeWithText(context.getString(R.string.local_network_permission_denied))
