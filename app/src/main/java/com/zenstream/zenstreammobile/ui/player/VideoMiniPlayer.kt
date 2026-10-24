@@ -50,7 +50,7 @@ import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import kotlin.math.min
 import kotlinx.coroutines.launch
 
-private const val MIN_VIDEO_MINI_PLAYER_WIDTH_DP = 256f
+private const val MIN_VIDEO_MINI_PLAYER_WIDTH_DP = 192f
 
 internal data class MiniVideoBounds(val width: Float, val height: Float, val x: Float, val y: Float)
 
