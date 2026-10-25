@@ -491,4 +491,15 @@
     <string name="player_expand">Expand player</string>
     <string name="continue_video_in_miniplayer">Continue in mini-player</string>
     <string name="continue_video_in_miniplayer_description">Keep playing in a mini-player when leaving the video player. Turn off to stop playback instead.</string>
+    <string name="player_video_decoder">Video decoder</string>
+    <string name="player_decoder_auto">Automatic</string>
+    <string name="player_decoder_hardware">Hardware</string>
+    <string name="player_decoder_android_software">Android software</string>
+    <string name="player_decoder_app_software">App software (FFmpeg)</string>
+    <string name="player_debug_video_decoder">V. decoder</string>
+    <string name="player_debug_audio_decoder">A. decoder</string>
+    <string name="player_debug_first_frame">First frame</string>
+    <string name="player_debug_recovery">Recovery</string>
+    <string name="player_frame_rendered">Rendered</string>
+    <string name="player_frame_pending">Waiting for video</string>
 </resources>

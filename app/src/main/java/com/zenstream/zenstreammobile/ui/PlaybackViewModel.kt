@@ -34,7 +34,11 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.ui.player.EngineState
+import com.zenstream.zenstreammobile.ui.player.Media3DecoderControl
+import com.zenstream.zenstreammobile.ui.player.Media3ServerRecovery
+import com.zenstream.zenstreammobile.ui.player.Media3SourceContext
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
+import com.zenstream.zenstreammobile.ui.player.VideoDecoderPreference
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.playbackRecoveryMode
 import kotlinx.coroutines.CancellationException
@@ -220,6 +224,7 @@ class PlaybackViewModel(
     private var playbackGeneration = 0L
     private var subtitleGeneration = 0L
     private var mediaOriginSeconds = 0.0
+    private val media3ServerRecovery = Media3ServerRecovery()
     private var recovered = false
     private var playedResetRequested = false
     private var subtitleSelectionInitialized = false
@@ -301,6 +306,7 @@ class PlaybackViewModel(
         playbackEngine?.release()
         playbackEngine = createPlaybackEngine(type, appContext, mpvPlaybackSettings)
         engineJob = viewModelScope.launch {
+            var lastMedia3Failure = 0L
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value = _uiState.value.copy(engine = state, error = state.error)
                 val manager = syncplay
@@ -313,8 +319,40 @@ class PlaybackViewModel(
                     )
                 }
                 clearPlayedOnPlaybackStart(state)
+                val media3 = state.media3
                 if (
                     state.error != null &&
+                        media3?.failureKind != null &&
+                        media3.failureSequence > lastMedia3Failure
+                ) {
+                    lastMedia3Failure = media3.failureSequence
+                    val nextMode =
+                        media3ServerRecovery.nextMode(
+                            identity =
+                                "$currentItemId:${_uiState.value.playback?.source?.id.orEmpty()}",
+                            currentMode = _uiState.value.playback?.mode,
+                            audioFailure =
+                                state.errorTrackType == androidx.media3.common.C.TRACK_TYPE_AUDIO,
+                            kind = media3.failureKind,
+                            hdr = media3.hdr,
+                        )
+                    if (nextMode != null) {
+                        Log.i(PLAYBACK_TAG, "Media3 server recovery mode=$nextMode")
+                        loadPlayback(
+                            PlaybackOptions(
+                                requestedMode = nextMode,
+                                maxStreamingBitrate =
+                                    _uiState.value.selectedQuality.takeIf { it > 0 },
+                                sourceId = _uiState.value.playback?.source?.id,
+                                audioStreamId = _uiState.value.selectedAudio,
+                            ),
+                            playWhenReadyOverride = media3.playWhenReady,
+                        )
+                    }
+                }
+                if (
+                    _uiState.value.engineType != PlayerEngine.MEDIA3 &&
+                        state.error != null &&
                         shouldRecoverPlaybackError(_uiState.value.playback?.mode, recovered)
                 ) {
                     recovered = true
@@ -545,6 +583,26 @@ class PlaybackViewModel(
                         },
                     error = null,
                 )
+            val videoStreams =
+                playbackData.source.mediaStreams.filter {
+                    it.type.equals("video", true) && !it.isAttachedPicture
+                }
+            (playbackEngine as? Media3DecoderControl)?.configureSource(
+                Media3SourceContext(
+                    identity = "$currentItemId:${playbackData.source.id.orEmpty()}",
+                    expectedVideo =
+                        videoStreams.isNotEmpty() ||
+                            playbackData.item.type.orEmpty().lowercase() in
+                                setOf("movie", "episode"),
+                    hdr =
+                        videoStreams.any {
+                            it.colorTransfer in setOf("smpte2084", "arib-std-b67") ||
+                                it.codec in setOf("dvhe", "dvh1")
+                        },
+                    mode = data.mode,
+                    audioStreamId = selectedAudio,
+                )
+            )
             playbackEngine?.prepare(
                 streamUrl,
                 localStartSeconds,
@@ -1210,6 +1268,10 @@ class PlaybackViewModel(
                     "playback session cancellation failed sessionId=$sessionId error=${error.message}",
                 )
             }
+    }
+
+    fun chooseVideoDecoder(preference: VideoDecoderPreference) {
+        (playbackEngine as? Media3DecoderControl)?.selectVideoDecoder(preference)
     }
 
     fun chooseQuality(value: Int) {

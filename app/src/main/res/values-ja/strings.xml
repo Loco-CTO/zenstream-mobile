@@ -487,4 +487,15 @@
     <string name="player_expand">プレーヤーを拡大</string>
     <string name="continue_video_in_miniplayer">ミニプレーヤーで再生を続ける</string>
     <string name="continue_video_in_miniplayer_description">動画プレーヤーを離れても再生を続けます。オフにすると再生を停止します。</string>
+    <string name="player_video_decoder">映像デコーダー</string>
+    <string name="player_decoder_auto">自動</string>
+    <string name="player_decoder_hardware">ハードウェア</string>
+    <string name="player_decoder_android_software">Androidソフトウェア</string>
+    <string name="player_decoder_app_software">アプリソフトウェア（FFmpeg）</string>
+    <string name="player_debug_video_decoder">映像デコーダー</string>
+    <string name="player_debug_audio_decoder">音声デコーダー</string>
+    <string name="player_debug_first_frame">初回フレーム</string>
+    <string name="player_debug_recovery">復旧</string>
+    <string name="player_frame_rendered">表示済み</string>
+    <string name="player_frame_pending">映像を待機中</string>
 </resources>

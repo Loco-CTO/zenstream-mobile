@@ -188,10 +188,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
-    // Official Media3 decoder extensions, built against the pinned Media3 version.
-    implementation(files("libs/media3-decoder-av1-1.11.1.aar"))
+    // Pinned decoder artifacts: dedicated music libFLAC and isolated NextLib audio/video.
     implementation(files("libs/media3-decoder-flac-1.11.1.aar"))
-    implementation(files("libs/media3-decoder-ffmpeg-1.11.1.aar"))
+    implementation(files("libs/nextlib-media3ext-1.11.1-0.16.0-zenstream1.aar"))
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation(libs.junit)

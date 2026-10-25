@@ -6,13 +6,8 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import `is`.xyz.mpv.BaseMPVView
@@ -78,6 +73,7 @@ data class EngineState(
     val ended: Boolean = false,
     val error: String? = null,
     val errorTrackType: Int? = null,
+    val media3: Media3PlaybackDetails? = null,
 )
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -189,175 +185,6 @@ interface PlaybackEngine {
     fun setSpeed(value: Float)
 
     fun release()
-}
-
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-class Media3PlaybackEngine : PlaybackEngine {
-    private val tag = "ZenStreamPlayback"
-    private val _state = MutableStateFlow(EngineState())
-    override val state: StateFlow<EngineState> = _state
-    private val handler = Handler(Looper.getMainLooper())
-    private var player: ExoPlayer? = null
-    private var pending: PendingPlayback? = null
-    private val initialSeek = InitialSeekController()
-    private val ticker =
-        object : Runnable {
-            override fun run() {
-                val current = player
-                if (current != null) {
-                    val duration = current.duration.takeIf { it > 0 } ?: 0L
-                    _state.value =
-                        _state.value.copy(
-                            positionSeconds = current.currentPosition / 1000.0,
-                            durationSeconds = duration / 1000.0,
-                            bufferedSeconds = current.bufferedPosition / 1000.0,
-                            isPlaying = current.isPlaying,
-                            isBuffering = current.playbackState == Player.STATE_BUFFERING,
-                            speed = current.playbackParameters.speed,
-                            ready = current.playbackState == Player.STATE_READY,
-                        )
-                }
-                handler.postDelayed(this, 250L)
-            }
-        }
-
-    override fun createView(context: Context): View {
-        if (player == null) {
-            player =
-                ExoPlayer.Builder(
-                        context.applicationContext,
-                        DefaultRenderersFactory(context.applicationContext)
-                            .setExtensionRendererMode(
-                                DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-                            ),
-                    )
-                    .build()
-                    .also { exo ->
-                        exo.trackSelectionParameters =
-                            exo.trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                .build()
-                        exo.addListener(
-                            object : Player.Listener {
-                                override fun onPlayerError(error: PlaybackException) {
-                                    val rendererError = error as? ExoPlaybackException
-                                    Log.e(
-                                        tag,
-                                        "Media3 playback error code=${error.errorCodeName} message=${error.message}",
-                                    )
-                                    _state.value =
-                                        _state.value.copy(
-                                            error = error.message ?: "Playback failed",
-                                            errorTrackType =
-                                                rendererError?.let {
-                                                    media3PlaybackErrorTrackType(
-                                                        errorType = it.type,
-                                                        rendererIndex = it.rendererIndex,
-                                                        rendererTypeAt = exo::getRendererType,
-                                                    )
-                                                },
-                                        )
-                                }
-
-                                override fun onPlaybackStateChanged(playbackState: Int) {
-                                    _state.value = media3PlaybackState(_state.value, playbackState)
-                                    Log.i(
-                                        tag,
-                                        "Media3 playback state=$playbackState ready=${playbackState == Player.STATE_READY} buffering=${playbackState == Player.STATE_BUFFERING}",
-                                    )
-                                    if (playbackState == Player.STATE_READY) applyInitialSeek()
-                                }
-                            }
-                        )
-                    }
-            handler.post(ticker)
-        }
-        return PlayerView(context)
-            .apply {
-                useController = false
-                subtitleView?.visibility = View.GONE
-                player = this@Media3PlaybackEngine.player
-            }
-            .also {
-                pending?.let { request ->
-                    prepare(
-                        request.url,
-                        request.startPositionSeconds,
-                        request.mimeType,
-                        request.playWhenReady,
-                    )
-                }
-            }
-    }
-
-    override fun currentPositionSeconds(): Double =
-        player?.currentPosition?.coerceAtLeast(0L)?.div(1000.0) ?: _state.value.positionSeconds
-
-    override fun prepare(
-        url: String,
-        startPositionSeconds: Double,
-        mimeType: String?,
-        playWhenReady: Boolean,
-    ) {
-        Log.i(
-            tag,
-            "Media3 prepare url=${redactPlaybackUrl(url)} mimeType=$mimeType start=$startPositionSeconds playWhenReady=$playWhenReady",
-        )
-        val current = player
-        if (current == null) {
-            pending =
-                PendingPlayback(
-                    url,
-                    startPositionSeconds,
-                    mimeType,
-                    playWhenReady,
-                )
-            return
-        }
-        pending = null
-        _state.value = EngineState()
-        initialSeek.schedule(startPositionSeconds)
-        current.playWhenReady = playWhenReady
-        val mediaItem =
-            MediaItem.Builder()
-                .setUri(url)
-                .apply {
-                    mimeType?.let { setMimeType(it) }
-                }
-                .build()
-        current.setMediaItem(mediaItem)
-        current.prepare()
-    }
-
-    private fun applyInitialSeek() {
-        val positionSeconds = initialSeek.consume() ?: return
-        player?.seekTo((positionSeconds * 1000).toLong())
-    }
-
-    override fun play() {
-        player?.play()
-    }
-
-    override fun pause() {
-        player?.pause()
-    }
-
-    override fun seekTo(positionSeconds: Double) {
-        initialSeek.cancel()
-        player?.seekTo(max(0.0, positionSeconds).times(1000).toLong())
-    }
-
-    override fun setSpeed(value: Float) {
-        player?.setPlaybackSpeed(value.coerceIn(.25f, 3f))
-    }
-
-    override fun release() {
-        handler.removeCallbacks(ticker)
-        initialSeek.cancel()
-        player?.release()
-        player = null
-    }
 }
 
 private fun redactPlaybackUrl(value: String): String =
