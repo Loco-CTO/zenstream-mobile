@@ -16,9 +16,11 @@ import androidx.media3.ui.PlayerView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegLibrary
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.*
+import org.junit.Assume.assumeNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +31,7 @@ class Media3CodecPlaybackTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private var captureName = "fixture"
     private var captureIndex = 0
+    private var requireFixtureColors = true
 
     @Test fun h264() = play("h264.mp4")
 
@@ -67,12 +70,36 @@ class Media3CodecPlaybackTest {
     @Test
     fun decoderInitializationFailureRecoversLocally() = play("h264.mp4", forceInitFailure = true)
 
-    private fun play(name: String, forceInitFailure: Boolean = false) {
+    @Test fun suppliedMediaAutomatic() = suppliedMedia(software = false)
+
+    @Test fun suppliedMediaSoftware() = suppliedMedia(software = true)
+
+    private fun suppliedMedia(software: Boolean) {
+        val path = InstrumentationRegistry.getArguments().getString("media3AcceptanceFile")
+        assumeNotNull(path)
+        val file = File(requireNotNull(path))
+        assertTrue("Acceptance media must be readable: $file", file.canRead())
+        requireFixtureColors = false
+        play(
+            "acceptance-${if (software) "software" else "automatic"}",
+            inputFile = file,
+            software = software,
+        )
+    }
+
+    private fun play(
+        name: String,
+        forceInitFailure: Boolean = false,
+        inputFile: File? = null,
+        software: Boolean = true,
+    ) {
         captureName = name
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val file = instrumentation.targetContext.cacheDir.resolve(name)
-        instrumentation.context.assets.open("media3/$name").use { input ->
-            file.outputStream().use(input::copyTo)
+        val file = inputFile ?: instrumentation.targetContext.cacheDir.resolve(name)
+        if (inputFile == null) {
+            instrumentation.context.assets.open("media3/$name").use { input ->
+                file.outputStream().use(input::copyTo)
+            }
         }
         val selector =
             if (forceInitFailure)
@@ -105,7 +132,7 @@ class Media3CodecPlaybackTest {
                 engine.configureSource(
                     Media3SourceContext(name, expectedVideo = true, mode = "direct")
                 )
-                if (!forceInitFailure)
+                if (!forceInitFailure && software)
                     engine.selectVideoDecoder(VideoDecoderPreference.APP_SOFTWARE)
                 engine.prepare(file.toURI().toString(), 0.0)
             }
@@ -114,10 +141,11 @@ class Media3CodecPlaybackTest {
                     engine.state.value.error != null
             }
             assertNull("$name: ${engine.state.value}", engine.state.value.error)
-            assertTrue(
-                "$name decoder=${engine.state.value.media3?.videoDecoder}",
-                engine.state.value.media3?.videoDecoder?.startsWith("ffmpeg") == true,
-            )
+            if (software)
+                assertTrue(
+                    "$name decoder=${engine.state.value.media3?.videoDecoder}",
+                    engine.state.value.media3?.videoDecoder?.startsWith("ffmpeg") == true,
+                )
             assertEquals((63 shl 16) or (1 shl 8) or 101, FfmpegLibrary.getRuntimeCodecVersion())
             if (forceInitFailure) assertEquals(1, engine.state.value.media3?.videoSoftwareRetries)
             val first = pixels(view.videoSurfaceView as SurfaceView)
@@ -141,7 +169,7 @@ class Media3CodecPlaybackTest {
             assertFalse("$name seek must display another frame", second.contentEquals(sought))
         } finally {
             compose.runOnIdle { engine.release() }
-            file.delete()
+            if (inputFile == null) file.delete()
         }
     }
 
@@ -172,10 +200,12 @@ class Media3CodecPlaybackTest {
                 }
             }
         bitmap.recycle()
-        assertTrue(
-            "Expected colored fixture pixels",
-            pixels.any { Color.red(it) > 80 && Color.green(it) < 80 },
-        )
+        if (requireFixtureColors)
+            assertTrue(
+                "Expected colored fixture pixels",
+                pixels.any { Color.red(it) > 80 && Color.green(it) < 80 },
+            )
+        else assertTrue("Expected visible, nonuniform video pixels", pixels.distinct().size > 32)
         return pixels
     }
 }

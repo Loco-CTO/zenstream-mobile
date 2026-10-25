@@ -63,8 +63,17 @@ gradlew.bat connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArgumen
 
 VC-1 registration is tested, but a real VC-1 fixture and physical-device performance
 remain separate acceptance gates. Emulator color-pattern tests do not establish
-physical-device 1080p/4K performance, hardware HDR, audible output or the user's
-reported HEVC media. Record those limits in verification reports.
+physical-device 1080p/4K performance, hardware HDR or audible output. Record those
+limits in verification reports.
+
+For optional real-media acceptance, copy a readable file to the debug app's external
+files directory and pass its device path as
+`-Pandroid.testInstrumentationRunnerArguments.media3AcceptanceFile=/sdcard/Android/data/com.zenstream.zenstreammobile.debug/files/sample.mkv`.
+The same test class then also checks automatic and forced app-software playback,
+visible nonuniform/changing Surface pixels, and seeking. Those two cases skip when
+the argument is absent. Preserve original encoded streams when making a short
+excerpt (`ffmpeg -ss 300 -i input.mkv -t 20 -map 0:v:0 -map 0:a:0? -c copy -sn -dn sample.mkv`).
+Keep private media and captures in ignored build output; never commit them as fixtures.
 
 ## Licenses and corresponding source
 
