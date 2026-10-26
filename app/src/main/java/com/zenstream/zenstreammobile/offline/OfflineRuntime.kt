@@ -84,6 +84,25 @@ class OfflineRuntime private constructor(context: Context) {
             },
             deviceId = { sessionStore.deviceId() },
         )
+    val metadataRefresh =
+        OfflineMetadataRefreshCoordinator(
+            catalog,
+            storage,
+            request = { session, path, method, body ->
+                check(connection.state.value.mode != ConnectionMode.OFFLINE) {
+                    "Offline mode is enabled."
+                }
+                network.offlineRequest(session, path, method, body)
+            },
+            binary = { session, path, headers, receive ->
+                check(connection.state.value.mode != ConnectionMode.OFFLINE) {
+                    "Offline mode is enabled."
+                }
+                network.offlineBinaryRequest(session, path, headers, receive)
+            },
+            loadCursor = connection::maintenanceCursor,
+            saveCursor = connection::saveMaintenanceCursor,
+        )
     val playbackSources =
         PlaybackSourceResolver(
             catalog,
@@ -359,9 +378,23 @@ class OfflineRuntime private constructor(context: Context) {
         database.offline().retryPlaylistMetadata(profile)
     }
 
-    var reconcileMetadata:
-        (suspend (OfflineProfile, com.zenstream.zenstreammobile.model.AuthSession) -> Unit)? =
-        null
+    suspend fun refreshMetadata(profileId: String): Boolean {
+        val policy = connection.state.first { it.initialized }
+        if (
+            policy.mode == ConnectionMode.OFFLINE ||
+                policy.authentication == OnlineAuthentication.NEEDS_SIGN_IN
+        )
+            return false
+        val profile =
+            database.offline().profile(profileId)?.takeUnless { it.locked } ?: return false
+        val session = sessionStore.session.first() ?: return false
+        if (profile.account != session.userId || profile.serverUrl != session.serverUrl)
+            return false
+        for (part in listOf("metadata-catalog", "metadata-assets", "metadata-playlists")) connection
+            .saveMaintenanceCursor("${profile.id}:$part", 0)
+        DownloadExecution.scheduleReconciliationNow(appContext)
+        return true
+    }
 
     suspend fun reconcileBounded() {
         val policy = connection.state.first { it.initialized }
@@ -382,7 +415,7 @@ class OfflineRuntime private constructor(context: Context) {
         val session = sessionStore.session.first() ?: return
         if (profile.account != session.userId || profile.serverUrl != session.serverUrl) return
         accountSync.reconcile(profile.id, session)
-        reconcileMetadata?.invoke(profile, session)
+        metadataRefresh.refresh(profile.id, session, sessionStore.metadataLanguage.first())
     }
 
     companion object {

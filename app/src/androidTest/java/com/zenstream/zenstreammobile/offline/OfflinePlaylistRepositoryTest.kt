@@ -79,7 +79,7 @@ class OfflinePlaylistRepositoryTest {
     }
 
     @Test
-    fun incompleteMembershipIsReadOnlyAndMetadataRefreshCannotReplacePendingEdits() = runBlocking {
+    fun incompleteMembershipIsReadOnlyAndMetadataRefreshKeepsPendingScalarOverlay() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
         try {
@@ -110,7 +110,7 @@ class OfflinePlaylistRepositoryTest {
                     id = "remote",
                     metadata =
                         JSONObject()
-                            .put("name", "Remote")
+                            .put("name", "Local pending name")
                             .put("stateRevisions", JSONObject())
                             .toString(),
                     complete = true,
@@ -200,11 +200,11 @@ class OfflinePlaylistRepositoryTest {
                 )
             )
             assertEquals(
-                listOf("old-track"),
+                listOf("remote-track"),
                 repository.entries("p", "remote", 10).map { it.track },
             )
             assertEquals(
-                "Remote",
+                "Local pending name",
                 JSONObject(repository.playlist("p", "remote")!!.metadata).getString("name"),
             )
         } finally {

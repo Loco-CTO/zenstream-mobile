@@ -65,6 +65,11 @@ interface OfflineDao {
 
     @Upsert suspend fun putItems(values: List<OfflineCatalogItem>)
 
+    @Query(
+        "SELECT * FROM offline_catalog WHERE profile=:profile ORDER BY id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun catalogPage(profile: String, limit: Int, offset: Int): List<OfflineCatalogItem>
+
     @Query("SELECT * FROM offline_catalog WHERE profile=:profile AND id=:id")
     suspend fun item(profile: String, id: String): OfflineCatalogItem?
 
@@ -170,6 +175,16 @@ interface OfflineDao {
     suspend fun asset(profile: String, id: String): OfflineAsset?
 
     @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0 ORDER BY id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun metadataAssetPage(profile: String, limit: Int, offset: Int): List<OfflineAsset>
+
+    @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item AND state='complete' AND locked=0 ORDER BY verifiedAt DESC,id LIMIT 1"
+    )
+    suspend fun latestCompleteAsset(profile: String, item: String): OfflineAsset?
+
+    @Query(
         "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item AND state='complete' AND locked=0 ORDER BY verifiedAt DESC,id"
     )
     suspend fun playable(profile: String, item: String): List<OfflineAsset>
@@ -266,6 +281,11 @@ interface OfflineDao {
 
     @Upsert suspend fun putPlaylist(value: OfflinePlaylist)
 
+    @Query(
+        "SELECT * FROM offline_playlists WHERE profile=:profile AND complete=1 AND deleted=0 AND id NOT LIKE '%#offline-staging' ORDER BY id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun playlistRefreshPage(profile: String, limit: Int, offset: Int): List<OfflinePlaylist>
+
     @Query("SELECT * FROM offline_playlists WHERE profile=:profile AND id=:id")
     suspend fun playlist(profile: String, id: String): OfflinePlaylist?
 
@@ -357,7 +377,7 @@ interface OfflineDao {
     ): List<OfflineCatalogItem>
 
     @Query(
-        "WITH RECURSIVE descendants(id) AS (SELECT :item UNION SELECT e.id FROM offline_catalog e JOIN descendants d ON e.parentId=d.id WHERE e.profile=:profile) SELECT COUNT(DISTINCT c.id) AS total,COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN c.id END) AS downloaded FROM offline_catalog c LEFT JOIN offline_assets a ON a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0 WHERE c.profile=:profile AND c.type IN ('movie','episode','track') AND (c.id IN (SELECT id FROM descendants) OR c.id IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:item))"
+        "WITH RECURSIVE descendants(id) AS (SELECT :item UNION SELECT e.id FROM offline_catalog e JOIN descendants d ON e.parentId=d.id WHERE e.profile=:profile) SELECT COUNT(DISTINCT c.id) AS total,COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN c.id END) AS downloaded,COUNT(DISTINCT CASE WHEN c.newSourceAvailable=1 THEN c.id END) AS newSourceAvailable FROM offline_catalog c LEFT JOIN offline_assets a ON a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0 WHERE c.profile=:profile AND c.type IN ('movie','episode','track') AND (c.id IN (SELECT id FROM descendants) OR c.id IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:item))"
     )
     suspend fun availability(profile: String, item: String): OfflineAvailability
 
@@ -471,7 +491,7 @@ interface OfflineDao {
     suspend fun nextTransferAttempt(profile: String): Long
 }
 
-data class OfflineAvailability(val total: Int, val downloaded: Int)
+data class OfflineAvailability(val total: Int, val downloaded: Int, val newSourceAvailable: Int = 0)
 
 data class OfflineWatchedCounts(val total: Int, val watched: Int)
 

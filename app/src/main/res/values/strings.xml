@@ -76,6 +76,8 @@
     <string name="offline_verifying">Verifying and saving</string>
     <string name="offline_save_playlist_metadata">Save complete playlist metadata for offline editing</string>
     <string name="offline_downloads">Downloads</string>
+    <string name="offline_refresh_metadata">Refresh saved metadata</string>
+    <string name="offline_new_version_available">A newer server version is available</string>
     <string name="offline_mode_active">Offline mode · network activity is paused</string>
     <string name="offline_local_available">Your saved library is available on this device</string>
     <string name="offline_go_online">Go online</string>

@@ -525,6 +525,22 @@ fun DownloadsScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.weight(1f).padding(vertical = 12.dp),
             )
+            IconButton(
+                enabled =
+                    selected != null &&
+                        connection.mode == ConnectionMode.AUTOMATIC &&
+                        connection.authentication != OnlineAuthentication.NEEDS_SIGN_IN,
+                onClick = {
+                    selected?.let { profile ->
+                        scope.launch { runtime.refreshMetadata(profile.id) }
+                    }
+                },
+            ) {
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_refresh_cw),
+                    stringResource(R.string.offline_refresh_metadata),
+                )
+            }
             TextButton(
                 onClick = {
                     scope.launch {
@@ -763,6 +779,12 @@ private fun ColumnScope.SavedDownloadList(
                                 availability.total,
                             )
                         )
+                        if (availability.newSourceAvailable > 0)
+                            Text(
+                                stringResource(R.string.offline_new_version_available),
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                         if (watchedCounts.total > 0)
                             Text(
                                 stringResource(

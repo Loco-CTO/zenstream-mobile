@@ -7,6 +7,8 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import java.security.MessageDigest
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -143,6 +145,7 @@ class OfflineCatalogRepository(
     private val request: OfflineRequest,
 ) {
     val dao = database.offline()
+    private val playlistCacheMutex = Mutex()
 
     suspend fun requireProfile(profile: String): OfflineProfile =
         requireNotNull(dao.profile(profile)) { "Offline profile is unavailable." }
@@ -393,6 +396,15 @@ class OfflineCatalogRepository(
         profile: String,
         id: String,
         language: String,
+    ): Boolean = playlistCacheMutex.withLock {
+        cachePlaylistPageLocked(session, profile, id, language)
+    }
+
+    private suspend fun cachePlaylistPageLocked(
+        session: AuthSession,
+        profile: String,
+        id: String,
+        language: String,
     ): Boolean {
         val retained = requireProfile(profile)
         val staging = "$id#offline-staging"
@@ -470,14 +482,41 @@ class OfflineCatalogRepository(
                 check(dao.playlistEntryCount(profile, staging) == page.expectedCount) {
                     "Playlist changed during refresh. Retry its snapshot."
                 }
-                if (dao.hasPendingPlaylistOperations(profile, id)) {
+                val current = dao.playlist(profile, id)
+                val currentMetadata = JSONObject(current?.metadata ?: "{}")
+                val pending = dao.targetOperations(profile, id)
+                if (pending.any { it.kind == "playlist_create" || it.kind == "playlist_delete" }) {
                     dao.clearPlaylistEntries(profile, staging)
                     dao.deletePlaylist(profile, staging)
                     return@withTransaction true
                 }
-                dao.clearPlaylistEntries(profile, id)
-                dao.publishPlaylistEntries(profile, staging, id)
-                dao.putPlaylist(page.copy(id = id, complete = true))
+                val membershipPending = pending.any {
+                    it.kind in setOf("playlist_add", "playlist_remove", "playlist_order")
+                }
+                val updatedMetadata = JSONObject(page.metadata)
+                if (pending.any { it.kind == "playlist_name" } && currentMetadata.has("name"))
+                    updatedMetadata.put("name", currentMetadata.get("name"))
+                if (
+                    pending.any { it.kind == "playlist_description" } &&
+                        currentMetadata.has("description")
+                )
+                    updatedMetadata.put("description", currentMetadata.get("description"))
+                val updated =
+                    page.copy(
+                        id = id,
+                        metadata = updatedMetadata.toString(),
+                        complete = if (membershipPending) current?.complete ?: true else true,
+                        expectedCount =
+                            if (membershipPending) current?.expectedCount ?: page.expectedCount
+                            else page.expectedCount,
+                    )
+                if (!membershipPending) {
+                    dao.clearPlaylistEntries(profile, id)
+                    dao.publishPlaylistEntries(profile, staging, id)
+                } else {
+                    updatedMetadata.put("itemCount", updated.expectedCount)
+                }
+                dao.putPlaylist(updated.copy(metadata = updatedMetadata.toString()))
                 dao.clearPlaylistEntries(profile, staging)
                 dao.deletePlaylist(profile, staging)
             }

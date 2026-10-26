@@ -76,6 +76,8 @@
     <string name="offline_verifying">検証して保存中</string>
     <string name="offline_save_playlist_metadata">オフライン編集用にプレイリストの全メタデータを保存</string>
     <string name="offline_downloads">ダウンロード</string>
+    <string name="offline_refresh_metadata">保存済みメタデータを更新</string>
+    <string name="offline_new_version_available">サーバーに新しいバージョンがあります</string>
     <string name="offline_mode_active">オフラインモード · ネットワーク通信を停止中</string>
     <string name="offline_local_available">保存済みライブラリはこのデバイスで利用できます</string>
     <string name="offline_go_online">オンラインにする</string>
