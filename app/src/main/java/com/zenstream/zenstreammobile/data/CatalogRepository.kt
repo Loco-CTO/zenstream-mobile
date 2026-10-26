@@ -10,9 +10,11 @@ import com.zenstream.zenstreammobile.model.CalendarResponse
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
+import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
+import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MpvVideoOutput
 import com.zenstream.zenstreammobile.model.MpvVideoProfile
@@ -33,6 +35,8 @@ import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.model.ViewerEnd
 import com.zenstream.zenstreammobile.model.ViewerHeartbeat
+import com.zenstream.zenstreammobile.model.homeSectionId
+import com.zenstream.zenstreammobile.model.orderedHomeRows
 import java.time.Instant
 import java.util.LinkedHashMap
 import java.util.UUID
@@ -43,6 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -156,6 +162,17 @@ interface HomeDataSource : CatalogRefreshSource {
     suspend fun homeLibraries(session: AuthSession): List<Library>
 
     suspend fun homeLibraryData(session: AuthSession, library: Library): LibraryData
+}
+
+interface HomeLayoutDataSource {
+    fun homeLayoutPreferences(session: AuthSession): Flow<HomeLayoutPreferences>
+
+    suspend fun saveHomeLayoutPreferences(
+        session: AuthSession,
+        preferences: HomeLayoutPreferences,
+    )
+
+    suspend fun homeLayoutRows(session: AuthSession): List<MediaRow>
 }
 
 interface LibraryDataSource : CatalogRefreshSource {
@@ -386,6 +403,7 @@ class CatalogRepository(
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
 ) :
     HomeDataSource,
+    HomeLayoutDataSource,
     LibraryDataSource,
     SearchDataSource,
     FavoritesDataSource,
@@ -966,6 +984,48 @@ class CatalogRepository(
         authenticatedCatalogRequest(session) { current ->
             api.fetchHomeLibraryData(current, library, CatalogApi.HOME_REQUEST_TIMEOUT_MILLIS)
         }
+
+    override fun homeLayoutPreferences(session: AuthSession) =
+        sessionStore.homeLayoutPreferences(session.serverUrl, session.userId)
+
+    override suspend fun saveHomeLayoutPreferences(
+        session: AuthSession,
+        preferences: HomeLayoutPreferences,
+    ) = sessionStore.cacheHomeLayoutPreferences(session.serverUrl, session.userId, preferences)
+
+    override suspend fun homeLayoutRows(session: AuthSession): List<MediaRow> {
+        val continueWatching = homeContinueWatching(session)
+        val nextUp = homeNextUp(session)
+        val recommendations =
+            try {
+                homeRecommendations(session)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        val derived = homeDerived(session)
+        val libraries = homeLibraries(session)
+        val libraryRows =
+            libraries.chunked(3).flatMap { batch ->
+                coroutineScope {
+                    batch.map { library -> async { homeLibraryData(session, library).rows } }.awaitAll().flatten()
+                }
+            }
+        return orderedHomeRows(
+            listOfNotNull(
+                continueWatching.takeIf { it.isNotEmpty() }?.let {
+                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.ContinueWatching, items = it, wide = true)
+                },
+                nextUp.takeIf { it.isNotEmpty() }?.let {
+                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.NextUp, items = it, wide = true)
+                },
+                recommendations.takeIf { it.isNotEmpty() }?.let {
+                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.Recommendations, items = it)
+                },
+            ) + derived.rows() + libraryRows
+        ).distinctBy(::homeSectionId)
+    }
 
     override suspend fun libraries(session: AuthSession) =
         authenticatedCatalogRequest(session) { current -> api.getLibraries(current) }

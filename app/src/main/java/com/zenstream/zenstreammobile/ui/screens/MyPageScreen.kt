@@ -64,6 +64,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
+import com.zenstream.zenstreammobile.ui.HomeLayoutViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import kotlinx.coroutines.launch
@@ -90,6 +91,12 @@ fun MyPageScreen(
             factory = SettingsViewModel.Factory(repository),
         )
     val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val homeLayoutViewModel: HomeLayoutViewModel =
+        viewModel(
+            key = "home-layout-${session.serverUrl}-${session.userId}",
+            factory = HomeLayoutViewModel.Factory(repository, session),
+        )
+    val homeLayoutState by homeLayoutViewModel.uiState.collectAsStateWithLifecycle()
     var avatarActionsOpen by remember { mutableStateOf(false) }
     var editorOpen by remember { mutableStateOf(false) }
     var deleteConfirmationOpen by remember { mutableStateOf(false) }
@@ -103,12 +110,14 @@ fun MyPageScreen(
     var clearWatchHistoryOpen by remember { mutableStateOf(false) }
     var clearingWatchHistory by remember { mutableStateOf(false) }
     var clearWatchHistoryError by remember { mutableStateOf(false) }
+    var homeLayoutCanScroll by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val removeFailed = stringResource(R.string.avatar_remove_failed)
     val listState = rememberLazyListState()
     ObserveScrollability(
         canScroll = {
-            !calendarOpen && (listState.canScrollForward || listState.canScrollBackward)
+            !calendarOpen &&
+                (listState.canScrollForward || listState.canScrollBackward || homeLayoutCanScroll)
         },
         onScrollabilityChanged = onScrollabilityChanged,
     )
@@ -129,6 +138,14 @@ fun MyPageScreen(
         clearingWatchHistory = false
         clearWatchHistoryError = false
         listState.scrollToItem(0)
+    }
+
+    LaunchedEffect(settingsSection) {
+        if (settingsSection == MyPageSettingsSection.Home) {
+            homeLayoutViewModel.load(force = true)
+        } else {
+            homeLayoutCanScroll = false
+        }
     }
 
     BackHandler(
@@ -274,6 +291,7 @@ fun MyPageScreen(
                                     when (activeSection) {
                                         MyPageSettingsSection.Appearance ->
                                             R.string.appearance_group
+                                        MyPageSettingsSection.Home -> R.string.home
                                         MyPageSettingsSection.Player -> R.string.player_group
                                         MyPageSettingsSection.Subtitles -> R.string.subtitles_group
                                         MyPageSettingsSection.Privacy -> R.string.privacy_group
@@ -284,31 +302,41 @@ fun MyPageScreen(
                         )
                     }
                     item {
-                        MyPageSettingsContent(
-                            section = activeSection,
-                            state = settingsState,
-                            onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
-                            onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
-                            onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
-                            onPlayerEngineChange = settingsViewModel::setPlayerEngine,
-                            onMpvVideoOutputChange = settingsViewModel::setMpvVideoOutput,
-                            onMpvVideoProfileChange = settingsViewModel::setMpvVideoProfile,
-                            onMpvVideoScalerChange = settingsViewModel::setMpvVideoScaler,
-                            onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
-                            onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
-                            onContinueVideoInMiniPlayerChange =
-                                settingsViewModel::setContinueVideoInMiniPlayer,
-                            onAutomaticPictureInPictureChange =
-                                settingsViewModel::setAutomaticPictureInPicture,
-                            onCheckForUpdatesOnStartupChange =
-                                settingsViewModel::setCheckForUpdatesOnStartup,
-                            onWatchHistoryChange = settingsViewModel::setWatchHistoryEnabled,
-                            onClearWatchHistory = {
-                                clearWatchHistoryError = false
-                                clearWatchHistoryOpen = true
-                            },
-                            onSubtitleChange = settingsViewModel::updateSubtitle,
-                        )
+                        if (activeSection == MyPageSettingsSection.Home) {
+                            MyPageHomeLayoutContent(
+                                state = homeLayoutState,
+                                onRetry = { homeLayoutViewModel.load(force = true) },
+                                onVisibilityChange = homeLayoutViewModel::setHidden,
+                                onReorder = homeLayoutViewModel::reorder,
+                                onScrollabilityChanged = { homeLayoutCanScroll = it },
+                            )
+                        } else {
+                            MyPageSettingsContent(
+                                section = activeSection,
+                                state = settingsState,
+                                onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
+                                onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
+                                onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                                onPlayerEngineChange = settingsViewModel::setPlayerEngine,
+                                onMpvVideoOutputChange = settingsViewModel::setMpvVideoOutput,
+                                onMpvVideoProfileChange = settingsViewModel::setMpvVideoProfile,
+                                onMpvVideoScalerChange = settingsViewModel::setMpvVideoScaler,
+                                onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
+                                onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
+                                onContinueVideoInMiniPlayerChange =
+                                    settingsViewModel::setContinueVideoInMiniPlayer,
+                                onAutomaticPictureInPictureChange =
+                                    settingsViewModel::setAutomaticPictureInPicture,
+                                onCheckForUpdatesOnStartupChange =
+                                    settingsViewModel::setCheckForUpdatesOnStartup,
+                                onWatchHistoryChange = settingsViewModel::setWatchHistoryEnabled,
+                                onClearWatchHistory = {
+                                    clearWatchHistoryError = false
+                                    clearWatchHistoryOpen = true
+                                },
+                                onSubtitleChange = settingsViewModel::updateSubtitle,
+                            )
+                        }
                     }
                 }
             }

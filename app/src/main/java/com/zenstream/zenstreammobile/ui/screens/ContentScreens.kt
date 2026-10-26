@@ -116,6 +116,8 @@ import com.zenstream.zenstreammobile.model.FavoriteSortBy
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.homeSectionId
+import com.zenstream.zenstreammobile.model.orderHomeRows
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.ui.FavoritesViewModel
@@ -180,7 +182,7 @@ fun HomeScreen(
 
         else -> {
             val data = state.data
-            val homeRows = data?.rows.orEmpty().distinctBy { it.key }
+            val homeRows = orderHomeRows(data?.rows.orEmpty(), state.layoutPreferences)
             PullToRefreshLayout(
                 isRefreshing = state.loading,
                 onRefresh = vm::refresh,
@@ -205,7 +207,7 @@ fun HomeScreen(
                     }
                     items(
                         homeRows,
-                        key = { it.key },
+                        key = ::homeSectionId,
                     ) { row ->
                         MediaRowView(
                             row,

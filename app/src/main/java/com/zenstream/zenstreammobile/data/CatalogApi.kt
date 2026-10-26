@@ -2139,6 +2139,7 @@ internal fun parseHomeData(payload: JSONObject): HomeData {
                         it,
                         stackEpisodes = row.optBoolean("stackEpisodes", false),
                         variant = rowVariant(row),
+                        libraryId = row.optString("libraryId").takeIf { id -> id.isNotBlank() },
                     )
                 }
         }
@@ -2173,6 +2174,7 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
                             it,
                             stackEpisodes = row.optBoolean("stackEpisodes", false),
                             variant = rowVariant(row),
+                            libraryId = library.id,
                         )
                     }
             }
@@ -2195,6 +2197,7 @@ internal fun parseHomeLibraryData(payload: JSONObject, library: Library): Librar
                         it,
                         stackEpisodes = legacyRow.optBoolean("stackEpisodes", false),
                         variant = rowVariant(legacyRow),
+                        libraryId = library.id,
                     )
                 )
             }

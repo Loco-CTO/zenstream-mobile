@@ -45,11 +45,12 @@ class MyPageSettingsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithText(context.getString(R.string.appearance_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.player_group)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.subtitles_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.privacy_group)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.updates_group)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.player_group)).performClick()
-        composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Player, selected) }
+        composeRule.onNodeWithText(context.getString(R.string.home)).performClick()
+        composeRule.runOnIdle { assertEquals(MyPageSettingsSection.Home, selected) }
     }
 
     @Test

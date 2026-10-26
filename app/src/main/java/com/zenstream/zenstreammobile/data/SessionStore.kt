@@ -15,6 +15,7 @@ import com.zenstream.zenstreammobile.model.AudioRepeatMode
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
+import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MpvVideoOutput
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
 import org.json.JSONObject
+import org.json.JSONArray
 
 internal const val DEFAULT_SESSION_DATA_STORE_NAME = "zenstream_session"
 internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrumentation"
@@ -100,6 +102,7 @@ class SessionStore(
         val watchHistoryEnabled = booleanPreferencesKey("watch_history_enabled")
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
+        val homeSectionLayouts = stringPreferencesKey("home_section_layouts")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
         val syncplayPresenceSequence = longPreferencesKey("syncplay_presence_sequence")
         val deviceId = stringPreferencesKey("device_id")
@@ -537,6 +540,46 @@ class SessionStore(
         dataStore.edit { it[Keys.librarySorts] = current.toString() }
     }
 
+    fun homeLayoutPreferences(serverUrl: String, userId: String): Flow<HomeLayoutPreferences> =
+        dataStore.data
+            .map { preferences ->
+                val root =
+                    preferences[Keys.homeSectionLayouts]?.let {
+                        runCatching { JSONObject(it) }.getOrNull()
+                    }
+                val value = root?.optJSONObject(homeLayoutScope(serverUrl, userId))
+                    ?: return@map HomeLayoutPreferences()
+                val order = value.optJSONArray("order").toStringListOrNull()
+                    ?: return@map HomeLayoutPreferences()
+                val hidden = value.optJSONArray("hidden").toStringListOrNull()
+                    ?: return@map HomeLayoutPreferences()
+                HomeLayoutPreferences(
+                    order = order,
+                    hidden = hidden,
+                )
+            }
+            .distinctUntilChanged()
+
+    suspend fun cacheHomeLayoutPreferences(
+        serverUrl: String,
+        userId: String,
+        preferences: HomeLayoutPreferences,
+    ) {
+        dataStore.edit { stored ->
+            val root =
+                stored[Keys.homeSectionLayouts]?.let {
+                    runCatching { JSONObject(it) }.getOrNull()
+                } ?: JSONObject()
+            root.put(
+                homeLayoutScope(serverUrl, userId),
+                JSONObject()
+                    .put("order", JSONArray(preferences.order.distinct()))
+                    .put("hidden", JSONArray(preferences.hidden.distinct())),
+            )
+            stored[Keys.homeSectionLayouts] = root.toString()
+        }
+    }
+
     suspend fun cachedSubtitleStyle(): SubtitleStyle? {
         val preferences = dataStore.data.first()
         val stored =
@@ -637,6 +680,19 @@ class SessionStore(
 private fun librarySortKey(userId: String, libraryId: String): String = "$userId\u0000$libraryId"
 
 private fun favoriteSortKey(userId: String): String = "$userId\u0000favorites"
+
+private fun homeLayoutScope(serverUrl: String, userId: String): String =
+    "${serverUrl.trimEnd('/')}\u0000$userId"
+
+private fun JSONArray?.toStringListOrNull(): List<String>? {
+    if (this == null) return null
+    val values = mutableListOf<String>()
+    for (index in 0 until length()) {
+        val value = opt(index) as? String ?: return null
+        if (value.isNotBlank()) values += value
+    }
+    return values.distinct()
+}
 
 private fun librarySortToJson(sort: LibrarySort): JSONObject =
     JSONObject().put("sortBy", sort.sortBy.name).put("sortOrder", sort.sortOrder.name)
