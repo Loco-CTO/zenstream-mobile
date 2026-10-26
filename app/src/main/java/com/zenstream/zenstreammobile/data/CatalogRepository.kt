@@ -397,6 +397,16 @@ class CatalogRepository(
         authenticatedCatalogRequest(session) { current -> api.logout(current) }
     }
 
+    suspend fun offlineRequest(
+        session: AuthSession,
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+    ): JSONObject =
+        authenticatedCatalogRequest(session) { current ->
+            api.offlineRequest(current, path, method, body)
+        }
+
     private val homeMutex = Mutex()
     private val interfaceLocaleMutex = Mutex()
     private val playbackPreferenceMutex = Mutex()

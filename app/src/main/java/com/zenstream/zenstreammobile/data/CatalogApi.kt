@@ -1698,6 +1698,16 @@ class CatalogApi(
     private suspend fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
         catalogItems(requestJson(session, "/api/catalog/items/$itemId/similar"))
 
+    internal suspend fun offlineRequest(
+        session: AuthSession,
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+    ): JSONObject {
+        require(path.startsWith("/api/offline/") || path == "/api/account/sync")
+        return requestJson(session, path, method = method, body = body?.toString())
+    }
+
     private suspend fun requestJson(
         session: AuthSession,
         path: String,

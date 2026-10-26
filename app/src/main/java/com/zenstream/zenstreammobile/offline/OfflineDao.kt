@@ -174,4 +174,35 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_supplements WHERE profile=:profile AND asset=:asset")
     suspend fun deleteSupplements(profile: String, asset: String)
+
+    @Query(
+        "SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND (:category='' OR (:category='movies' AND c.type='movie') OR (:category='tv' AND c.type IN ('series','season','episode')) OR (:category='music' AND c.type IN ('artist','release','track'))) AND c.name LIKE :query ESCAPE '!' ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun browse(
+        profile: String,
+        category: String,
+        query: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        "WITH RECURSIVE descendants(id) AS (SELECT :item UNION SELECT e.id FROM offline_catalog e JOIN descendants d ON e.parentId=d.id WHERE e.profile=:profile) SELECT COUNT(DISTINCT c.id) AS total,COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN c.id END) AS downloaded FROM offline_catalog c LEFT JOIN offline_assets a ON a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0 WHERE c.profile=:profile AND c.type IN ('movie','episode','track') AND (c.id IN (SELECT id FROM descendants) OR c.id IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:item))"
+    )
+    suspend fun availability(profile: String, item: String): OfflineAvailability
+
+    @Query("DELETE FROM offline_playlists WHERE profile=:profile AND id=:id")
+    suspend fun deletePlaylist(profile: String, id: String)
+
+    @Query(
+        "INSERT INTO offline_playlist_entries(profile,playlist,track,entryId,position) SELECT profile,:target,track,entryId,position FROM offline_playlist_entries WHERE profile=:profile AND playlist=:staging"
+    )
+    suspend fun publishPlaylistEntries(profile: String, staging: String, target: String)
+
+    @Query(
+        "SELECT COUNT(*) FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist"
+    )
+    suspend fun playlistEntryCount(profile: String, playlist: String): Int
 }
+
+data class OfflineAvailability(val total: Int, val downloaded: Int)
