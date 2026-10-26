@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,6 +49,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import kotlin.math.min
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 private const val MIN_VIDEO_MINI_PLAYER_WIDTH_DP = 192f
@@ -88,11 +90,27 @@ internal fun VideoMiniPlayerHost(
     val playback = VideoPlaybackSessions.active ?: return
     val context = LocalContext.current
     val currentSession = session ?: playback.session.takeUnless { sessionResolved }
-    LaunchedEffect(currentSession, playback) {
-        if (currentSession == null || !playback.matches(currentSession))
-            VideoPlaybackSessions.close()
+    val profile = playback.profile
+    val retainedAllowed by
+        produceState<Boolean?>(if (profile == null) false else null, playback, session) {
+            val runtime = repository.offline
+            if (profile != null && runtime != null) {
+                combine(runtime.catalogRevision, runtime.connection.state) { _, policy -> policy }
+                    .collect { policy ->
+                        value =
+                            policy.profile == profile.id &&
+                                runtime.database.offline().profile(profile.id)?.locked == false &&
+                                (session == null || playback.matches(session))
+                    }
+            }
+        }
+    val authorized =
+        retainedAllowed == true ||
+            (profile == null && currentSession != null && playback.matches(currentSession))
+    LaunchedEffect(currentSession, playback, retainedAllowed) {
+        if (retainedAllowed != null && !authorized) VideoPlaybackSessions.close()
     }
-    if (currentSession == null || !playback.matches(currentSession)) return
+    if (!authorized) return
     if (
         playback.presentation != VideoPresentation.TO_MINI &&
             playback.presentation != VideoPresentation.MINI
@@ -117,6 +135,7 @@ internal fun VideoMiniPlayerHost(
                                 args.subtitleStreamIndex,
                                 args.hasSubtitleSelection,
                             ),
+                            args.offlineProfileId,
                         )
                     }
                 }
@@ -127,7 +146,12 @@ internal fun VideoMiniPlayerHost(
         PlaybackScreen(
             repository = repository,
             session = currentSession,
-            syncplay = repository.syncplayManager(currentSession),
+            syncplay =
+                currentSession
+                    ?.takeIf { playback.args.offlineProfileId == null }
+                    ?.let(repository::syncplayManager),
+            offlineProfileId = profile?.id,
+            offlineOnly = playback.args.offlineProfileId != null,
             itemId = playback.args.itemId,
             initialItemName = playback.args.itemName,
             enterPictureInPicture = { false },

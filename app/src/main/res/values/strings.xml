@@ -1,4 +1,8 @@
 <resources>
+    <string name="offline_video_stream_paused">Streaming stopped in offline mode. Open a downloaded video to continue.</string>
+    <string name="offline_video_other_engine">Try the other installed player</string>
+    <string name="offline_video_stream">Stream another version instead</string>
+    <string name="offline_video_compatible_help">If this original cannot play on this device, download a compatible 720p or 1080p version while connected.</string>
     <string name="offline_audio_not_downloaded">Not downloaded</string>
     <string name="offline_stream_track">Stream this track instead</string>
     <string name="offline_audio_albums">Downloaded albums</string>

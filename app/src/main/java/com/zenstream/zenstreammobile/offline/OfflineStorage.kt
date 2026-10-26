@@ -99,6 +99,9 @@ class OfflineStorage(
     private val mutex = Mutex()
     private val leases = ConcurrentHashMap<String, Int>()
 
+    internal fun leaseCount(profile: String, assetId: String): Int =
+        leases["$profile:$assetId"] ?: 0
+
     init {
         check(root.isDirectory || root.mkdirs()) { "Download storage is unavailable." }
     }

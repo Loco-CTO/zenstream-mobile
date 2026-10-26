@@ -29,6 +29,7 @@ import com.zenstream.zenstreammobile.data.DEFAULT_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.INSTRUMENTATION_SESSION_DATA_STORE_NAME
 import com.zenstream.zenstreammobile.data.SessionStore
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
+import com.zenstream.zenstreammobile.offline.OfflineRuntime
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.screens.PlaybackScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
@@ -44,6 +45,7 @@ object PlaybackActivityContract {
         "com.zenstream.zenstreammobile.extra.SUBTITLE_STREAM_INDEX"
     const val EXTRA_HAS_SUBTITLE_SELECTION =
         "com.zenstream.zenstreammobile.extra.HAS_SUBTITLE_SELECTION"
+    const val EXTRA_OFFLINE_PROFILE = "com.zenstream.zenstreammobile.extra.OFFLINE_PROFILE"
     internal const val EXTRA_SESSION_DATA_STORE =
         "com.zenstream.zenstreammobile.extra.SESSION_DATA_STORE"
 }
@@ -54,6 +56,7 @@ data class PlaybackLaunchArgs(
     val audioStreamId: Int? = null,
     val subtitleStreamIndex: Int? = null,
     val hasSubtitleSelection: Boolean = false,
+    val offlineProfileId: String? = null,
 )
 
 internal fun parsePlaybackLaunchArgs(
@@ -62,6 +65,7 @@ internal fun parsePlaybackLaunchArgs(
     audioStreamId: Int? = null,
     subtitleStreamIndex: Int? = null,
     hasSubtitleSelection: Boolean = false,
+    offlineProfileId: String? = null,
 ): PlaybackLaunchArgs? =
     itemId
         ?.takeIf { it.isNotBlank() }
@@ -72,6 +76,7 @@ internal fun parsePlaybackLaunchArgs(
                 audioStreamId,
                 subtitleStreamIndex,
                 hasSubtitleSelection,
+                offlineProfileId,
             )
         }
 
@@ -145,10 +150,12 @@ fun playbackIntent(
     itemId: String,
     itemName: String,
     tracks: PlaybackTrackSelection? = null,
+    offlineProfileId: String? = null,
 ): Intent =
     Intent(context, PlaybackActivity::class.java).apply {
         putExtra(PlaybackActivityContract.EXTRA_ITEM_ID, itemId)
         putExtra(PlaybackActivityContract.EXTRA_ITEM_NAME, itemName)
+        putExtra(PlaybackActivityContract.EXTRA_OFFLINE_PROFILE, offlineProfileId)
         tracks?.let { selection ->
             selection.audioStreamId?.let {
                 putExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID, it)
@@ -168,9 +175,10 @@ fun launchPlayback(
     itemId: String,
     itemName: String,
     tracks: PlaybackTrackSelection? = null,
+    offlineProfileId: String? = null,
 ) {
     if (!playbackActivityLaunchGate.beginLaunch()) return
-    val intent = playbackIntent(context, itemId, itemName, tracks)
+    val intent = playbackIntent(context, itemId, itemName, tracks, offlineProfileId)
     val activity = context.findActivity()
     try {
         if (activity != null) {
@@ -218,6 +226,7 @@ class PlaybackActivity : ComponentActivity() {
         CatalogRepository(
             CatalogApi(),
             SessionStore(applicationContext, dataStoreName = dataStoreName),
+            offline = OfflineRuntime.get(applicationContext),
         )
     }
 
@@ -250,6 +259,7 @@ class PlaybackActivity : ComponentActivity() {
                     PlaybackActivityContract.EXTRA_HAS_SUBTITLE_SELECTION,
                     false,
                 ),
+                intent.getStringExtra(PlaybackActivityContract.EXTRA_OFFLINE_PROFILE),
             )
                 ?: run {
                     finish()
@@ -258,11 +268,27 @@ class PlaybackActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val session = repository.session.first()
-            if (session == null || isFinishing) {
+            val runtime = repository.offline
+            val connection = runtime?.connection?.state?.first { it.initialized }
+            val profile =
+                if (OfflineRuntime.ENABLED && runtime != null) {
+                    (args.offlineProfileId ?: connection?.profile)
+                        ?.let { runtime.database.offline().profile(it) }
+                        ?.takeIf { !it.locked && it.id == connection?.profile }
+                        ?.takeIf {
+                            session == null ||
+                                it.account == session.userId && it.serverUrl == session.serverUrl
+                        }
+                } else null
+            if (
+                (session == null && profile == null) ||
+                    (args.offlineProfileId != null && profile == null) ||
+                    isFinishing
+            ) {
                 finish()
                 return@launch
             }
-            videoSession = VideoPlaybackSessions.open(args, session)
+            videoSession = VideoPlaybackSessions.open(args, session, profile)
             val locale = repository.locale.first()
             setContent {
                 ZenStreamTheme {
@@ -270,7 +296,12 @@ class PlaybackActivity : ComponentActivity() {
                         PlaybackScreen(
                             repository = repository,
                             session = session,
-                            syncplay = repository.syncplayManager(session),
+                            syncplay =
+                                session
+                                    ?.takeIf { args.offlineProfileId == null }
+                                    ?.let(repository::syncplayManager),
+                            offlineProfileId = profile?.id,
+                            offlineOnly = args.offlineProfileId != null,
                             itemId = args.itemId,
                             initialItemName = args.itemName,
                             initialAudioStreamId = args.audioStreamId,

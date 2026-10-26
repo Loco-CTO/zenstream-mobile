@@ -110,17 +110,24 @@ fun OfflineDownloadHost(
     var open by remember { mutableStateOf(false) }
     var localMusic by remember { mutableStateOf<Pair<OfflineProfile, MediaItem>?>(null) }
     var localQueue by remember { mutableStateOf<List<MediaItem>?>(null) }
+    val context = LocalContext.current
     val playSaved: (OfflineProfile, MediaItem) -> Unit =
         onSavedItem
             ?: { profile, item ->
                 if (item.isOfflineMusic()) {
                     localQueue = null
                     localMusic = profile to item
+                } else if (item.type in setOf("Movie", "Episode")) {
+                    com.zenstream.zenstreammobile.launchPlayback(
+                        context,
+                        item.id,
+                        item.name,
+                        offlineProfileId = profile.id,
+                    )
                 }
             }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    val context = LocalContext.current
     val resources = LocalResources.current
     val actions =
         if (runtime != null && OfflineRuntime.ENABLED)
