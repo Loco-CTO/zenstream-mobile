@@ -61,6 +61,14 @@ class OfflineRuntime private constructor(context: Context) {
             sourceDetails = { session, item -> network.offlineSourceDetails(session, item) },
         )
 
+    val playbackSources =
+        PlaybackSourceResolver(
+            catalog,
+            storage,
+            policy = { connection.state.first { it.initialized } },
+            remote = { session, item, options -> network.playback(session, item, options) },
+        )
+
     init {
         scope.launch { sessionStore.serverUrl.collect { connection.serverUrl = it } }
         if (ENABLED)

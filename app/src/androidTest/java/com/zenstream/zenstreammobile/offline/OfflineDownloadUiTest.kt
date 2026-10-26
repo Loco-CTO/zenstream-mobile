@@ -1,7 +1,8 @@
 package com.zenstream.zenstreammobile.offline
 
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -14,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class OfflineDownloadUiTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun downloadsRemainNavigableWhenExplicitlyOffline() {
@@ -38,6 +39,11 @@ class OfflineDownloadUiTest {
             runtime.connection.setMode(ConnectionMode.AUTOMATIC)
         }
         try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                compose.activity.window.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                )
+            }
             compose.setContent { ZenStreamTheme { DownloadsScreen(runtime, onOnline = {}) } }
             compose
                 .onNodeWithText(context.getString(R.string.offline_downloads))
@@ -59,6 +65,11 @@ class OfflineDownloadUiTest {
             compose.onNodeWithText(context.getString(R.string.offline_saved)).performClick()
             compose.onNodeWithText(context.getString(R.string.offline_empty)).assertIsDisplayed()
         } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                compose.activity.window.clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                )
+            }
             runBlocking {
                 runtime.connection.setMode(previous.mode)
                 runtime.connection.selectProfile(previous.profile)

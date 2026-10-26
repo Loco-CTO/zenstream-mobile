@@ -106,6 +106,11 @@ interface OfflineDao {
     )
     suspend fun playable(profile: String, item: String): List<OfflineAsset>
 
+    @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item ORDER BY (state='complete' AND locked=0) DESC,verifiedAt DESC,id LIMIT :limit"
+    )
+    suspend fun playbackCandidates(profile: String, item: String, limit: Int): List<OfflineAsset>
+
     @Query("SELECT * FROM offline_assets WHERE profile=:profile")
     suspend fun assets(profile: String): List<OfflineAsset>
 

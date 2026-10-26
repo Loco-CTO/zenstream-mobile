@@ -1302,6 +1302,44 @@ class CatalogRepository(
         }
     }
 
+    suspend fun resolvePlayback(
+        session: AuthSession?,
+        itemId: String,
+        options: PlaybackOptions = PlaybackOptions(),
+        preference: com.zenstream.zenstreammobile.offline.PlaybackSourcePreference =
+            com.zenstream.zenstreammobile.offline.PlaybackSourcePreference.PREFER_DOWNLOAD,
+        profileId: String? = null,
+        assetId: String? = null,
+    ): com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource {
+        if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED)
+            return offline.playbackSources.resolve(
+                itemId,
+                session,
+                options,
+                preference,
+                profileId,
+                assetId,
+            )
+        if (
+            preference ==
+                com.zenstream.zenstreammobile.offline.PlaybackSourcePreference.DOWNLOAD_ONLY
+        )
+            throw com.zenstream.zenstreammobile.offline.LocalPlaybackUnavailable(
+                com.zenstream.zenstreammobile.offline.LocalPlaybackFailure.UNAVAILABLE
+            )
+        val account =
+            session
+                ?: throw com.zenstream.zenstreammobile.offline.LocalPlaybackUnavailable(
+                    com.zenstream.zenstreammobile.offline.LocalPlaybackFailure
+                        .AUTHENTICATION_REQUIRED
+                )
+        val data = playback(account, itemId, options)
+        return com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource.Remote(
+            data,
+            playbackUrl(account, itemId, data.source.copy(url = data.url ?: data.source.url)),
+        )
+    }
+
     suspend fun playbackSource(session: AuthSession, itemId: String) =
         authenticatedCatalogRequest(session) { current -> api.playbackSource(current, itemId) }
 

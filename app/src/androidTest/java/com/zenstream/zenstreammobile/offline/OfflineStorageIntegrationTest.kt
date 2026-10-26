@@ -73,7 +73,7 @@ class OfflineStorageIntegrationTest {
             }
             assertNull(db.offline().asset(profile, id))
         } finally {
-            scope.cancel()
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
             db.close()
             root.deleteRecursively()
         }
@@ -115,7 +115,7 @@ class OfflineStorageIntegrationTest {
             storage.repairPage(profile)
             assertEquals("corrupt", db.offline().asset(profile, id)?.state)
         } finally {
-            scope.cancel()
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
             db.close()
             root.deleteRecursively()
         }

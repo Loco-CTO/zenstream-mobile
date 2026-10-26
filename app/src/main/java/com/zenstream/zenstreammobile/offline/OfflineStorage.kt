@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 internal const val OFFLINE_FREE_RESERVE = 1073741824L
 
@@ -164,7 +165,14 @@ class OfflineStorage(
                 check(!target.exists() || target.delete()) { "Cannot replace incomplete download." }
                 check(temporary.renameTo(target)) { "Cannot finalize downloaded media." }
                 val completed =
-                    staged.copy(state = "complete", verifiedAt = System.currentTimeMillis())
+                    staged.copy(
+                        state = "complete",
+                        verifiedAt = System.currentTimeMillis(),
+                        descriptor =
+                            JSONObject(staged.descriptor)
+                                .put("localModifiedMs", target.lastModified())
+                                .toString(),
+                    )
                 complete(completed, transfer)
                 completed
             }
@@ -199,6 +207,7 @@ class OfflineStorage(
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 val existing = dao.asset(profile, id) ?: return@withLock false
+                require(existing.relativePath == paths.relative(profile, id))
                 val target = paths.resolve(existing.relativePath)
                 if (
                     existing.state !in setOf("complete", "pending_delete") ||
@@ -225,6 +234,7 @@ class OfflineStorage(
                 }
                 val asset = requireNotNull(dao.asset(profile, assetId))
                 check(asset.state == "complete" && !asset.locked)
+                require(asset.relativePath == paths.relative(profile, assetId))
                 val target = paths.resolve(asset.relativePath)
                 check(target.isFile && target.length() == asset.size) {
                     "Saved media is missing or damaged. Retry its download."
@@ -237,6 +247,50 @@ class OfflineStorage(
                 }
             }
         }
+
+    /** Publication hashes the file once; changed or legacy stat stamps require revalidation. */
+    suspend fun acquireVerified(profile: String, assetId: String): OfflineFileLease {
+        val lease = acquire(profile, assetId)
+        try {
+            return withContext(Dispatchers.IO) {
+                val asset = requireNotNull(dao.asset(profile, assetId))
+                val descriptor = JSONObject(asset.descriptor)
+                val modified = lease.file.lastModified()
+                if (
+                    !descriptor.has("localModifiedMs") ||
+                        descriptor.getLong("localModifiedMs") != modified
+                ) {
+                    val valid = sha256(lease.file) == asset.sha256
+                    database.withTransaction {
+                        val latest = dao.asset(profile, assetId)
+                        if (
+                            latest != null &&
+                                latest.state == "complete" &&
+                                latest.sha256 == asset.sha256
+                        ) {
+                            dao.putAsset(
+                                if (valid)
+                                    latest.copy(
+                                        descriptor =
+                                            JSONObject(latest.descriptor)
+                                                .put("localModifiedMs", modified)
+                                                .toString(),
+                                        verifiedAt = System.currentTimeMillis(),
+                                    )
+                                else latest.copy(state = "corrupt")
+                            )
+                        }
+                    }
+                    check(valid) { "Saved media failed its integrity check." }
+                }
+                check(dao.profile(profile)?.locked == false)
+                lease
+            }
+        } catch (error: Exception) {
+            lease.close()
+            throw error
+        }
+    }
 
     suspend fun removeSelection(profile: String, selection: String) =
         withContext(Dispatchers.IO) {
