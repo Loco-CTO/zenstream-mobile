@@ -384,6 +384,7 @@ class CatalogRepository(
     private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
+    val offline: com.zenstream.zenstreammobile.offline.OfflineRuntime? = null,
 ) :
     HomeDataSource,
     LibraryDataSource,

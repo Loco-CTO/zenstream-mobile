@@ -28,7 +28,8 @@ internal suspend fun checkForUpdateBestEffort(updateSource: UpdateSource): AppUp
     }
 
 class GitHubUpdateChecker(
-    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val httpClient: OkHttpClient =
+        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client(),
     private val currentVersion: String = BuildConfig.ZENSTREAM_VERSION,
 ) : UpdateSource {
     override suspend fun checkForUpdate(): AppUpdate? =

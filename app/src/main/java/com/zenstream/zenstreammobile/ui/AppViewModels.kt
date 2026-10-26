@@ -203,6 +203,8 @@ class AppViewModel(
             }
         }
         viewModelScope.launch {
+            if (!com.zenstream.zenstreammobile.offline.ConnectionCoordinator.onlineStartupAllowed())
+                return@launch
             if (!repository.checkForUpdatesOnStartup.first()) return@launch
             try {
                 _availableUpdate.value = checkForUpdateBestEffort(updateSource)

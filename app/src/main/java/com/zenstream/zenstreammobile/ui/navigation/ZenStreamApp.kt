@@ -177,6 +177,54 @@ fun ZenStreamApp(
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val offline = repository.offline
+    val offlineConnection by
+        offline?.connection?.state?.collectAsStateWithLifecycle()
+            ?: remember {
+                mutableStateOf<com.zenstream.zenstreammobile.offline.ConnectionState?>(null)
+            }
+    val offlineProfiles by
+        offline
+            ?.database
+            ?.offline()
+            ?.profiles()
+            ?.collectAsStateWithLifecycle(initialValue = emptyList())
+            ?: remember {
+                mutableStateOf(emptyList<com.zenstream.zenstreammobile.offline.OfflineProfile>())
+            }
+    var onlineRequested by remember { mutableStateOf(false) }
+    if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
+        if (offlineConnection?.initialized != true) {
+            LoadingScreen()
+            return
+        }
+        val localEntry =
+            offlineConnection?.mode ==
+                com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE ||
+                !onlineRequested &&
+                    offlineProfiles.any { !it.locked } &&
+                    (appState.loading ||
+                        !appState.showMain ||
+                        offlineConnection?.reachability in
+                            setOf(
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .UNREACHABLE,
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .CERTIFICATE_ERROR,
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .PERMISSION_DENIED,
+                            ))
+        if (localEntry) {
+            com.zenstream.zenstreammobile.offline.OfflineEntryScreen(
+                offline,
+                onOnline = {
+                    onlineRequested = true
+                    appViewModel.retryAuthentication()
+                },
+            )
+            return
+        }
+    }
     val activeServerUrl = appState.session?.serverUrl ?: appState.serverUrl
     val shouldGateServerAccess =
         appState.showMain || appState.showLogin || appState.showAuthRecovery

@@ -1,4 +1,15 @@
 <resources>
+    <string name="offline_downloads">Downloads</string>
+    <string name="offline_mode_active">Offline mode · network activity is paused</string>
+    <string name="offline_local_available">Your saved library is available on this device</string>
+    <string name="offline_go_online">Go online</string>
+    <string name="offline_use_mode">Use offline mode</string>
+    <string name="offline_locked">Sign in to unlock saved downloads</string>
+    <string name="offline_empty">No saved items to show. Download media while connected to your server.</string>
+    <string name="offline_movies">Movies</string>
+    <string name="offline_tv">TV</string>
+    <string name="offline_music">Music</string>
+    <string name="offline_search">Search saved library</string>
     <string name="app_name">ZenStream</string>
     <string name="server_setup_title">Connect to ZenStream</string>
     <string name="server_setup_description">Enter your ZenStream Orchestrator address to get started.</string>

@@ -107,7 +107,8 @@ private const val AUTH_FLOW_HEADER = "X-ZenStream-Auth-Flow"
 private const val AUTH_FLOW_VERSION = "refresh-v1"
 
 class CatalogApi(
-    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val httpClient: OkHttpClient =
+        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client(),
     private var deviceId: String = UUID.randomUUID().toString(),
 ) {
     fun setDeviceId(value: String) {

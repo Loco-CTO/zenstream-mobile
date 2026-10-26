@@ -58,7 +58,11 @@ class MainActivity : ComponentActivity() {
         }
 
     private val repository by lazy {
-        CatalogRepository(CatalogApi(), SessionStore(applicationContext))
+        CatalogRepository(
+            CatalogApi(),
+            SessionStore(applicationContext),
+            offline = com.zenstream.zenstreammobile.offline.OfflineRuntime.get(applicationContext),
+        )
     }
     private val appViewModel by viewModels<AppViewModel> { AppViewModel.Factory(repository) }
 
