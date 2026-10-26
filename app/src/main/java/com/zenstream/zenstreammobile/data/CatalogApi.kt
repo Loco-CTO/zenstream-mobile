@@ -1709,6 +1709,9 @@ class CatalogApi(
         return requestJson(session, path, method = method, body = body?.toString())
     }
 
+    internal suspend fun offlineSourceDetails(session: AuthSession, itemId: String): JSONObject =
+        requestJson(session, "/api/playback/items/${android.net.Uri.encode(itemId)}/source")
+
     internal suspend fun offlineBinaryRequest(
         session: AuthSession,
         path: String,

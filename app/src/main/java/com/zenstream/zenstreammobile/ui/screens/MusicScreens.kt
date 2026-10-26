@@ -211,6 +211,7 @@ fun MusicAlbumScreen(
 
         DetailOverlayTopBar(
             title = state.data?.album?.name ?: stringResource(R.string.music_album),
+            downloadItem = state.data?.album,
             visible = true,
             scrolled = detailScrolled,
             backOnly = state.data == null,
@@ -695,6 +696,7 @@ fun MusicArtistScreen(
 
         DetailOverlayTopBar(
             title = state.data?.artist?.name ?: stringResource(R.string.music_artist),
+            downloadItem = state.data?.artist,
             visible = true,
             scrolled = detailScrolled,
             backOnly = state.data == null,

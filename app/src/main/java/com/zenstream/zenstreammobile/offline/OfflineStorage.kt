@@ -179,6 +179,8 @@ class OfflineStorage(
             dao.putTransfer(
                 latest.copy(
                     state = "complete",
+                    assetId = asset.id,
+                    descriptor = asset.descriptor,
                     bytes = asset.size,
                     total = asset.size,
                     reserved = 0,

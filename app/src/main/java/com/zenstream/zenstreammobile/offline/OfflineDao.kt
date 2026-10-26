@@ -50,6 +50,36 @@ interface OfflineDao {
     fun selections(profile: String): Flow<List<OfflineSelection>>
 
     @Query(
+        "SELECT * FROM offline_selections WHERE profile=:profile AND state!='removal_pending' ORDER BY title,id LIMIT :limit OFFSET :offset"
+    )
+    fun selectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
+
+    @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile ORDER BY priority DESC,id LIMIT :limit OFFSET :offset"
+    )
+    fun transferPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineTransfer>>
+
+    @Query(
+        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile AND (s.state='metadata_only' OR (s.kind='playlist' AND s.state IN ('queued','complete','partial') AND s.error IS NULL AND NOT EXISTS (SELECT 1 FROM offline_playlists p WHERE p.profile=s.profile AND p.id=s.rootId AND p.complete=1))) LIMIT 1"
+    )
+    suspend fun playlistMetadataWork(profile: String): List<OfflineSelection>
+
+    @Query(
+        "UPDATE offline_transfers SET state='queued',error=NULL,nextAttemptMs=0 WHERE profile=:profile AND state IN ('paused','failed')"
+    )
+    suspend fun resumeAllTransfers(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state=substr(state,8) WHERE profile=:profile AND state IN ('paused_enumerating','paused_ready','paused_queueing','paused_metadata_only')"
+    )
+    suspend fun resumeEnumeration(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state=CASE WHEN state='metadata_failed' THEN 'metadata_only' ELSE state END,error=NULL WHERE profile=:profile AND error='playlist_metadata_unavailable'"
+    )
+    suspend fun retryPlaylistMetadata(profile: String)
+
+    @Query(
         "SELECT * FROM offline_selections WHERE profile=:profile AND state='enumerating' LIMIT 20"
     )
     suspend fun pendingSelections(profile: String): List<OfflineSelection>
@@ -176,7 +206,7 @@ interface OfflineDao {
     suspend fun deleteSupplements(profile: String, asset: String)
 
     @Query(
-        "SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND (:category='' OR (:category='movies' AND c.type='movie') OR (:category='tv' AND c.type IN ('series','season','episode')) OR (:category='music' AND c.type IN ('artist','release','track'))) AND c.name LIKE :query ESCAPE '!' ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"
+        "WITH RECURSIVE saved(id) AS (SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0 UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0 UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL) SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved) AND (:category='' OR (:category='movies' AND c.type='movie') OR (:category='tv' AND c.type IN ('series','season','episode')) OR (:category='music' AND c.type IN ('artist','release','track'))) AND c.name LIKE :query ESCAPE '!' ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"
     )
     suspend fun browse(
         profile: String,
@@ -253,7 +283,12 @@ interface OfflineDao {
     suspend fun downloadTotals(profile: String): DownloadTotals
 
     @Query(
-        "SELECT (SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending')) + (SELECT COUNT(*) FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing'))"
+        "SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN state='complete' THEN 1 ELSE 0 END),0) AS complete,COALESCE(SUM(total),0) AS totalBytes,COALESCE(SUM(bytes),0) AS downloadedBytes FROM offline_transfers WHERE profile=:profile AND selection=:selection AND state!='cancelled'"
+    )
+    fun selectionTotals(profile: String, selection: String): Flow<DownloadTotals>
+
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM offline_selections s WHERE profile=:profile AND (state IN ('enumerating','ready','queueing','removal_pending','metadata_only') OR (kind='playlist' AND state IN ('queued','complete','partial') AND error IS NULL AND NOT EXISTS(SELECT 1 FROM offline_playlists p WHERE p.profile=s.profile AND p.id=s.rootId AND p.complete=1)))) + (SELECT COUNT(*) FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing'))"
     )
     suspend fun pendingWorkCount(profile: String): Int
 
@@ -268,17 +303,17 @@ interface OfflineDao {
     suspend fun cancelAllTransfers(profile: String)
 
     @Query(
-        "UPDATE offline_selections SET state='paused_'||state WHERE profile=:profile AND state IN ('enumerating','ready','queueing')"
+        "UPDATE offline_selections SET state='paused_'||state WHERE profile=:profile AND state IN ('enumerating','ready','queueing','metadata_only')"
     )
     suspend fun pauseEnumeration(profile: String)
 
     @Query(
-        "UPDATE offline_selections SET state='partial' WHERE profile=:profile AND state IN ('enumerating','ready','queueing','queued','downloading')"
+        "UPDATE offline_selections SET state='partial' WHERE profile=:profile AND state IN ('enumerating','ready','queueing','queued','downloading','metadata_only')"
     )
     suspend fun cancelEnumeration(profile: String)
 
     @Query(
-        "SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending')"
+        "SELECT (SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending','metadata_only')) + (SELECT COUNT(*) FROM offline_selections s WHERE s.profile=:profile AND s.kind='playlist' AND s.state IN ('queued','complete','partial') AND s.error IS NULL AND NOT EXISTS(SELECT 1 FROM offline_playlists p WHERE p.profile=s.profile AND p.id=s.rootId AND p.complete=1))"
     )
     suspend fun pendingSelectionWorkCount(profile: String): Int
 

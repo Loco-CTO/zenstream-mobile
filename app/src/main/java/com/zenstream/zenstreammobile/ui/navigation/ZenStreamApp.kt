@@ -193,6 +193,17 @@ fun ZenStreamApp(
                 mutableStateOf(emptyList<com.zenstream.zenstreammobile.offline.OfflineProfile>())
             }
     var onlineRequested by remember { mutableStateOf(false) }
+    // Retained downloads render first; automatic authentication may restore independently.
+    LaunchedEffect(appState.serverUrl, offlineConnection?.mode, localNetworkPermissionGranted) {
+        if (
+            offline != null &&
+                com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
+                offlineConnection?.mode ==
+                    com.zenstream.zenstreammobile.offline.ConnectionMode.AUTOMATIC &&
+                localNetworkPermissionGranted
+        )
+            appState.serverUrl?.let { appViewModel.onServerNetworkAccessReady(it) }
+    }
     if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
         if (offlineConnection?.initialized != true) {
             LoadingScreen()
@@ -430,6 +441,11 @@ private fun AuthRestoreUnavailableScreen(
             )
             Spacer(Modifier.size(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+            com.zenstream.zenstreammobile.offline.LocalDownloadUi.current?.let { downloads ->
+                TextButton(onClick = downloads.openDownloads) {
+                    Text(stringResource(R.string.offline_downloads))
+                }
+            }
             TextButton(onClick = onUseSignIn) {
                 Text(stringResource(R.string.auth_use_sign_in))
             }

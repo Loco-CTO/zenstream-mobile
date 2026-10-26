@@ -171,8 +171,8 @@ class ConnectionCoordinator(context: Context) {
         }
     }
 
-    suspend fun selectProfile(id: String) {
-        preferences.edit { it[profileKey] = id }
+    suspend fun selectProfile(id: String?) {
+        preferences.edit { if (id == null) it.remove(profileKey) else it[profileKey] = id }
     }
 
     suspend fun setDownloadLimit(bytes: Long?) {

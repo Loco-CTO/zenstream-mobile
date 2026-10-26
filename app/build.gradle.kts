@@ -142,7 +142,11 @@ android {
     buildTypes {
         debug {
             // Keep Android Studio debug installs separate from the stable release app.
-            applicationIdSuffix = ".debug"
+            applicationIdSuffix = configuredValue("zenstreamApplicationIdSuffix")?.also {
+                require(Regex("\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*").matches(it)) {
+                    "zenstreamApplicationIdSuffix must be a dot-prefixed package suffix"
+                }
+            } ?: ".debug"
             if (hasCiDebugSigning) {
                 signingConfig = signingConfigs.getByName("ciDebug")
             }

@@ -87,6 +87,20 @@ internal fun MyPageServiceEntries(
     ) {
         MyPageCalendarEntry(onOpen = onOpenCalendar)
         MyPageNotificationsEntry(onOpen = onOpenNotifications)
+        com.zenstream.zenstreammobile.offline.LocalDownloadUi.current?.let { downloads ->
+            SettingsTabRow(
+                title = stringResource(R.string.offline_downloads),
+                supporting = stringResource(R.string.offline_local_available),
+                icon = {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_download),
+                        null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                },
+                onClick = downloads.openDownloads,
+            )
+        }
     }
 }
 

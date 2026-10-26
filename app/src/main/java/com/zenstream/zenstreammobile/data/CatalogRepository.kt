@@ -418,6 +418,9 @@ class CatalogRepository(
             api.offlineBinaryRequest(current, path, headers, receive)
         }
 
+    suspend fun offlineSourceDetails(session: AuthSession, itemId: String): JSONObject =
+        authenticatedCatalogRequest(session) { api.offlineSourceDetails(it, itemId) }
+
     private val homeMutex = Mutex()
     private val interfaceLocaleMutex = Mutex()
     private val playbackPreferenceMutex = Mutex()

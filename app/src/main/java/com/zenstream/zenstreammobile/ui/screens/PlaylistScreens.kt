@@ -1139,6 +1139,7 @@ private fun PlaylistDetailContent(
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val currentSummary = data?.summary
+    val downloadUi = com.zenstream.zenstreammobile.offline.LocalDownloadUi.current
     val edgeScrollThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
     val fallbackRowHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
     val minimumScrollPx = with(LocalDensity.current) { 4.dp.toPx() }
@@ -1348,6 +1349,31 @@ private fun PlaylistDetailContent(
                                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    val downloadSpec =
+                                        com.zenstream.zenstreammobile.offline.DownloadSpec(
+                                            summary.id,
+                                            summary.name,
+                                            "playlist",
+                                            "Playlist",
+                                        )
+                                    com.zenstream.zenstreammobile.offline.DownloadButton(
+                                        downloadSpec
+                                    )
+                                    if (downloadUi != null)
+                                        IconButton(
+                                            onClick = {
+                                                downloadUi.savePlaylistMetadata(downloadSpec)
+                                            }
+                                        ) {
+                                            Icon(
+                                                painterResource(
+                                                    LucideR.drawable.lucide_ic_database
+                                                ),
+                                                stringResource(
+                                                    R.string.offline_save_playlist_metadata
+                                                ),
+                                            )
+                                        }
                                     if (
                                         summary.isOwner &&
                                             !summary.isPrivate &&

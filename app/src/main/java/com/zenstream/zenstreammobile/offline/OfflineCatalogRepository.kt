@@ -56,7 +56,7 @@ internal data class SelectionPage(
         fun parse(json: JSONObject, offset: Int): SelectionPage {
             val items = (json.optJSONArray("items") ?: JSONArray()).objects()
             val metadata = (json.optJSONArray("metadata") ?: JSONArray()).objects()
-            require(items.size <= 100 && metadata.size <= 1700)
+            require(items.size <= 100 && metadata.size <= 1701)
             val next = if (json.isNull("nextOffset")) null else json.getInt("nextOffset")
             require(next == null || next == offset + items.size && next > offset)
             return SelectionPage(
@@ -152,6 +152,9 @@ class OfflineCatalogRepository(
             )
         require(page.id == id)
         return database.withTransaction {
+            val latest = requireNotNull(dao.selection(profile, id))
+            if (latest.state != current.state || latest.cursor != current.cursor)
+                return@withTransaction latest
             if (page.state == "ready") {
                 ingestItems(profile, page.metadata + page.items)
                 dao.putMembers(
@@ -177,7 +180,7 @@ class OfflineCatalogRepository(
     }
 
     suspend fun ingestItems(profile: String, items: List<JSONObject>) {
-        require(items.size <= 1800)
+        require(items.size <= 1801)
         database.withTransaction {
             for (item in items.distinctBy { it.getString("id") }) {
                 val row = offlineCatalogItem(profile, item)

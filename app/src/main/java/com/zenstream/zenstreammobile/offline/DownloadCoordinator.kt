@@ -60,6 +60,7 @@ class DownloadCoordinator(
     private val request: OfflineRequest,
     private val binary: OfflineBinaryRequest,
     private val activeSession: suspend () -> AuthSession?,
+    private val sourceDetails: (suspend (AuthSession, String) -> JSONObject)? = null,
 ) {
     private val database = catalog.database
     private val dao = database.offline()
@@ -114,6 +115,44 @@ class DownloadCoordinator(
             }
         }
         var worked = false
+        for (selection in dao.playlistMetadataWork(profileId)) {
+            try {
+                val complete =
+                    catalog.cachePlaylistPage(
+                        session,
+                        profileId,
+                        selection.rootId,
+                        JSONObject(selection.options).optString("language", "en"),
+                    )
+                if (complete && selection.state == "metadata_only")
+                    database.withTransaction {
+                        val latest = dao.selection(profileId, selection.id)
+                        if (latest?.state == "metadata_only")
+                            dao.putSelection(latest.copy(state = "metadata_complete"))
+                    }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (
+                    error is CatalogException &&
+                        error.statusCode in setOf(401, 429, 500, 502, 503, 504)
+                )
+                    throw error
+                if (error is IOException) throw error
+                database.withTransaction {
+                    val latest = dao.selection(profileId, selection.id)
+                    if (latest?.state == selection.state)
+                        dao.putSelection(
+                            latest.copy(
+                                error = "playlist_metadata_unavailable",
+                                state =
+                                    if (selection.state == "metadata_only") "metadata_failed"
+                                    else selection.state,
+                            )
+                        )
+                }
+            }
+            worked = true
+        }
         for (selection in dao.pendingSelections(profileId).take(3)) {
             catalog.ingestSelectionPage(session, profileId, selection.id)
             worked = true
@@ -136,6 +175,9 @@ class DownloadCoordinator(
         val members = dao.members(selection.profile, selection.id, 100, offset)
         val priority = JSONObject(selection.options).optString("priorityItem")
         database.withTransaction {
+            val latest = dao.selection(selection.profile, selection.id) ?: return@withTransaction
+            if (latest.state != selection.state || latest.cursor != selection.cursor)
+                return@withTransaction
             for (member in members) {
                 val id = transferIdentity(selection.profile, selection.id, member.item)
                 if (dao.transfer(selection.profile, id) == null) {
@@ -191,6 +233,20 @@ class DownloadCoordinator(
     ) {
         try {
             checkTransfer(profile, session, original.id)
+            val requestedOptions = JSONObject(original.options)
+            if (requestedOptions.optBoolean("skipExisting")) {
+                for (asset in dao.playable(profile.id, original.item)) {
+                    val savedOptions = JSONObject(asset.descriptor).optJSONObject("downloadOptions")
+                    if (
+                        asset.quality != requestedOptions.optString("profile", "original") ||
+                            !sameDownloadChoices(requestedOptions, savedOptions ?: JSONObject())
+                    )
+                        continue
+                    if (storage.adoptCompleted(profile.id, asset.id, original.id, asset.sha256)) {
+                        return
+                    }
+                }
+            }
             val descriptor = resolve(session, original)
             val state = descriptor.getString("state")
             if (state in setOf("queued", "preparing")) {
@@ -317,7 +373,10 @@ class DownloadCoordinator(
                         descriptor,
                         JSONObject(original.options),
                     )
-                val combined = JSONObject(descriptor.toString()).put("bundle", bundle)
+                val combined =
+                    JSONObject(descriptor.toString())
+                        .put("bundle", bundle)
+                        .put("downloadOptions", JSONObject(original.options))
                 checkTransfer(profile, session, original.id)
                 saveActive(
                     requireNotNull(dao.transfer(profile.id, original.id)).copy(state = "publishing")
@@ -381,7 +440,11 @@ class DownloadCoordinator(
                 if (error.statusCode != 404) throw error
             }
         }
-        val options = JSONObject(transfer.options)
+        var options = JSONObject(transfer.options)
+        if (options.has("audioLanguage") || options.has("subtitleLanguages")) {
+            options =
+                languageSelections(requireNotNull(sourceDetails)(session, transfer.item), options)
+        }
         val body =
             JSONObject()
                 .put("selectionId", transfer.selection)
