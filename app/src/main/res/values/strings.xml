@@ -1,4 +1,18 @@
 <resources>
+    <string name="offline_audio_not_downloaded">Not downloaded</string>
+    <string name="offline_stream_track">Stream this track instead</string>
+    <string name="offline_audio_albums">Downloaded albums</string>
+    <string name="offline_audio_artists">Downloaded artists</string>
+    <string name="offline_audio_tracks">Downloaded tracks</string>
+    <string name="offline_audio_queue">Queue</string>
+    <string name="offline_audio_lyrics">Lyrics</string>
+    <string name="offline_no_saved_lyrics">No lyrics were saved for this track.</string>
+    <string name="offline_audio_previous">Previous track</string>
+    <string name="offline_audio_next">Next track</string>
+    <string name="offline_audio_repeat">Change repeat mode</string>
+    <string name="offline_queue_this_page">Queue this page · %1$d tracks</string>
+    <string name="offline_stream_paused">Streaming paused in offline mode. Select a downloaded track to continue.</string>
+    <string name="offline_audio_skipped">Skipped unavailable download: %1$s</string>
     <string name="offline_default_audio">Default audio track</string>
     <string name="offline_metadata_saved">Complete playlist metadata saved</string>
     <string name="offline_previous_selections">Previous selections</string>

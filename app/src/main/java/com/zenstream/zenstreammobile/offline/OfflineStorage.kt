@@ -219,7 +219,18 @@ class OfflineStorage(
                     return@withLock false
                 check(dao.profile(profile)?.locked == false)
                 complete(
-                    existing.copy(state = "complete"),
+                    existing.copy(
+                        state = "complete",
+                        descriptor =
+                            JSONObject(existing.descriptor)
+                                .put(
+                                    "downloadOptions",
+                                    JSONObject(
+                                        requireNotNull(dao.transfer(profile, transferId)).options
+                                    ),
+                                )
+                                .toString(),
+                    ),
                     requireNotNull(dao.transfer(profile, transferId)),
                 )
                 true

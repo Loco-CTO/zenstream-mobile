@@ -211,6 +211,13 @@ data class OfflineOperation(
     val inFlight: Boolean = false,
 )
 
+@Entity(tableName = "offline_audio_queues")
+data class OfflineAudioQueue(
+    @PrimaryKey val profile: String,
+    val payload: String,
+    val updatedAt: Long,
+)
+
 @Database(
     entities =
         [
@@ -226,8 +233,9 @@ data class OfflineOperation(
             OfflinePlaylist::class,
             OfflinePlaylistEntry::class,
             OfflineOperation::class,
+            OfflineAudioQueue::class,
         ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
@@ -242,6 +250,14 @@ abstract class OfflineDatabase : RoomDatabase() {
                     )
                 }
             }
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS offline_audio_queues (profile TEXT NOT NULL, payload TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(profile))"
+                    )
+                }
+            }
         @Volatile private var instance: OfflineDatabase? = null
 
         fun get(context: Context): OfflineDatabase =
@@ -253,7 +269,7 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 OfflineDatabase::class.java,
                                 "offline.db",
                             )
-                            .addMigrations(MIGRATION_1_2)
+                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                             .build()
                             .also { instance = it }
                 }

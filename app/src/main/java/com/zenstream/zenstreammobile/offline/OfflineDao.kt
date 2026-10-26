@@ -9,7 +9,47 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface OfflineDao {
+    @Upsert suspend fun putAudioQueue(value: OfflineAudioQueue)
+
+    @Query("SELECT * FROM offline_audio_queues WHERE profile=:profile")
+    suspend fun audioQueue(profile: String): OfflineAudioQueue?
+
+    @Query("DELETE FROM offline_audio_queues WHERE profile=:profile")
+    suspend fun clearAudioQueue(profile: String)
+
+    @Query(
+        "SELECT s.* FROM offline_supplements s JOIN offline_assets a ON a.profile=s.profile AND a.id=s.asset WHERE s.profile=:profile AND s.key=:key AND a.state='complete' AND a.locked=0 ORDER BY a.verifiedAt DESC,a.id LIMIT 1"
+    )
+    suspend fun artwork(profile: String, key: String): OfflineSupplement?
+
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM offline_supplements s JOIN offline_assets a ON a.profile=s.profile AND a.id=s.asset WHERE s.profile=:profile AND s.relativePath=:path AND s.key LIKE 'art:%' AND a.state='complete' AND a.locked=0)"
+    )
+    suspend fun hasArtworkFile(profile: String, path: String): Boolean
+
+    @Query(
+        "SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.type IN ('release','track') AND (c.parentId=:root OR c.id IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:root) OR c.id IN (SELECT e.parentId FROM offline_catalog e JOIN offline_members m ON m.profile=e.profile AND m.item=e.id JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE e.profile=:profile AND s.rootId=:root)) ORDER BY CASE WHEN c.type='release' THEN 0 ELSE 1 END,COALESCE((SELECT MIN(m.ordinal) FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=c.profile AND m.item=c.id AND s.rootId=:root),2147483647),c.parentId,c.disc,c.track,c.name COLLATE NOCASE,c.id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun musicChildren(
+        profile: String,
+        root: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        "WITH RECURSIVE saved(id) AS (SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0 UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0 UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL) SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.type=:type AND c.id IN (SELECT id FROM saved) ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun savedMusicType(
+        profile: String,
+        type: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
     @Upsert suspend fun putProfile(value: OfflineProfile)
+
+    @Query("DELETE FROM offline_profiles WHERE id=:id") suspend fun deleteProfileRecord(id: String)
 
     @Query("SELECT * FROM offline_profiles WHERE id=:id")
     suspend fun profile(id: String): OfflineProfile?

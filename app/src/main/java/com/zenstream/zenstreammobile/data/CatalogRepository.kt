@@ -1173,10 +1173,25 @@ class CatalogRepository(
     ): List<MediaItem> =
         authenticatedCatalogRequest(session) { current -> api.musicArtistTracks(current, artistId) }
 
-    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
-        AudioLyricsCache.getOrLoad(AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)) {
+    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? {
+        if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
+            val policy = offline.connection.state.first { it.initialized }
+            val identity = offline.audio.identity(policy.profile, session)
+            val profile = identity?.profile
+            if (
+                profile != null &&
+                    offline.database.offline().playable(profile.id, itemId).isNotEmpty()
+            )
+                return offline.audio.lyrics(profile.id, itemId)
+            if (policy.mode == com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE)
+                return null
+        }
+        return AudioLyricsCache.getOrLoad(
+            AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)
+        ) {
             authenticatedCatalogRequest(session) { current -> api.audioLyrics(current, itemId) }
         }
+    }
 
     suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
         try {

@@ -382,6 +382,7 @@ data class AudioQueueSnapshot(
     val sourceBitrate: Int? = null,
     val sourceSampleRate: Int? = null,
     val playbackMode: String? = null,
+    val offlineOnly: Boolean = false,
 )
 
 data class AudioPlayerState(
@@ -399,6 +400,10 @@ data class AudioPlayerState(
     val volume: Float = 1f,
     val muted: Boolean = false,
     val error: String? = null,
+    val offlineOnly: Boolean = false,
+    val offlineProfileId: String? = null,
+    val notice: String? = null,
+    val sourceAudioLanguage: String? = null,
     val sourceFormat: String? = null,
     val sourceBitrate: Int? = null,
     val sourceSampleRate: Int? = null,

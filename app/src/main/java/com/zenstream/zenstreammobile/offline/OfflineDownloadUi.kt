@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -102,14 +103,25 @@ fun OfflineDownloadHost(
     session: AuthSession?,
     openRequested: Boolean = false,
     onOpenConsumed: () -> Unit = {},
-    onSavedItem: (OfflineProfile, MediaItem) -> Unit = { _, _ -> },
+    onSavedItem: ((OfflineProfile, MediaItem) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     var selected by remember { mutableStateOf<DownloadSpec?>(null) }
     var open by remember { mutableStateOf(false) }
+    var localMusic by remember { mutableStateOf<Pair<OfflineProfile, MediaItem>?>(null) }
+    var localQueue by remember { mutableStateOf<List<MediaItem>?>(null) }
+    val playSaved: (OfflineProfile, MediaItem) -> Unit =
+        onSavedItem
+            ?: { profile, item ->
+                if (item.isOfflineMusic()) {
+                    localQueue = null
+                    localMusic = profile to item
+                }
+            }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val actions =
         if (runtime != null && OfflineRuntime.ENABLED)
             DownloadUiActions(
@@ -125,12 +137,12 @@ fun OfflineDownloadHost(
                             try {
                                 runtime.enqueuePlaylistMetadata(context, session, spec)
                                 snackbar.showSnackbar(
-                                    context.getString(R.string.offline_metadata_queued)
+                                    resources.getString(R.string.offline_metadata_queued)
                                 )
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
                                 snackbar.showSnackbar(
-                                    context.getString(R.string.offline_request_failed)
+                                    resources.getString(R.string.offline_request_failed)
                                 )
                             }
                         }
@@ -152,16 +164,16 @@ fun OfflineDownloadHost(
                                     ),
                                     options,
                                 )
-                                snackbar.showSnackbar(context.getString(R.string.offline_added))
+                                snackbar.showSnackbar(resources.getString(R.string.offline_added))
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
                                 snackbar.showSnackbar(
-                                    context.getString(R.string.offline_request_failed)
+                                    resources.getString(R.string.offline_request_failed)
                                 )
                             }
                         }
                 },
-                playSaved = onSavedItem,
+                playSaved = playSaved,
             )
         else null
     LaunchedEffect(openRequested) {
@@ -188,10 +200,31 @@ fun OfflineDownloadHost(
                         runtime,
                         onBack = { open = false },
                         onOnline = { open = false },
-                        onItem = onSavedItem,
+                        onItem = playSaved,
                     )
                 }
             }
+        }
+        localMusic?.let { (profile, item) ->
+            if (runtime != null)
+                Dialog(
+                    onDismissRequest = { localMusic = null },
+                    properties = DialogProperties(usePlatformDefaultWidth = false),
+                ) {
+                    Surface(Modifier.fillMaxSize()) {
+                        OfflineSavedMusicScreen(
+                            runtime,
+                            profile,
+                            item,
+                            onBack = { localMusic = null },
+                            initialQueue = localQueue,
+                            onItem = { next, queue ->
+                                localQueue = queue
+                                localMusic = profile to next
+                            },
+                        )
+                    }
+                }
         }
         selected?.let { spec ->
             if (runtime != null && session != null)
@@ -204,7 +237,7 @@ fun OfflineDownloadHost(
                         selected = null
                         scope.launch {
                             snackbar.showSnackbar(
-                                context.getString(
+                                resources.getString(
                                     if (started) R.string.offline_added
                                     else R.string.offline_resume_needed
                                 )
@@ -556,6 +589,8 @@ fun DownloadsScreen(
                 1 -> TransferDownloadList(runtime, selected)
                 else -> DownloadSettings(runtime, selected)
             }
+        if (selected != null && !selected.locked && tab == 0)
+            OfflineMusicMiniPlayer(selected) { onItem(selected, it) }
     }
 }
 
@@ -571,7 +606,12 @@ private fun ColumnScope.SavedDownloadList(
     var rows by remember { mutableStateOf(emptyList<MediaItem>()) }
     val revision by runtime.catalogRevision.collectAsState()
     LaunchedEffect(profile.id, profile.locked, category, query, offset, revision) {
-        rows = runtime.catalog.search(profile.id, category, query, offset)
+        try {
+            rows = runtime.catalog.search(profile.id, category, query, offset)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            rows = emptyList()
+        }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf(
@@ -608,7 +648,12 @@ private fun ColumnScope.SavedDownloadList(
         items(rows, key = { it.id }) { item ->
             val availability by
                 produceState(OfflineAvailability(0, 0), item.id, revision) {
-                    value = runtime.catalog.availability(profile.id, item.id)
+                    try {
+                        value = runtime.catalog.availability(profile.id, item.id)
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        value = OfflineAvailability(0, 0)
+                    }
                 }
             ListItem(
                 headlineContent = { Text(item.name) },

@@ -8,6 +8,8 @@ internal data class PlaybackRequest(
     val entryId: String,
     val autoPlay: Boolean,
     val positionMs: Long,
+    val automatic: Boolean = false,
+    val stream: Boolean = false,
 )
 
 /**

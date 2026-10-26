@@ -61,6 +61,7 @@ class OfflineRuntime private constructor(context: Context) {
             sourceDetails = { session, item -> network.offlineSourceDetails(session, item) },
         )
 
+    val audio = OfflineAudioRepository(catalog, storage)
     val playbackSources =
         PlaybackSourceResolver(
             catalog,
@@ -179,7 +180,11 @@ class OfflineRuntime private constructor(context: Context) {
     }
 
     companion object {
-        const val ENABLED = false
+        val ENABLED: Boolean
+            get() =
+                com.zenstream.zenstreammobile.BuildConfig.DEBUG &&
+                    com.zenstream.zenstreammobile.BuildConfig.OFFLINE_QA
+
         @Volatile private var instance: OfflineRuntime? = null
 
         fun get(context: Context): OfflineRuntime =

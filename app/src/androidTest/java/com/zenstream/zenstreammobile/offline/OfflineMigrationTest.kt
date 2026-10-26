@@ -45,7 +45,7 @@ class OfflineMigrationTest {
         }
         val current =
             Room.databaseBuilder(context, OfflineDatabase::class.java, name)
-                .addMigrations(OfflineDatabase.MIGRATION_1_2)
+                .addMigrations(OfflineDatabase.MIGRATION_1_2, OfflineDatabase.MIGRATION_2_3)
                 .build()
         try {
             val profile = current.offline().profile("p")
@@ -53,7 +53,7 @@ class OfflineMigrationTest {
             assertEquals(42L, profile?.nextSequence)
             assertEquals(3L, profile?.historyEpoch)
             assertEquals(4L, profile?.privacyEpoch)
-            assertEquals(2, current.openHelper.readableDatabase.version)
+            assertEquals(3, current.openHelper.readableDatabase.version)
         } finally {
             current.close()
             context.deleteDatabase(name)

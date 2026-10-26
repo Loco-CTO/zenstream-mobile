@@ -64,6 +64,29 @@ class OfflineDownloadUiTest {
                 .assertIsDisplayed()
             compose.onNodeWithText(context.getString(R.string.offline_saved)).performClick()
             compose.onNodeWithText(context.getString(R.string.offline_empty)).assertIsDisplayed()
+            runBlocking {
+                val retained = requireNotNull(runtime.database.offline().profile(profile))
+                runtime.database.offline().putProfile(retained.copy(locked = true))
+            }
+            compose.waitUntil(5000) {
+                runCatching {
+                        compose
+                            .onNodeWithText(context.getString(R.string.offline_locked))
+                            .assertIsDisplayed()
+                    }
+                    .isSuccess
+            }
+            runBlocking {
+                runtime.database.offline().deleteProfileRecord(profile)
+            }
+            compose.waitUntil(5000) {
+                runCatching {
+                        compose
+                            .onNodeWithText(context.getString(R.string.offline_empty))
+                            .assertIsDisplayed()
+                    }
+                    .isSuccess
+            }
         } finally {
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 compose.activity.window.clearFlags(
@@ -73,10 +96,7 @@ class OfflineDownloadUiTest {
             runBlocking {
                 runtime.connection.setMode(previous.mode)
                 runtime.connection.selectProfile(previous.profile)
-                runtime.database.openHelper.writableDatabase.execSQL(
-                    "DELETE FROM offline_profiles WHERE id=?",
-                    arrayOf(profile),
-                )
+                runtime.database.offline().deleteProfileRecord(profile)
             }
         }
     }
