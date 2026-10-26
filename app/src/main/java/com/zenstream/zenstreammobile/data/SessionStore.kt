@@ -38,8 +38,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
-import org.json.JSONObject
 import org.json.JSONArray
+import org.json.JSONObject
 
 internal const val DEFAULT_SESSION_DATA_STORE_NAME = "zenstream_session"
 internal const val INSTRUMENTATION_SESSION_DATA_STORE_NAME = "zenstream_instrumentation"
@@ -547,12 +547,15 @@ class SessionStore(
                     preferences[Keys.homeSectionLayouts]?.let {
                         runCatching { JSONObject(it) }.getOrNull()
                     }
-                val value = root?.optJSONObject(homeLayoutScope(serverUrl, userId))
-                    ?: return@map HomeLayoutPreferences()
-                val order = value.optJSONArray("order").toStringListOrNull()
-                    ?: return@map HomeLayoutPreferences()
-                val hidden = value.optJSONArray("hidden").toStringListOrNull()
-                    ?: return@map HomeLayoutPreferences()
+                val value =
+                    root?.optJSONObject(homeLayoutScope(serverUrl, userId))
+                        ?: return@map HomeLayoutPreferences()
+                val order =
+                    value.optJSONArray("order").toStringListOrNull()
+                        ?: return@map HomeLayoutPreferences()
+                val hidden =
+                    value.optJSONArray("hidden").toStringListOrNull()
+                        ?: return@map HomeLayoutPreferences()
                 HomeLayoutPreferences(
                     order = order,
                     hidden = hidden,

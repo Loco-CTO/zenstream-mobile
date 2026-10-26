@@ -8,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,16 +54,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
-import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.homeSectionId
 import com.zenstream.zenstreammobile.model.orderHomeRows
 import com.zenstream.zenstreammobile.ui.HomeLayoutUiState
 import com.zenstream.zenstreammobile.ui.components.homeSectionTitle
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -104,7 +100,8 @@ internal fun MyPageHomeLayoutContent(
         val hitIndex = ids.indexOf(nearest.key as String)
         if (hitIndex < 0) return
         val insertion = hitIndex + if (draggedCenterY > nearest.offset + nearest.size / 2f) 1 else 0
-        insertionIndex = (if (insertion > draggedFrom) insertion - 1 else insertion).coerceIn(0, ids.lastIndex)
+        insertionIndex =
+            (if (insertion > draggedFrom) insertion - 1 else insertion).coerceIn(0, ids.lastIndex)
     }
 
     fun finishDrag(commit: Boolean) {
@@ -127,7 +124,8 @@ internal fun MyPageHomeLayoutContent(
         while (draggedId != null) {
             val edgeDistance =
                 when {
-                    draggedCenterY > viewportHeightPx - edgeThresholdPx && listState.canScrollForward ->
+                    draggedCenterY > viewportHeightPx - edgeThresholdPx &&
+                        listState.canScrollForward ->
                         draggedCenterY - (viewportHeightPx - edgeThresholdPx)
                     draggedCenterY < edgeThresholdPx && listState.canScrollBackward ->
                         draggedCenterY - edgeThresholdPx
@@ -161,7 +159,9 @@ internal fun MyPageHomeLayoutContent(
                 Text(stringResource(R.string.loading_home_sections))
             }
         } else if (state.error && rows.isEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
                 Text(
                     text = stringResource(R.string.home_sections_load_failed),
                     color = MaterialTheme.colorScheme.error,
@@ -187,11 +187,14 @@ internal fun MyPageHomeLayoutContent(
                         .pointerInput(ids) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { touch ->
-                                    if (touch.x > dragHandleWidthPx || ids.size < 2) return@detectDragGesturesAfterLongPress
+                                    if (touch.x > dragHandleWidthPx || ids.size < 2)
+                                        return@detectDragGesturesAfterLongPress
                                     val item =
                                         listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                            touch.y >= it.offset && touch.y < it.offset + it.size &&
-                                                it.key is String && it.key in ids
+                                            touch.y >= it.offset &&
+                                                touch.y < it.offset + it.size &&
+                                                it.key is String &&
+                                                it.key in ids
                                         } ?: return@detectDragGesturesAfterLongPress
                                     val id = item.key as String
                                     draggedId = id
@@ -221,26 +224,46 @@ internal fun MyPageHomeLayoutContent(
                     val step = (rowHeights[id] ?: draggedHeightPx) + with(density) { 8.dp.toPx() }
                     val targetOffset =
                         when {
-                            draggedFrom >= 0 && insertionIndex > draggedFrom && index in (draggedFrom + 1)..insertionIndex -> -step
-                            draggedFrom >= 0 && insertionIndex in 0 until draggedFrom && index in insertionIndex until draggedFrom -> step
+                            draggedFrom >= 0 &&
+                                insertionIndex > draggedFrom &&
+                                index in (draggedFrom + 1)..insertionIndex -> -step
+                            draggedFrom >= 0 &&
+                                insertionIndex in 0 until draggedFrom &&
+                                index in insertionIndex until draggedFrom -> step
                             else -> 0f
                         }
-                    val neighborOffset by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = targetOffset,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        label = "home section reorder offset",
-                    )
-                    val lift by animateFloatAsState(
-                        targetValue = if (isDragged) 1f else 0f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        label = "home section drag lift",
-                    )
-                    val elevation by animateDpAsState(
-                        targetValue = if (isDragged) 10.dp else 0.dp,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        label = "home section drag elevation",
-                    )
-                    val rowDragOffset = if (isDragged) draggedCenterY - draggedStartCenterY else neighborOffset
+                    val neighborOffset by
+                        androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = targetOffset,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "home section reorder offset",
+                        )
+                    val lift by
+                        animateFloatAsState(
+                            targetValue = if (isDragged) 1f else 0f,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "home section drag lift",
+                        )
+                    val elevation by
+                        animateDpAsState(
+                            targetValue = if (isDragged) 10.dp else 0.dp,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            label = "home section drag elevation",
+                        )
+                    val rowDragOffset =
+                        if (isDragged) draggedCenterY - draggedStartCenterY else neighborOffset
                     Surface(
                         modifier =
                             Modifier.fillMaxWidth()
@@ -255,15 +278,24 @@ internal fun MyPageHomeLayoutContent(
                                 }
                                 .onSizeChanged { rowHeights[id] = it.height.toFloat() },
                         shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDragged) .98f else .56f),
+                        color =
+                            MaterialTheme.colorScheme.surfaceVariant.copy(
+                                alpha = if (isDragged) .98f else .56f
+                            ),
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier =
+                                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                painter = painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
-                                contentDescription = stringResource(R.string.reorder_home_section, homeSectionTitle(row)),
+                                painter =
+                                    painterResource(LucideR.drawable.lucide_ic_ellipsis_vertical),
+                                contentDescription =
+                                    stringResource(
+                                        R.string.reorder_home_section,
+                                        homeSectionTitle(row),
+                                    ),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.width(40.dp).size(20.dp),
                             )

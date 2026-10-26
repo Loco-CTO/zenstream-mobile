@@ -50,10 +50,9 @@ fun reorderHomeLayoutPreferences(
     val order = preferences.order.distinct().toMutableList()
     availableIds.forEach { if (it !in order) order += it }
     var nextIndex = 0
-    val merged =
-        order.map { id ->
-            if (id in available) reordered.getOrNull(nextIndex++) ?: id else id
-        }
+    val merged = order.map { id ->
+        if (id in available) reordered.getOrNull(nextIndex++) ?: id else id
+    }
     return preferences.copy(order = merged.distinct())
 }
 

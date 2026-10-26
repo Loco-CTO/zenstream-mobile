@@ -63,8 +63,8 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.HomeLayoutViewModel
+import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
 import kotlinx.coroutines.launch
@@ -316,13 +316,15 @@ fun MyPageScreen(
                                 state = settingsState,
                                 onInterfaceLocaleChange = settingsViewModel::setInterfaceLocaleMode,
                                 onMetadataLanguageChange = settingsViewModel::setMetadataLanguage,
-                                onPlaybackPreferenceChange = settingsViewModel::setPlaybackPreference,
+                                onPlaybackPreferenceChange =
+                                    settingsViewModel::setPlaybackPreference,
                                 onPlayerEngineChange = settingsViewModel::setPlayerEngine,
                                 onMpvVideoOutputChange = settingsViewModel::setMpvVideoOutput,
                                 onMpvVideoProfileChange = settingsViewModel::setMpvVideoProfile,
                                 onMpvVideoScalerChange = settingsViewModel::setMpvVideoScaler,
                                 onShowDebugIconChange = settingsViewModel::setShowDebugIcon,
-                                onAutoplayNextEpisodeChange = settingsViewModel::setAutoplayNextEpisode,
+                                onAutoplayNextEpisodeChange =
+                                    settingsViewModel::setAutoplayNextEpisode,
                                 onContinueVideoInMiniPlayerChange =
                                     settingsViewModel::setContinueVideoInMiniPlayer,
                                 onAutomaticPictureInPictureChange =

@@ -44,16 +44,15 @@ import com.zenstream.zenstreammobile.model.SearchFacets
 import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.orderedHomeRows
-import com.zenstream.zenstreammobile.model.orderHomeRows
 import java.io.IOException
 import java.security.GeneralSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
@@ -553,7 +552,8 @@ data class HomeUiState(
 class HomeViewModel(
     private val repository: HomeDataSource,
     private val session: AuthSession,
-    private val homeLayoutPreferences: Flow<HomeLayoutPreferences> = flowOf(HomeLayoutPreferences()),
+    private val homeLayoutPreferences: Flow<HomeLayoutPreferences> =
+        flowOf(HomeLayoutPreferences()),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState = _uiState.asStateFlow()

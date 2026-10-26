@@ -66,7 +66,13 @@ class HomeLayoutPreferencesTest {
             orderHomeRows(rows, preferences).map(::homeSectionId),
         )
         assertEquals(
-            listOf("home:genre:drama", "home:library:library-b:newlyAddedOn", "home:genre:comedy", "home:continueWatching", "home:library:library-a:newlyAddedOn"),
+            listOf(
+                "home:genre:drama",
+                "home:library:library-b:newlyAddedOn",
+                "home:genre:comedy",
+                "home:continueWatching",
+                "home:library:library-a:newlyAddedOn",
+            ),
             orderHomeRows(rows, preferences, includeHidden = true).map(::homeSectionId),
         )
     }
@@ -76,7 +82,12 @@ class HomeLayoutPreferencesTest {
         val availableIds = listOf("home:continueWatching", "home:genre:comedy", "home:genre:drama")
         val preferences =
             HomeLayoutPreferences(
-                order = listOf("home:genre:comedy", "home:genre:temporarily-missing", "home:continueWatching"),
+                order =
+                    listOf(
+                        "home:genre:comedy",
+                        "home:genre:temporarily-missing",
+                        "home:continueWatching",
+                    ),
                 hidden = listOf("home:genre:temporarily-missing"),
             )
         val reordered =
@@ -99,13 +110,14 @@ class HomeLayoutPreferencesTest {
         assertEquals(
             listOf("home:genre:drama", "home:genre:comedy", "home:continueWatching"),
             orderHomeRows(
-                listOf(
-                    row(RowTitle.ContinueWatching, "Continue"),
-                    row(RowTitle.Genre, "Comedy"),
-                    row(RowTitle.Genre, "Drama"),
-                ),
-                reordered,
-            ).map(::homeSectionId),
+                    listOf(
+                        row(RowTitle.ContinueWatching, "Continue"),
+                        row(RowTitle.Genre, "Comedy"),
+                        row(RowTitle.Genre, "Drama"),
+                    ),
+                    reordered,
+                )
+                .map(::homeSectionId),
         )
     }
 }

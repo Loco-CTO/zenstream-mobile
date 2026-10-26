@@ -14,8 +14,8 @@ import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
 import com.zenstream.zenstreammobile.model.LibrarySort
-import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.MpvVideoOutput
 import com.zenstream.zenstreammobile.model.MpvVideoProfile
 import com.zenstream.zenstreammobile.model.MpvVideoScaler
@@ -1009,22 +1009,43 @@ class CatalogRepository(
         val libraryRows =
             libraries.chunked(3).flatMap { batch ->
                 coroutineScope {
-                    batch.map { library -> async { homeLibraryData(session, library).rows } }.awaitAll().flatten()
+                    batch
+                        .map { library -> async { homeLibraryData(session, library).rows } }
+                        .awaitAll()
+                        .flatten()
                 }
             }
         return orderedHomeRows(
-            listOfNotNull(
-                continueWatching.takeIf { it.isNotEmpty() }?.let {
-                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.ContinueWatching, items = it, wide = true)
-                },
-                nextUp.takeIf { it.isNotEmpty() }?.let {
-                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.NextUp, items = it, wide = true)
-                },
-                recommendations.takeIf { it.isNotEmpty() }?.let {
-                    MediaRow(com.zenstream.zenstreammobile.model.RowTitle.Recommendations, items = it)
-                },
-            ) + derived.rows() + libraryRows
-        ).distinctBy(::homeSectionId)
+                listOfNotNull(
+                    continueWatching
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
+                            MediaRow(
+                                com.zenstream.zenstreammobile.model.RowTitle.ContinueWatching,
+                                items = it,
+                                wide = true,
+                            )
+                        },
+                    nextUp
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
+                            MediaRow(
+                                com.zenstream.zenstreammobile.model.RowTitle.NextUp,
+                                items = it,
+                                wide = true,
+                            )
+                        },
+                    recommendations
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
+                            MediaRow(
+                                com.zenstream.zenstreammobile.model.RowTitle.Recommendations,
+                                items = it,
+                            )
+                        },
+                ) + derived.rows() + libraryRows
+            )
+            .distinctBy(::homeSectionId)
     }
 
     override suspend fun libraries(session: AuthSession) =
