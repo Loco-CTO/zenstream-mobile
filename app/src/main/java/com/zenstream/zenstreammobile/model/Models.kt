@@ -76,7 +76,7 @@ data class MediaItem(
     val seriesPrimaryImageBlurHash: String? = null,
     val played: Boolean = false,
     val favorite: Boolean = false,
-    /** Follow is populated for movies, series, and music artists only. */
+    /** Episodes reflect their parent series' Follow state; seasons and tracks omit it. */
     val following: Boolean? = null,
     val watchlistStatus: WatchlistStatus? = null,
     val unplayedItemCount: Int? = null,

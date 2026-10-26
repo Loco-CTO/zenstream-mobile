@@ -721,6 +721,27 @@ private fun ColumnScope.SavedDownloadList(
                                 .getOrDefault(OfflineWatchedCounts(0, 0))
                         else OfflineWatchedCounts(0, 0)
                 }
+            val pendingFlags by
+                produceState(false, item.id, revision) {
+                    value =
+                        runCatching {
+                                runtime.playbackState.hasPendingFlags(profile.id, item.id)
+                            }
+                            .getOrDefault(false)
+                }
+            val favoriteAvailable =
+                item.type in
+                    setOf(
+                        "Movie",
+                        "Series",
+                        "Season",
+                        "Episode",
+                        "MusicArtist",
+                        "MusicAlbum",
+                        "Audio",
+                        "BoxSet",
+                    )
+            val followAvailable = item.type in setOf("Movie", "Series", "Episode", "MusicArtist")
             ListItem(
                 headlineContent = { Text(item.name) },
                 supportingContent = {
@@ -740,11 +761,66 @@ private fun ColumnScope.SavedDownloadList(
                                     watchedCounts.total,
                                 )
                             )
+                        if (pendingFlags)
+                            Text(
+                                stringResource(R.string.offline_action_pending),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                     }
                 },
                 trailingContent = {
                     Column(horizontalAlignment = Alignment.End) {
                         DownloadedBadge(item)
+                        if (favoriteAvailable || followAvailable)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (favoriteAvailable)
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                runtime.playbackState.setFavorite(
+                                                    profile.id,
+                                                    item.id,
+                                                    !item.favorite,
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            painterResource(LucideR.drawable.lucide_ic_heart),
+                                            stringResource(
+                                                if (item.favorite) R.string.remove_favorite
+                                                else R.string.add_favorite
+                                            ),
+                                            tint =
+                                                if (item.favorite) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                if (followAvailable)
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                runtime.playbackState.setFollowing(
+                                                    profile.id,
+                                                    item.id,
+                                                    item.following != true,
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            painterResource(LucideR.drawable.lucide_ic_bookmark),
+                                            stringResource(
+                                                if (item.following == true) R.string.unfollow
+                                                else R.string.follow
+                                            ),
+                                            tint =
+                                                if (item.following == true)
+                                                    MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                            }
                         if (watchedCounts.total > 0)
                             TextButton(
                                 onClick = {

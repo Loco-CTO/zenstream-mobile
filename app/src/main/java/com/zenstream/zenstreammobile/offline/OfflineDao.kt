@@ -272,6 +272,11 @@ interface OfflineDao {
     @Query("SELECT * FROM offline_operations WHERE profile=:profile AND id=:id LIMIT 1")
     suspend fun operation(profile: String, id: String): OfflineOperation?
 
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM offline_operations WHERE profile=:profile AND target=:target AND kind IN ('favorite','unfavorite','follow','unfollow'))"
+    )
+    suspend fun hasPendingFlagOperations(profile: String, target: String): Boolean
+
     @Query("SELECT * FROM offline_operations WHERE profile=:profile ORDER BY sequence LIMIT :limit")
     suspend fun operations(profile: String, limit: Int): List<OfflineOperation>
 

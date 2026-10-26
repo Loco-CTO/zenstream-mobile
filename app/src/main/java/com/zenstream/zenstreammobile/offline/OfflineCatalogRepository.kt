@@ -316,6 +316,19 @@ class OfflineCatalogRepository(
                 value.keys().forEach { merged.put(it, value.get(it)) }
             }
         }
+        if (row.type == "episode") {
+            val seriesId = dao.episodeSeriesId(profile, id)
+            val seriesState = seriesId?.let { dao.state(profile, it) }
+            if (seriesState != null) {
+                val canonical = JSONObject(seriesState.canonical)
+                val overlay = JSONObject(seriesState.overlay)
+                if (canonical.has("following") || overlay.has("following"))
+                    merged.put(
+                        "following",
+                        overlay.optBoolean("following", canonical.optBoolean("following")),
+                    )
+            }
+        }
         payload.put("userState", merged)
         return catalogMediaItem(payload)
     }

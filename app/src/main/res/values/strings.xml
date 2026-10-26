@@ -62,6 +62,7 @@
     <string name="offline_continue_watching">Continue watching</string>
     <string name="offline_continue_hint">Resume saved playback</string>
     <string name="offline_next_up">Next up</string>
+    <string name="offline_action_pending">Pending sync</string>
     <string name="offline_selection_count">%1$d items in this snapshot</string>
     <string name="offline_server_unavailable">Server unavailable · saved media remains available</string>
     <string name="offline_size_estimate">Estimated size: %1$s</string>

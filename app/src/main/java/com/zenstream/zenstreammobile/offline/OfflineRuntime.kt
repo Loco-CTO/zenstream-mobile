@@ -28,6 +28,7 @@ class OfflineRuntime private constructor(context: Context) {
                 "offline_assets",
                 "offline_states",
                 "offline_playback_states",
+                "offline_operations",
                 "offline_playlists",
                 "offline_selections",
             )

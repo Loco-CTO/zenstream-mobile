@@ -2508,7 +2508,7 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
         played = state.optBoolean("played", false),
         favorite = state.optBoolean("favorite", false),
         following =
-            if (type == "Movie" || type == "Series" || type == "MusicArtist") {
+            if (type == "Movie" || type == "Series" || type == "Episode" || type == "MusicArtist") {
                 state.optBoolean("following", false)
             } else null,
         unplayedItemCount = state.optIntOrNull("unplayedItemCount"),

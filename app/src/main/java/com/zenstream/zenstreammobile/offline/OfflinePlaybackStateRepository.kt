@@ -249,6 +249,64 @@ class OfflinePlaybackStateRepository(
         true
     }
 
+    suspend fun setFavorite(profileId: String, target: String, favorite: Boolean): Boolean =
+        setFlag(profileId, target, "favorite", favorite)
+
+    suspend fun setFollowing(profileId: String, target: String, following: Boolean): Boolean =
+        setFlag(profileId, target, "following", following)
+
+    suspend fun hasPendingFlags(profileId: String, target: String): Boolean {
+        requireProfile(profileId)
+        if (dao.hasPendingFlagOperations(profileId, target)) return true
+        val item = dao.item(profileId, target)
+        val seriesId = if (item?.type == "episode") dao.episodeSeriesId(profileId, target) else null
+        return seriesId?.let { dao.hasPendingFlagOperations(profileId, it) } ?: false
+    }
+
+    private suspend fun setFlag(
+        profileId: String,
+        target: String,
+        field: String,
+        value: Boolean,
+    ): Boolean = database.withTransaction {
+        val profile = requireProfile(profileId)
+        val sourceItem =
+            requireNotNull(dao.item(profileId, target)) { "Downloaded item is missing." }
+        val operationTarget =
+            if (field == "following" && sourceItem.type == "episode")
+                requireNotNull(dao.episodeSeriesId(profileId, target)) {
+                    "The episode's series is unavailable."
+                }
+            else target
+        val item =
+            requireNotNull(dao.item(profileId, operationTarget)) { "Downloaded item is missing." }
+        if (field == "following")
+            require(item.type in setOf("movie", "series", "artist")) {
+                "Follow is available for movies, series, and artists."
+            }
+        val current = effectiveState(profileId, operationTarget)
+        if (current.optBoolean(field) == value) return@withTransaction false
+        val userState =
+            dao.state(profileId, operationTarget) ?: OfflineUserState(profileId, operationTarget)
+        val overlay = JSONObject(userState.overlay).put(field, value)
+        dao.putState(userState.copy(overlay = overlay.toString()))
+        val activity = activity(profile)
+        appendOperation(
+            profile,
+            operationTarget,
+            when (field) {
+                "favorite" -> if (value) "favorite" else "unfavorite"
+                "following" -> if (value) "follow" else "unfollow"
+                else -> error("Unsupported offline account field.")
+            },
+            activity.first,
+            activity.second,
+            JSONObject(),
+            field = field,
+        )
+        true
+    }
+
     private suspend fun appendOperation(
         profile: OfflineProfile,
         target: String,
@@ -257,6 +315,7 @@ class OfflinePlaybackStateRepository(
         trusted: Boolean,
         payload: JSONObject,
         operationId: String = UUID.randomUUID().toString(),
+        field: String = operationField(kind),
     ) {
         if (kind == "checkpoint") {
             val latest = dao.targetOperations(profile.id, target).lastOrNull()
@@ -265,7 +324,7 @@ class OfflinePlaybackStateRepository(
                     latest.copy(
                         activityMs = activityMs,
                         clockTrusted = trusted,
-                        baseRevision = playbackRevision(profile.id, target),
+                        baseRevision = fieldRevision(profile.id, target, field),
                         historyEpoch = profile.historyEpoch,
                         privacyEpoch = profile.privacyEpoch,
                         payload = payload.toString(),
@@ -285,7 +344,7 @@ class OfflinePlaybackStateRepository(
                 kind,
                 activityMs,
                 trusted,
-                playbackRevision(profile.id, target),
+                fieldRevision(profile.id, target, field),
                 profile.historyEpoch,
                 profile.privacyEpoch,
                 payload.toString(),
@@ -293,8 +352,17 @@ class OfflinePlaybackStateRepository(
         )
     }
 
-    private suspend fun playbackRevision(profileId: String, target: String): Long =
-        JSONObject(dao.state(profileId, target)?.revisions ?: "{}").optLong("playback", 0L)
+    private suspend fun fieldRevision(profileId: String, target: String, field: String): Long =
+        JSONObject(dao.state(profileId, target)?.revisions ?: "{}").optLong(field, 0L)
+
+    private fun operationField(kind: String): String =
+        when (kind) {
+            "favorite",
+            "unfavorite" -> "favorite"
+            "follow",
+            "unfollow" -> "following"
+            else -> "playback"
+        }
 
     private suspend fun writeUserState(
         profileId: String,

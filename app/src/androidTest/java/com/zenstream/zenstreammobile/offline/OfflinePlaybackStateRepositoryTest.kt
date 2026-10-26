@@ -200,8 +200,146 @@ class OfflinePlaybackStateRepositoryTest {
         }
     }
 
-    private fun profile() =
-        OfflineProfile("p", "server-instance", "account", "https://example.invalid", "Local")
+    @Test
+    fun favoriteAndFollowOperationsStayOrderedAndOverlaysSurviveCatalogRefresh() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        try {
+            database.offline().putProfile(profile())
+            database
+                .offline()
+                .putItems(
+                    listOf(
+                        catalogItem("movie", "movie", null),
+                        catalogItem("series", "series", null),
+                        catalogItem("artist", "artist", null),
+                        catalogItem("episode", "episode", "series"),
+                        catalogItem("track", "track", null),
+                    )
+                )
+            database
+                .offline()
+                .putState(
+                    OfflineUserState(
+                        "p",
+                        "movie",
+                        canonical =
+                            JSONObject().put("favorite", false).put("following", false).toString(),
+                        revisions = JSONObject().put("favorite", 7).put("following", 2).toString(),
+                    )
+                )
+            val repository = OfflinePlaybackStateRepository(context, database)
+
+            assertTrue(repository.setFavorite("p", "movie", true))
+            assertTrue(repository.setFavorite("p", "movie", false))
+            assertTrue(repository.setFavorite("p", "movie", true))
+            assertTrue(repository.setFollowing("p", "movie", true))
+            assertTrue(repository.setFollowing("p", "episode", true))
+            assertFalse(repository.setFollowing("p", "series", true))
+            assertTrue(repository.setFollowing("p", "artist", true))
+            assertUnsupportedFollow { repository.setFollowing("p", "track", true) }
+
+            val operations = database.offline().operations("p", 100)
+            assertEquals(
+                listOf(
+                    "favorite",
+                    "unfavorite",
+                    "favorite",
+                    "follow",
+                    "follow",
+                    "follow",
+                ),
+                operations.map { it.kind },
+            )
+            assertEquals((1L..6L).toList(), operations.map { it.sequence })
+            assertEquals(7L, operations.first().baseRevision)
+            assertEquals(2L, operations[3].baseRevision)
+            assertEquals(listOf("movie", "series", "artist"), operations.drop(3).map { it.target })
+            assertTrue(repository.hasPendingFlags("p", "movie"))
+            assertTrue(repository.hasPendingFlags("p", "episode"))
+
+            val catalog = OfflineCatalogRepository(database) { _, _, _, _ -> JSONObject() }
+            catalog.ingestItems(
+                "p",
+                listOf(
+                    stateSnapshot("movie", "movie", favorite = false, following = false),
+                    stateSnapshot("series", "series", following = false),
+                    stateSnapshot("artist", "artist", following = false),
+                    stateSnapshot("episode", "episode", parentId = "series", following = false),
+                ),
+            )
+            assertTrue(catalog.item("p", "movie")!!.favorite)
+            assertEquals(true, catalog.item("p", "movie")!!.following)
+            assertEquals(true, catalog.item("p", "series")!!.following)
+            assertEquals(true, catalog.item("p", "artist")!!.following)
+            assertEquals("series", database.offline().episodeSeriesId("p", "episode"))
+            assertTrue(
+                JSONObject(database.offline().state("p", "series")!!.overlay)
+                    .getBoolean("following")
+            )
+            val episode = catalog.item("p", "episode")
+            assertEquals("Episode", episode?.type)
+            assertEquals(true, episode?.following)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun accountFlagOverlaysAndOutboxRemainProfileScoped() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        try {
+            database.offline().putProfile(profile())
+            database.offline().putProfile(profile("other", "account-2"))
+            database
+                .offline()
+                .putItems(
+                    listOf(
+                        catalogItem("movie", "movie", null),
+                        catalogItem("movie", "movie", null, profile = "other"),
+                    )
+                )
+            val repository = OfflinePlaybackStateRepository(context, database)
+
+            assertTrue(repository.setFavorite("p", "movie", true))
+            assertTrue(database.offline().operations("other", 100).isEmpty())
+            val catalog = OfflineCatalogRepository(database) { _, _, _, _ -> JSONObject() }
+            assertTrue(catalog.item("p", "movie")!!.favorite)
+            assertFalse(catalog.item("other", "movie")!!.favorite)
+
+            database.offline().putProfile(profile("locked", "account-3").copy(locked = true))
+            database
+                .offline()
+                .putItems(listOf(catalogItem("movie", "movie", null, profile = "locked")))
+            assertLockedProfile { repository.setFavorite("locked", "movie", true) }
+        } finally {
+            database.close()
+        }
+    }
+
+    private suspend fun assertUnsupportedFollow(action: suspend () -> Unit) {
+        var rejected = false
+        try {
+            action()
+        } catch (_: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue("unsupported entity must not enqueue a Follow operation", rejected)
+    }
+
+    private suspend fun assertLockedProfile(action: suspend () -> Unit) {
+        var rejected = false
+        try {
+            action()
+        } catch (_: IllegalStateException) {
+            rejected = true
+        }
+        assertTrue("locked profile must not mutate account state", rejected)
+    }
+
+    private fun profile(id: String = "p", account: String = "account") =
+        OfflineProfile(id, "server-instance", account, "https://example.invalid", "Local")
 
     private fun catalogItem(
         id: String,
@@ -209,9 +347,10 @@ class OfflinePlaybackStateRepositoryTest {
         parentId: String?,
         season: Int = 0,
         episode: Int = 0,
+        profile: String = "p",
     ) =
         OfflineCatalogItem(
-            profile = "p",
+            profile = profile,
             id = id,
             libraryId = "library",
             parentId = parentId,
@@ -228,6 +367,20 @@ class OfflinePlaybackStateRepositoryTest {
                     .apply { parentId?.let { put("parentId", it) } }
                     .toString(),
         )
+
+    private fun stateSnapshot(
+        id: String,
+        type: String,
+        favorite: Boolean = false,
+        following: Boolean = false,
+        parentId: String? = null,
+    ) =
+        JSONObject()
+            .put("id", id)
+            .put("type", type)
+            .put("name", id)
+            .put("userState", JSONObject().put("favorite", favorite).put("following", following))
+            .apply { parentId?.let { put("parentId", it) } }
 
     private fun asset(id: String, item: String) =
         OfflineAsset(
