@@ -65,6 +65,7 @@ class OfflineRuntime private constructor(context: Context) {
 
     val audio = OfflineAudioRepository(catalog, storage)
     val playbackState = OfflinePlaybackStateRepository(appContext, database)
+    val playlists = OfflinePlaylistRepository(database, playbackState, catalog)
     val playbackSources =
         PlaybackSourceResolver(
             catalog,

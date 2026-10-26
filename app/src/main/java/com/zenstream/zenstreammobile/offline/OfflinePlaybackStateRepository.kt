@@ -352,6 +352,37 @@ class OfflinePlaybackStateRepository(
         )
     }
 
+    /** Enqueues a non-playback account operation inside the caller's Room transaction. */
+    internal suspend fun appendAccountOperation(
+        profileId: String,
+        target: String,
+        kind: String,
+        baseRevision: Long,
+        payload: JSONObject,
+        operationId: String = UUID.randomUUID().toString(),
+    ): String {
+        val profile = requireProfile(profileId)
+        val activity = activity(profile)
+        val sequence = profile.nextSequence
+        dao.putProfile(profile.copy(nextSequence = sequence + 1))
+        dao.insertOperation(
+            OfflineOperation(
+                profile = profile.id,
+                sequence = sequence,
+                id = operationId,
+                target = target,
+                kind = kind,
+                activityMs = activity.first,
+                clockTrusted = activity.second,
+                baseRevision = baseRevision,
+                historyEpoch = profile.historyEpoch,
+                privacyEpoch = profile.privacyEpoch,
+                payload = payload.toString(),
+            )
+        )
+        return operationId
+    }
+
     private suspend fun fieldRevision(profileId: String, target: String, field: String): Long =
         JSONObject(dao.state(profileId, target)?.revisions ?: "{}").optLong(field, 0L)
 

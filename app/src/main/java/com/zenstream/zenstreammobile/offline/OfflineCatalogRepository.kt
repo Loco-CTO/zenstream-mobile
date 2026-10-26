@@ -443,6 +443,10 @@ class OfflineCatalogRepository(
                         .apply {
                             remove("items")
                             remove("shareToken")
+                            put(
+                                "stateRevisions",
+                                result.optJSONObject("stateRevisions") ?: JSONObject(),
+                            )
                         }
                         .toString(),
                     version,
@@ -465,6 +469,11 @@ class OfflineCatalogRepository(
             if (next == null) {
                 check(dao.playlistEntryCount(profile, staging) == page.expectedCount) {
                     "Playlist changed during refresh. Retry its snapshot."
+                }
+                if (dao.hasPendingPlaylistOperations(profile, id)) {
+                    dao.clearPlaylistEntries(profile, staging)
+                    dao.deletePlaylist(profile, staging)
+                    return@withTransaction true
                 }
                 dao.clearPlaylistEntries(profile, id)
                 dao.publishPlaylistEntries(profile, staging, id)

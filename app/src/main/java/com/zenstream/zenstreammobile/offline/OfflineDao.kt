@@ -66,6 +66,26 @@ interface OfflineDao {
     suspend fun item(profile: String, id: String): OfflineCatalogItem?
 
     @Query(
+        "SELECT * FROM offline_catalog WHERE profile=:profile AND type='track' AND name LIKE :query ESCAPE '!' ORDER BY name COLLATE NOCASE,disc,track,id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun knownTracks(
+        profile: String,
+        query: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        "SELECT * FROM offline_catalog WHERE profile=:profile AND type IN ('artist','release') AND name LIKE :query ESCAPE '!' ORDER BY type,name COLLATE NOCASE,id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun knownMusicGroups(
+        profile: String,
+        query: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
         "SELECT * FROM offline_catalog WHERE profile=:profile AND parentId=:parent ORDER BY season,episode,disc,track,id"
     )
     suspend fun children(profile: String, parent: String): List<OfflineCatalogItem>
@@ -249,6 +269,11 @@ interface OfflineDao {
     @Query("SELECT * FROM offline_playlists WHERE profile=:profile AND deleted=0")
     fun playlists(profile: String): Flow<List<OfflinePlaylist>>
 
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM offline_operations WHERE profile=:profile AND target=:playlist AND kind LIKE 'playlist_%')"
+    )
+    suspend fun hasPendingPlaylistOperations(profile: String, playlist: String): Boolean
+
     @Upsert suspend fun putPlaylistEntries(values: List<OfflinePlaylistEntry>)
 
     @Query(
@@ -263,6 +288,11 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist")
     suspend fun clearPlaylistEntries(profile: String, playlist: String)
+
+    @Query(
+        "DELETE FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist AND track=:track"
+    )
+    suspend fun deletePlaylistEntry(profile: String, playlist: String, track: String)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOperation(value: OfflineOperation)
