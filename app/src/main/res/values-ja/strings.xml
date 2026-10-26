@@ -1,5 +1,6 @@
 <resources>
     <string name="offline_video_stream_paused">オフラインモードでストリーミングを停止しました。ダウンロード済みの動画を開いてください。</string>
+    <string name="offline_next_episode_not_downloaded">次のエピソードはダウンロードされていません。オフラインで続けるにはダウンロード一覧から保存してください。</string>
     <string name="offline_video_other_engine">別のインストール済みプレーヤーを試す</string>
     <string name="offline_video_stream">別のバージョンをストリーミング再生</string>
     <string name="offline_video_compatible_help">このデバイスで元のファイルを再生できない場合は、接続時に互換性のある720pまたは1080pバージョンをダウンロードしてください。</string>

@@ -1,5 +1,6 @@
 <resources>
     <string name="offline_video_stream_paused">Streaming stopped in offline mode. Open a downloaded video to continue.</string>
+    <string name="offline_next_episode_not_downloaded">Next episode is not downloaded. Download it from Downloads to continue offline.</string>
     <string name="offline_video_other_engine">Try the other installed player</string>
     <string name="offline_video_stream">Stream another version instead</string>
     <string name="offline_video_compatible_help">If this original cannot play on this device, download a compatible 720p or 1080p version while connected.</string>

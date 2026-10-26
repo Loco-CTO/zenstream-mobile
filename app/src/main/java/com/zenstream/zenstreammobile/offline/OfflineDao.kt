@@ -71,6 +71,11 @@ interface OfflineDao {
     suspend fun children(profile: String, parent: String): List<OfflineCatalogItem>
 
     @Query(
+        "WITH current_series(id) AS (SELECT CASE WHEN parent.type='season' THEN parent.parentId ELSE parent.id END FROM offline_catalog focus JOIN offline_catalog parent ON parent.profile=focus.profile AND parent.id=focus.parentId WHERE focus.profile=:profile AND focus.id=:item AND focus.type='episode') SELECT candidate.* FROM offline_catalog candidate WHERE candidate.profile=:profile AND candidate.type='episode' AND (candidate.parentId IN (SELECT id FROM current_series) OR candidate.parentId IN (SELECT season.id FROM offline_catalog season WHERE season.profile=:profile AND season.type='season' AND season.parentId IN (SELECT id FROM current_series))) ORDER BY candidate.season,candidate.episode,candidate.episodeEnd,candidate.id"
+    )
+    suspend fun episodesInSeries(profile: String, item: String): List<OfflineCatalogItem>
+
+    @Query(
         "SELECT * FROM offline_catalog WHERE profile=:profile AND (:type='' OR type=:type) AND name LIKE :query ESCAPE '!' ORDER BY name COLLATE NOCASE,id LIMIT :limit OFFSET :offset"
     )
     suspend fun search(

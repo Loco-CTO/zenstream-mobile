@@ -9,6 +9,71 @@ import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
 
+data class OfflineEpisodeNavigation(
+    val previous: MediaItem? = null,
+    val next: MediaItem? = null,
+    val nextUnavailable: Boolean = false,
+)
+
+internal data class OfflineEpisodeNeighborIds(
+    val previous: String? = null,
+    val next: String? = null,
+)
+
+internal data class BundledEpisodeNeighbor(val id: String?)
+
+internal fun JSONObject?.bundledEpisodeNeighbor(direction: String): BundledEpisodeNeighbor? {
+    if (this == null || !has(direction)) return null
+    if (isNull(direction)) return BundledEpisodeNeighbor(null)
+    return BundledEpisodeNeighbor(optString(direction).takeIf { it.isNotBlank() && it != "null" })
+}
+
+internal fun offlineEpisodeNeighborIds(
+    currentId: String,
+    episodes: List<OfflineCatalogItem>,
+): OfflineEpisodeNeighborIds {
+    val current =
+        episodes.firstOrNull { it.id == currentId && it.type == "episode" }
+            ?: return OfflineEpisodeNeighborIds()
+    val previous =
+        episodes
+            .asSequence()
+            .filter { candidate ->
+                candidate.type == "episode" &&
+                    (candidate.season < current.season ||
+                        candidate.season == current.season &&
+                            candidate.episodeEnd < current.episode)
+            }
+            .maxWithOrNull(
+                compareBy<OfflineCatalogItem>(
+                    { it.season },
+                    { it.episodeEnd },
+                    { it.episode },
+                    { it.id },
+                )
+            )
+            ?.id
+    val next =
+        episodes
+            .asSequence()
+            .filter { candidate ->
+                candidate.type == "episode" &&
+                    (candidate.season > current.season ||
+                        candidate.season == current.season &&
+                            candidate.episode > current.episodeEnd)
+            }
+            .minWithOrNull(
+                compareBy<OfflineCatalogItem>(
+                    { it.season },
+                    { it.episode },
+                    { it.episodeEnd },
+                    { it.id },
+                )
+            )
+            ?.id
+    return OfflineEpisodeNeighborIds(previous, next)
+}
+
 typealias OfflineRequest = suspend (AuthSession, String, String, JSONObject?) -> JSONObject
 
 internal fun JSONArray.objects(): List<JSONObject> = List(length()) { getJSONObject(it) }
@@ -237,6 +302,40 @@ class OfflineCatalogRepository(
     suspend fun availability(profile: String, id: String): OfflineAvailability {
         requireProfile(profile)
         return dao.availability(profile, id)
+    }
+
+    /**
+     * Resolves only adjacent episodes and exposes a neighbor only when its verified asset is local.
+     */
+    suspend fun episodeNavigation(
+        profile: String,
+        itemId: String,
+        bundle: JSONObject,
+    ): OfflineEpisodeNavigation {
+        requireProfile(profile)
+        if (dao.item(profile, itemId)?.type != "episode") return OfflineEpisodeNavigation()
+        val persisted = offlineEpisodeNeighborIds(itemId, dao.episodesInSeries(profile, itemId))
+        val bundled = bundle.optJSONObject("episodeNeighbors")
+        val previousId =
+            bundled.bundledEpisodeNeighbor("previous")?.id
+                ?: if (bundled?.has("previous") == true) null else persisted.previous
+        val nextId =
+            bundled.bundledEpisodeNeighbor("next")?.id
+                ?: if (bundled?.has("next") == true) null else persisted.next
+
+        suspend fun playableNeighbor(id: String?): MediaItem? {
+            if (id.isNullOrBlank() || id == itemId || dao.playable(profile, id).isEmpty())
+                return null
+            return item(profile, id)
+        }
+
+        val previous = playableNeighbor(previousId)
+        val next = playableNeighbor(nextId)
+        return OfflineEpisodeNavigation(
+            previous = previous,
+            next = next,
+            nextUnavailable = nextId != null && next == null,
+        )
     }
 
     fun selections(profile: String): Flow<List<OfflineSelection>> = dao.selections(profile)

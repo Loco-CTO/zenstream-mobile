@@ -4,9 +4,11 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.PlaybackPreference
@@ -84,6 +86,7 @@ data class PlaybackUiState(
     val previousEpisode: MediaItem? = null,
     val nextEpisode: MediaItem? = null,
     val episodeNeighborsLoaded: Boolean = false,
+    val nextEpisodeUnavailable: Boolean = false,
     val closeRequested: Boolean = false,
     val syncplaySettling: Boolean = false,
 ) {
@@ -644,6 +647,10 @@ class PlaybackViewModel(
                                     endSeconds = end,
                                 )
                         },
+                    previousEpisode = null,
+                    nextEpisode = null,
+                    episodeNeighborsLoaded = false,
+                    nextEpisodeUnavailable = false,
                     error = null,
                 )
             playbackEngine?.setKnownHdr(local?.knownHdr() == true)
@@ -674,12 +681,33 @@ class PlaybackViewModel(
                 loadEpisodeNeighbors(loadGeneration, playbackData.item)
             } else {
                 episodeNeighborsJob?.cancel()
-                _uiState.value =
-                    _uiState.value.copy(
-                        previousEpisode = null,
-                        nextEpisode = null,
-                        episodeNeighborsLoaded = true,
-                    )
+                val navigation =
+                    runCatching {
+                            repository.offline
+                                ?.catalog
+                                ?.episodeNavigation(
+                                    local.profile.id,
+                                    playbackData.item.id,
+                                    local.bundle,
+                                )
+                        }
+                        .onFailure { error ->
+                            Log.w(
+                                PLAYBACK_TAG,
+                                "offline episode neighbor lookup failed item=${playbackData.item.id} error=${error.message}",
+                            )
+                        }
+                        .getOrNull()
+                if (loadGeneration == playbackGeneration && currentItemId == playbackData.item.id) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            previousEpisode = navigation?.previous,
+                            nextEpisode = navigation?.next,
+                            episodeNeighborsLoaded = true,
+                            nextEpisodeUnavailable = navigation?.nextUnavailable == true,
+                        )
+                    if (pendingCompletionGeneration == loadGeneration) advanceAfterEpisodeEnd()
+                }
             }
         }
     }
@@ -691,6 +719,7 @@ class PlaybackViewModel(
                 previousEpisode = null,
                 nextEpisode = null,
                 episodeNeighborsLoaded = false,
+                nextEpisodeUnavailable = false,
             )
         episodeNeighborsJob = viewModelScope.launch {
             val neighbors =
@@ -1237,6 +1266,14 @@ class PlaybackViewModel(
             }
             EpisodeCompletionAction.CLOSE -> {
                 pendingCompletionGeneration = null
+                if (_uiState.value.local && _uiState.value.nextEpisodeUnavailable) {
+                    Toast.makeText(
+                            appContext,
+                            R.string.offline_next_episode_not_downloaded,
+                            Toast.LENGTH_SHORT,
+                        )
+                        .show()
+                }
                 requestClose()
                 return
             }
@@ -1290,6 +1327,7 @@ class PlaybackViewModel(
                     previousEpisode = null,
                     nextEpisode = null,
                     episodeNeighborsLoaded = false,
+                    nextEpisodeUnavailable = false,
                 )
             loadPlayback(playWhenReadyOverride = true)
         }
