@@ -6,6 +6,11 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+    <exclude domain="file" path="offline/" />
+    <exclude domain="file" path="datastore/offline_settings.preferences_pb" />
+    <exclude domain="database" path="offline.db" />
+    <exclude domain="database" path="offline.db-wal" />
+    <exclude domain="database" path="offline.db-shm" />
 	<!-- Bearer/resource tickets are encrypted at rest but must never leave the
 	     device through cloud backup or device transfer. -->
 	<exclude domain="file" path="datastore/zenstream_session.preferences_pb" />

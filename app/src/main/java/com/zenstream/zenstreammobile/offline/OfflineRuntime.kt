@@ -14,6 +14,13 @@ class OfflineRuntime private constructor(context: Context) {
     val connection = ConnectionCoordinator(context)
     val database = OfflineDatabase.get(context)
     val sessionStore = SessionStore(context)
+    val storage =
+        OfflineStorage(
+            database,
+            java.io.File(context.filesDir, "offline"),
+            scope,
+            limitBytes = { connection.downloadLimitBytes.value },
+        )
     private val network = CatalogRepository(CatalogApi(), sessionStore)
     val catalog =
         OfflineCatalogRepository(database) { session, path, method, body ->

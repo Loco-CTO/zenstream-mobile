@@ -203,6 +203,36 @@ interface OfflineDao {
         "SELECT COUNT(*) FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist"
     )
     suspend fun playlistEntryCount(profile: String, playlist: String): Int
+
+    @Query(
+        "SELECT COALESCE(SUM(reserved),0) FROM offline_transfers WHERE NOT (profile=:profile AND id=:id) AND state NOT IN ('complete','cancelled','failed')"
+    )
+    suspend fun reservedExcept(profile: String, id: String): Long
+
+    @Query(
+        "SELECT COALESCE(SUM(size),0) FROM offline_assets WHERE state IN ('complete','staged','pending_delete')"
+    )
+    suspend fun totalAssetBytes(): Long
+
+    @Query(
+        "SELECT COALESCE(SUM(bytes),0) FROM offline_transfers WHERE state NOT IN ('complete','cancelled')"
+    )
+    suspend fun totalPartialBytes(): Long
+
+    @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile ORDER BY id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun assetPage(profile: String, limit: Int, offset: Int): List<OfflineAsset>
+
+    @Query(
+        "UPDATE offline_transfers SET state='cancelled',reserved=0 WHERE profile=:profile AND selection=:selection"
+    )
+    suspend fun cancelSelectionTransfers(profile: String, selection: String)
+
+    @Query(
+        "SELECT (EXISTS(SELECT 1 FROM offline_assets WHERE profile=:profile AND relativePath=:path) OR EXISTS(SELECT 1 FROM offline_supplements WHERE profile=:profile AND relativePath=:path) OR EXISTS(SELECT 1 FROM offline_transfers WHERE profile=:profile AND assetId=:id AND state NOT IN ('complete','cancelled')))"
+    )
+    suspend fun fileReferences(profile: String, path: String, id: String): Int
 }
 
 data class OfflineAvailability(val total: Int, val downloaded: Int)

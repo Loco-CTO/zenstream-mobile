@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.offline
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import java.io.IOException
@@ -120,6 +121,9 @@ class ConnectionCoordinator(context: Context) {
         }
     private val modeKey = stringPreferencesKey("connection_mode")
     private val profileKey = stringPreferencesKey("retained_profile")
+    private val limitKey = longPreferencesKey("download_limit_bytes")
+    private val _downloadLimitBytes = MutableStateFlow<Long?>(null)
+    val downloadLimitBytes = _downloadLimitBytes.asStateFlow()
     private val _state = MutableStateFlow(ConnectionState())
     val state = _state.asStateFlow()
     @Volatile var serverUrl: String? = null
@@ -134,6 +138,7 @@ class ConnectionCoordinator(context: Context) {
                     _state.update { it.copy(initialized = true, mode = ConnectionMode.OFFLINE) }
                 }
                 .collect { prefs ->
+                    _downloadLimitBytes.value = prefs[limitKey]
                     val mode =
                         if (prefs[modeKey] == "offline") ConnectionMode.OFFLINE
                         else ConnectionMode.AUTOMATIC
@@ -157,6 +162,13 @@ class ConnectionCoordinator(context: Context) {
 
     suspend fun selectProfile(id: String) {
         preferences.edit { it[profileKey] = id }
+    }
+
+    suspend fun setDownloadLimit(bytes: Long?) {
+        require(bytes == null || bytes >= 0)
+        preferences.edit { prefs ->
+            if (bytes == null) prefs.remove(limitKey) else prefs[limitKey] = bytes
+        }
     }
 
     fun report(url: String, status: Int?, error: Throwable?) {
