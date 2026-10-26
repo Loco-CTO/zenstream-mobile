@@ -408,6 +408,16 @@ class CatalogRepository(
             api.offlineRequest(current, path, method, body)
         }
 
+    suspend fun offlineBinaryRequest(
+        session: AuthSession,
+        path: String,
+        headers: Map<String, String>,
+        receive: suspend (okhttp3.Response) -> Unit,
+    ) =
+        authenticatedCatalogRequest(session) { current ->
+            api.offlineBinaryRequest(current, path, headers, receive)
+        }
+
     private val homeMutex = Mutex()
     private val interfaceLocaleMutex = Mutex()
     private val playbackPreferenceMutex = Mutex()

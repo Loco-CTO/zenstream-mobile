@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.data.SessionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class OfflineRuntime private constructor(context: Context) {
@@ -29,6 +30,18 @@ class OfflineRuntime private constructor(context: Context) {
             }
             network.offlineRequest(session, path, method, body)
         }
+    val downloads =
+        DownloadCoordinator(
+            catalog,
+            storage,
+            request = { session, path, method, body ->
+                network.offlineRequest(session, path, method, body)
+            },
+            binary = { session, path, headers, receive ->
+                network.offlineBinaryRequest(session, path, headers, receive)
+            },
+            activeSession = { sessionStore.session.first() },
+        )
 
     init {
         scope.launch { sessionStore.serverUrl.collect { connection.serverUrl = it } }

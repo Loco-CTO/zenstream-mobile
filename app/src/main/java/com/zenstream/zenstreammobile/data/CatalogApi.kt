@@ -1709,6 +1709,34 @@ class CatalogApi(
         return requestJson(session, path, method = method, body = body?.toString())
     }
 
+    internal suspend fun offlineBinaryRequest(
+        session: AuthSession,
+        path: String,
+        headers: Map<String, String>,
+        receive: suspend (Response) -> Unit,
+    ) =
+        withContext(Dispatchers.IO) {
+            require(
+                path.startsWith("/api/offline/assets/") ||
+                    path.startsWith("/api/catalog/items/") ||
+                    path.startsWith("/api/playback/items/")
+            )
+            val request =
+                Request.Builder()
+                    .url(session.serverUrl + path)
+                    .header("Authorization", "Bearer ${session.token}")
+                    .header(AUTH_FLOW_HEADER, AUTH_FLOW_VERSION)
+                    .apply { headers.forEach { (key, value) -> header(key, value) } }
+                    .get()
+                    .build()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful && response.code != 416) {
+                    throw CatalogException(response.code, "Download authorization needs recovery.")
+                }
+                receive(response)
+            }
+        }
+
     private suspend fun requestJson(
         session: AuthSession,
         path: String,

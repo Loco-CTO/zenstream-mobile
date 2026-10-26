@@ -103,7 +103,12 @@ object OfflineNetworkPolicy {
             val url = chain.request().url.toString()
             return try {
                 chain.proceed(chain.request()).also { response ->
-                    ConnectionCoordinator.current?.report(url, response.code, null)
+                    ConnectionCoordinator.current?.report(
+                        url,
+                        response.code,
+                        null,
+                        chain.request().header("Authorization")?.startsWith("Bearer ") == true,
+                    )
                 }
             } catch (error: IOException) {
                 if (allowed) ConnectionCoordinator.current?.report(url, null, error)
@@ -171,7 +176,7 @@ class ConnectionCoordinator(context: Context) {
         }
     }
 
-    fun report(url: String, status: Int?, error: Throwable?) {
+    fun report(url: String, status: Int?, error: Throwable?, authorized: Boolean = false) {
         val expected = serverUrl?.toHttpUrlOrNull() ?: return
         val actual = url.toHttpUrlOrNull() ?: return
         if (
@@ -192,9 +197,10 @@ class ConnectionCoordinator(context: Context) {
                 reachability = reachability,
                 authentication =
                     when (status) {
-                        401,
-                        403 -> OnlineAuthentication.NEEDS_SIGN_IN
-                        in 200..299 -> OnlineAuthentication.AUTHENTICATED
+                        401 -> OnlineAuthentication.NEEDS_SIGN_IN
+                        in 200..299 ->
+                            if (authorized) OnlineAuthentication.AUTHENTICATED
+                            else it.authentication
                         else -> it.authentication
                     },
             )

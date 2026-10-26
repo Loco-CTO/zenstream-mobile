@@ -101,7 +101,7 @@ interface OfflineDao {
     fun transfers(profile: String): Flow<List<OfflineTransfer>>
 
     @Query(
-        "SELECT * FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now ORDER BY priority DESC,id LIMIT :limit"
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now AND EXISTS(SELECT 1 FROM offline_selections s WHERE s.profile=offline_transfers.profile AND s.id=offline_transfers.selection AND s.state IN ('queued','downloading','complete','partial')) ORDER BY priority DESC,id LIMIT :limit"
     )
     suspend fun pendingTransfers(profile: String, now: Long, limit: Int): List<OfflineTransfer>
 
@@ -233,6 +233,19 @@ interface OfflineDao {
         "SELECT (EXISTS(SELECT 1 FROM offline_assets WHERE profile=:profile AND relativePath=:path) OR EXISTS(SELECT 1 FROM offline_supplements WHERE profile=:profile AND relativePath=:path) OR EXISTS(SELECT 1 FROM offline_transfers WHERE profile=:profile AND assetId=:id AND state NOT IN ('complete','cancelled')))"
     )
     suspend fun fileReferences(profile: String, path: String, id: String): Int
+
+    @Query(
+        "SELECT * FROM offline_selections WHERE profile=:profile AND state IN ('ready','queueing') LIMIT 3"
+    )
+    suspend fun queueableSelections(profile: String): List<OfflineSelection>
+
+    @Query(
+        "SELECT * FROM offline_selections WHERE profile=:profile AND state='removal_pending' LIMIT 20"
+    )
+    suspend fun cleanupSelections(profile: String): List<OfflineSelection>
+
+    @Query("DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection")
+    suspend fun deleteSelectionTransfers(profile: String, selection: String)
 }
 
 data class OfflineAvailability(val total: Int, val downloaded: Int)

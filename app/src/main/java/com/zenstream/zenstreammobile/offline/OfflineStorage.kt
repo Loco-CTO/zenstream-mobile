@@ -57,9 +57,7 @@ class OfflinePaths(val root: File) {
                 !parts[2].contains("..")
         )
         val result = File(root, relative).canonicalFile
-        require(
-            result.toPath().startsWith(root.canonicalFile.toPath()) && result != root.canonicalFile
-        )
+        require(result.path.startsWith(root.canonicalPath + File.separator))
         return result
     }
 }
@@ -187,6 +185,30 @@ class OfflineStorage(
         }
     }
 
+    suspend fun adoptCompleted(
+        profile: String,
+        id: String,
+        transferId: String,
+        digest: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                val existing = dao.asset(profile, id) ?: return@withLock false
+                val target = paths.resolve(existing.relativePath)
+                if (
+                    existing.state != "complete" ||
+                        existing.locked ||
+                        existing.sha256 != digest ||
+                        !target.isFile ||
+                        target.length() != existing.size
+                )
+                    return@withLock false
+                check(dao.profile(profile)?.locked == false)
+                complete(existing, requireNotNull(dao.transfer(profile, transferId)))
+                true
+            }
+        }
+
     suspend fun acquire(profile: String, assetId: String): OfflineFileLease =
         withContext(Dispatchers.IO) {
             mutex.withLock {
@@ -215,7 +237,9 @@ class OfflineStorage(
                     dao.cancelSelectionTransfers(profile, selection)
                     dao.removeReferences(profile, selection)
                     dao.deleteMembers(profile, selection)
-                    dao.deleteSelection(profile, selection)
+                    dao.selection(profile, selection)?.let {
+                        dao.putSelection(it.copy(state = "removal_pending", itemCount = 0))
+                    }
                 }
             }
             var offset = 0
@@ -234,12 +258,15 @@ class OfflineStorage(
         dao.putAsset(asset.copy(state = "pending_delete"))
         if ((leases["$profile:$assetId"] ?: 0) > 0) return@withLock
         paths.resolve(asset.relativePath).let { check(!it.exists() || it.delete()) }
-        dao.supplements(profile, assetId).forEach {
-            paths.resolve(it.relativePath).let { file -> check(!file.exists() || file.delete()) }
-        }
+        val supplements = dao.supplements(profile, assetId)
         database.withTransaction {
             dao.deleteSupplements(profile, assetId)
             dao.deleteAsset(profile, assetId)
+        }
+        supplements.forEach {
+            val file = paths.resolve(it.relativePath)
+            if (dao.fileReferences(profile, it.relativePath, file.name.substringBefore('.')) == 0)
+                check(!file.exists() || file.delete())
         }
     }
 

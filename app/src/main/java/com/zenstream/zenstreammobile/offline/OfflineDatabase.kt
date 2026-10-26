@@ -7,9 +7,11 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.security.MessageDigest
 
-/** Credentials and transfer URLs never belong in this database. */
+/** Credentials and signed playback/transfer URLs never belong in this database. */
 @Entity(
     tableName = "offline_profiles",
     indices = [Index(value = ["serverInstance", "account"], unique = true)],
@@ -119,7 +121,11 @@ data class OfflineAssetReference(val profile: String, val selection: String, val
 @Entity(
     tableName = "offline_transfers",
     primaryKeys = ["profile", "id"],
-    indices = [Index(value = ["profile", "state", "priority"])],
+    indices =
+        [
+            Index(value = ["profile", "state", "priority"]),
+            Index(value = ["profile", "selection", "state"]),
+        ],
 )
 data class OfflineTransfer(
     val profile: String,
@@ -221,13 +227,21 @@ data class OfflineOperation(
             OfflinePlaylistEntry::class,
             OfflineOperation::class,
         ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
     abstract fun offline(): OfflineDao
 
     companion object {
+        val MIGRATION_1_2 =
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS index_offline_transfers_profile_selection_state ON offline_transfers(profile,selection,state)"
+                    )
+                }
+            }
         @Volatile private var instance: OfflineDatabase? = null
 
         fun get(context: Context): OfflineDatabase =
@@ -239,6 +253,7 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 OfflineDatabase::class.java,
                                 "offline.db",
                             )
+                            .addMigrations(MIGRATION_1_2)
                             .build()
                             .also { instance = it }
                 }
