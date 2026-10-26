@@ -437,7 +437,7 @@ class PlaybackViewModel(
     }
 
     private fun clearPlayedOnPlaybackStart(state: EngineState) {
-        if (_uiState.value.local || !_uiState.value.watchHistoryEnabled) return
+        if (!_uiState.value.watchHistoryEnabled) return
         val playback = _uiState.value.playback ?: return
         if (
             !shouldClearPlayedOnPlaybackStart(
@@ -451,6 +451,39 @@ class PlaybackViewModel(
         // Set this before launching so the engine ticker cannot enqueue duplicate
         // DELETE requests while the first request is in flight.
         playedResetRequested = true
+        if (_uiState.value.local) {
+            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            viewModelScope.launch {
+                runCatching {
+                        repository.offline
+                            ?.playbackState
+                            ?.setPlayed(
+                                source.profile.id,
+                                playback.item.id,
+                                false,
+                            )
+                    }
+                    .onSuccess {
+                        val current = _uiState.value.playback
+                        if (current?.item?.id == playback.item.id) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    playback =
+                                        current.copy(
+                                            item =
+                                                current.item.copy(
+                                                    played = false,
+                                                    playedPercentage = 0.0,
+                                                    playbackPositionTicks = 0,
+                                                )
+                                        )
+                                )
+                        }
+                    }
+                    .onFailure { playedResetRequested = false }
+            }
+            return
+        }
         viewModelScope.launch {
             runCatching { repository.setPlayed(remoteSession, playback.item.id, false) }
                 .onSuccess {
@@ -983,9 +1016,25 @@ class PlaybackViewModel(
         snapshot: PlaybackProgressSnapshot?,
         requireCurrentGeneration: Boolean = true,
     ) {
-        if (_uiState.value.local || !_uiState.value.watchHistoryEnabled) return
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
+        if (_uiState.value.local) {
+            if (handledCompletionGeneration == snapshot.playbackGeneration) return
+            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            runCatching {
+                repository.offline
+                    ?.playbackState
+                    ?.checkpoint(
+                        source.profile.id,
+                        snapshot.itemId,
+                        snapshot.positionSeconds,
+                        snapshot.durationSeconds,
+                        _uiState.value.watchHistoryEnabled,
+                    )
+            }
+            return
+        }
+        if (!_uiState.value.watchHistoryEnabled) return
         runCatching {
             repository.reportPlayback(
                 remoteSession,
@@ -1237,7 +1286,7 @@ class PlaybackViewModel(
 
     fun playNextEpisode() = transitionTo(_uiState.value.nextEpisode)
 
-    private fun onPlaybackEnded() {
+    private suspend fun onPlaybackEnded() {
         if (
             !shouldHandlePlaybackCompletion(
                 ended = true,
@@ -1248,6 +1297,43 @@ class PlaybackViewModel(
         )
             return
         handledCompletionGeneration = playbackGeneration
+        if (_uiState.value.local) {
+            val source = resolvedSource as? ResolvedPlaybackSource.Local
+            if (source != null) {
+                runCatching {
+                        repository.offline
+                            ?.playbackState
+                            ?.complete(
+                                source.profile.id,
+                                currentItemId,
+                                _uiState.value.engine.durationSeconds,
+                                _uiState.value.watchHistoryEnabled,
+                            )
+                    }
+                    .onFailure { error ->
+                        Log.w(
+                            PLAYBACK_TAG,
+                            "local playback completion could not be persisted",
+                            error,
+                        )
+                    }
+                val current = _uiState.value.playback
+                if (current?.item?.id == currentItemId && _uiState.value.watchHistoryEnabled) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            playback =
+                                current.copy(
+                                    item =
+                                        current.item.copy(
+                                            played = true,
+                                            playedPercentage = 0.0,
+                                            playbackPositionTicks = 0,
+                                        )
+                                )
+                        )
+                }
+            }
+        }
         advanceAfterEpisodeEnd()
     }
 

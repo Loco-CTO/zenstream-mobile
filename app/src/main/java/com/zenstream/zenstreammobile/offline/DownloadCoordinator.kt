@@ -483,6 +483,7 @@ class DownloadCoordinator(
             }
         val items = (bundle.optJSONArray("items") ?: JSONArray()).objects()
         catalog.ingestItems(profile, items)
+        catalog.saveEpisodeNeighbors(profile, item, bundle)
         val supplements = mutableListOf<OfflineSupplement>()
         for ((kind, list) in
             listOf(

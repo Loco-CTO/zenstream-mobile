@@ -166,6 +166,22 @@ data class OfflineUserState(
     val localOnlyResume: String? = null,
 )
 
+@Entity(
+    tableName = "offline_playback_states",
+    primaryKeys = ["profile", "target"],
+    indices = [Index(value = ["profile", "played", "activityMs"])],
+)
+data class OfflinePlaybackState(
+    val profile: String,
+    val target: String,
+    val positionSeconds: Double = 0.0,
+    val durationSeconds: Double = 0.0,
+    val played: Boolean = false,
+    val activityMs: Long = 0,
+    val previousEpisodeId: String? = null,
+    val nextEpisodeId: String? = null,
+)
+
 @Entity(tableName = "offline_playlists", primaryKeys = ["profile", "id"])
 data class OfflinePlaylist(
     val profile: String,
@@ -230,12 +246,13 @@ data class OfflineAudioQueue(
             OfflineTransfer::class,
             OfflineSupplement::class,
             OfflineUserState::class,
+            OfflinePlaybackState::class,
             OfflinePlaylist::class,
             OfflinePlaylistEntry::class,
             OfflineOperation::class,
             OfflineAudioQueue::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
@@ -258,6 +275,17 @@ abstract class OfflineDatabase : RoomDatabase() {
                     )
                 }
             }
+        val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS offline_playback_states (profile TEXT NOT NULL, target TEXT NOT NULL, positionSeconds REAL NOT NULL, durationSeconds REAL NOT NULL, played INTEGER NOT NULL, activityMs INTEGER NOT NULL, previousEpisodeId TEXT, nextEpisodeId TEXT, PRIMARY KEY(profile, target))"
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS index_offline_playback_states_profile_played_activityMs ON offline_playback_states(profile, played, activityMs)"
+                    )
+                }
+            }
         @Volatile private var instance: OfflineDatabase? = null
 
         fun get(context: Context): OfflineDatabase =
@@ -269,7 +297,7 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 OfflineDatabase::class.java,
                                 "offline.db",
                             )
-                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                             .build()
                             .also { instance = it }
                 }

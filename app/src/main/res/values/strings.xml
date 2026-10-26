@@ -56,6 +56,12 @@
     <string name="offline_saved">Saved</string>
     <string name="offline_saved_badge">Available offline</string>
     <string name="offline_saved_count">%1$d of %2$d known items saved</string>
+    <string name="offline_downloaded_watched_count">%1$d of %2$d downloaded episodes watched</string>
+    <string name="offline_mark_downloaded_watched">Mark downloaded episodes watched</string>
+    <string name="offline_mark_downloaded_unwatched">Mark downloaded episodes unwatched</string>
+    <string name="offline_continue_watching">Continue watching</string>
+    <string name="offline_continue_hint">Resume saved playback</string>
+    <string name="offline_next_up">Next up</string>
     <string name="offline_selection_count">%1$d items in this snapshot</string>
     <string name="offline_server_unavailable">Server unavailable · saved media remains available</string>
     <string name="offline_size_estimate">Estimated size: %1$s</string>

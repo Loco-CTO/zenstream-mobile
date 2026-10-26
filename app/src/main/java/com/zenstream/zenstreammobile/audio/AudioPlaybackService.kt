@@ -1275,6 +1275,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 // Telemetry cannot delay or fail playback.
                 if (shouldPlay) launchPlayStart(account, entry, request.generation)
                 startAudioAccessRefresh(account, entry, request, data)
+            } else if (source is ResolvedPlaybackSource.Local && shouldPlay) {
+                launchOfflinePlayStart(source.profile.id, entry, request.generation)
             }
         } catch (error: Throwable) {
             if (error is kotlinx.coroutines.CancellationException) throw error
@@ -1443,6 +1445,70 @@ class AudioPlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun launchOfflinePlayStart(
+        profileId: String,
+        oldEntry: AudioQueueEntry,
+        expectedGeneration: Long,
+    ) {
+        serviceScope.launch {
+            var entry =
+                queueCommandMutex.withLock {
+                    currentState.currentEntry?.takeIf {
+                        it.entryId == oldEntry.entryId &&
+                            transactionController.currentGeneration() == expectedGeneration
+                    }
+                } ?: return@launch
+            val instanceId = entry.playbackInstanceId ?: UUID.randomUUID().toString()
+            if (entry.playbackInstanceId == null) {
+                val assigned = queueCommandMutex.withLock {
+                    if (
+                        currentState.currentEntry?.entryId != entry.entryId ||
+                            transactionController.currentGeneration() != expectedGeneration
+                    ) {
+                        false
+                    } else {
+                        currentState =
+                            currentState.copy(
+                                queue =
+                                    currentState.queue.map { value ->
+                                        if (value.entryId == entry.entryId)
+                                            value.copy(playbackInstanceId = instanceId)
+                                        else value
+                                    }
+                            )
+                        entry = requireNotNull(currentState.currentEntry)
+                        true
+                    }
+                }
+                if (!assigned) return@launch
+                persistSnapshot()
+            }
+            runCatching {
+                    offline.playbackState.musicPlay(
+                        profileId,
+                        entry.track.id,
+                        instanceId,
+                        sessionStore.watchHistoryEnabled.first(),
+                    )
+                }
+                .onFailure { error ->
+                    if (error !is kotlinx.coroutines.CancellationException)
+                        Log.w(AUDIO_TAG, "Offline audio play-start could not be queued", error)
+                }
+        }
+    }
+
+    private fun resetPlayStartId(entryId: String) {
+        currentState =
+            currentState.copy(
+                queue =
+                    currentState.queue.map { value ->
+                        if (value.entryId == entryId) value.copy(playbackInstanceId = null)
+                        else value
+                    }
+            )
+    }
+
     private suspend fun recordPlayStart(
         account: AuthSession,
         oldEntry: AudioQueueEntry,
@@ -1538,6 +1604,7 @@ class AudioPlaybackService : MediaLibraryService() {
                             positionMs = startPositionMs ?: position,
                         )
                     if (request == null) return@withLock
+                    resetPlayStartId(target.entryId)
                     loadingCurrent = true
                     activeAudioSource = null
                     suppressEnded = true
@@ -1551,6 +1618,7 @@ class AudioPlaybackService : MediaLibraryService() {
                     startPositionMs?.let { position ->
                         player.seekTo(position)
                         rememberPosition(target.entryId, position)
+                        if (position == 0L) resetPlayStartId(target.entryId)
                     }
                     player.play()
                     publishPlayerState()
@@ -1568,7 +1636,14 @@ class AudioPlaybackService : MediaLibraryService() {
             if (request == null) return@withLock
             progress = captureProgressSample(paused = true)
             currentState =
-                selectQueueEntryForPlayback(currentState, target.entryId) ?: return@withLock
+                (selectQueueEntryForPlayback(currentState, target.entryId) ?: return@withLock).copy(
+                    queue =
+                        currentState.queue.map { value ->
+                            if (value.entryId == target.entryId)
+                                value.copy(playbackInstanceId = null)
+                            else value
+                        }
+                )
             rememberPosition(target.entryId, startPositionMs ?: 0L)
             currentState =
                 currentState.copy(
@@ -1635,6 +1710,12 @@ class AudioPlaybackService : MediaLibraryService() {
             currentState =
                 currentState.copy(
                     currentIndex = selection.index,
+                    queue =
+                        currentState.queue.map { value ->
+                            if (value.entryId == target.entryId)
+                                value.copy(playbackInstanceId = null)
+                            else value
+                        },
                     playedEntryIds = selection.playedEntryIds,
                     positionSeconds = 0L,
                     positionMillis = 0L,
@@ -1695,6 +1776,12 @@ class AudioPlaybackService : MediaLibraryService() {
             currentState =
                 currentState.copy(
                     currentIndex = previous,
+                    queue =
+                        currentState.queue.map { value ->
+                            if (value.entryId == target.entryId)
+                                value.copy(playbackInstanceId = null)
+                            else value
+                        },
                     positionSeconds = 0L,
                     positionMillis = 0L,
                     positionUpdatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
@@ -2209,7 +2296,24 @@ class AudioPlaybackService : MediaLibraryService() {
     }
 
     private suspend fun sendProgress(sample: ProgressSample) {
-        if (resolvedAudioSource is ResolvedPlaybackSource.Local) return
+        val localSource = resolvedAudioSource as? ResolvedPlaybackSource.Local
+        if (localSource != null) {
+            if (sample.scope != currentQueueIdentity()?.scope) return
+            try {
+                offline.playbackState.checkpoint(
+                    localSource.profile.id,
+                    sample.itemId,
+                    sample.positionSeconds,
+                    sample.durationSeconds ?: 0.0,
+                    sessionStore.watchHistoryEnabled.first(),
+                )
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                Log.w(AUDIO_TAG, "Offline audio progress could not be persisted", error)
+            }
+            return
+        }
         if (
             !com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.allowed ||
                 sample.scope != currentQueueIdentity()?.scope

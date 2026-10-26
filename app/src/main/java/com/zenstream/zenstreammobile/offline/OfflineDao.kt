@@ -197,6 +197,44 @@ interface OfflineDao {
 
     @Upsert suspend fun putState(value: OfflineUserState)
 
+    @Upsert suspend fun putPlaybackState(value: OfflinePlaybackState)
+
+    @Query("SELECT * FROM offline_playback_states WHERE profile=:profile AND target=:target")
+    suspend fun playbackState(profile: String, target: String): OfflinePlaybackState?
+
+    @Query(
+        "SELECT p.* FROM offline_playback_states p JOIN offline_catalog c ON c.profile=p.profile AND c.id=p.target WHERE p.profile=:profile AND p.played=0 AND p.positionSeconds>0 AND c.type IN ('movie','episode') AND EXISTS(SELECT 1 FROM offline_assets a WHERE a.profile=p.profile AND a.item=p.target AND a.state='complete' AND a.locked=0) ORDER BY p.activityMs DESC,p.target LIMIT :limit"
+    )
+    suspend fun continueWatching(profile: String, limit: Int): List<OfflinePlaybackState>
+
+    @Query(
+        "SELECT p.* FROM offline_playback_states p JOIN offline_catalog c ON c.profile=p.profile AND c.id=p.target WHERE p.profile=:profile AND p.played=1 AND c.type='episode' AND EXISTS(SELECT 1 FROM offline_assets a WHERE a.profile=p.profile AND a.item=p.target AND a.state='complete' AND a.locked=0) ORDER BY p.activityMs DESC,c.season DESC,c.episode DESC,c.episodeEnd DESC,p.target DESC LIMIT :limit"
+    )
+    suspend fun completedDownloadedEpisodes(
+        profile: String,
+        limit: Int,
+    ): List<OfflinePlaybackState>
+
+    @Query(
+        "SELECT CASE WHEN parent.type='season' THEN parent.parentId ELSE parent.id END FROM offline_catalog focus JOIN offline_catalog parent ON parent.profile=focus.profile AND parent.id=focus.parentId WHERE focus.profile=:profile AND focus.id=:episode AND focus.type='episode'"
+    )
+    suspend fun episodeSeriesId(profile: String, episode: String): String?
+
+    @Query(
+        "SELECT c.id FROM offline_catalog c WHERE c.profile=:profile AND c.type='episode' AND EXISTS(SELECT 1 FROM offline_assets a WHERE a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0) AND c.id IN (WITH RECURSIVE descendants(id) AS (SELECT :root UNION SELECT child.id FROM offline_catalog child JOIN descendants parent ON child.parentId=parent.id WHERE child.profile=:profile) SELECT id FROM descendants) ORDER BY c.season,c.episode,c.episodeEnd,c.id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun downloadedEpisodeIds(
+        profile: String,
+        root: String,
+        limit: Int,
+        offset: Int,
+    ): List<String>
+
+    @Query(
+        "SELECT COUNT(DISTINCT c.id) AS total,COUNT(DISTINCT CASE WHEN p.played=1 THEN c.id END) AS watched FROM offline_catalog c JOIN offline_assets a ON a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0 LEFT JOIN offline_playback_states p ON p.profile=c.profile AND p.target=c.id WHERE c.profile=:profile AND c.type='episode' AND c.id IN (WITH RECURSIVE descendants(id) AS (SELECT :root UNION SELECT child.id FROM offline_catalog child JOIN descendants parent ON child.parentId=parent.id WHERE child.profile=:profile) SELECT id FROM descendants)"
+    )
+    suspend fun downloadedEpisodeWatchCounts(profile: String, root: String): OfflineWatchedCounts
+
     @Query("SELECT * FROM offline_states WHERE profile=:profile AND target=:target")
     suspend fun state(profile: String, target: String): OfflineUserState?
 
@@ -228,6 +266,11 @@ interface OfflineDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOperation(value: OfflineOperation)
+
+    @Upsert suspend fun putOperation(value: OfflineOperation)
+
+    @Query("SELECT * FROM offline_operations WHERE profile=:profile AND id=:id LIMIT 1")
+    suspend fun operation(profile: String, id: String): OfflineOperation?
 
     @Query("SELECT * FROM offline_operations WHERE profile=:profile ORDER BY sequence LIMIT :limit")
     suspend fun operations(profile: String, limit: Int): List<OfflineOperation>
@@ -382,6 +425,8 @@ interface OfflineDao {
 }
 
 data class OfflineAvailability(val total: Int, val downloaded: Int)
+
+data class OfflineWatchedCounts(val total: Int, val watched: Int)
 
 data class DownloadTotals(
     val total: Int,

@@ -611,6 +611,9 @@ private fun ColumnScope.SavedDownloadList(
     var query by remember { mutableStateOf("") }
     var offset by remember { mutableIntStateOf(0) }
     var rows by remember { mutableStateOf(emptyList<MediaItem>()) }
+    var continueWatching by remember(profile.id) { mutableStateOf(emptyList<MediaItem>()) }
+    var nextUp by remember(profile.id) { mutableStateOf(emptyList<MediaItem>()) }
+    val scope = rememberCoroutineScope()
     val revision by runtime.catalogRevision.collectAsState()
     LaunchedEffect(profile.id, profile.locked, category, query, offset, revision) {
         try {
@@ -618,6 +621,15 @@ private fun ColumnScope.SavedDownloadList(
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             rows = emptyList()
+        }
+    }
+    LaunchedEffect(profile.id, profile.locked, category, query, revision) {
+        if (query.isNotBlank() || category !in setOf("", "tv")) {
+            continueWatching = emptyList()
+            nextUp = emptyList()
+        } else {
+            continueWatching = runtime.playbackState.continueWatching(profile.id)
+            nextUp = runtime.playbackState.nextUp(profile.id)
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -648,7 +660,41 @@ private fun ColumnScope.SavedDownloadList(
         singleLine = true,
     )
     LazyColumn(Modifier.weight(1f)) {
-        if (rows.isEmpty())
+        if (continueWatching.isNotEmpty()) {
+            item(key = "offline:continue:heading") {
+                Text(
+                    stringResource(R.string.offline_continue_watching),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                )
+            }
+            items(continueWatching, key = { "offline:continue:${it.id}" }) { item ->
+                ListItem(
+                    headlineContent = { Text(item.name) },
+                    supportingContent = { Text(stringResource(R.string.offline_continue_hint)) },
+                    trailingContent = { DownloadedBadge(item) },
+                    modifier = Modifier.clickable { onItem(profile, item) },
+                )
+            }
+        }
+        if (nextUp.isNotEmpty()) {
+            item(key = "offline:next-up:heading") {
+                Text(
+                    stringResource(R.string.offline_next_up),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                )
+            }
+            items(nextUp, key = { "offline:next-up:${it.id}" }) { item ->
+                ListItem(
+                    headlineContent = { Text(item.name) },
+                    supportingContent = { Text(item.seriesName.orEmpty()) },
+                    trailingContent = { DownloadedBadge(item) },
+                    modifier = Modifier.clickable { onItem(profile, item) },
+                )
+            }
+        }
+        if (rows.isEmpty() && continueWatching.isEmpty() && nextUp.isEmpty())
             item {
                 Text(stringResource(R.string.offline_empty), Modifier.padding(vertical = 24.dp))
             }
@@ -662,18 +708,66 @@ private fun ColumnScope.SavedDownloadList(
                         value = OfflineAvailability(0, 0)
                     }
                 }
+            val watchedCounts by
+                produceState(OfflineWatchedCounts(0, 0), item.id, revision) {
+                    value =
+                        if (item.type.equals("Series", true) || item.type.equals("Season", true))
+                            runCatching {
+                                    runtime.playbackState.downloadedEpisodeWatchCounts(
+                                        profile.id,
+                                        item.id,
+                                    )
+                                }
+                                .getOrDefault(OfflineWatchedCounts(0, 0))
+                        else OfflineWatchedCounts(0, 0)
+                }
             ListItem(
                 headlineContent = { Text(item.name) },
                 supportingContent = {
-                    Text(
-                        stringResource(
-                            R.string.offline_saved_count,
-                            availability.downloaded,
-                            availability.total,
+                    Column {
+                        Text(
+                            stringResource(
+                                R.string.offline_saved_count,
+                                availability.downloaded,
+                                availability.total,
+                            )
                         )
-                    )
+                        if (watchedCounts.total > 0)
+                            Text(
+                                stringResource(
+                                    R.string.offline_downloaded_watched_count,
+                                    watchedCounts.watched,
+                                    watchedCounts.total,
+                                )
+                            )
+                    }
                 },
-                trailingContent = { DownloadedBadge(item) },
+                trailingContent = {
+                    Column(horizontalAlignment = Alignment.End) {
+                        DownloadedBadge(item)
+                        if (watchedCounts.total > 0)
+                            TextButton(
+                                onClick = {
+                                    val markWatched = watchedCounts.watched < watchedCounts.total
+                                    scope.launch {
+                                        runtime.playbackState.markDownloadedEpisodes(
+                                            profile.id,
+                                            item.id,
+                                            markWatched,
+                                        )
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (watchedCounts.watched < watchedCounts.total)
+                                            R.string.offline_mark_downloaded_watched
+                                        else R.string.offline_mark_downloaded_unwatched
+                                    )
+                                )
+                            }
+                    }
+                },
                 modifier = Modifier.clickable { onItem(profile, item) },
             )
         }

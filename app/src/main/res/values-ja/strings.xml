@@ -56,6 +56,12 @@
     <string name="offline_saved">保存済み</string>
     <string name="offline_saved_badge">オフラインで利用可能</string>
     <string name="offline_saved_count">確認済み%2$d項目中%1$d項目を保存済み</string>
+    <string name="offline_downloaded_watched_count">ダウンロード済みエピソード%2$d件中%1$d件を視聴済み</string>
+    <string name="offline_mark_downloaded_watched">ダウンロード済みエピソードを視聴済みにする</string>
+    <string name="offline_mark_downloaded_unwatched">ダウンロード済みエピソードを未視聴に戻す</string>
+    <string name="offline_continue_watching">続きを見る</string>
+    <string name="offline_continue_hint">保存済みの再生位置から再開</string>
+    <string name="offline_next_up">次のエピソード</string>
     <string name="offline_selection_count">このスナップショットには%1$d項目あります</string>
     <string name="offline_server_unavailable">サーバーに接続できません · 保存済みメディアは利用できます</string>
     <string name="offline_size_estimate">推定サイズ: %1$s</string>

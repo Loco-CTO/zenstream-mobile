@@ -5,6 +5,7 @@ import com.zenstream.zenstreammobile.data.catalogMediaItem
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import java.security.MessageDigest
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -264,7 +265,40 @@ class OfflineCatalogRepository(
                         canonical = (item.optJSONObject("userState") ?: JSONObject()).toString()
                     )
                 )
+                if (dao.playbackState(profile, row.id) == null) {
+                    val userState = item.optJSONObject("userState") ?: JSONObject()
+                    val lastPlayedAt = userState.optString("lastPlayedAt")
+                    val activityMs =
+                        runCatching { Instant.parse(lastPlayedAt).toEpochMilli() }.getOrDefault(0L)
+                    dao.putPlaybackState(
+                        OfflinePlaybackState(
+                            profile = profile,
+                            target = row.id,
+                            positionSeconds =
+                                userState.optDouble("positionSeconds", 0.0).coerceAtLeast(0.0),
+                            durationSeconds =
+                                userState.optDouble("durationSeconds", 0.0).coerceAtLeast(0.0),
+                            played = userState.optBoolean("played", false),
+                            activityMs = activityMs,
+                        )
+                    )
+                }
             }
+        }
+    }
+
+    suspend fun saveEpisodeNeighbors(profile: String, itemId: String, bundle: JSONObject) {
+        if (dao.item(profile, itemId)?.type != "episode") return
+        val neighbors = bundle.optJSONObject("episodeNeighbors") ?: return
+        database.withTransaction {
+            val current =
+                dao.playbackState(profile, itemId) ?: OfflinePlaybackState(profile, itemId)
+            dao.putPlaybackState(
+                current.copy(
+                    previousEpisodeId = neighbors.bundledEpisodeNeighbor("previous")?.id,
+                    nextEpisodeId = neighbors.bundledEpisodeNeighbor("next")?.id,
+                )
+            )
         }
     }
 
