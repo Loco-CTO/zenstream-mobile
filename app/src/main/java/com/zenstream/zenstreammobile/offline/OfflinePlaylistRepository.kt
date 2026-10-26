@@ -2,6 +2,9 @@ package com.zenstream.zenstreammobile.offline
 
 import androidx.room.withTransaction
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.model.PlaylistData
+import com.zenstream.zenstreammobile.model.PlaylistEntry
+import com.zenstream.zenstreammobile.model.PlaylistSummary
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +37,48 @@ class OfflinePlaylistRepository(
         requireProfile(profileId)
         require(limit in 1..MAX_ENTRIES && offset >= 0)
         return dao.playlistEntries(profileId, playlistId, limit, offset)
+    }
+
+    suspend fun snapshotData(profileId: String, playlistId: String): PlaylistData? {
+        requireProfile(profileId)
+        val row = dao.playlist(profileId, playlistId)?.takeUnless { it.deleted } ?: return null
+        if (!row.complete || dao.playlistEntryCount(profileId, playlistId) != row.expectedCount)
+            return null
+        val metadata = JSONObject(row.metadata)
+        val entries = dao.playlistEntries(profileId, playlistId, MAX_ENTRIES, 0)
+        val items = entries.map { entry ->
+            val item = catalog.item(profileId, entry.track) ?: return null
+            PlaylistEntry(entry.entryId, entry.position, "", item)
+        }
+        val summary =
+            PlaylistSummary(
+                id = row.id,
+                name = metadata.optString("name", ""),
+                description =
+                    if (metadata.isNull("description")) null
+                    else metadata.optString("description").takeIf { it.isNotBlank() },
+                isPrivate = metadata.optBoolean("isPrivate", true),
+                shareToken =
+                    metadata.optString("shareToken").takeIf { it.isNotBlank() && it != "null" },
+                itemCount = metadata.optInt("itemCount", row.expectedCount),
+                createdAt = metadata.optString("createdAt"),
+                updatedAt = metadata.optString("updatedAt"),
+                isOwner = metadata.optBoolean("isOwner", true),
+            )
+        return PlaylistData(summary = summary, items = items)
+    }
+
+    suspend fun canAddTracks(profileId: String, trackIds: List<String>): Boolean {
+        requireProfile(profileId)
+        if (trackIds.size > MAX_BATCH) return false
+        return trackIds.all { id -> dao.item(profileId, id)?.type == "track" }
+    }
+
+    suspend fun trackForEntry(profileId: String, playlistId: String, entryId: String): String? {
+        requireProfile(profileId)
+        return dao.playlistEntries(profileId, playlistId, MAX_ENTRIES, 0)
+            .firstOrNull { it.entryId == entryId }
+            ?.track
     }
 
     suspend fun knownTracks(
@@ -332,6 +377,80 @@ class OfflinePlaylistRepository(
         val target = destination.coerceIn(0, current.lastIndex)
         if (source == target) return@withTransaction false
         val ordered = current.toMutableList().apply { add(target, removeAt(source)) }
+        val metadata = JSONObject(row.metadata)
+        val baseRevision = fieldRevision(metadata, "order")
+        dao.putPlaylistEntries(ordered.mapIndexed { index, entry -> entry.copy(position = index) })
+        metadata.put("updatedAt", Instant.now().toString())
+        bumpRevision(metadata, "order")
+        dao.putPlaylist(row.copy(metadata = metadata.toString()))
+        operationWriter.appendAccountOperation(
+            profileId,
+            playlistId,
+            "playlist_order",
+            baseRevision,
+            JSONObject().put("trackIds", JSONArray(ordered.map { it.track })),
+        )
+        true
+    }
+
+    suspend fun moveEntry(
+        profileId: String,
+        playlistId: String,
+        entryId: String,
+        beforeEntryId: String?,
+        afterEntryId: String?,
+    ): Boolean = database.withTransaction {
+        val row = editablePlaylist(profileId, playlistId)
+        val current = dao.playlistEntries(profileId, playlistId, MAX_ENTRIES, 0)
+        val source = current.indexOfFirst { it.entryId == entryId }
+        if (source < 0) return@withTransaction false
+        val before = beforeEntryId?.let { id -> current.indexOfFirst { it.entryId == id } }
+        val after = afterEntryId?.let { id -> current.indexOfFirst { it.entryId == id } }
+        if (
+            beforeEntryId != null && (before == null || before < 0) ||
+                afterEntryId != null && (after == null || after < 0)
+        )
+            return@withTransaction false
+        val destination =
+            when {
+                before != null && before >= 0 -> if (source < before) before - 1 else before
+                after != null && after >= 0 -> if (source < after) after else after + 1
+                else -> current.lastIndex
+            }.coerceIn(0, current.lastIndex)
+        if (source == destination) return@withTransaction false
+        val ordered = current.toMutableList().apply { add(destination, removeAt(source)) }
+        val metadata = JSONObject(row.metadata)
+        val baseRevision = fieldRevision(metadata, "order")
+        dao.putPlaylistEntries(ordered.mapIndexed { index, entry -> entry.copy(position = index) })
+        metadata.put("updatedAt", Instant.now().toString())
+        bumpRevision(metadata, "order")
+        dao.putPlaylist(row.copy(metadata = metadata.toString()))
+        operationWriter.appendAccountOperation(
+            profileId,
+            playlistId,
+            "playlist_order",
+            baseRevision,
+            JSONObject().put("trackIds", JSONArray(ordered.map { it.track })),
+        )
+        true
+    }
+
+    suspend fun reorderEntries(
+        profileId: String,
+        playlistId: String,
+        orderedEntryIds: List<String>,
+    ): Boolean = database.withTransaction {
+        val row = editablePlaylist(profileId, playlistId)
+        val current = dao.playlistEntries(profileId, playlistId, MAX_ENTRIES, 0)
+        if (
+            orderedEntryIds.size != current.size ||
+                orderedEntryIds.distinct().size != orderedEntryIds.size ||
+                orderedEntryIds.toSet() != current.map { it.entryId }.toSet()
+        )
+            return@withTransaction false
+        if (orderedEntryIds == current.map { it.entryId }) return@withTransaction false
+        val byId = current.associateBy { it.entryId }
+        val ordered = orderedEntryIds.map { requireNotNull(byId[it]) }
         val metadata = JSONObject(row.metadata)
         val baseRevision = fieldRevision(metadata, "order")
         dao.putPlaylistEntries(ordered.mapIndexed { index, entry -> entry.copy(position = index) })

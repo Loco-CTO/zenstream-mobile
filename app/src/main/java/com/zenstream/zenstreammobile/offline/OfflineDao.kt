@@ -60,6 +60,9 @@ interface OfflineDao {
     @Query("SELECT * FROM offline_profiles WHERE serverInstance=:server AND account=:account")
     suspend fun profileFor(server: String, account: String): OfflineProfile?
 
+    @Query("SELECT * FROM offline_profiles WHERE serverUrl=:serverUrl AND account=:account LIMIT 1")
+    suspend fun profileForServerAccount(serverUrl: String, account: String): OfflineProfile?
+
     @Upsert suspend fun putItems(values: List<OfflineCatalogItem>)
 
     @Query("SELECT * FROM offline_catalog WHERE profile=:profile AND id=:id")
@@ -285,6 +288,15 @@ interface OfflineDao {
         limit: Int,
         offset: Int,
     ): List<OfflinePlaylistEntry>
+
+    @Query(
+        "SELECT * FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist AND track=:track LIMIT 1"
+    )
+    suspend fun playlistEntry(
+        profile: String,
+        playlist: String,
+        track: String,
+    ): OfflinePlaylistEntry?
 
     @Query("DELETE FROM offline_playlist_entries WHERE profile=:profile AND playlist=:playlist")
     suspend fun clearPlaylistEntries(profile: String, playlist: String)

@@ -1066,6 +1066,12 @@ class CatalogRepository(
         isPrivate: Boolean,
         entityId: String?,
     ): PlaylistData {
+        if (isPrivate && entityId == null) {
+            offline?.createPrivatePlaylist(session, name, description)?.let { local ->
+                invalidateCatalogState()
+                return local
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.createPlaylist(current, name, description, isPrivate, entityId)
@@ -1081,6 +1087,17 @@ class CatalogRepository(
         description: String?,
         isPrivate: Boolean,
     ): PlaylistData {
+        val runtime = offline
+        if (isPrivate && runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(session, playlistId) { profile ->
+                    runtime.playlists.updateDetails(profile, playlistId, name, description)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.updatePlaylist(current, playlistId, name, description, isPrivate)
@@ -1090,6 +1107,17 @@ class CatalogRepository(
     }
 
     override suspend fun deletePlaylist(session: AuthSession, playlistId: String) {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(session, playlistId) { profile ->
+                    runtime.playlists.delete(profile, playlistId)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return
+            }
+        }
         authenticatedCatalogRequest(session) { current -> api.deletePlaylist(current, playlistId) }
         invalidateCatalogState()
     }
@@ -1099,6 +1127,21 @@ class CatalogRepository(
         playlistId: String,
         entityIds: List<String>,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile -> runtime.playlists.canAddTracks(profile, entityIds) },
+                ) { profile ->
+                    runtime.playlists.addTracks(profile, playlistId, entityIds) > 0
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.addPlaylistItems(current, playlistId, entityIds)
@@ -1112,6 +1155,24 @@ class CatalogRepository(
         playlistId: String,
         entryId: String,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = {
+                        runtime.playlists.trackForEntry(it, playlistId, entryId) != null
+                    },
+                ) { profile ->
+                    val track = runtime.playlists.trackForEntry(profile, playlistId, entryId)
+                    track != null && runtime.playlists.removeTrack(profile, playlistId, track)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.removePlaylistEntry(current, playlistId, entryId)
@@ -1140,6 +1201,35 @@ class CatalogRepository(
         beforeEntryId: String?,
         afterEntryId: String?,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile ->
+                        val ids =
+                            runtime.playlists.entries(profile, playlistId, 10_000).map {
+                                it.entryId
+                            }
+                        entryId in ids &&
+                            (beforeEntryId == null || beforeEntryId in ids) &&
+                            (afterEntryId == null || afterEntryId in ids)
+                    },
+                ) { profile ->
+                    runtime.playlists.moveEntry(
+                        profile,
+                        playlistId,
+                        entryId,
+                        beforeEntryId,
+                        afterEntryId,
+                    )
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.movePlaylistEntry(current, playlistId, entryId, beforeEntryId, afterEntryId)
@@ -1153,6 +1243,29 @@ class CatalogRepository(
         playlistId: String,
         entryIds: List<String>,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile ->
+                        val current =
+                            runtime.playlists.entries(profile, playlistId, 10_000).map {
+                                it.entryId
+                            }
+                        entryIds.size == current.size &&
+                            entryIds.distinct().size == entryIds.size &&
+                            entryIds.toSet() == current.toSet()
+                    },
+                ) { profile ->
+                    runtime.playlists.reorderEntries(profile, playlistId, entryIds)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.reorderPlaylist(current, playlistId, entryIds)
@@ -1208,6 +1321,17 @@ class CatalogRepository(
         itemId: String,
         playbackInstanceId: String,
     ) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                "music_play",
+                JSONObject().put("playbackInstanceId", playbackInstanceId),
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.recordAudioPlayStart(current, itemId, playbackInstanceId)
         }
@@ -1239,6 +1363,16 @@ class CatalogRepository(
         }
 
     override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (favorite) "favorite" else "unfavorite",
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.setFavorite(current, itemId, favorite)
         }
@@ -1246,11 +1380,31 @@ class CatalogRepository(
     }
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (played) "watched" else "unwatched",
+            ) == true
+        ) {
+            invalidateHomeCache()
+            return
+        }
         authenticatedCatalogRequest(session) { current -> api.setPlayed(current, itemId, played) }
         invalidateHomeCache()
     }
 
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (following) "follow" else "unfollow",
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.setFollowing(current, itemId, following)
         }
@@ -1461,6 +1615,19 @@ class CatalogRepository(
         playSessionId: String?,
         durationSeconds: Double? = null,
     ) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                "checkpoint",
+                JSONObject()
+                    .put("positionSeconds", positionSeconds)
+                    .put("durationSeconds", durationSeconds ?: 0.0),
+            ) == true
+        ) {
+            invalidateHomeCache()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.reportPlayback(
                 current,

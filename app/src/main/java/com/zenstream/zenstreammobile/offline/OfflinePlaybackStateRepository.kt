@@ -255,6 +255,35 @@ class OfflinePlaybackStateRepository(
     suspend fun setFollowing(profileId: String, target: String, following: Boolean): Boolean =
         setFlag(profileId, target, "following", following)
 
+    /** Queue an online flag mutation even when the item itself has no downloaded catalog row. */
+    internal suspend fun setAccountFlag(
+        profileId: String,
+        target: String,
+        field: String,
+        value: Boolean,
+    ): Boolean = database.withTransaction {
+        require(field == "favorite" || field == "following")
+        val profile = requireProfile(profileId)
+        val current = effectiveState(profileId, target)
+        if (current.has(field) && current.optBoolean(field) == value) return@withTransaction false
+        val state = dao.state(profileId, target) ?: OfflineUserState(profileId, target)
+        dao.putState(state.copy(overlay = JSONObject(state.overlay).put(field, value).toString()))
+        val activity = activity(profile)
+        appendOperation(
+            profile,
+            target,
+            when (field) {
+                "favorite" -> if (value) "favorite" else "unfavorite"
+                else -> if (value) "follow" else "unfollow"
+            },
+            activity.first,
+            activity.second,
+            JSONObject(),
+            field = field,
+        )
+        true
+    }
+
     suspend fun hasPendingFlags(profileId: String, target: String): Boolean {
         requireProfile(profileId)
         if (dao.hasPendingFlagOperations(profileId, target)) return true
@@ -285,7 +314,7 @@ class OfflinePlaybackStateRepository(
                 "Follow is available for movies, series, and artists."
             }
         val current = effectiveState(profileId, operationTarget)
-        if (current.optBoolean(field) == value) return@withTransaction false
+        if (current.has(field) && current.optBoolean(field) == value) return@withTransaction false
         val userState =
             dao.state(profileId, operationTarget) ?: OfflineUserState(profileId, operationTarget)
         val overlay = JSONObject(userState.overlay).put(field, value)
@@ -383,8 +412,11 @@ class OfflinePlaybackStateRepository(
         return operationId
     }
 
-    private suspend fun fieldRevision(profileId: String, target: String, field: String): Long =
-        JSONObject(dao.state(profileId, target)?.revisions ?: "{}").optLong(field, 0L)
+    private suspend fun fieldRevision(profileId: String, target: String, field: String): Long {
+        val revision = JSONObject(dao.state(profileId, target)?.revisions ?: "{}").opt(field)
+        val objectRevision = (revision as? JSONObject)?.optLong("revision")
+        return objectRevision ?: (revision as? Number)?.toLong() ?: 0L
+    }
 
     private fun operationField(kind: String): String =
         when (kind) {

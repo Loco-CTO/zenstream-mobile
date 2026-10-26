@@ -66,6 +66,8 @@ object DownloadExecution {
     const val CHANNEL = "offline-downloads"
     const val PROFILE = "offline-profile"
     const val RECONCILE = "offline-reconcile"
+    const val RECONCILE_NOW = "offline-reconcile-now"
+    const val RECONCILE_DEBOUNCED = "offline-reconcile-debounced"
 
     @RequiresApi(34)
     private fun scheduler(context: Context): JobScheduler =
@@ -128,6 +130,7 @@ object DownloadExecution {
             PeriodicWorkRequestBuilder<OfflineReconcileWorker>(6, TimeUnit.HOURS)
                 .setConstraints(
                     Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
                         .setRequiresBatteryNotLow(true)
                         .setRequiresStorageNotLow(true)
                         .build()
@@ -138,8 +141,35 @@ object DownloadExecution {
             .enqueueUniquePeriodicWork(RECONCILE, ExistingPeriodicWorkPolicy.KEEP, work)
     }
 
+    fun scheduleReconciliationNow(context: Context) {
+        val work =
+            OneTimeWorkRequestBuilder<OfflineReconcileWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(RECONCILE_NOW, ExistingWorkPolicy.KEEP, work)
+    }
+
+    fun scheduleAccountSync(context: Context) {
+        val work =
+            OneTimeWorkRequestBuilder<OfflineReconcileWorker>()
+                .setInitialDelay(5, TimeUnit.SECONDS)
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(RECONCILE_DEBOUNCED, ExistingWorkPolicy.KEEP, work)
+    }
+
     fun cancelReconciliation(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(RECONCILE)
+        WorkManager.getInstance(context).cancelUniqueWork(RECONCILE_NOW)
+        WorkManager.getInstance(context).cancelUniqueWork(RECONCILE_DEBOUNCED)
     }
 
     fun notification(
