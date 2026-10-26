@@ -10,6 +10,11 @@
     <string name="offline_tv">TV</string>
     <string name="offline_music">Music</string>
     <string name="offline_search">Search saved library</string>
+    <string name="offline_transfer_running">Preparing and downloading your saved media</string>
+    <string name="offline_resume_needed">Open Downloads to resume queued transfers</string>
+    <string name="offline_pause">Pause</string>
+    <string name="offline_cancel_remaining">Cancel remaining</string>
+    <string name="offline_transfer_progress">%1$d of %2$d items saved</string>
     <string name="app_name">ZenStream</string>
     <string name="server_setup_title">Connect to ZenStream</string>
     <string name="server_setup_description">Enter your ZenStream Orchestrator address to get started.</string>

@@ -146,7 +146,9 @@ class DownloadCoordinator(
                             selection.id,
                             member.item,
                             selection.options,
-                            priority = if (priority == member.item) 100 else 0,
+                            priority =
+                                if (priority == member.item) Int.MAX_VALUE
+                                else Int.MAX_VALUE - 1 - member.ordinal,
                         )
                     )
                 }

@@ -101,7 +101,7 @@ interface OfflineDao {
     fun transfers(profile: String): Flow<List<OfflineTransfer>>
 
     @Query(
-        "SELECT * FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now AND EXISTS(SELECT 1 FROM offline_selections s WHERE s.profile=offline_transfers.profile AND s.id=offline_transfers.selection AND s.state IN ('queued','downloading','complete','partial')) ORDER BY priority DESC,id LIMIT :limit"
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now AND (assetId IS NOT NULL OR (SELECT COUNT(*) FROM offline_transfers p WHERE p.profile=:profile AND p.state='preparing')<2) AND EXISTS(SELECT 1 FROM offline_selections s WHERE s.profile=offline_transfers.profile AND s.id=offline_transfers.selection AND s.state IN ('queued','downloading','complete','partial')) ORDER BY priority DESC,id LIMIT :limit"
     )
     suspend fun pendingTransfers(profile: String, now: Long, limit: Int): List<OfflineTransfer>
 
@@ -246,6 +246,61 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection")
     suspend fun deleteSelectionTransfers(profile: String, selection: String)
+
+    @Query(
+        "SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN state='complete' THEN 1 ELSE 0 END),0) AS complete,COALESCE(SUM(total),0) AS totalBytes,COALESCE(SUM(bytes),0) AS downloadedBytes FROM offline_transfers WHERE profile=:profile AND state!='cancelled'"
+    )
+    suspend fun downloadTotals(profile: String): DownloadTotals
+
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending')) + (SELECT COUNT(*) FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing'))"
+    )
+    suspend fun pendingWorkCount(profile: String): Int
+
+    @Query(
+        "UPDATE offline_transfers SET state='paused',reserved=0 WHERE profile=:profile AND state NOT IN ('complete','cancelled','failed')"
+    )
+    suspend fun pauseAllTransfers(profile: String)
+
+    @Query(
+        "UPDATE offline_transfers SET state='cancelled',reserved=0 WHERE profile=:profile AND state!='complete'"
+    )
+    suspend fun cancelAllTransfers(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state='paused_'||state WHERE profile=:profile AND state IN ('enumerating','ready','queueing')"
+    )
+    suspend fun pauseEnumeration(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state='partial' WHERE profile=:profile AND state IN ('enumerating','ready','queueing','queued','downloading')"
+    )
+    suspend fun cancelEnumeration(profile: String)
+
+    @Query(
+        "SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending')"
+    )
+    suspend fun pendingSelectionWorkCount(profile: String): Int
+
+    @Query("SELECT COUNT(*) FROM offline_transfers WHERE profile=:profile AND state='preparing'")
+    suspend fun preparingCount(profile: String): Int
+
+    @Query(
+        "SELECT COALESCE(MIN(nextAttemptMs),0) FROM offline_transfers WHERE profile=:profile AND state='preparing'"
+    )
+    suspend fun nextPreparationAttempt(profile: String): Long
+
+    @Query(
+        "SELECT COALESCE(MIN(nextAttemptMs),0) FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing')"
+    )
+    suspend fun nextTransferAttempt(profile: String): Long
 }
 
 data class OfflineAvailability(val total: Int, val downloaded: Int)
+
+data class DownloadTotals(
+    val total: Int,
+    val complete: Int,
+    val totalBytes: Long,
+    val downloadedBytes: Long,
+)

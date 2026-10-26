@@ -155,6 +155,9 @@ class OfflineStorage(
                     "Downloaded media failed its integrity check."
                 }
                 FileOutputStream(temporary, true).use { it.fd.sync() }
+                check(!target.exists() || (leases["${asset.profile}:${asset.id}"] ?: 0) == 0) {
+                    "Stop playback before replacing this download."
+                }
                 val staged = asset.copy(relativePath = relative, state = "staged")
                 dao.putAsset(staged)
                 target.parentFile?.let { check(it.isDirectory || it.mkdirs()) }
@@ -196,7 +199,7 @@ class OfflineStorage(
                 val existing = dao.asset(profile, id) ?: return@withLock false
                 val target = paths.resolve(existing.relativePath)
                 if (
-                    existing.state != "complete" ||
+                    existing.state !in setOf("complete", "pending_delete") ||
                         existing.locked ||
                         existing.sha256 != digest ||
                         !target.isFile ||
@@ -204,7 +207,10 @@ class OfflineStorage(
                 )
                     return@withLock false
                 check(dao.profile(profile)?.locked == false)
-                complete(existing, requireNotNull(dao.transfer(profile, transferId)))
+                complete(
+                    existing.copy(state = "complete"),
+                    requireNotNull(dao.transfer(profile, transferId)),
+                )
                 true
             }
         }

@@ -1729,12 +1729,24 @@ class CatalogApi(
                     .apply { headers.forEach { (key, value) -> header(key, value) } }
                     .get()
                     .build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful && response.code != 416) {
-                    throw CatalogException(response.code, "Download authorization needs recovery.")
+            com.zenstream.zenstreammobile.offline
+                .transferClient(
+                    httpClient,
+                    kotlin.coroutines.coroutineContext[
+                            com.zenstream.zenstreammobile.offline.TransferNetwork]
+                        ?.network,
+                )
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    if (!response.isSuccessful && response.code != 416) {
+                        throw CatalogException(
+                            response.code,
+                            "Download authorization needs recovery.",
+                        )
+                    }
+                    receive(response)
                 }
-                receive(response)
-            }
         }
 
     private suspend fun requestJson(
@@ -1780,7 +1792,14 @@ class CatalogApi(
                     if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
                 )
                 .build()
-        val call = httpClient.newCall(request)
+        val call =
+            com.zenstream.zenstreammobile.offline
+                .transferClient(
+                    httpClient,
+                    continuation.context[com.zenstream.zenstreammobile.offline.TransferNetwork]
+                        ?.network,
+                )
+                .newCall(request)
         requestTimeoutMillis?.let {
             call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS)
         }

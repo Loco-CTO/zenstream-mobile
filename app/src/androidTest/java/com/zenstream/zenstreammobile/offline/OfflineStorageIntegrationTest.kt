@@ -68,7 +68,9 @@ class OfflineStorageIntegrationTest {
             assertEquals("pending_delete", db.offline().asset(profile, id)?.state)
             assertTrue(lease.file.isFile)
             lease.close()
-            withTimeout(5000) { while (target.exists()) delay(25) }
+            withTimeout(5000) {
+                while (target.exists() || db.offline().asset(profile, id) != null) delay(25)
+            }
             assertNull(db.offline().asset(profile, id))
         } finally {
             scope.cancel()

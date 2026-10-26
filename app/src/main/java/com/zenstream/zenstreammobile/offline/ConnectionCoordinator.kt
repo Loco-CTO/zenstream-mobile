@@ -2,7 +2,9 @@ package com.zenstream.zenstreammobile.offline
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -127,6 +129,9 @@ class ConnectionCoordinator(context: Context) {
     private val modeKey = stringPreferencesKey("connection_mode")
     private val profileKey = stringPreferencesKey("retained_profile")
     private val limitKey = longPreferencesKey("download_limit_bytes")
+    private val meteredKey = booleanPreferencesKey("allow_metered_downloads")
+    private val _allowMetered = MutableStateFlow(false)
+    val allowMetered = _allowMetered.asStateFlow()
     private val _downloadLimitBytes = MutableStateFlow<Long?>(null)
     val downloadLimitBytes = _downloadLimitBytes.asStateFlow()
     private val _state = MutableStateFlow(ConnectionState())
@@ -143,6 +148,7 @@ class ConnectionCoordinator(context: Context) {
                     _state.update { it.copy(initialized = true, mode = ConnectionMode.OFFLINE) }
                 }
                 .collect { prefs ->
+                    _allowMetered.value = prefs[meteredKey] ?: false
                     _downloadLimitBytes.value = prefs[limitKey]
                     val mode =
                         if (prefs[modeKey] == "offline") ConnectionMode.OFFLINE
@@ -174,6 +180,17 @@ class ConnectionCoordinator(context: Context) {
         preferences.edit { prefs ->
             if (bytes == null) prefs.remove(limitKey) else prefs[limitKey] = bytes
         }
+    }
+
+    suspend fun setAllowMetered(value: Boolean) {
+        preferences.edit { it[meteredKey] = value }
+    }
+
+    suspend fun maintenanceCursor(profile: String): Int =
+        preferences.data.first()[intPreferencesKey("maintenance_$profile")] ?: 0
+
+    suspend fun saveMaintenanceCursor(profile: String, value: Int) {
+        preferences.edit { it[intPreferencesKey("maintenance_$profile")] = value }
     }
 
     fun report(url: String, status: Int?, error: Throwable?, authorized: Boolean = false) {
