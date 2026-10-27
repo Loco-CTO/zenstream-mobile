@@ -23,61 +23,66 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SyncplayLiveRecoveryTest {
     @Test
-    fun recoversInTheOriginalMixedClientRoom() = runBlocking {
+    fun recoversInTheOriginalMixedClientRoom() {
         val url = InstrumentationRegistry.getArguments().getString("syncplayLabUrl")
-        assumeTrue("Start the isolated SyncPlay lab and web live test", url != null)
+        assumeTrue("Start the isolated SyncPlay lab and web live test", !url.isNullOrBlank())
         val serverUrl = requireNotNull(url).trimEnd('/')
-        val store =
-            SessionStore(
-                InstrumentationRegistry.getInstrumentation().targetContext,
-                dataStoreName =
-                    "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_live_${UUID.randomUUID()}",
-            )
-        val manager =
-            SyncplayManager(AuthSession(serverUrl, "lab-mobile", "lab-mobile", "Android"), store)
-        val client = OkHttpClient()
-        suspend fun labState(): JSONObject =
-            withContext(Dispatchers.IO) {
-                client
-                    .newCall(Request.Builder().url("$serverUrl/__test/state").build())
-                    .execute()
-                    .use {
-                        JSONObject(it.body.string())
+        runBlocking {
+            val store =
+                SessionStore(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    dataStoreName =
+                        "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_live_${UUID.randomUUID()}",
+                )
+            val manager =
+                SyncplayManager(
+                    AuthSession(serverUrl, "lab-mobile", "lab-mobile", "Android"),
+                    store,
+                )
+            val client = OkHttpClient()
+            suspend fun labState(): JSONObject =
+                withContext(Dispatchers.IO) {
+                    client
+                        .newCall(Request.Builder().url("$serverUrl/__test/state").build())
+                        .execute()
+                        .use {
+                            JSONObject(it.body.string())
+                        }
+                }
+            val reporter = launch {
+                var lastKey = ""
+                manager.state.collect { state ->
+                    val group = state.active ?: return@collect
+                    if (group.itemId == null) return@collect
+                    val key =
+                        "${state.recoveryEpoch}:${group.mediaGeneration}:${group.timelineRevision}"
+                    if (key != lastKey) {
+                        lastKey = key
+                        // A ready engine stays mounted: recovery must solicit this fresh probe.
+                        manager.reportPresence(true, false, immediate = true)
                     }
-            }
-        val reporter = launch {
-            var lastKey = ""
-            manager.state.collect { state ->
-                val group = state.active ?: return@collect
-                if (group.itemId == null) return@collect
-                val key =
-                    "${state.recoveryEpoch}:${group.mediaGeneration}:${group.timelineRevision}"
-                if (key != lastKey) {
-                    lastKey = key
-                    // A ready engine stays mounted: recovery must solicit this fresh probe.
-                    manager.reportPresence(true, false, immediate = true)
                 }
             }
-        }
-        try {
-            withTimeout(90_000) {
-                while (manager.state.value.groups.isEmpty()) delay(50)
-                val group = manager.state.value.groups.first()
-                manager.join(group.id)
-                val originalParticipant = manager.state.value.participantId
-                while (labState().optString("phase") != "background") delay(100)
-                assertEquals(group.id, manager.state.value.active?.id)
-                assertEquals(originalParticipant, manager.state.value.participantId)
-                assertTrue(manager.state.value.connected)
-                manager.reportPresence(false, false, immediate = true, pauseRoom = true)
-                while (labState().optString("phase") != "done") delay(100)
-                assertEquals(group.id, manager.state.value.active?.id)
-                assertTrue(manager.state.value.active!!.playing)
+            try {
+                withTimeout(90_000) {
+                    while (manager.state.value.groups.isEmpty()) delay(50)
+                    val group = manager.state.value.groups.first()
+                    manager.join(group.id)
+                    val originalParticipant = manager.state.value.participantId
+                    while (labState().optString("phase") != "background") delay(100)
+                    assertEquals(group.id, manager.state.value.active?.id)
+                    assertEquals(originalParticipant, manager.state.value.participantId)
+                    assertTrue(manager.state.value.connected)
+                    manager.reportPresence(false, false, immediate = true, pauseRoom = true)
+                    while (labState().optString("phase") != "done") delay(100)
+                    assertEquals(group.id, manager.state.value.active?.id)
+                    assertTrue(manager.state.value.active!!.playing)
+                }
+            } finally {
+                reporter.cancelAndJoin()
+                manager.stop()
+                store.clearAll()
             }
-        } finally {
-            reporter.cancelAndJoin()
-            manager.stop()
-            store.clearAll()
         }
     }
 }
