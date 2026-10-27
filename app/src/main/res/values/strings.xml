@@ -54,6 +54,7 @@
     <string name="offline_restart_needed">The source changed. Retry to restart safely.</string>
     <string name="offline_resume_all">Resume downloads</string>
     <string name="offline_saved">Saved</string>
+    <string name="offline_item_actions">Item actions</string>
     <string name="offline_saved_badge">Available offline</string>
     <string name="offline_saved_count">%1$d of %2$d known items saved</string>
     <string name="offline_downloaded_watched_count">%1$d of %2$d downloaded episodes watched</string>

@@ -54,6 +54,7 @@
     <string name="offline_restart_needed">元のファイルが変更されました。再試行して最初からダウンロードしてください。</string>
     <string name="offline_resume_all">ダウンロードを再開</string>
     <string name="offline_saved">保存済み</string>
+    <string name="offline_item_actions">項目の操作</string>
     <string name="offline_saved_badge">オフラインで利用可能</string>
     <string name="offline_saved_count">確認済み%2$d項目中%1$d項目を保存済み</string>
     <string name="offline_downloaded_watched_count">ダウンロード済みエピソード%2$d件中%1$d件を視聴済み</string>
