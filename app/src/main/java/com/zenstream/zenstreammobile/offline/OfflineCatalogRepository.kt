@@ -79,6 +79,18 @@ internal fun offlineEpisodeNeighborIds(
 
 typealias OfflineRequest = suspend (AuthSession, String, String, JSONObject?) -> JSONObject
 
+class OfflineDownloadsUnsupportedException :
+    IllegalStateException("This server does not support offline downloads.")
+
+internal fun requireOfflineCapabilities(capabilities: JSONObject) {
+    if (
+        !capabilities.optBoolean("enabled") ||
+            capabilities.optString("contractVersion") != "offline-v1"
+    )
+        throw OfflineDownloadsUnsupportedException()
+    capabilities.getString("serverInstanceId")
+}
+
 internal fun JSONArray.objects(): List<JSONObject> = List(length()) { getJSONObject(it) }
 
 internal fun searchPattern(value: String): String =
@@ -153,13 +165,7 @@ class OfflineCatalogRepository(
 
     suspend fun capabilities(session: AuthSession): JSONObject {
         val capabilities = request(session, "/api/offline/capabilities", "GET", null)
-        check(
-            capabilities.optBoolean("enabled") &&
-                capabilities.optString("contractVersion") == "offline-v1"
-        ) {
-            "This server does not support downloads."
-        }
-        capabilities.getString("serverInstanceId")
+        requireOfflineCapabilities(capabilities)
         return capabilities
     }
 

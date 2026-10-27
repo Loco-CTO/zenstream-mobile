@@ -560,9 +560,7 @@ class OfflineRuntime private constructor(context: Context) {
 
     companion object {
         val ENABLED: Boolean
-            get() =
-                com.zenstream.zenstreammobile.BuildConfig.DEBUG &&
-                    com.zenstream.zenstreammobile.BuildConfig.OFFLINE_QA
+            get() = true
 
         @Volatile private var instance: OfflineRuntime? = null
 

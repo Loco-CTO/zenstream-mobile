@@ -35,7 +35,7 @@ class OfflineVideoPlaybackTest {
     @Test fun mpvRendersAndSeeksDownloadedVideoWithLocalSubtitles() = exercise(PlayerEngine.MPV)
 
     private fun exercise(engine: PlayerEngine): Unit = runBlocking {
-        assumeTrue("Use the isolated offline QA build", OfflineRuntime.ENABLED)
+        assumeTrue("Offline playback must remain enabled", OfflineRuntime.ENABLED)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val runtime = OfflineRuntime.get(context)

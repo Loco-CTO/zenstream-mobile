@@ -43,6 +43,14 @@ data class DownloadUiActions(
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
 
+internal fun offlineCapabilityErrorMessage(failure: Exception): Int =
+    when {
+        failure is OfflineDownloadsUnsupportedException -> R.string.offline_not_supported
+        (failure as? CatalogException)?.statusCode in setOf(404, 405, 501) ->
+            R.string.offline_not_supported
+        else -> R.string.offline_request_failed
+    }
+
 @Composable
 fun DownloadButton(item: MediaItem?, modifier: Modifier = Modifier) {
     if (item == null) return
@@ -289,10 +297,7 @@ private fun DownloadSelectionSheet(
                 source = runtime.sourceDetails(session, spec.id)
         } catch (failure: Exception) {
             if (failure is CancellationException) throw failure
-            error =
-                if ((failure as? CatalogException)?.statusCode in setOf(404, 405, 501))
-                    R.string.offline_not_supported
-                else R.string.offline_request_failed
+            error = offlineCapabilityErrorMessage(failure)
         } finally {
             loading = false
         }

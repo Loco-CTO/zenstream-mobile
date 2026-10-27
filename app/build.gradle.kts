@@ -54,10 +54,6 @@ val mainVersion =
             ?.takeIf { it >= 0 }
         ?: 0
 val releaseBuild = configuredValue("zenstreamRelease") == "true"
-val offlineQa = configuredValue("zenstreamOfflineQa") == "true"
-require(!offlineQa || configuredValue("zenstreamApplicationIdSuffix") == ".offlineqa") {
-    "Offline QA requires the separate .offlineqa application suffix"
-}
 val displayVersion =
     if (releaseBuild || mainVersion == 0) {
         semanticVersion
@@ -112,7 +108,6 @@ android {
         versionCode = semanticVersionCode.toInt()
         versionName = displayVersion
         buildConfigField("String", "ZENSTREAM_VERSION", "\"$displayVersion\"")
-        buildConfigField("boolean", "OFFLINE_QA", offlineQa.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

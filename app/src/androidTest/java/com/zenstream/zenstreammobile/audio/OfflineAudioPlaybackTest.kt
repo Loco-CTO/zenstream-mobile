@@ -38,7 +38,7 @@ class OfflineAudioPlaybackTest {
     fun originalMultipleAudioTracksHonorsTheDownloadedSelection() = exerciseLocalAudio("multi")
 
     private fun exerciseLocalAudio(format: String) = runBlocking {
-        assumeTrue("Use the isolated offline QA build", OfflineRuntime.ENABLED)
+        assumeTrue("Offline playback must remain enabled", OfflineRuntime.ENABLED)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val runtime = OfflineRuntime.get(context)
         val before = runtime.connection.state.first { it.initialized }
@@ -335,6 +335,7 @@ class OfflineAudioPlaybackTest {
                 coordinator?.release()
             }
             context.stopService(Intent(context, AudioPlaybackService::class.java))
+            activity?.close()
             runtime.storage.removeSelection(profile.id, "audio-service-selection")
             for (table in
                 listOf(
@@ -350,7 +351,6 @@ class OfflineAudioPlaybackTest {
             runtime.database.offline().deleteProfileRecord(profile.id)
             runtime.connection.selectProfile(before.profile)
             runtime.connection.setMode(before.mode)
-            activity?.close()
         }
     }
 

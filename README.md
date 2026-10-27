@@ -30,6 +30,10 @@ ZenStream has one Orchestrator backend and two clients:
 - [Android client](https://github.com/Loco-CTO/zenstream-mobile)
 - [Orchestrator](https://github.com/Loco-CTO/zenstream-orchestrator)
 
+## Offline playback
+
+Movies, episodes, and music can be saved in the Android app for playback without a server connection. See the [offline downloads guide](docs/offline-downloads.md) for download choices, offline mode, account access, and synchronization behavior.
+
 ## Configuration
 
 Enter the Orchestrator URL when the app starts.
