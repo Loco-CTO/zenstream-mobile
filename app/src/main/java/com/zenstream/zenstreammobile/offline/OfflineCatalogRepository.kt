@@ -372,6 +372,46 @@ class OfflineCatalogRepository(
         return dao.availability(profile, id)
     }
 
+    /** Browse playable downloads as titles, while search can still find individual descendants. */
+    suspend fun browseDownloads(
+        profile: String,
+        category: String,
+        query: String,
+        parent: MediaItem? = null,
+        offset: Int = 0,
+    ): List<MediaItem> {
+        requireProfile(profile)
+        require(category in setOf("", "movies", "tv", "music") && offset >= 0)
+        val rows =
+            when {
+                parent != null ->
+                    dao.downloadChildren(
+                        profile,
+                        parent.id,
+                        when (parent.type) {
+                            "MusicAlbum" -> "release"
+                            "MusicArtist" -> "artist"
+                            "BoxSet" -> "collection"
+                            else -> parent.type?.lowercase().orEmpty()
+                        },
+                        searchPattern(query),
+                        100,
+                        offset,
+                    )
+                query.isNotBlank() ->
+                    dao.browse(profile, category, searchPattern(query), 100, offset)
+                else -> dao.downloadRoots(profile, category, 100, offset)
+            }
+        return rows.mapNotNull { row ->
+            item(profile, row.id)?.let { parsed ->
+                if (row.type == "episode" && parsed.seriesName.isNullOrBlank()) {
+                    val series = dao.episodeSeriesId(profile, row.id)?.let { dao.item(profile, it) }
+                    parsed.copy(seriesName = series?.name)
+                } else parsed
+            }
+        }
+    }
+
     /**
      * Resolves only adjacent episodes and exposes a neighbor only when its verified asset is local.
      */

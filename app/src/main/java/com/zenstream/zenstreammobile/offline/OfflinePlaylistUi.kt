@@ -24,12 +24,14 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
     runtime: OfflineRuntime,
     profile: OfflineProfile,
     onItem: (OfflineProfile, MediaItem) -> Unit,
+    selectedId: String?,
+    onSelected: (String?) -> Unit,
 ) {
-    val rows by runtime.playlists.playlists(profile.id).collectAsState(initial = emptyList())
+    val snapshots by runtime.playlists.playlists(profile.id).collectAsState(initial = null)
+    val rows = snapshots.orEmpty()
     val revision by runtime.catalogRevision.collectAsState()
     val actions = LocalDownloadUi.current
     val scope = rememberCoroutineScope()
-    var selectedId by remember(profile.id) { mutableStateOf<String?>(null) }
     var createDialog by remember { mutableStateOf(false) }
     var editDialog by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<String?>(null) }
@@ -48,8 +50,9 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                stringResource(R.string.offline_playlists),
-                style = MaterialTheme.typography.titleLarge,
+                stringResource(R.string.offline_playlists_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FilledTonalButton(onClick = { createDialog = true }) {
                 Icon(
@@ -60,7 +63,11 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                 Text(stringResource(R.string.offline_playlist_new))
             }
         }
-        if (rows.isEmpty()) {
+        if (snapshots == null) {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(24.dp))
+            }
+        } else if (rows.isEmpty()) {
             Text(
                 stringResource(R.string.offline_playlist_empty),
                 modifier = Modifier.padding(vertical = 16.dp),
@@ -82,7 +89,32 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                                     .hasPendingPlaylistOperations(profile.id, row.id)
                         }
                     val isComplete = row.complete && count == row.expectedCount
+                    val downloaded by
+                        produceState(0, profile.id, row.id, revision) {
+                            value =
+                                runtime.database
+                                    .offline()
+                                    .playlistDownloadedCount(profile.id, row.id)
+                        }
                     ListItem(
+                        colors =
+                            ListItemDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            ),
+                        leadingContent = {
+                            Surface(
+                                Modifier.size(56.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_list_music),
+                                        null,
+                                    )
+                                }
+                            }
+                        },
                         headlineContent = {
                             Text(
                                 metadata.optString(
@@ -95,9 +127,9 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                             Column {
                                 Text(
                                     stringResource(
-                                        R.string.offline_playlist_entry_count,
-                                        count,
+                                        R.string.offline_playlist_saved_summary,
                                         row.expectedCount,
+                                        downloaded,
                                     )
                                 )
                                 if (!isComplete)
@@ -107,25 +139,13 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                             }
                         },
                         trailingContent = {
-                            if (!isComplete)
-                                TextButton(
-                                    enabled = actions != null,
-                                    onClick = {
-                                        actions
-                                            ?.savePlaylistMetadata
-                                            ?.invoke(
-                                                DownloadSpec(
-                                                    row.id,
-                                                    metadata.optString("name", row.id),
-                                                    kind = "playlist_metadata",
-                                                )
-                                            )
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.offline_playlist_save_membership))
-                                }
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_chevron_right),
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         },
-                        modifier = Modifier.clickable { selectedId = row.id },
+                        modifier = Modifier.clickable { onSelected(row.id) },
                     )
                 }
             }
@@ -136,7 +156,6 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
             profile = profile,
             playlist = selected,
             revision = revision,
-            onBack = { selectedId = null },
             onEdit = { editDialog = selected.id },
             onDelete = { deleting = selected.id },
             onItem = onItem,
@@ -154,7 +173,7 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                 scope.launch {
                     try {
                         runtime.playlists.create(profile.id, name, description)
-                        selectedId = null
+                        onSelected(null)
                         createDialog = false
                         error = false
                     } catch (failure: Exception) {
@@ -201,7 +220,7 @@ internal fun ColumnScope.OfflinePlaylistsScreen(
                         scope.launch {
                             try {
                                 runtime.playlists.delete(profile.id, id)
-                                selectedId = null
+                                onSelected(null)
                                 deleting = null
                                 error = false
                             } catch (failure: Exception) {
@@ -229,7 +248,6 @@ private fun ColumnScope.OfflinePlaylistDetail(
     profile: OfflineProfile,
     playlist: OfflinePlaylist,
     revision: Long,
-    onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onItem: (OfflineProfile, MediaItem) -> Unit,
@@ -245,20 +263,57 @@ private fun ColumnScope.OfflinePlaylistDetail(
             value = runtime.database.offline().playlistEntryCount(profile.id, playlist.id)
         }
     val complete = playlist.complete && count == playlist.expectedCount
+    val actions = LocalDownloadUi.current
+    val downloaded by
+        produceState(0, profile.id, playlist.id, revision) {
+            value = runtime.database.offline().playlistDownloadedCount(profile.id, playlist.id)
+        }
+    fun playEntry(target: MediaItem? = null) {
+        scope.launch {
+            try {
+                val queue = mutableListOf<MediaItem>()
+                var start = 0
+                do {
+                    val batch =
+                        runtime.playlists.entries(
+                            profile.id,
+                            playlist.id,
+                            limit = 100,
+                            offset = start,
+                        )
+                    batch.forEach { entry ->
+                        if (
+                            runtime.database
+                                .offline()
+                                .playable(profile.id, entry.track)
+                                .isNotEmpty()
+                        ) {
+                            runtime.catalog.item(profile.id, entry.track)?.let { queue += it }
+                        }
+                    }
+                    start += batch.size
+                } while (batch.size == 100)
+                (target ?: queue.firstOrNull())?.let { selected ->
+                    if (actions?.playSavedQueue != null)
+                        actions.playSavedQueue.invoke(profile, selected, queue)
+                    else onItem(profile, selected)
+                }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                onError(true)
+            }
+        }
+    }
 
     LaunchedEffect(profile.id, playlist.id, offset, revision) {
-        entries = runtime.playlists.entries(profile.id, playlist.id, offset = offset)
+        entries =
+            offlineUiRead(emptyList()) {
+                runtime.playlists.entries(profile.id, playlist.id, offset = offset)
+            }
     }
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        IconButton(onClick = onBack) {
-            Icon(
-                painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                stringResource(R.string.back),
-            )
-        }
         Column(Modifier.weight(1f)) {
-            Text(metadata.optString("name"), style = MaterialTheme.typography.titleLarge)
             Text(
                 stringResource(
                     R.string.offline_playlist_entry_count,
@@ -289,9 +344,8 @@ private fun ColumnScope.OfflinePlaylistDetail(
             stringResource(R.string.offline_playlist_read_only),
             modifier = Modifier.padding(vertical = 8.dp),
         )
-        val actions = LocalDownloadUi.current
         TextButton(
-            enabled = actions != null,
+            enabled = actions?.canDownload?.invoke(profile) == true,
             onClick = {
                 actions
                     ?.savePlaylistMetadata
@@ -308,17 +362,21 @@ private fun ColumnScope.OfflinePlaylistDetail(
         }
     } else {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = { addTracks = true }) {
+            FilledTonalButton(enabled = downloaded > 0, onClick = { playEntry() }) {
+                Icon(painterResource(LucideR.drawable.lucide_ic_play), null, Modifier.size(18.dp))
+                Text(stringResource(R.string.play_all), Modifier.padding(start = 8.dp))
+            }
+            OutlinedButton(onClick = { addTracks = true }) {
                 Icon(painterResource(LucideR.drawable.lucide_ic_plus), contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.offline_playlist_add_tracks))
             }
-            Text(
-                stringResource(R.string.offline_playlist_local_membership_note),
-                modifier = Modifier.weight(1f).align(Alignment.CenterVertically),
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
+        Text(
+            stringResource(R.string.offline_playlist_local_membership_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     LazyColumn(Modifier.weight(1f)) {
@@ -328,16 +386,34 @@ private fun ColumnScope.OfflinePlaylistDetail(
         items(entries, key = { it.track }) { entry ->
             val item by
                 produceState<MediaItem?>(null, profile.id, entry.track, revision) {
-                    value = runtime.catalog.item(profile.id, entry.track)
+                    value = offlineUiRead(null) { runtime.catalog.item(profile.id, entry.track) }
                 }
             val availability by
                 produceState(OfflineAvailability(0, 0), profile.id, entry.track, revision) {
                     value =
-                        runCatching { runtime.catalog.availability(profile.id, entry.track) }
-                            .getOrDefault(OfflineAvailability(0, 0))
+                        offlineUiRead(OfflineAvailability(0, 0)) {
+                            runtime.catalog.availability(profile.id, entry.track)
+                        }
                 }
+            var entryMenu by remember(entry.track) { mutableStateOf(false) }
+            fun editEntry(action: suspend () -> Unit) {
+                entryMenu = false
+                scope.launch {
+                    try {
+                        action()
+                    } catch (failure: Exception) {
+                        if (failure is CancellationException) throw failure
+                        onError(true)
+                    }
+                }
+            }
             ListItem(
-                headlineContent = { Text(item?.name ?: entry.track) },
+                headlineContent = {
+                    Text(
+                        item?.name ?: stringResource(R.string.offline_unknown_item),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                },
                 supportingContent = {
                     Text(
                         stringResource(
@@ -346,14 +422,41 @@ private fun ColumnScope.OfflinePlaylistDetail(
                         )
                     )
                 },
+                colors =
+                    ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
+                leadingContent = {
+                    item?.let { OfflineMediaArtwork(runtime, profile.id, it, revision) }
+                },
                 trailingContent = {
-                    if (complete)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                enabled = offset + entries.indexOf(entry) > 0,
-                                onClick = {
-                                    scope.launch {
-                                        runCatching {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (availability.downloaded > 0 && item != null)
+                            IconButton(onClick = { playEntry(requireNotNull(item)) }) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_play),
+                                    stringResource(
+                                        R.string.play_description,
+                                        requireNotNull(item).name,
+                                    ),
+                                )
+                            }
+                        if (complete)
+                            Box {
+                                IconButton(onClick = { entryMenu = true }) {
+                                    Icon(
+                                        painterResource(
+                                            LucideR.drawable.lucide_ic_ellipsis_vertical
+                                        ),
+                                        stringResource(R.string.offline_item_actions),
+                                    )
+                                }
+                                DropdownMenu(entryMenu, onDismissRequest = { entryMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(stringResource(R.string.offline_playlist_move_up))
+                                        },
+                                        enabled = offset + entries.indexOf(entry) > 0,
+                                        onClick = {
+                                            editEntry {
                                                 runtime.playlists.moveTrack(
                                                     profile.id,
                                                     playlist.id,
@@ -361,23 +464,17 @@ private fun ColumnScope.OfflinePlaylistDetail(
                                                     offset + entries.indexOf(entry) - 1,
                                                 )
                                             }
-                                            .onFailure { failure ->
-                                                if (failure is CancellationException) throw failure
-                                                onError(true)
-                                            }
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_arrow_up),
-                                    stringResource(R.string.offline_playlist_move_up),
-                                )
-                            }
-                            IconButton(
-                                enabled = offset + entries.indexOf(entry) < count - 1,
-                                onClick = {
-                                    scope.launch {
-                                        runCatching {
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(R.string.offline_playlist_move_down)
+                                            )
+                                        },
+                                        enabled = offset + entries.indexOf(entry) < count - 1,
+                                        onClick = {
+                                            editEntry {
                                                 runtime.playlists.moveTrack(
                                                     profile.id,
                                                     playlist.id,
@@ -385,66 +482,54 @@ private fun ColumnScope.OfflinePlaylistDetail(
                                                     offset + entries.indexOf(entry) + 1,
                                                 )
                                             }
-                                            .onFailure { failure ->
-                                                if (failure is CancellationException) throw failure
-                                                onError(true)
-                                            }
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_arrow_down),
-                                    stringResource(R.string.offline_playlist_move_down),
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        runCatching {
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(
+                                                    R.string.offline_playlist_remove_track
+                                                )
+                                            )
+                                        },
+                                        onClick = {
+                                            editEntry {
                                                 runtime.playlists.removeTrack(
                                                     profile.id,
                                                     playlist.id,
                                                     entry.track,
                                                 )
                                             }
-                                            .onFailure { failure ->
-                                                if (failure is CancellationException) throw failure
-                                                onError(true)
-                                            }
-                                    }
+                                        },
+                                    )
                                 }
-                            ) {
-                                Icon(
-                                    painterResource(LucideR.drawable.lucide_ic_x),
-                                    stringResource(R.string.offline_playlist_remove_track),
-                                )
                             }
-                        }
+                    }
                 },
                 modifier =
                     if (availability.downloaded > 0 && item != null)
-                        Modifier.clickable { onItem(profile, requireNotNull(item)) }
+                        Modifier.clickable { playEntry(requireNotNull(item)) }
                     else Modifier,
             )
         }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(
-                    enabled = offset > 0,
-                    onClick = {
-                        offset = (offset - OfflinePlaylistRepository.PAGE_SIZE).coerceAtLeast(0)
-                    },
-                ) {
-                    Text(stringResource(R.string.offline_previous_page))
-                }
-                TextButton(
-                    enabled = offset + entries.size < count,
-                    onClick = { offset += OfflinePlaylistRepository.PAGE_SIZE },
-                ) {
-                    Text(stringResource(R.string.offline_next_page))
+        if (offset > 0 || offset + entries.size < count)
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (offset > 0)
+                        TextButton(
+                            onClick = {
+                                offset =
+                                    (offset - OfflinePlaylistRepository.PAGE_SIZE).coerceAtLeast(0)
+                            }
+                        ) {
+                            Text(stringResource(R.string.offline_previous_page))
+                        }
+                    if (offset + entries.size < count)
+                        TextButton(onClick = { offset += OfflinePlaylistRepository.PAGE_SIZE }) {
+                            Text(stringResource(R.string.offline_next_page))
+                        }
                 }
             }
-        }
     }
 
     if (addTracks)

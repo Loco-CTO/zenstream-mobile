@@ -11,6 +11,138 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OfflineDownloadManagementTest {
+    @Test
+    fun downloadNavigationGroupsTitlesAndOnlyOpensSavedChildren() = runBlocking {
+        val db = database()
+        val dao = db.offline()
+        try {
+            fun row(
+                id: String,
+                type: String,
+                parent: String? = null,
+                season: Int = 0,
+                episode: Int = 0,
+            ) =
+                OfflineCatalogItem(
+                    "p",
+                    id,
+                    null,
+                    parent,
+                    type,
+                    id,
+                    season = season,
+                    episode = episode,
+                    payload = "{}",
+                )
+            dao.putItems(
+                listOf(
+                    row("series", "series"),
+                    row("season", "season", "series"),
+                    row("episode-2", "episode", "season", 1, 2),
+                    row("episode-1", "episode", "season", 1, 1),
+                    row("episode-cached", "episode", "season", 1, 3),
+                    row("album", "release", "artist"),
+                    row("artist", "artist"),
+                    row("track", "track", "album"),
+                    row("standalone-track", "track"),
+                    row("standalone-episode", "episode"),
+                    row("movie", "movie"),
+                    row("locked-movie", "movie"),
+                )
+            )
+            val asset =
+                OfflineAsset(
+                    "p",
+                    "a",
+                    "movie",
+                    "original",
+                    "source",
+                    "r",
+                    1,
+                    "hash",
+                    "video/mp4",
+                    "{}",
+                    "path",
+                    state = "complete",
+                )
+            listOf(
+                    "episode-2",
+                    "episode-1",
+                    "track",
+                    "standalone-track",
+                    "standalone-episode",
+                    "movie",
+                )
+                .forEach { id -> dao.putAsset(asset.copy(id = "asset-$id", item = id)) }
+            dao.putAsset(asset.copy(id = "duplicate-quality", item = "episode-1"))
+            dao.putAsset(asset.copy(id = "locked", item = "locked-movie", locked = true))
+            dao.putAsset(asset.copy(profile = "other", id = "other", item = "locked-movie"))
+            assertEquals(
+                setOf("series", "album", "standalone-track", "standalone-episode", "movie"),
+                dao.downloadRoots("p", "", 100, 0).map { it.id }.toSet(),
+            )
+            assertEquals(
+                listOf("episode-1", "episode-2"),
+                dao.downloadChildren("p", "series", "series", "%", 100, 0).map { it.id },
+            )
+            assertEquals(
+                listOf("track"),
+                dao.downloadChildren("p", "album", "release", "%", 100, 0).map { it.id },
+            )
+            assertEquals(
+                listOf("series", "standalone-episode"),
+                dao.downloadRoots("p", "tv", 100, 0).map { it.id },
+            )
+            assertTrue(
+                dao.downloadRoots("p", "", 2, 0)
+                    .map { it.id }
+                    .intersect(dao.downloadRoots("p", "", 2, 2).map { it.id }.toSet())
+                    .isEmpty()
+            )
+            // Credited artist membership may point at tracks rather than catalog parents.
+            dao.putItems(listOf(row("credited", "artist")))
+            dao.putSelection(
+                OfflineSelection(
+                    "p",
+                    "credited-selection",
+                    "credited",
+                    "artist",
+                    "Credited",
+                    "{}",
+                    state = "complete",
+                )
+            )
+            dao.putMembers(listOf(OfflineMember("p", "credited-selection", "track", 0)))
+            assertEquals(
+                listOf("album"),
+                dao.downloadChildren("p", "credited", "artist", "%", 100, 0).map { it.id },
+            )
+            assertEquals(0, dao.pendingDownloadCount("p").first())
+            dao.putSelection(OfflineSelection("p", "building", "series", "series", "Series", "{}"))
+            assertEquals(1, dao.pendingDownloadCount("p").first())
+            dao.putTransfer(OfflineTransfer("p", "queued", "building", "episode-cached", "{}"))
+            assertEquals(1, dao.pendingDownloadCount("p").first())
+            dao.putSelection(
+                OfflineSelection(
+                    "p",
+                    "finished",
+                    "movie",
+                    "movie",
+                    "A completed film",
+                    "{}",
+                    state = "complete",
+                )
+            )
+            assertEquals("building", dao.managedSelectionPage("p", 1, 0).first().single().id)
+            assertEquals(
+                listOf("queued"),
+                dao.selectionTransferPage("p", "building", 20, 0).first().map { it.id },
+            )
+        } finally {
+            db.close()
+        }
+    }
+
     private fun database() =
         Room.inMemoryDatabaseBuilder(
                 InstrumentationRegistry.getInstrumentation().targetContext,

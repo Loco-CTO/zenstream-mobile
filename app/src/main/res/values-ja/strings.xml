@@ -1,4 +1,35 @@
 <resources>
+    <string name="offline_manage_downloads">ダウンロード管理</string>
+    <string name="offline_close_search">検索を閉じる</string>
+    <string name="offline_actions_for">%1$s の操作</string>
+    <string name="offline_expanded">展開済み</string>
+    <string name="offline_collapsed">折りたたみ済み</string>
+    <string name="offline_sign_in_manage">ダウンロードを管理するにはログインしてください</string>
+    <string name="offline_episode_number">シーズン %1$d · 第 %2$d 話</string>
+    <string name="offline_group_unavailable">この保存済みグループは表示できません。ダウンロード一覧に戻ってください。</string>
+    <string name="offline_download_settings">ダウンロード設定</string>
+    <string name="offline_mode_label">オフラインモード</string>
+    <string name="offline_unreachable_label">サーバーに接続できません</string>
+    <string name="offline_on_device">このデバイス</string>
+    <string name="offline_no_matches">検索に一致するダウンロードはありません。</string>
+    <string name="offline_season_number">シーズン %1$d</string>
+    <string name="offline_load_more">さらに表示</string>
+    <string name="offline_episode_availability">エピソード %2$d 件中 %1$d 件をダウンロード済み</string>
+    <string name="offline_track_availability">曲 %2$d 件中 %1$d 件をダウンロード済み</string>
+    <string name="offline_pause_all">すべて一時停止</string>
+    <string name="offline_resume">再開</string>
+    <string name="offline_remove_download_help">「%1$s」を削除しますか？別のダウンロードでも保存されているメディアは、このデバイスに残ります。</string>
+    <string name="offline_no_transfers">管理するダウンロードはありません。映画、番組、アルバムのダウンロード操作から追加できます。</string>
+    <string name="offline_connection_settings">接続</string>
+    <string name="offline_mode_help">サーバーに接続せずに、ダウンロードを閲覧・再生します。</string>
+    <string name="offline_storage_settings">ストレージ</string>
+    <string name="offline_no_limit">ダウンロード容量を制限しない</string>
+    <string name="offline_limit_size">ダウンロード容量の上限（GiB）</string>
+    <string name="offline_limit_invalid">0 より大きい数値を入力してください。</string>
+    <string name="offline_playlist_saved_summary">%1$d 曲 · %2$d 曲をダウンロード済み</string>
+    <string name="offline_playlists_hint">保存済みプレイリスト</string>
+    <plurals name="offline_queue_count"><item quantity="other">待機中 %d 件</item></plurals>
+    <plurals name="offline_playlist_count"><item quantity="other">プレイリスト %d 件</item></plurals>
     <string name="offline_video_stream_paused">オフラインモードでストリーミングを停止しました。ダウンロード済みの動画を開いてください。</string>
     <string name="offline_next_episode_not_downloaded">次のエピソードはダウンロードされていません。オフラインで続けるにはダウンロード一覧から保存してください。</string>
     <string name="offline_video_other_engine">別のインストール済みプレーヤーを試す</string>

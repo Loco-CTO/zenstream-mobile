@@ -1,4 +1,41 @@
 <resources>
+    <string name="offline_manage_downloads">Manage downloads</string>
+    <string name="offline_close_search">Close search</string>
+    <string name="offline_actions_for">Actions for %1$s</string>
+    <string name="offline_expanded">Expanded</string>
+    <string name="offline_collapsed">Collapsed</string>
+    <string name="offline_sign_in_manage">Sign in to manage downloads</string>
+    <string name="offline_episode_number">S%1$d · E%2$d</string>
+    <string name="offline_group_unavailable">This saved group is unavailable. Go back to your downloads.</string>
+    <string name="offline_download_settings">Download settings</string>
+    <string name="offline_mode_label">Offline mode</string>
+    <string name="offline_unreachable_label">Server unavailable</string>
+    <string name="offline_on_device">On this device</string>
+    <string name="offline_no_matches">No downloads match your search.</string>
+    <string name="offline_season_number">Season %1$d</string>
+    <string name="offline_load_more">Load more</string>
+    <string name="offline_episode_availability">%1$d of %2$d episodes downloaded</string>
+    <string name="offline_track_availability">%1$d of %2$d tracks downloaded</string>
+    <string name="offline_pause_all">Pause all</string>
+    <string name="offline_resume">Resume</string>
+    <string name="offline_remove_download_help">Remove “%1$s”? Media saved by another download will stay on this device.</string>
+    <string name="offline_no_transfers">No downloads to manage. Choose Download on a movie, show, or album to get started.</string>
+    <string name="offline_connection_settings">Connection</string>
+    <string name="offline_mode_help">Browse and play your downloads without contacting your server.</string>
+    <string name="offline_storage_settings">Storage</string>
+    <string name="offline_no_limit">No download limit</string>
+    <string name="offline_limit_size">Download limit (GiB)</string>
+    <string name="offline_limit_invalid">Enter a number greater than 0.</string>
+    <string name="offline_playlist_saved_summary">%1$d tracks · %2$d downloaded</string>
+    <string name="offline_playlists_hint">Your saved playlists</string>
+    <plurals name="offline_queue_count">
+        <item quantity="one">%d in queue</item>
+        <item quantity="other">%d in queue</item>
+    </plurals>
+    <plurals name="offline_playlist_count">
+        <item quantity="one">%d playlist</item>
+        <item quantity="other">%d playlists</item>
+    </plurals>
     <string name="offline_video_stream_paused">Streaming stopped in offline mode. Open a downloaded video to continue.</string>
     <string name="offline_next_episode_not_downloaded">Next episode is not downloaded. Download it from Downloads to continue offline.</string>
     <string name="offline_video_other_engine">Try the other installed player</string>
