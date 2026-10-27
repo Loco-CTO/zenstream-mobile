@@ -2,7 +2,7 @@
   <a href="./app/src/main/res/mipmap-nodpi/zenstream_logo.png">
     <img src="./app/src/main/res/mipmap-nodpi/zenstream_logo.png" alt="Logo" width="120" height="120">
   </a>
-  <h3 align="center">ZenStream Mobile</h3>
+  <h1 align="center">ZenStream Mobile</h1>
   <p align="center">
     An Android client for <a href="https://github.com/Loco-CTO/zenstream-mobile">ZenStream</a>.
     <br />
@@ -39,7 +39,7 @@ Enter the Orchestrator URL when the app starts.
 
 Do not commit keystore files or signing credentials.
 
-## Development
+## Quick start
 
 Requires Android Studio, JDK 21, and Android SDK 37. Open the project in Android Studio or build the debug APK with:
 
@@ -57,11 +57,19 @@ Install a local debug build on a connected device or emulator with:
 
 Signed release APKs are published through [GitHub Releases](https://github.com/Loco-CTO/zenstream-mobile/releases).
 
-## Checks
+## Development checks
 
 ```sh
 ./gradlew spotlessCheck lint test assembleDebug
 ```
+
+## Developer documentation
+
+- [Documentation index](docs/README.md)
+- [Architecture and ownership](docs/architecture.md)
+- [Android interface design](docs/ui-design.md)
+- [Playback and audio](docs/playback.md)
+- [Offline downloads](docs/offline.md)
 
 ## Troubleshooting
 
