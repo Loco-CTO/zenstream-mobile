@@ -78,6 +78,9 @@
     <string name="offline_downloads">Downloads</string>
     <string name="offline_refresh_metadata">Refresh saved metadata</string>
     <string name="offline_new_version_available">A newer server version is available</string>
+    <string name="logout_download_policy_description">Remove saved media and offline account data from this device, or keep it locked until you sign in again with the same account and server.</string>
+    <string name="logout_remove_downloads">Remove saved downloads</string>
+    <string name="logout_keep_downloads_locked">Keep downloads locked</string>
     <string name="offline_mode_active">Offline mode · network activity is paused</string>
     <string name="offline_local_available">Your saved library is available on this device</string>
     <string name="offline_go_online">Go online</string>

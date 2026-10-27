@@ -49,6 +49,7 @@ class OfflineMigrationTest {
                     OfflineDatabase.MIGRATION_1_2,
                     OfflineDatabase.MIGRATION_2_3,
                     OfflineDatabase.MIGRATION_3_4,
+                    OfflineDatabase.MIGRATION_4_5,
                 )
                 .build()
         try {
@@ -57,7 +58,8 @@ class OfflineMigrationTest {
             assertEquals(42L, profile?.nextSequence)
             assertEquals(3L, profile?.historyEpoch)
             assertEquals(4L, profile?.privacyEpoch)
-            assertEquals(4, current.openHelper.readableDatabase.version)
+            assertEquals(5, current.openHelper.readableDatabase.version)
+            assertFalse(requireNotNull(profile).deletePending)
             assertNull(current.offline().playbackState("p", "item"))
         } finally {
             current.close()

@@ -241,6 +241,43 @@ class OfflineMetadataRefreshCoordinatorTest {
         }
     }
 
+    @Test
+    fun revokedCatalogGrantLocksSavedFilesAndCancelsItsRemoteTransfer() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed(
+                title = "Saved title",
+                bundle = bundle(presentation = "presentation-1", supplement = "supplement-1"),
+            )
+            fixture.dao.putTransfer(
+                OfflineTransfer(
+                    profile = fixture.profileId,
+                    id = sha256("transfer".toByteArray()),
+                    selection = sha256("selection".toByteArray()),
+                    item = "movie",
+                    options = "{}",
+                    state = "transferring",
+                    assetId = fixture.assetId,
+                )
+            )
+
+            fixture.refresh(
+                reconcileResult(status = "unavailable", sourceStatus = "unavailable"),
+                bundle(presentation = "presentation-1", supplement = "supplement-1"),
+            )
+
+            assertTrue(fixture.dao.item(fixture.profileId, "movie")!!.unavailable)
+            assertTrue(fixture.dao.asset(fixture.profileId, fixture.assetId)!!.locked)
+            assertEquals(
+                "cancelled",
+                fixture.dao.profileTransferPage(fixture.profileId, 10, 0).single().state,
+            )
+            assertTrue(fixture.storage.paths.resolve(fixture.mediaPath).isFile)
+        } finally {
+            fixture.close()
+        }
+    }
+
     private class Fixture : AutoCloseable {
         private val context = InstrumentationRegistry.getInstrumentation().targetContext
         private val database =

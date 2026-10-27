@@ -31,6 +31,7 @@ data class OfflineProfile(
     val anchorServerMs: Long = 0,
     val anchorElapsedMs: Long = 0,
     val anchorBoot: Long = -1,
+    val deletePending: Boolean = false,
 ) {
     companion object {
         fun identity(serverInstance: String, account: String): String =
@@ -252,7 +253,7 @@ data class OfflineAudioQueue(
             OfflineOperation::class,
             OfflineAudioQueue::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
@@ -286,6 +287,14 @@ abstract class OfflineDatabase : RoomDatabase() {
                     )
                 }
             }
+        val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE offline_profiles ADD COLUMN deletePending INTEGER NOT NULL DEFAULT 0"
+                    )
+                }
+            }
         @Volatile private var instance: OfflineDatabase? = null
 
         fun get(context: Context): OfflineDatabase =
@@ -297,7 +306,12 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 OfflineDatabase::class.java,
                                 "offline.db",
                             )
-                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                            .addMigrations(
+                                MIGRATION_1_2,
+                                MIGRATION_2_3,
+                                MIGRATION_3_4,
+                                MIGRATION_4_5,
+                            )
                             .build()
                             .also { instance = it }
                 }

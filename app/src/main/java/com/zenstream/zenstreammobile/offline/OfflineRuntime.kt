@@ -1,8 +1,13 @@
+@file:Suppress("UnsafeOptInUsageError")
+
 package com.zenstream.zenstreammobile.offline
 
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import androidx.room.withTransaction
+import com.zenstream.zenstreammobile.VideoPlaybackSessions
+import com.zenstream.zenstreammobile.audio.AudioServiceBridge
 import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
@@ -113,6 +118,17 @@ class OfflineRuntime private constructor(context: Context) {
 
     init {
         scope.launch { sessionStore.serverUrl.collect { connection.serverUrl = it } }
+        if (ENABLED)
+            scope.launch {
+                database
+                    .offline()
+                    .profiles()
+                    .first()
+                    .filter { it.deletePending }
+                    .forEach { profile ->
+                        runCatching { storage.removeProfile(profile.id) }
+                    }
+            }
         if (ENABLED) {
             runCatching {
                 connectivity.registerDefaultNetworkCallback(
@@ -378,6 +394,129 @@ class OfflineRuntime private constructor(context: Context) {
         database.offline().retryPlaylistMetadata(profile)
     }
 
+    suspend fun prepareForLogout(
+        session: com.zenstream.zenstreammobile.model.AuthSession,
+        keepDownloadsLocked: Boolean,
+    ) {
+        stopPlaybackForIdentityChange()
+        DownloadExecution.stop(appContext)
+        DownloadExecution.cancelReconciliation(appContext)
+        val dao = database.offline()
+        val normalizedServer = session.serverUrl.trimEnd('/')
+        val selected =
+            connection.state.value.profile
+                ?.let { dao.profile(it) }
+                ?.takeIf {
+                    it.account == session.userId && it.serverUrl.trimEnd('/') == normalizedServer
+                }
+        val profile =
+            selected
+                ?: dao.profiles().first().firstOrNull {
+                    it.account == session.userId && it.serverUrl.trimEnd('/') == normalizedServer
+                }
+                ?: return
+        if (keepDownloadsLocked) {
+            database.withTransaction {
+                val currentProfile = dao.profile(profile.id) ?: return@withTransaction
+                check(!currentProfile.deletePending) {
+                    "Offline profile removal has already started."
+                }
+                dao.pauseTransfersForIdentityChange(profile.id)
+                dao.pauseSelectionsForIdentityChange(profile.id)
+                dao.putProfile(currentProfile.copy(locked = true))
+            }
+            connection.selectProfile(profile.id)
+        } else {
+            storage.removeProfile(profile.id)
+            if (connection.state.value.profile == profile.id) connection.selectProfile(null)
+        }
+    }
+
+    suspend fun prepareForServerChange() {
+        stopPlaybackForIdentityChange()
+        val dao = database.offline()
+        val selectedId = connection.state.value.profile
+        val profiles = dao.profiles().first().filter { !it.locked }
+        for (profile in profiles) lockProfileForIdentityChange(profile)
+        if (selectedId != null) connection.selectProfile(selectedId)
+    }
+
+    /**
+     * Locks profiles for other accounts and unlocks only after capabilities authenticate this
+     * identity.
+     */
+    suspend fun onAuthenticatedSession(session: com.zenstream.zenstreammobile.model.AuthSession) {
+        val policy = connection.state.first { it.initialized }
+        val dao = database.offline()
+        val normalizedServer = session.serverUrl.trimEnd('/')
+        dao.profiles()
+            .first()
+            .filter {
+                it.account != session.userId || it.serverUrl.trimEnd('/') != normalizedServer
+            }
+            .filterNot { it.locked }
+            .forEach { lockProfileForIdentityChange(it) }
+        if (policy.mode == ConnectionMode.OFFLINE) return
+        try {
+            val profile = catalog.discover(session).first
+            dao.profiles()
+                .first()
+                .filter { it.id != profile.id && !it.locked }
+                .forEach { lockProfileForIdentityChange(it) }
+            connection.selectProfile(profile.id)
+            database.withTransaction {
+                dao.resumeTransfersAfterIdentityChange(profile.id)
+                dao.resumeSelectionsAfterIdentityChange(profile.id)
+            }
+            if (dao.pendingWorkCount(profile.id) > 0)
+                DownloadExecution.start(appContext, profile.id)
+            DownloadExecution.scheduleReconciliationNow(appContext)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Keep local data available only under the last retained identity when the server is
+            // down.
+        }
+    }
+
+    private suspend fun lockProfileForIdentityChange(profile: OfflineProfile) {
+        stopPlaybackForIdentityChange()
+        DownloadExecution.stop(appContext)
+        DownloadExecution.cancelReconciliation(appContext)
+        val dao = database.offline()
+        database.withTransaction {
+            dao.pauseTransfersForIdentityChange(profile.id)
+            dao.pauseSelectionsForIdentityChange(profile.id)
+            dao.profile(profile.id)?.let { dao.putProfile(it.copy(locked = true)) }
+        }
+        if (connection.state.value.profile == profile.id) connection.selectProfile(null)
+    }
+
+    private fun stopPlaybackForIdentityChange() {
+        if (AudioServiceBridge.state.value.queue.isNotEmpty())
+            AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_CLEAR_QUEUE)
+        VideoPlaybackSessions.close()
+    }
+
+    suspend fun matchesCurrentServerIdentity(
+        profileId: String,
+        session: com.zenstream.zenstreammobile.model.AuthSession,
+    ): Boolean {
+        val dao = database.offline()
+        val profile = dao.profile(profileId)?.takeUnless { it.locked } ?: return false
+        if (
+            profile.account != session.userId ||
+                profile.serverUrl.trimEnd('/') != session.serverUrl.trimEnd('/')
+        ) {
+            lockProfileForIdentityChange(profile)
+            return false
+        }
+        val capabilities = catalog.capabilities(session)
+        if (capabilities.getString("serverInstanceId") == profile.serverInstance) return true
+        lockProfileForIdentityChange(profile)
+        return false
+    }
+
     suspend fun refreshMetadata(profileId: String): Boolean {
         val policy = connection.state.first { it.initialized }
         if (
@@ -402,6 +541,9 @@ class OfflineRuntime private constructor(context: Context) {
         if (policy.authentication == OnlineAuthentication.NEEDS_SIGN_IN) return
         val id = policy.profile ?: return
         val profile = database.offline().profile(id)?.takeUnless { it.locked } ?: return
+        val session = sessionStore.session.first() ?: return
+        if (profile.account != session.userId || profile.serverUrl != session.serverUrl) return
+        if (!matchesCurrentServerIdentity(id, session)) return
         val cursor = connection.maintenanceCursor(id)
         connection.saveMaintenanceCursor(id, storage.repairPage(id, cursor) ?: 0)
         val bucket = connection.maintenanceCursor("$id:orphan-bucket")
@@ -412,8 +554,6 @@ class OfflineRuntime private constructor(context: Context) {
             connection.saveMaintenanceCursor(key, storage.sweepBucket(id, selected, offset) ?: 0)
         }
         connection.saveMaintenanceCursor("$id:orphan-bucket", (bucket + 8) % 256)
-        val session = sessionStore.session.first() ?: return
-        if (profile.account != session.userId || profile.serverUrl != session.serverUrl) return
         accountSync.reconcile(profile.id, session)
         metadataRefresh.refresh(profile.id, session, sessionStore.metadataLanguage.first())
     }

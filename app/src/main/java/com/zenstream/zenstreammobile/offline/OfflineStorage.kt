@@ -132,7 +132,7 @@ class OfflineStorage(
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 val transfer = requireNotNull(dao.transfer(asset.profile, transferId))
-                check(transfer.state !in setOf("cancelled", "paused")) {
+                check(transfer.state !in setOf("cancelled", "paused", "identity_paused")) {
                     "Download publication was cancelled."
                 }
                 val profile = requireNotNull(dao.profile(asset.profile))
@@ -184,7 +184,9 @@ class OfflineStorage(
     private suspend fun complete(asset: OfflineAsset, transfer: OfflineTransfer) {
         database.withTransaction {
             val latest = requireNotNull(dao.transfer(transfer.profile, transfer.id))
-            check(latest.state !in setOf("paused", "cancelled")) { "Download was cancelled." }
+            check(latest.state !in setOf("paused", "cancelled", "identity_paused")) {
+                "Download was cancelled."
+            }
             dao.putAsset(asset)
             dao.putReference(OfflineAssetReference(asset.profile, transfer.selection, asset.id))
             dao.putTransfer(
@@ -328,6 +330,59 @@ class OfflineStorage(
             }
         }
 
+    /**
+     * Removes one account profile, retaining only leased files until active playback releases them.
+     */
+    suspend fun removeProfile(profile: String) =
+        withContext(Dispatchers.IO) {
+            val current = dao.profile(profile) ?: return@withContext
+            database.withTransaction {
+                dao.putProfile(current.copy(locked = true, deletePending = true))
+                dao.cancelAllTransfers(profile)
+                dao.cancelEnumeration(profile)
+                dao.deleteAllAssetReferences(profile)
+            }
+
+            var transferOffset = 0
+            while (true) {
+                val transfers = dao.profileTransferPage(profile, 100, transferOffset)
+                transfers.forEach { transfer ->
+                    transfer.assetId?.let { assetId ->
+                        runCatching { staging(profile, assetId) }
+                            .getOrNull()
+                            ?.let { part ->
+                                if (part.exists()) check(part.delete())
+                            }
+                    }
+                }
+                if (transfers.size < 100) break
+                transferOffset += transfers.size
+            }
+
+            database.withTransaction {
+                dao.deleteAllTransfers(profile)
+                dao.deleteAllSelections(profile)
+                dao.deleteAllMembers(profile)
+                dao.deleteAllCatalog(profile)
+                dao.deleteAllStates(profile)
+                dao.deleteAllPlaybackStates(profile)
+                dao.deleteAllPlaylistEntries(profile)
+                dao.deleteAllPlaylists(profile)
+                dao.deleteAllOperations(profile)
+                dao.deleteAllAudioQueues(profile)
+            }
+
+            var afterAssetId = ""
+            while (true) {
+                val assets = dao.assetPageAfter(profile, afterAssetId, 100)
+                if (assets.isEmpty()) break
+                afterAssetId = assets.last().id
+                assets.forEach { prune(profile, it.id) }
+                if (assets.size < 100) break
+            }
+            finalizeProfileDeletion(profile)
+        }
+
     private suspend fun prune(profile: String, assetId: String) = mutex.withLock {
         if (dao.references(profile, assetId) != 0) return@withLock
         val asset = dao.asset(profile, assetId) ?: return@withLock
@@ -344,6 +399,23 @@ class OfflineStorage(
             if (dao.fileReferences(profile, it.relativePath, file.name.substringBefore('.')) == 0)
                 check(!file.exists() || file.delete())
         }
+        finalizeProfileDeletion(profile)
+    }
+
+    private suspend fun finalizeProfileDeletion(profile: String) {
+        val current = dao.profile(profile) ?: return
+        if (!current.deletePending || dao.assetCount(profile) != 0) return
+        while (true) {
+            val first = dao.supplementPage(profile, 100, 0).firstOrNull() ?: break
+            val supplements = dao.supplements(profile, first.asset)
+            database.withTransaction { dao.deleteSupplements(profile, first.asset) }
+            supplements.forEach { supplement ->
+                val file = paths.resolve(supplement.relativePath)
+                if (dao.fileReferences(profile, supplement.relativePath, "") == 0 && file.exists())
+                    check(file.delete())
+            }
+        }
+        dao.deleteProfileRecord(profile)
     }
 
     /** One bounded journal page. The caller persists the next offset for further work. */

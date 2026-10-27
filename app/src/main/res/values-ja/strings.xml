@@ -78,6 +78,9 @@
     <string name="offline_downloads">ダウンロード</string>
     <string name="offline_refresh_metadata">保存済みメタデータを更新</string>
     <string name="offline_new_version_available">サーバーに新しいバージョンがあります</string>
+    <string name="logout_download_policy_description">保存したメディアとオフラインアカウントデータを端末から削除するか、同じアカウントとサーバーで再度サインインするまでロックして保持します。</string>
+    <string name="logout_remove_downloads">保存済みダウンロードを削除</string>
+    <string name="logout_keep_downloads_locked">ダウンロードをロックして保持</string>
     <string name="offline_mode_active">オフラインモード · ネットワーク通信を停止中</string>
     <string name="offline_local_available">保存済みライブラリはこのデバイスで利用できます</string>
     <string name="offline_go_online">オンラインにする</string>

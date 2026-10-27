@@ -258,6 +258,41 @@ object DownloadExecution {
     ) {
         val runtime = OfflineRuntime.get(context)
         if (runtime.connection.state.first { it.initialized }.mode == ConnectionMode.OFFLINE) return
+        val initialProfile = runtime.database.offline().profile(profileId) ?: return
+        val initialSession = runtime.sessionStore.session.first() ?: return
+        if (
+            initialProfile.locked ||
+                initialProfile.account != initialSession.userId ||
+                initialProfile.serverUrl != initialSession.serverUrl
+        )
+            return
+        var identityVerified = false
+        var identityFailures = 0
+        while (!identityVerified && currentCoroutineContext().isActive) {
+            val policy = runtime.connection.state.value
+            if (
+                policy.mode == ConnectionMode.OFFLINE ||
+                    policy.authentication == OnlineAuthentication.NEEDS_SIGN_IN
+            )
+                return
+            val profile = runtime.database.offline().profile(profileId) ?: return
+            val session = runtime.sessionStore.session.first() ?: return
+            if (
+                profile.locked ||
+                    profile.account != session.userId ||
+                    profile.serverUrl != session.serverUrl
+            )
+                return
+            try {
+                if (!runtime.matchesCurrentServerIdentity(profileId, session)) return
+                identityVerified = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                delay(transferRetryDelay(++identityFailures).coerceAtMost(30_000L))
+            }
+        }
+        if (!identityVerified) return
         var failures = 0
         while (currentCoroutineContext().isActive) {
             if (runtime.connection.state.value.mode == ConnectionMode.OFFLINE) return

@@ -9,6 +9,83 @@ import org.junit.Test
 
 class OfflineStorageIntegrationTest {
     @Test
+    fun identityPausedTransferCannotPublishOrAdoptACompletedAsset() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "offline-identity-pause-test").apply { mkdirs() }
+        val db = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val profile = "e".repeat(64)
+        val id = "f".repeat(64)
+        val storage = OfflineStorage(db, root, scope, freeBytes = { 8 * OFFLINE_FREE_RESERVE })
+        try {
+            db.offline()
+                .putProfile(
+                    OfflineProfile(profile, "server", "user", "https://example.invalid", "User")
+                )
+            val transfer =
+                OfflineTransfer(
+                    profile,
+                    "transfer",
+                    "selection",
+                    "movie",
+                    "{}",
+                    state = "identity_paused",
+                    assetId = id,
+                    bytes = 4,
+                    total = 4,
+                )
+            db.offline().putTransfer(transfer)
+            val part = storage.staging(profile, id)
+            part.parentFile!!.mkdirs()
+            part.writeText("data")
+            val digest = sha256(part)
+            val asset =
+                OfflineAsset(
+                    profile,
+                    id,
+                    "movie",
+                    "original",
+                    "source",
+                    "revision",
+                    4,
+                    digest,
+                    "video/mp4",
+                    "{}",
+                    "",
+                )
+            val publishError = runCatching { storage.publish(asset, transfer.id) }.exceptionOrNull()
+            assertTrue(publishError is IllegalStateException)
+            assertFalse(storage.paths.resolve(storage.paths.relative(profile, id)).exists())
+
+            val adoptId = "1".repeat(64)
+            val adoptedBytes = "data"
+            val adoptedDigest = sha256(File(root, "adopt-source").apply { writeText(adoptedBytes) })
+            val adoptedRelative = storage.paths.relative(profile, adoptId)
+            val adoptedFile = storage.paths.resolve(adoptedRelative)
+            adoptedFile.parentFile!!.mkdirs()
+            adoptedFile.writeText(adoptedBytes)
+            db.offline()
+                .putAsset(
+                    asset.copy(
+                        id = adoptId,
+                        sha256 = adoptedDigest,
+                        relativePath = adoptedRelative,
+                        state = "complete",
+                    )
+                )
+            val adoptError =
+                runCatching { storage.adoptCompleted(profile, adoptId, transfer.id, adoptedDigest) }
+                    .exceptionOrNull()
+            assertTrue(adoptError is IllegalStateException)
+            assertEquals("identity_paused", db.offline().transfer(profile, transfer.id)?.state)
+        } finally {
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
+            db.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun sharedReferencesAndActivePlaybackProtectFiles() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.cacheDir, "offline-storage-test")

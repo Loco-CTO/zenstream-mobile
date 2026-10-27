@@ -133,6 +133,11 @@ interface OfflineDao {
     fun transferPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineTransfer>>
 
     @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile ORDER BY id LIMIT :limit OFFSET :offset"
+    )
+    suspend fun profileTransferPage(profile: String, limit: Int, offset: Int): List<OfflineTransfer>
+
+    @Query(
         "SELECT s.* FROM offline_selections s WHERE s.profile=:profile AND (s.state='metadata_only' OR (s.kind='playlist' AND s.state IN ('queued','complete','partial') AND s.error IS NULL AND NOT EXISTS (SELECT 1 FROM offline_playlists p WHERE p.profile=s.profile AND p.id=s.rootId AND p.complete=1))) LIMIT 1"
     )
     suspend fun playlistMetadataWork(profile: String): List<OfflineSelection>
@@ -184,6 +189,9 @@ interface OfflineDao {
     )
     suspend fun latestCompleteAsset(profile: String, item: String): OfflineAsset?
 
+    @Query("UPDATE offline_assets SET locked=1 WHERE profile=:profile AND item=:item")
+    suspend fun lockAssetsForItem(profile: String, item: String)
+
     @Query(
         "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item AND state='complete' AND locked=0 ORDER BY verifiedAt DESC,id"
     )
@@ -232,6 +240,11 @@ interface OfflineDao {
 
     @Query("SELECT * FROM offline_supplements WHERE profile=:profile AND asset=:asset")
     suspend fun supplements(profile: String, asset: String): List<OfflineSupplement>
+
+    @Query(
+        "SELECT * FROM offline_supplements WHERE profile=:profile ORDER BY asset,key LIMIT :limit OFFSET :offset"
+    )
+    suspend fun supplementPage(profile: String, limit: Int, offset: Int): List<OfflineSupplement>
 
     @Upsert suspend fun putState(value: OfflineUserState)
 
@@ -362,6 +375,9 @@ interface OfflineDao {
     @Query("DELETE FROM offline_assets WHERE profile=:profile AND id=:asset")
     suspend fun deleteAsset(profile: String, asset: String)
 
+    @Query("SELECT COUNT(*) FROM offline_assets WHERE profile=:profile")
+    suspend fun assetCount(profile: String): Int
+
     @Query("DELETE FROM offline_supplements WHERE profile=:profile AND asset=:asset")
     suspend fun deleteSupplements(profile: String, asset: String)
 
@@ -415,6 +431,15 @@ interface OfflineDao {
     suspend fun assetPage(profile: String, limit: Int, offset: Int): List<OfflineAsset>
 
     @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile AND id > :afterId ORDER BY id LIMIT :limit"
+    )
+    suspend fun assetPageAfter(
+        profile: String,
+        afterId: String,
+        limit: Int,
+    ): List<OfflineAsset>
+
+    @Query(
         "UPDATE offline_transfers SET state='cancelled',reserved=0 WHERE profile=:profile AND selection=:selection"
     )
     suspend fun cancelSelectionTransfers(profile: String, selection: String)
@@ -463,6 +488,31 @@ interface OfflineDao {
     suspend fun cancelAllTransfers(profile: String)
 
     @Query(
+        "UPDATE offline_transfers SET state='cancelled',reserved=0,error='access_revoked' WHERE profile=:profile AND item=:item AND state NOT IN ('complete','cancelled')"
+    )
+    suspend fun cancelTransfersForItem(profile: String, item: String)
+
+    @Query(
+        "UPDATE offline_transfers SET state='identity_paused',reserved=0 WHERE profile=:profile AND state NOT IN ('complete','cancelled','failed','paused','identity_paused')"
+    )
+    suspend fun pauseTransfersForIdentityChange(profile: String)
+
+    @Query(
+        "UPDATE offline_transfers SET state='queued' WHERE profile=:profile AND state='identity_paused'"
+    )
+    suspend fun resumeTransfersAfterIdentityChange(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state='identity_paused_'||state WHERE profile=:profile AND state IN ('enumerating','ready','queueing','metadata_only')"
+    )
+    suspend fun pauseSelectionsForIdentityChange(profile: String)
+
+    @Query(
+        "UPDATE offline_selections SET state=substr(state,17) WHERE profile=:profile AND state LIKE 'identity_paused_%'"
+    )
+    suspend fun resumeSelectionsAfterIdentityChange(profile: String)
+
+    @Query(
         "UPDATE offline_selections SET state='paused_'||state WHERE profile=:profile AND state IN ('enumerating','ready','queueing','metadata_only')"
     )
     suspend fun pauseEnumeration(profile: String)
@@ -471,6 +521,39 @@ interface OfflineDao {
         "UPDATE offline_selections SET state='partial' WHERE profile=:profile AND state IN ('enumerating','ready','queueing','queued','downloading','metadata_only')"
     )
     suspend fun cancelEnumeration(profile: String)
+
+    @Query("DELETE FROM offline_asset_refs WHERE profile=:profile")
+    suspend fun deleteAllAssetReferences(profile: String)
+
+    @Query("DELETE FROM offline_transfers WHERE profile=:profile")
+    suspend fun deleteAllTransfers(profile: String)
+
+    @Query("DELETE FROM offline_selections WHERE profile=:profile")
+    suspend fun deleteAllSelections(profile: String)
+
+    @Query("DELETE FROM offline_members WHERE profile=:profile")
+    suspend fun deleteAllMembers(profile: String)
+
+    @Query("DELETE FROM offline_catalog WHERE profile=:profile")
+    suspend fun deleteAllCatalog(profile: String)
+
+    @Query("DELETE FROM offline_states WHERE profile=:profile")
+    suspend fun deleteAllStates(profile: String)
+
+    @Query("DELETE FROM offline_playback_states WHERE profile=:profile")
+    suspend fun deleteAllPlaybackStates(profile: String)
+
+    @Query("DELETE FROM offline_playlists WHERE profile=:profile")
+    suspend fun deleteAllPlaylists(profile: String)
+
+    @Query("DELETE FROM offline_playlist_entries WHERE profile=:profile")
+    suspend fun deleteAllPlaylistEntries(profile: String)
+
+    @Query("DELETE FROM offline_operations WHERE profile=:profile")
+    suspend fun deleteAllOperations(profile: String)
+
+    @Query("DELETE FROM offline_audio_queues WHERE profile=:profile")
+    suspend fun deleteAllAudioQueues(profile: String)
 
     @Query(
         "SELECT (SELECT COUNT(*) FROM offline_selections WHERE profile=:profile AND state IN ('enumerating','ready','queueing','removal_pending','metadata_only')) + (SELECT COUNT(*) FROM offline_selections s WHERE s.profile=:profile AND s.kind='playlist' AND s.state IN ('queued','complete','partial') AND s.error IS NULL AND NOT EXISTS(SELECT 1 FROM offline_playlists p WHERE p.profile=s.profile AND p.id=s.rootId AND p.complete=1))"

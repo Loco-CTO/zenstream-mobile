@@ -484,7 +484,7 @@ private fun MainScaffold(
     onRetryAuthentication: () -> Unit,
     pendingDeepLink: NativeAppDeepLink?,
     onNativeAppLinkConsumed: () -> Unit,
-    onLogout: () -> Unit,
+    onLogout: (keepDownloadsLocked: Boolean) -> Unit,
     onPasswordChanged: () -> Unit,
     onPickAvatar: () -> Unit,
     avatarPickerResult: Uri?,
@@ -863,9 +863,9 @@ private fun MainScaffold(
                             MyPageScreen(
                                 repository = repository,
                                 session = session,
-                                onLogout = {
+                                onLogout = { keepDownloadsLocked ->
                                     audio.stopAndClear()
-                                    onLogout()
+                                    onLogout(keepDownloadsLocked)
                                 },
                                 onPasswordChanged = onPasswordChanged,
                                 outerPadding = padding,

@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
 fun MyPageScreen(
     repository: CatalogRepository,
     session: AuthSession,
-    onLogout: () -> Unit,
+    onLogout: (keepDownloadsLocked: Boolean) -> Unit,
     outerPadding: PaddingValues = PaddingValues(),
     onPickAvatar: () -> Unit = {},
     avatarPickerResult: Uri? = null,

@@ -151,7 +151,7 @@ class OfflineCatalogRepository(
         requireNotNull(dao.profile(profile)) { "Offline profile is unavailable." }
             .also { check(!it.locked) { "Sign in to unlock these downloads." } }
 
-    suspend fun discover(session: AuthSession): Pair<OfflineProfile, JSONObject> {
+    suspend fun capabilities(session: AuthSession): JSONObject {
         val capabilities = request(session, "/api/offline/capabilities", "GET", null)
         check(
             capabilities.optBoolean("enabled") &&
@@ -159,12 +159,24 @@ class OfflineCatalogRepository(
         ) {
             "This server does not support downloads."
         }
+        capabilities.getString("serverInstanceId")
+        return capabilities
+    }
+
+    suspend fun discover(session: AuthSession): Pair<OfflineProfile, JSONObject> {
+        val capabilities = capabilities(session)
         val instance = capabilities.getString("serverInstanceId")
         val id = OfflineProfile.identity(instance, session.userId)
         val existing = dao.profile(id)
+        check(existing?.deletePending != true) {
+            "Offline downloads for this profile are being removed."
+        }
         val profile =
-            existing?.copy(serverUrl = session.serverUrl, displayName = session.username)
-                ?: OfflineProfile(id, instance, session.userId, session.serverUrl, session.username)
+            existing?.copy(
+                serverUrl = session.serverUrl,
+                displayName = session.username,
+                locked = false,
+            ) ?: OfflineProfile(id, instance, session.userId, session.serverUrl, session.username)
         dao.putProfile(profile)
         return profile to capabilities
     }

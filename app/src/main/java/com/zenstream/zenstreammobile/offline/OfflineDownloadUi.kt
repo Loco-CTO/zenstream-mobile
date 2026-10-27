@@ -190,6 +190,10 @@ fun OfflineDownloadHost(
             onOpenConsumed()
         }
     }
+    LaunchedEffect(runtime, session?.serverUrl, session?.userId) {
+        if (runtime != null && session != null && OfflineRuntime.ENABLED)
+            runtime.onAuthenticatedSession(session)
+    }
     CompositionLocalProvider(LocalDownloadUi provides actions) {
         Box(Modifier.fillMaxSize()) {
             content()

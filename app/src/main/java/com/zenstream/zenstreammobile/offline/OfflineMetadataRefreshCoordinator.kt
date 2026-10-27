@@ -99,6 +99,8 @@ class OfflineMetadataRefreshCoordinator(
             "unavailable",
             "deleted" -> {
                 dao.putItems(listOf(previous.copy(unavailable = true, newSourceAvailable = false)))
+                dao.lockAssetsForItem(profileId, previous.id)
+                dao.cancelTransfersForItem(profileId, previous.id)
                 return
             }
             "unchanged",

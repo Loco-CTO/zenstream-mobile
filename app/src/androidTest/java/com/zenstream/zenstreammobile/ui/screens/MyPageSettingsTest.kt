@@ -53,6 +53,30 @@ class MyPageSettingsTest {
     }
 
     @Test
+    fun logoutExplainsAndReportsBothDownloadPolicies() {
+        var keepLocked: Boolean? = null
+        composeRule.setContent {
+            ZenStreamTheme { MyPageSettingsFooter(onLogout = { keepLocked = it }) }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_download_policy_description))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_keep_downloads_locked))
+            .performClick()
+        composeRule.runOnIdle { assertEquals(true, keepLocked) }
+
+        composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_remove_downloads))
+            .performClick()
+        composeRule.runOnIdle { assertEquals(false, keepLocked) }
+    }
+
+    @Test
     fun mpvAdvancedSettingsAreShownOnlyForMpvAndCanBeChanged() {
         var state by
             mutableStateOf(

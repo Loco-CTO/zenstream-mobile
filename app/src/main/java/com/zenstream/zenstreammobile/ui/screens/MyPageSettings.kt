@@ -368,13 +368,14 @@ internal fun MyPageSettingsContent(
 }
 
 @Composable
-internal fun MyPageSettingsFooter(onLogout: () -> Unit) {
+internal fun MyPageSettingsFooter(onLogout: (keepDownloadsLocked: Boolean) -> Unit) {
+    var logoutConfirmationOpen by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         OutlinedButton(
-            onClick = onLogout,
+            onClick = { logoutConfirmationOpen = true },
             modifier = Modifier.fillMaxWidth(),
             colors =
                 ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
@@ -388,6 +389,32 @@ internal fun MyPageSettingsFooter(onLogout: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
     }
+    if (logoutConfirmationOpen)
+        AlertDialog(
+            onDismissRequest = { logoutConfirmationOpen = false },
+            title = { Text(stringResource(R.string.logout)) },
+            text = { Text(stringResource(R.string.logout_download_policy_description)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        logoutConfirmationOpen = false
+                        onLogout(false)
+                    }
+                ) {
+                    Text(stringResource(R.string.logout_remove_downloads))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        logoutConfirmationOpen = false
+                        onLogout(true)
+                    }
+                ) {
+                    Text(stringResource(R.string.logout_keep_downloads_locked))
+                }
+            },
+        )
 }
 
 @Composable
