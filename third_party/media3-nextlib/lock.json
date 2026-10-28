@@ -1,0 +1,75 @@
+{
+  "nextlib_commit": "2dc77cd2d9352bc308aa26782f9c77a320df510b",
+  "media3_version": "1.11.1",
+  "ndk_version": "25.2.9519653",
+  "artifact": "nextlib-media3ext-1.11.1-0.16.0-zenstream1.aar",
+  "artifact_sha256": "5c0794e5733d075b61c14f6248d3683c11907b5d08a4242c609d5c9cb1ab06a6",
+  "sources": [
+    {
+      "name": "nextlib.zip",
+      "url": "https://codeload.github.com/anilbeesetti/nextlib/zip/2dc77cd2d9352bc308aa26782f9c77a320df510b",
+      "sha256": "d9132862e57ab9a201b2064686a4e53a2deebf2191adaf52d14932f39769619e",
+      "directory": "nextlib-2dc77cd2d9352bc308aa26782f9c77a320df510b"
+    },
+    {
+      "name": "ffmpeg-9.0.1.tar.gz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.gz",
+      "sha256": "657dbf258cce6c0681714b6e40b8ca69e988c67ecfc2f7aab47574e6ebaceb38",
+      "directory": "ffmpeg-9.0.1"
+    },
+    {
+      "name": "dav1d-1.5.4.tar.gz",
+      "url": "https://codeload.github.com/videolan/dav1d/tar.gz/refs/tags/1.5.4",
+      "sha256": "a1d5b63d2d38ec9bd03acf643caa51fa22edd1e89c5a109c4807717216bbec07",
+      "directory": "dav1d-1.5.4"
+    },
+    {
+      "name": "mbedtls-3.6.7.tar.bz2",
+      "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
+      "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6",
+      "directory": "mbedtls-3.6.7"
+    }
+  ],
+  "mpv_sha256": {
+    "app/src/main/jniLibs/arm64-v8a/libavcodec.so": "79e6d002104eff3235674f9f553822cd03b34ca2ac0afe77c5b6f624bcda43c4",
+    "app/src/main/jniLibs/arm64-v8a/libavdevice.so": "a5e76247d49e64848bcd5c70582c2d6fa5a3d8e86dfdc5de76c24899720df230",
+    "app/src/main/jniLibs/arm64-v8a/libavfilter.so": "57270bd5623b60d2d3301e01d9f2716c6b7e7731184461afd154fef0158585ab",
+    "app/src/main/jniLibs/arm64-v8a/libavformat.so": "08c63fa386620f1a32ea28bc8fda7aa1627389cf23c7c90e34526a5f7f7a9ca1",
+    "app/src/main/jniLibs/arm64-v8a/libavutil.so": "1c686aa8f4efd9ee89e1e70aefc87815c2afc6b1244df612659b47da7d34140a",
+    "app/src/main/jniLibs/arm64-v8a/libc++_shared.so": "0c52cfab2df0d957d8b346a2bdc5ae8d71feca2591924d77e1cd724d5bf74352",
+    "app/src/main/jniLibs/arm64-v8a/libmpv.so": "bd6f8d1b0f89dca96332d7cfbcc9a53c70ff71da54d5f3b6fa76b35a152f0cda",
+    "app/src/main/jniLibs/arm64-v8a/libplayer.so": "c083806dd24927bc85fa7174568a49ed7d5556451f639ffbbd934a76b9cff70c",
+    "app/src/main/jniLibs/arm64-v8a/libswresample.so": "ba462e741e529ffdf38adc2ad5ae1b10f1b906e61f48a8c7adc8296529647be2",
+    "app/src/main/jniLibs/arm64-v8a/libswscale.so": "bad22e11c5eec938579c11fc38eade0d2058112a76d34f2ff39c0ae8e960b4f2",
+    "app/src/main/jniLibs/armeabi-v7a/libavcodec.so": "54382d9ad0a85a781820600228226154a1eabbc8303c461140b105e32def5fd7",
+    "app/src/main/jniLibs/armeabi-v7a/libavdevice.so": "a903feb022a26bd172e6ba53ec0234982b07db864e4e7125cfe3910e11215eee",
+    "app/src/main/jniLibs/armeabi-v7a/libavfilter.so": "d419c4f233deb39654f286b212faf8c16f5374ffed295e36f6f70e5b77a5b050",
+    "app/src/main/jniLibs/armeabi-v7a/libavformat.so": "ec8f7fcddc7e996cf67b944be9a3c0d809679f94a24f35208d76a0d0f85535a7",
+    "app/src/main/jniLibs/armeabi-v7a/libavutil.so": "a0a27ec1592ad404131c12f5bc66e88282182b9dc59a63a9dcdd47f3f5196178",
+    "app/src/main/jniLibs/armeabi-v7a/libc++_shared.so": "7ce65fd0fdd49236bc2ee618f6968dbb3fca46434845f563f2bb4c994878853e",
+    "app/src/main/jniLibs/armeabi-v7a/libmpv.so": "5a6206440aafe69da2586e8bfcadb3e890795c3250f4ca38e74d8f68d445411b",
+    "app/src/main/jniLibs/armeabi-v7a/libplayer.so": "b64386fdd6c0307554a831ac2ab62bf55c260b4161b760a7a4c032924ba80d66",
+    "app/src/main/jniLibs/armeabi-v7a/libswresample.so": "5cb6f4f648a2da6f2fcfd02a9e7afa8300594d9c0f79fc1ead673efe6d4e1322",
+    "app/src/main/jniLibs/armeabi-v7a/libswscale.so": "e6182478b83fa61c957244b7296a37a08c6130ed73faf1123389c08126a7a2cd",
+    "app/src/main/jniLibs/x86/libavcodec.so": "0dba46671d3f7b891c28b1c20b6b0afea7741ee54a293ca4b6bcbac875d5d88d",
+    "app/src/main/jniLibs/x86/libavdevice.so": "68a3653d6b5a031484bb833dac0004c1318eafcec159922b9718d60dbebbe406",
+    "app/src/main/jniLibs/x86/libavfilter.so": "5bbc582acaf5f16c9377aef67c0a5424418b59b7252f0314263b786d6118754a",
+    "app/src/main/jniLibs/x86/libavformat.so": "d00439020e76eebd71393c4b7bb1337b24aeaf517860e8d83586143ddd606e3d",
+    "app/src/main/jniLibs/x86/libavutil.so": "09c49efde09a3886687d5482a70aae87d1970bc9e27d582f64f4ed9dd470405b",
+    "app/src/main/jniLibs/x86/libc++_shared.so": "3553e4dfd7c62f16862861ebd716636df7606b37b2c59a121314507e627df581",
+    "app/src/main/jniLibs/x86/libmpv.so": "a954ca62de752698fbc5f126934c66961e9149456a4273821a1bcefa3978d97f",
+    "app/src/main/jniLibs/x86/libplayer.so": "5c1164d57816543e56431f187cf5c8d0946250308fb33f272ae5d7b197555fbc",
+    "app/src/main/jniLibs/x86/libswresample.so": "23faa0d6c220c3103fdbd372f2b5e67f99c9ccd354ec4fae6b3619f52a1ea590",
+    "app/src/main/jniLibs/x86/libswscale.so": "cc775e35979a1e58d6d2b59ba3c19b497e911af185fabebeb70ccf5dc09c60bc",
+    "app/src/main/jniLibs/x86_64/libavcodec.so": "67fc34fddc91311cc321fe376b6cc9b8c5e15c5f9e842222cbce363c037bd104",
+    "app/src/main/jniLibs/x86_64/libavdevice.so": "3946d0c67fd52820b9d183aec345329070b7f7ee3b13bf9a405065e938ce3b49",
+    "app/src/main/jniLibs/x86_64/libavfilter.so": "04b673f906ff9a8e1ad4e4e0597e9a76597fd27130a6141344dd98f9d30dcb84",
+    "app/src/main/jniLibs/x86_64/libavformat.so": "d43558db2fd837bbf6acc1a2719b0c88f115ab2d89b3d726383c76f3715bf5ea",
+    "app/src/main/jniLibs/x86_64/libavutil.so": "ff17cfadf4628771338da5c214a907f39f15b8e8288d85034dc6714608021e6d",
+    "app/src/main/jniLibs/x86_64/libc++_shared.so": "e28cb9e0f456caf8498d0e8562b3ac3f73bf78c07555a52b5602396f240abec3",
+    "app/src/main/jniLibs/x86_64/libmpv.so": "6d1dfdb568875127054caef6642ac6518b5d96f5cbc972e6a4d04ef5b5d70a61",
+    "app/src/main/jniLibs/x86_64/libplayer.so": "cd1733039255165adf2b27e656ee4c53e9b6704cd59d49668e41735b9a27a3c3",
+    "app/src/main/jniLibs/x86_64/libswresample.so": "abff286ea4e163180aa41d5d287e4f03812455c20cfa325707b4769aded83965",
+    "app/src/main/jniLibs/x86_64/libswscale.so": "cf31370953260daa4f8893fa1d8a360bad7733abd6cc47af9d685137e596782b"
+  }
+}

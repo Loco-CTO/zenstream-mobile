@@ -1,0 +1,4 @@
+third_party/media3-nextlib/*.sh text eol=lf
+third_party/media3-nextlib/*.py text eol=lf
+third_party/media3-nextlib/Dockerfile text eol=lf
+scripts/generate-media3-fixtures.py text eol=lf

@@ -8,18 +8,18 @@ import org.junit.Test
 
 class Media3DecoderArtifactsTest {
     @Test
-    fun bundledAv1ArtifactIncludesEverySupportedAbi() {
+    fun bundledNextlibArtifactIncludesEverySupportedAbi() {
         assertNativeLibraries(
-            artifactName = "media3-decoder-av1-1.11.1.aar",
-            libraryName = "libdav1dJNI.so",
+            artifactName = "nextlib-media3ext-1.11.1-0.16.0-zenstream1.aar",
+            libraryName = "libmedia3ext.so",
         )
     }
 
     @Test
-    fun bundledFfmpegArtifactIncludesEverySupportedAbi() {
+    fun bundledNextlibFfmpegUsesPrivateLibraryNames() {
         assertNativeLibraries(
-            artifactName = "media3-decoder-ffmpeg-1.11.1.aar",
-            libraryName = "libffmpegJNI.so",
+            artifactName = "nextlib-media3ext-1.11.1-0.16.0-zenstream1.aar",
+            libraryName = "libavcodec-zenstream-media3.so",
         )
     }
 

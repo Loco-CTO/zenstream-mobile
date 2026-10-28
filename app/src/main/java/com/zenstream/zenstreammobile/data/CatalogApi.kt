@@ -2527,6 +2527,10 @@ internal fun parseMediaSource(source: JSONObject): MediaSource {
                                 tags?.optString("handler_name") == "Lyrics" ||
                                 tags?.optString("title") == "Lyrics",
                         codec = stream.optString("codec_name").ifBlank { null },
+                        colorTransfer = stream.optString("color_transfer").ifBlank { null },
+                        profile = stream.optString("profile").ifBlank { null },
+                        pixelFormat = stream.optString("pix_fmt").ifBlank { null },
+                        isAttachedPicture = disposition?.optInt("attached_pic", 0) == 1,
                         width = stream.optIntOrNull("width"),
                         height = stream.optIntOrNull("height"),
                         channels = stream.optIntOrNull("channels"),

@@ -12,8 +12,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zenstream.zenstreammobile.model.MediaStream
+import com.zenstream.zenstreammobile.ui.player.VideoDecoderPreference
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -107,5 +109,34 @@ class PlaybackSheetTest {
         composeRule.onNodeWithText("Subtitles off").assertIsSelected().performClick()
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("Subtitles off").assertCountEquals(0)
+    }
+
+    @Test
+    fun media3QualitySheetExposesPerPlaybackDecoderSelection() {
+        var selected = VideoDecoderPreference.AUTO
+        composeRule.setContent {
+            ZenStreamTheme {
+                PlayerBottomSheet(
+                    sheet = PlayerSheet.Quality,
+                    selectedSubtitle = null,
+                    selectedAudio = null,
+                    selectedQuality = 0,
+                    audio = emptyList(),
+                    subtitles = emptyList(),
+                    qualities = listOf(0, 8_000_000),
+                    speed = 1f,
+                    onDismiss = {},
+                    onSubtitle = {},
+                    onAudio = {},
+                    onQuality = {},
+                    onSpeed = {},
+                    decoderPreference = VideoDecoderPreference.AUTO,
+                    onVideoDecoder = { selected = it },
+                )
+            }
+        }
+        composeRule.onNodeWithText("Video decoder").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("App software (FFmpeg)").performScrollTo().performClick()
+        composeRule.runOnIdle { assertEquals(VideoDecoderPreference.APP_SOFTWARE, selected) }
     }
 }

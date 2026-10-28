@@ -41,6 +41,10 @@ data class MediaStream(
     val channels: Int? = null,
     val bitrate: Int? = null,
     val sampleRate: Int? = null,
+    val colorTransfer: String? = null,
+    val profile: String? = null,
+    val pixelFormat: String? = null,
+    val isAttachedPicture: Boolean = false,
 )
 
 data class BazarrSubtitleSummary(
