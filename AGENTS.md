@@ -35,3 +35,7 @@ This repository owns the ZenStream Android client. It is a Jetpack Compose appli
 - Use sentence-case headings, short paragraphs, descriptive links, and repository-relative paths.
 - Architecture documents explain ownership and flows. Keep detailed behavior in one focused guide and link it here; do not duplicate the entire feature specification in `AGENTS.md`.
 - Update `docs/ui-design.md` when shared visual or navigation patterns change; keep feature-specific behavior in its focused guide.
+
+## Downloads interface
+
+- Downloads browsing and local container navigation live in `OfflineLibraryUi.kt`; `OfflineTransferUi.kt` groups transfer controls by selection, and `OfflineDownloadSettings.kt` owns connection/storage preferences. The landing list groups shows and albums, while search may return their descendants. Route containers locally before dispatching individual playback, preserve album queues and local Continue Watching/Next Up, and retain filter/search/scroll state through Back navigation. Keep offline UI on the shared theme background and match Library filters and Favorites media rows.

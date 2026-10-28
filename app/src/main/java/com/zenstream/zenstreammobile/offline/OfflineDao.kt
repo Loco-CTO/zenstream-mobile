@@ -128,6 +128,11 @@ interface OfflineDao {
     fun selectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
 
     @Query(
+        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile ORDER BY CASE WHEN s.state NOT IN ('complete','metadata_complete','cancelled') OR s.id IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')) THEN 0 ELSE 1 END,s.title COLLATE NOCASE,s.id LIMIT :limit OFFSET :offset"
+    )
+    fun managedSelectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
+
+    @Query(
         "SELECT * FROM offline_transfers WHERE profile=:profile ORDER BY priority DESC,id LIMIT :limit OFFSET :offset"
     )
     fun transferPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineTransfer>>
@@ -391,6 +396,80 @@ interface OfflineDao {
         limit: Int,
         offset: Int,
     ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id
+                WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), candidates AS (SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved))
+        SELECT c.* FROM candidates c WHERE
+            (:category='' OR (:category='movies' AND c.type='movie') OR
+             (:category='tv' AND c.type IN ('series','season','episode')) OR
+             (:category='music' AND c.type IN ('release','track')))
+            AND (c.type IN ('movie','series','release') OR
+                (c.type='season' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='series')) OR
+                (c.type='episode' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type IN ('series','season'))) OR
+                (c.type='track' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='release')))
+        ORDER BY c.name COLLATE NOCASE,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun downloadRoots(
+        profile: String,
+        category: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE descendants(id) AS (
+            SELECT :root UNION SELECT c.id FROM offline_catalog c JOIN descendants p ON c.parentId=p.id WHERE c.profile=:profile
+        ), saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), member_ids(id) AS (
+            SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:root
+            UNION SELECT c.parentId FROM offline_catalog c JOIN member_ids m ON c.id=m.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), candidates AS (
+            SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id<>:root AND c.id IN (SELECT id FROM saved)
+                AND (c.id IN (SELECT id FROM descendants) OR c.id IN (SELECT id FROM member_ids))
+        ) SELECT c.* FROM candidates c WHERE c.name LIKE :query ESCAPE '!' AND (
+            (:kind IN ('series','season') AND c.type='episode') OR
+            (:kind='release' AND c.type='track') OR
+            (:kind='artist' AND (c.type='release' OR (c.type='track' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='release')))) OR
+            (:kind='collection' AND (c.type IN ('movie','series','release') OR
+                (c.type='season' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='series')) OR
+                (c.type='episode' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type IN ('series','season'))) OR
+                (c.type='track' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='release')))))
+        ORDER BY c.season,c.episode,c.episodeEnd,c.disc,c.track,c.name COLLATE NOCASE,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun downloadChildren(
+        profile: String,
+        root: String,
+        kind: String,
+        query: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM offline_transfers WHERE profile=:profile AND state NOT IN ('complete','cancelled')) + (SELECT COUNT(*) FROM offline_selections s WHERE s.profile=:profile AND s.state IN ('enumerating','ready','queueing','metadata_only','paused_enumerating','paused_ready','paused_queueing','paused_metadata_only') AND s.id NOT IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')))"
+    )
+    fun pendingDownloadCount(profile: String): Flow<Int>
+
+    @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND selection=:selection ORDER BY priority DESC,id LIMIT :limit OFFSET :offset"
+    )
+    fun selectionTransferPage(
+        profile: String,
+        selection: String,
+        limit: Int,
+        offset: Int,
+    ): Flow<List<OfflineTransfer>>
+
+    @Query(
+        "SELECT COUNT(DISTINCT e.track) FROM offline_playlist_entries e JOIN offline_assets a ON a.profile=e.profile AND a.item=e.track AND a.state='complete' AND a.locked=0 WHERE e.profile=:profile AND e.playlist=:playlist"
+    )
+    suspend fun playlistDownloadedCount(profile: String, playlist: String): Int
 
     @Query(
         "WITH RECURSIVE descendants(id) AS (SELECT :item UNION SELECT e.id FROM offline_catalog e JOIN descendants d ON e.parentId=d.id WHERE e.profile=:profile) SELECT COUNT(DISTINCT c.id) AS total,COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN c.id END) AS downloaded,COUNT(DISTINCT CASE WHEN c.newSourceAvailable=1 THEN c.id END) AS newSourceAvailable FROM offline_catalog c LEFT JOIN offline_assets a ON a.profile=c.profile AND a.item=c.id AND a.state='complete' AND a.locked=0 WHERE c.profile=:profile AND c.type IN ('movie','episode','track') AND (c.id IN (SELECT id FROM descendants) OR c.id IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:item))"
