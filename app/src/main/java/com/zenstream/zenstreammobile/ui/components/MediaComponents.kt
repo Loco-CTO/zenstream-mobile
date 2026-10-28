@@ -71,23 +71,7 @@ fun MediaRowView(
             uniqueItems
         }
     if (visibleItems.isEmpty()) return
-    val title =
-        when (row.title) {
-            RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
-            RowTitle.NextUp -> stringResource(R.string.next_up)
-            RowTitle.Recommendations -> stringResource(R.string.recommendations_for_you)
-            RowTitle.MyList -> stringResource(R.string.favorites)
-            RowTitle.FavoriteMusic -> stringResource(R.string.favorite_music)
-            RowTitle.Genre -> row.label.orEmpty()
-            RowTitle.NewlyAdded ->
-                row.libraryName?.let {
-                    stringResource(R.string.newly_added_on, it)
-                } ?: stringResource(R.string.newly_added)
-            RowTitle.TopRated ->
-                row.libraryName?.let {
-                    stringResource(R.string.top_rated_on, it)
-                } ?: stringResource(R.string.top_rated)
-        }
+    val title = homeSectionTitle(row)
     val resolvedTitle =
         if (
             row.title == RowTitle.NewlyAdded ||
@@ -145,6 +129,23 @@ fun MediaRowView(
         Spacer(Modifier.height(24.dp))
     }
 }
+
+@Composable
+internal fun homeSectionTitle(row: MediaRow): String =
+    when (row.title) {
+        RowTitle.ContinueWatching -> stringResource(R.string.continue_watching)
+        RowTitle.NextUp -> stringResource(R.string.next_up)
+        RowTitle.Recommendations -> stringResource(R.string.recommendations_for_you)
+        RowTitle.MyList -> stringResource(R.string.favorites)
+        RowTitle.FavoriteMusic -> stringResource(R.string.favorite_music)
+        RowTitle.Genre -> row.label.orEmpty()
+        RowTitle.NewlyAdded ->
+            row.libraryName?.let { stringResource(R.string.newly_added_on, it) }
+                ?: stringResource(R.string.newly_added)
+        RowTitle.TopRated ->
+            row.libraryName?.let { stringResource(R.string.top_rated_on, it) }
+                ?: stringResource(R.string.top_rated)
+    }
 
 internal data class EpisodeStack(val items: List<MediaItem>)
 
