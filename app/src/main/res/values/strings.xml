@@ -474,6 +474,14 @@
     <string name="select_season">Select season</string>
     <string name="appearance_group">Appearance</string>
     <string name="appearance_settings_summary">Language and metadata</string>
+    <string name="home_sections_settings_summary">Reorder or hide Home sections</string>
+    <string name="home_sections_description">Drag sections to reorder them. Turn a section off to hide it from Home.</string>
+    <string name="loading_home_sections">Loading Home sections…</string>
+    <string name="home_sections_load_failed">Could not load Home sections.</string>
+    <string name="home_sections_save_failed">Could not save Home section preferences.</string>
+    <string name="no_home_sections">No Home sections are available yet.</string>
+    <string name="reorder_home_section">Drag to reorder %1$s</string>
+    <string name="show_home_section">Show %1$s on Home</string>
     <string name="interface_language">Interface language</string>
     <string name="interface_language_automatic">Automatic (device language)</string>
     <string name="language_english">English</string>
@@ -612,4 +620,15 @@
     <string name="offline_playlist_group_kind_partial">%1$s · locally known tracks only, so the set may be partial</string>
     <string name="offline_playlist_add_cached_tracks">Add cached tracks</string>
     <string name="offline_playlist_group_added_count">Added %1$d locally known tracks. New media was not downloaded.</string>
+    <string name="player_video_decoder">Video decoder</string>
+    <string name="player_decoder_auto">Automatic</string>
+    <string name="player_decoder_hardware">Hardware</string>
+    <string name="player_decoder_android_software">Android software</string>
+    <string name="player_decoder_app_software">App software (FFmpeg)</string>
+    <string name="player_debug_video_decoder">V. decoder</string>
+    <string name="player_debug_audio_decoder">A. decoder</string>
+    <string name="player_debug_first_frame">First frame</string>
+    <string name="player_debug_recovery">Recovery</string>
+    <string name="player_frame_rendered">Rendered</string>
+    <string name="player_frame_pending">Waiting for video</string>
 </resources>

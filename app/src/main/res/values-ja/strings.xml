@@ -472,6 +472,14 @@
     <string name="rating_description">%1$sの評価</string>
     <string name="appearance_group">&#x5916;&#x89B3;</string>
     <string name="appearance_settings_summary">&#x8868;&#x793A;&#x8A00;&#x8A9E;&#x3068;&#x30E1;&#x30BF;&#x30C7;&#x30FC;&#x30BF;</string>
+    <string name="home_sections_settings_summary">ホームのセクションを並べ替え、表示を切り替えます</string>
+    <string name="home_sections_description">ドラッグしてセクションを並べ替えます。オフにするとホームから非表示になります。</string>
+    <string name="loading_home_sections">ホームのセクションを読み込み中…</string>
+    <string name="home_sections_load_failed">ホームのセクションを読み込めませんでした。</string>
+    <string name="home_sections_save_failed">ホームのセクション設定を保存できませんでした。</string>
+    <string name="no_home_sections">現在、ホームに表示できるセクションはありません。</string>
+    <string name="reorder_home_section">ドラッグして並べ替え: %1$s</string>
+    <string name="show_home_section">ホームに「%1$s」を表示</string>
     <string name="interface_language">&#x8868;&#x793A;&#x8A00;&#x8A9E;</string>
     <string name="interface_language_automatic">&#x81EA;&#x52D5;&#xFF08;&#x30C7;&#x30D0;&#x30A4;&#x30B9;&#x306E;&#x8A00;&#x8A9E;&#xFF09;</string>
     <string name="language_english">English</string>
@@ -608,4 +616,15 @@
     <string name="offline_playlist_group_kind_partial">%1$s · ローカルで確認できる曲のみのため、一部の曲だけの場合があります</string>
     <string name="offline_playlist_add_cached_tracks">キャッシュ済みの曲を追加</string>
     <string name="offline_playlist_group_added_count">ローカルで確認できる曲を%1$d件追加しました。メディアはダウンロードされていません。</string>
+    <string name="player_video_decoder">映像デコーダー</string>
+    <string name="player_decoder_auto">自動</string>
+    <string name="player_decoder_hardware">ハードウェア</string>
+    <string name="player_decoder_android_software">Androidソフトウェア</string>
+    <string name="player_decoder_app_software">アプリソフトウェア（FFmpeg）</string>
+    <string name="player_debug_video_decoder">映像デコーダー</string>
+    <string name="player_debug_audio_decoder">音声デコーダー</string>
+    <string name="player_debug_first_frame">初回フレーム</string>
+    <string name="player_debug_recovery">復旧</string>
+    <string name="player_frame_rendered">表示済み</string>
+    <string name="player_frame_pending">映像を待機中</string>
 </resources>

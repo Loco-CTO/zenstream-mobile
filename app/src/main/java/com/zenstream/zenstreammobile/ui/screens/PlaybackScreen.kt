@@ -122,6 +122,7 @@ import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
 import com.zenstream.zenstreammobile.ui.components.ToastHost
 import com.zenstream.zenstreammobile.ui.components.rememberToastHostState
 import com.zenstream.zenstreammobile.ui.player.SubtitleOverlay
+import com.zenstream.zenstreammobile.ui.player.VideoDecoderPreference
 import com.zenstream.zenstreammobile.ui.player.subtitleBottomPadding
 import com.zenstream.zenstreammobile.ui.syncplayWaitingForMembers
 import kotlinx.coroutines.delay
@@ -903,6 +904,11 @@ fun PlaybackScreen(
                 subtitles = state.playback?.subtitles.orEmpty(),
                 qualities = state.playback?.qualities.orEmpty(),
                 speed = state.engine.speed,
+                decoderPreference = state.engine.media3?.preference,
+                onVideoDecoder = {
+                    vm.chooseVideoDecoder(it)
+                    sheet = null
+                },
                 onDismiss = { sheet = null },
                 onSubtitle = {
                     vm.chooseSubtitle(it)
@@ -1756,6 +1762,18 @@ private fun PlaybackDiagnosticsPanel(
                     )
                     .joinToString(" / "),
             )
+            state.engine.media3?.let { native ->
+                DebugRow(R.string.player_debug_video_decoder, native.videoDecoder ?: "—")
+                DebugRow(R.string.player_debug_audio_decoder, native.audioDecoder ?: "—")
+                DebugRow(
+                    R.string.player_debug_first_frame,
+                    stringResourceCompat(
+                        if (native.firstFrameRendered) R.string.player_frame_rendered
+                        else R.string.player_frame_pending
+                    ),
+                )
+                native.recoveryStage?.let { DebugRow(R.string.player_debug_recovery, it) }
+            }
             state.engine.error?.let { DebugRow(R.string.player_debug_error, it) }
         }
     }
@@ -1800,6 +1818,8 @@ internal fun PlayerBottomSheet(
     onAudio: (MediaStream) -> Unit,
     onQuality: (Int) -> Unit,
     onSpeed: (Float) -> Unit,
+    decoderPreference: VideoDecoderPreference? = null,
+    onVideoDecoder: (VideoDecoderPreference) -> Unit = {},
 ) {
     if (sheet == null) return
 
@@ -1904,7 +1924,7 @@ internal fun PlayerBottomSheet(
                                 )
                             }
 
-                        PlayerSheet.Quality ->
+                        PlayerSheet.Quality -> {
                             qualities.forEach { value ->
                                 PlayerOptionRow(
                                     label = playbackQualityLabel(value),
@@ -1912,6 +1932,22 @@ internal fun PlayerBottomSheet(
                                     onClick = { onQuality(value) },
                                 )
                             }
+                            if (decoderPreference != null) {
+                                Text(
+                                    stringResourceCompat(R.string.player_video_decoder),
+                                    modifier =
+                                        Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                VideoDecoderPreference.entries.forEach { preference ->
+                                    PlayerOptionRow(
+                                        label = videoDecoderLabel(preference),
+                                        selected = decoderPreference == preference,
+                                        onClick = { onVideoDecoder(preference) },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2021,3 +2057,14 @@ internal fun shouldShowNextUp(
 @Composable
 private fun stringResourceCompat(id: Int, vararg formatArgs: Any): String =
     androidx.compose.ui.res.stringResource(id, *formatArgs)
+
+@Composable
+private fun videoDecoderLabel(preference: VideoDecoderPreference): String =
+    stringResourceCompat(
+        when (preference) {
+            VideoDecoderPreference.AUTO -> R.string.player_decoder_auto
+            VideoDecoderPreference.HARDWARE -> R.string.player_decoder_hardware
+            VideoDecoderPreference.ANDROID_SOFTWARE -> R.string.player_decoder_android_software
+            VideoDecoderPreference.APP_SOFTWARE -> R.string.player_decoder_app_software
+        }
+    )

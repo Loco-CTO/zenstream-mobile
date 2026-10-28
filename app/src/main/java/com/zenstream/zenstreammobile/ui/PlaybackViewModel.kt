@@ -42,7 +42,11 @@ import com.zenstream.zenstreammobile.offline.knownHdr
 import com.zenstream.zenstreammobile.offline.subtitleText
 import com.zenstream.zenstreammobile.offline.videoData
 import com.zenstream.zenstreammobile.ui.player.EngineState
+import com.zenstream.zenstreammobile.ui.player.Media3DecoderControl
+import com.zenstream.zenstreammobile.ui.player.Media3ServerRecovery
+import com.zenstream.zenstreammobile.ui.player.Media3SourceContext
 import com.zenstream.zenstreammobile.ui.player.PlaybackEngine
+import com.zenstream.zenstreammobile.ui.player.VideoDecoderPreference
 import com.zenstream.zenstreammobile.ui.player.createPlaybackEngine
 import com.zenstream.zenstreammobile.ui.player.playbackRecoveryMode
 import kotlinx.coroutines.CancellationException
@@ -241,6 +245,7 @@ class PlaybackViewModel(
     private var playbackGeneration = 0L
     private var subtitleGeneration = 0L
     private var mediaOriginSeconds = 0.0
+    private val media3ServerRecovery = Media3ServerRecovery()
     private var recovered = false
     private var playedResetRequested = false
     private var subtitleSelectionInitialized = false
@@ -386,6 +391,7 @@ class PlaybackViewModel(
         runCatching { playbackEngine?.release() }
         playbackEngine = createPlaybackEngine(type, appContext, mpvPlaybackSettings)
         engineJob = viewModelScope.launch {
+            var lastMedia3Failure = 0L
             playbackEngine?.state?.collectLatest { state ->
                 _uiState.value =
                     _uiState.value.copy(
@@ -402,6 +408,7 @@ class PlaybackViewModel(
                     )
                 }
                 clearPlayedOnPlaybackStart(state)
+                val media3 = state.media3
                 if (
                     state.error != null &&
                         _uiState.value.local &&
@@ -415,6 +422,39 @@ class PlaybackViewModel(
                 }
                 if (
                     state.error != null &&
+                        !_uiState.value.local &&
+                        media3?.failureKind != null &&
+                        media3.failureSequence > lastMedia3Failure
+                ) {
+                    lastMedia3Failure = media3.failureSequence
+                    val nextMode =
+                        media3ServerRecovery.nextMode(
+                            identity =
+                                "$currentItemId:${_uiState.value.playback?.source?.id.orEmpty()}",
+                            currentMode = _uiState.value.playback?.mode,
+                            audioFailure =
+                                state.errorTrackType == androidx.media3.common.C.TRACK_TYPE_AUDIO,
+                            kind = media3.failureKind,
+                            hdr = media3.hdr,
+                        )
+                    if (nextMode != null) {
+                        Log.i(PLAYBACK_TAG, "Media3 server recovery mode=$nextMode")
+                        loadPlayback(
+                            PlaybackOptions(
+                                requestedMode = nextMode,
+                                maxStreamingBitrate =
+                                    _uiState.value.selectedQuality.takeIf { it > 0 },
+                                sourceId = _uiState.value.playback?.source?.id,
+                                audioStreamId = _uiState.value.selectedAudio,
+                            ),
+                            playWhenReadyOverride = media3.playWhenReady,
+                        )
+                    }
+                }
+                if (
+                    _uiState.value.engineType != PlayerEngine.MEDIA3 &&
+                        state.error != null &&
+                        !_uiState.value.local &&
                         shouldRecoverPlaybackError(_uiState.value.playback?.mode, recovered)
                 ) {
                     recovered = true
@@ -434,6 +474,37 @@ class PlaybackViewModel(
                 if (state.ended) onPlaybackEnded()
             }
         }
+    }
+
+    private fun configurePlaybackSource(
+        data: PlaybackData,
+        local: ResolvedPlaybackSource.Local?,
+    ) {
+        val videoStreams =
+            data.source.mediaStreams.filter {
+                it.type.equals("video", true) && !it.isAttachedPicture
+            }
+        val hdr =
+            local?.knownHdr() == true ||
+                videoStreams.any {
+                    it.colorTransfer in setOf("smpte2084", "arib-std-b67") ||
+                        it.codec in setOf("dvhe", "dvh1")
+                }
+        playbackEngine?.setKnownHdr(hdr)
+        (playbackEngine as? Media3DecoderControl)?.configureSource(
+            Media3SourceContext(
+                identity =
+                    if (local != null)
+                        "${local.profile.id}:${local.asset.id}:${local.asset.sourceRevision}"
+                    else "$currentItemId:${data.source.id.orEmpty()}",
+                expectedVideo =
+                    videoStreams.isNotEmpty() ||
+                        data.item.type.orEmpty().lowercase() in setOf("movie", "episode"),
+                hdr = hdr,
+                mode = data.mode,
+                audioStreamId = _uiState.value.selectedAudio,
+            )
+        )
     }
 
     private fun clearPlayedOnPlaybackStart(state: EngineState) {
@@ -520,9 +591,7 @@ class PlaybackViewModel(
             viewModelScope.launch { repository.savePlayerEngine(PlayerEngine.MEDIA3) }
         val playback = _uiState.value.playback
         if (playback != null) {
-            playbackEngine?.setKnownHdr(
-                (resolvedSource as? ResolvedPlaybackSource.Local)?.knownHdr() == true
-            )
+            configurePlaybackSource(playback, resolvedSource as? ResolvedPlaybackSource.Local)
             playbackEngine?.prepare(
                 requireNotNull(resolvedSource).uri,
                 currentPosition,
@@ -686,7 +755,7 @@ class PlaybackViewModel(
                     nextEpisodeUnavailable = false,
                     error = null,
                 )
-            playbackEngine?.setKnownHdr(local?.knownHdr() == true)
+            configurePlaybackSource(playbackData, local)
             playbackEngine?.prepare(
                 streamUrl,
                 localStartSeconds,
@@ -1475,6 +1544,10 @@ class PlaybackViewModel(
             }
     }
 
+    fun chooseVideoDecoder(preference: VideoDecoderPreference) {
+        (playbackEngine as? Media3DecoderControl)?.selectVideoDecoder(preference)
+    }
+
     fun chooseQuality(value: Int) {
         if (_uiState.value.local) return
         loadPlayback(
@@ -1505,9 +1578,9 @@ class PlaybackViewModel(
                 error = null,
                 engineInstance = _uiState.value.engineInstance + 1,
             )
-        playbackEngine?.setKnownHdr(source.knownHdr())
-        playbackEngine?.prepare(source.uri, position, source.data.mimeType, true)
         val data = _uiState.value.playback ?: return
+        configurePlaybackSource(data, source)
+        playbackEngine?.prepare(source.uri, position, source.data.mimeType, true)
         playbackEngine?.selectAudioTrack(
             data.audioTracks
                 .indexOfFirst { it.index == _uiState.value.selectedAudio }

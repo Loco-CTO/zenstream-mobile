@@ -20,6 +20,13 @@ def job_block(workflow: str, name: str) -> str:
 
 
 class CandidateFirstWorkflowTest(unittest.TestCase):
+    def test_decoder_sources_are_uploaded_and_verified_with_apk(self) -> None:
+        publish = job_block(RELEASE.read_text(encoding="utf-8"), "publish")
+        self.assertIn("rebuild.py --sources-only", publish)
+        self.assertIn('"$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"', publish)
+        self.assertIn('gh release download "$TAG" --pattern "$MEDIA3_SOURCE_NAME"', publish)
+        self.assertIn('cmp "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"', publish)
+
     def test_release_pipeline_orders_validation_publish_and_promotion(self) -> None:
         workflow = RELEASE.read_text(encoding="utf-8")
         names = ["candidate", "validate", "publish", "promote"]

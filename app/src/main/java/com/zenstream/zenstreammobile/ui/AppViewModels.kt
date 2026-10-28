@@ -30,6 +30,7 @@ import com.zenstream.zenstreammobile.model.BazarrStatus
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
+import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
@@ -48,6 +49,7 @@ import java.security.GeneralSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +59,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
@@ -559,10 +562,15 @@ data class HomeUiState(
     val error: Boolean = false,
     val pendingSections: Int = 0,
     val successfulSections: Int = 0,
+    val layoutPreferences: HomeLayoutPreferences = HomeLayoutPreferences(),
 )
 
-class HomeViewModel(private val repository: HomeDataSource, private val session: AuthSession) :
-    ViewModel() {
+class HomeViewModel(
+    private val repository: HomeDataSource,
+    private val session: AuthSession,
+    private val homeLayoutPreferences: Flow<HomeLayoutPreferences> =
+        flowOf(HomeLayoutPreferences()),
+) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState = _uiState.asStateFlow()
     private var loadingJob: Job? = null
@@ -573,6 +581,11 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
 
     init {
         load()
+        viewModelScope.launch {
+            homeLayoutPreferences.collectLatest { preferences ->
+                _uiState.update { it.copy(layoutPreferences = preferences) }
+            }
+        }
         viewModelScope.launch {
             repository.catalogRefreshRevision.drop(1).collectLatest {
                 load(force = true)
@@ -592,9 +605,14 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
                     loading = true,
                     data = HomeData(),
                     pendingSections = INITIAL_SECTION_COUNT,
+                    layoutPreferences = _uiState.value.layoutPreferences,
                 )
             } else {
-                HomeUiState(loading = true, pendingSections = INITIAL_SECTION_COUNT)
+                HomeUiState(
+                    loading = true,
+                    pendingSections = INITIAL_SECTION_COUNT,
+                    layoutPreferences = _uiState.value.layoutPreferences,
+                )
             }
         loadingJob = viewModelScope.launch {
             supervisorScope {
@@ -712,7 +730,7 @@ class HomeViewModel(private val repository: HomeDataSource, private val session:
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            HomeViewModel(repository, session) as T
+            HomeViewModel(repository, session, repository.homeLayoutPreferences(session)) as T
     }
 }
 

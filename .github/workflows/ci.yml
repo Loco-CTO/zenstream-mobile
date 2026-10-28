@@ -74,6 +74,9 @@ jobs:
           ZENSTREAM_API_FIXTURE_ROOT: ${{ github.workspace }}/_contracts/zenstream-orchestrator/contracts/fixtures
         run: bash ./gradlew spotlessCheck lint :app:koverXmlReport assembleDebug
 
+      - name: Verify decoder provenance and native isolation
+        run: python3 third_party/media3-nextlib/verify.py
+
       - name: Generate temporary release signing key
         shell: bash
         run: |

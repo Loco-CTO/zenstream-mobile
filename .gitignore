@@ -9,6 +9,7 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+/third_party/media3-nextlib/artifact/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -17,7 +18,3 @@ local.properties
 .kotlin/*
 app/release/*
 inspec/*
-
-# Agent guidance is maintained in the workspace-root AGENTS.md.
-AGENTS.md
-agents.md

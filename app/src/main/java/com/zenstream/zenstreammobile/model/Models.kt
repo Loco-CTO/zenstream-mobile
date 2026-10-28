@@ -117,6 +117,7 @@ data class MediaRow(
     val label: String? = null,
     val variant: RowVariant = RowVariant.Poster,
     val key: String = "${title.name}:${libraryName.orEmpty()}:${label.orEmpty()}",
+    val libraryId: String? = null,
 )
 
 enum class RowVariant {

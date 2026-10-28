@@ -27,3 +27,8 @@ dependencyResolutionManagement {
 rootProject.name = "ZenStream"
 
 include(":app")
+
+if (providers.gradleProperty("buildNextlib").orNull == "true") {
+    include(":nextlibArtifact")
+    project(":nextlibArtifact").projectDir = file("third_party/media3-nextlib/artifact")
+}

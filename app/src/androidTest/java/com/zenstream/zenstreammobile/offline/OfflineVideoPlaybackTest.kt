@@ -8,6 +8,8 @@ import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
+import androidx.media3.common.C
+import androidx.media3.ui.PlayerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.PlaybackActivity
@@ -28,6 +30,7 @@ import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class OfflineVideoPlaybackTest {
     @Test
     fun media3RendersAndSeeksDownloadedVideoWithLocalSubtitles() = exercise(PlayerEngine.MEDIA3)
@@ -209,6 +212,9 @@ class OfflineVideoPlaybackTest {
             assertNull(ready.error)
             assertEquals(engine, ready.engineType)
             assertEquals(2, ready.selectedAudio)
+            if (engine == PlayerEngine.MEDIA3)
+                assertTrue(ready.engine.media3?.firstFrameRendered == true)
+            assertAudioSelection(requireNotNull(activity), engine, 1)
             assertNull(ready.playback?.sessionId)
             assertNull(ready.playback?.viewerSessionId)
             assertNull(ready.playback?.accessExpiresIn)
@@ -228,12 +234,14 @@ class OfflineVideoPlaybackTest {
                 model.uiState.first { it.engine.positionSeconds >= 7.8 && it.engine.ready }
             }
             assertEquals(1, model.uiState.value.selectedAudio)
+            assertAudioSelection(requireNotNull(activity), engine, 0)
             assertRendered(requireNotNull(activity), engine, "seek")
             instrumentation.runOnMainSync { model.tryOtherLocalEngine() }
             awaitState("other-engine handoff", model) {
                 it.engineType != engine && it.engine.ready && it.engine.positionSeconds >= 7.8
             }
             assertRendered(requireNotNull(activity), engine, "other")
+            assertAudioSelection(requireNotNull(activity), model.uiState.value.engineType, 0)
             dao.putProfile(profile.copy(locked = true))
             withTimeout(5000) { model.uiState.first { it.closeRequested } }
             instrumentation.runOnMainSync { VideoPlaybackSessions.close() }
@@ -271,6 +279,44 @@ class OfflineVideoPlaybackTest {
     ): com.zenstream.zenstreammobile.ui.PlaybackUiState =
         withTimeoutOrNull(20000) { model.uiState.first(predicate) }
             ?: throw AssertionError("Timed out at $stage: ${model.uiState.value}")
+
+    private suspend fun assertAudioSelection(
+        activity: ActivityScenario<PlaybackActivity>,
+        engine: PlayerEngine,
+        expectedOrdinal: Int,
+    ) {
+        if (engine != PlayerEngine.MEDIA3) return
+        var actualOrdinal = -1
+        withTimeoutOrNull(5000) {
+            while (actualOrdinal != expectedOrdinal) {
+                activity.onActivity { screen ->
+                    val tracks = playerView(screen.window.decorView)?.player?.currentTracks
+                    actualOrdinal =
+                        tracks
+                            ?.groups
+                            .orEmpty()
+                            .filter { it.type == C.TRACK_TYPE_AUDIO }
+                            .flatMap { group ->
+                                (0 until group.length).map { group.isTrackSelected(it) }
+                            }
+                            .indexOfFirst { it }
+                }
+                if (actualOrdinal != expectedOrdinal) delay(25)
+            }
+        }
+        assertEquals(
+            "Media3 selected the wrong downloaded audio track",
+            expectedOrdinal,
+            actualOrdinal,
+        )
+    }
+
+    private fun playerView(view: View): PlayerView? =
+        if (view is PlayerView) view
+        else
+            (view as? ViewGroup)?.let { group ->
+                (0 until group.childCount).firstNotNullOfOrNull { playerView(group.getChildAt(it)) }
+            }
 
     private suspend fun assertRendered(
         activity: ActivityScenario<PlaybackActivity>,

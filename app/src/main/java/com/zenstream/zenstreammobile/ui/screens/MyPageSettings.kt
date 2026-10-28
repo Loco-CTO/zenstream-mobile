@@ -53,6 +53,7 @@ import com.zenstream.zenstreammobile.ui.SettingsUiState
 
 internal enum class MyPageSettingsSection {
     Appearance,
+    Home,
     Player,
     Subtitles,
     Privacy,
@@ -154,6 +155,19 @@ internal fun MyPageSettingsTabs(onOpenSection: (MyPageSettingsSection) -> Unit) 
             onClick = { onOpenSection(MyPageSettingsSection.Player) },
         )
         SettingsTabRow(
+            title = stringResource(R.string.home),
+            supporting = stringResource(R.string.home_sections_settings_summary),
+            icon = {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_layout_grid),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            },
+            onClick = { onOpenSection(MyPageSettingsSection.Home) },
+        )
+        SettingsTabRow(
             title = stringResource(R.string.subtitles_group),
             supporting = stringResource(R.string.subtitles_settings_summary),
             icon = {
@@ -216,6 +230,8 @@ internal fun MyPageSettingsContent(
     onSubtitleChange: (SubtitleStyle.() -> SubtitleStyle) -> Unit,
 ) {
     when (section) {
+        MyPageSettingsSection.Home -> Unit
+
         MyPageSettingsSection.Appearance ->
             SettingsSectionContent {
                 InterfaceLanguageSelector(

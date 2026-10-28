@@ -75,6 +75,12 @@ private val MEDIA3_VIDEO_CODEC_MIME_TYPES =
         "vp8" to setOf("video/x-vnd.on2.vp8"),
         "vp9" to setOf("video/x-vnd.on2.vp9"),
         "av1" to setOf("video/av01"),
+        "mpeg2video" to setOf("video/mpeg2"),
+        "mpeg4" to setOf("video/mp4v-es", "video/divx"),
+        "msmpeg4v2" to setOf("video/mp42"),
+        "msmpeg4v3" to setOf("video/mp43"),
+        "vc1" to setOf("video/wvc1"),
+        "mjpeg" to setOf("video/mjpeg"),
     )
 
 private val MEDIA3_AUDIO_CODEC_MIME_TYPES =
@@ -90,23 +96,17 @@ private val MEDIA3_AUDIO_CODEC_MIME_TYPES =
         "dts" to setOf("audio/vnd.dts", "audio/vnd.dts.hd;profile=lbr"),
         "dts_hd" to setOf("audio/vnd.dts.hd"),
         "truehd" to setOf("audio/true-hd"),
-    )
-
-private val FFMPEG_AUDIO_CODEC_MIME_TYPES =
-    linkedMapOf(
-        "ac3" to setOf("audio/ac3"),
-        "eac3" to setOf("audio/eac3", "audio/eac3-joc"),
-        "alac" to setOf("audio/alac"),
-        "dts" to setOf("audio/vnd.dts", "audio/vnd.dts.hd;profile=lbr"),
-        "dts_hd" to setOf("audio/vnd.dts.hd"),
-        "truehd" to setOf("audio/true-hd"),
+        "mp1" to setOf("audio/mpeg-L1"),
+        "mp2" to setOf("audio/mpeg-L2"),
+        "amr_nb" to setOf("audio/3gpp"),
+        "amr_wb" to setOf("audio/amr-wb"),
+        "pcm_mulaw" to setOf("audio/g711-mlaw"),
+        "pcm_alaw" to setOf("audio/g711-alaw"),
     )
 
 private val MEDIA3_PCM_CODECS = listOf("pcm_u8", "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le")
 
-private const val DAV1D_LIBRARY_CLASS = "androidx.media3.decoder.av1.Dav1dLibrary"
 private const val FLAC_LIBRARY_CLASS = "androidx.media3.decoder.flac.FlacLibrary"
-private const val FFMPEG_LIBRARY_CLASS = "androidx.media3.decoder.ffmpeg.FfmpegLibrary"
 
 internal fun playbackCapabilities(engine: PlayerEngine): PlaybackCapabilities =
     when (engine) {
@@ -202,24 +202,15 @@ private fun platformDecoderMimeTypes(): Set<String> =
         .getOrDefault(emptySet())
 
 private fun installedMedia3ExtensionCodecs(): Set<String> = buildSet {
-    if (extensionLibraryAvailable(DAV1D_LIBRARY_CLASS)) add("av1")
     if (extensionLibraryAvailable(FLAC_LIBRARY_CLASS)) add("flac")
-    FFMPEG_AUDIO_CODEC_MIME_TYPES.forEach { (codec, mimeTypes) ->
-        if (mimeTypes.any(::ffmpegSupportsFormat)) add(codec)
+    (MEDIA3_VIDEO_CODEC_MIME_TYPES + MEDIA3_AUDIO_CODEC_MIME_TYPES).forEach { (codec, mimeTypes) ->
+        if (mimeTypes.any(Media3NativeDecoders::supports)) add(codec)
     }
 }
 
 private fun extensionLibraryAvailable(className: String): Boolean =
     runCatching {
             Class.forName(className).getMethod("isAvailable").invoke(null) as? Boolean == true
-        }
-        .getOrDefault(false)
-
-private fun ffmpegSupportsFormat(mimeType: String): Boolean =
-    runCatching {
-            val ffmpegLibrary = Class.forName(FFMPEG_LIBRARY_CLASS)
-            ffmpegLibrary.getMethod("supportsFormat", String::class.java).invoke(null, mimeType)
-                as? Boolean == true
         }
         .getOrDefault(false)
 

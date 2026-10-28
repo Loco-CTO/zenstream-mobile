@@ -257,6 +257,16 @@ jobs:
           echo "APK_NAME=$(basename "$apk")" >> "$GITHUB_ENV"
           (cd "$RUNNER_TEMP" && sha256sum "$(basename "$apk")" > SHA256SUMS.txt)
 
+      - name: Prepare decoder corresponding source
+        env:
+          VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          set -euo pipefail
+          sources="$RUNNER_TEMP/zenstream-mobile-v$VERSION-media3-source.tar.gz"
+          python3 third_party/media3-nextlib/rebuild.py --sources-only --output "$sources"
+          echo "MEDIA3_SOURCE_NAME=$(basename "$sources")" >> "$GITHUB_ENV"
+          (cd "$RUNNER_TEMP" && sha256sum "$(basename "$sources")" >> SHA256SUMS.txt)
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -320,11 +330,14 @@ jobs:
           set -euo pipefail
           test -s "$APK_PATH"
           test -s "$RUNNER_TEMP/SHA256SUMS.txt"
-          gh release upload "$TAG" "$APK_PATH" "$RUNNER_TEMP/SHA256SUMS.txt" --clobber
+          test -s "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"
+          gh release upload "$TAG" "$APK_PATH" "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME" "$RUNNER_TEMP/SHA256SUMS.txt" --clobber
           mkdir -p "$RUNNER_TEMP/release-assets"
           gh release download "$TAG" --pattern "$APK_NAME" --dir "$RUNNER_TEMP/release-assets"
+          gh release download "$TAG" --pattern "$MEDIA3_SOURCE_NAME" --dir "$RUNNER_TEMP/release-assets"
           gh release download "$TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-assets"
           cmp "$APK_PATH" "$RUNNER_TEMP/release-assets/$APK_NAME"
+          cmp "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME" "$RUNNER_TEMP/release-assets/$MEDIA3_SOURCE_NAME"
           cmp "$RUNNER_TEMP/SHA256SUMS.txt" "$RUNNER_TEMP/release-assets/SHA256SUMS.txt"
           (cd "$RUNNER_TEMP/release-assets" && sha256sum --check SHA256SUMS.txt)
           gh release edit "$TAG" --draft=false
