@@ -68,6 +68,7 @@ internal fun AudioQueueSnapshot.toJson(): JSONObject {
         .put("sourceBitrate", sourceBitrate?.takeIf { it > 0 })
         .put("sourceSampleRate", sourceSampleRate?.takeIf { it > 0 })
         .put("playbackMode", playbackMode?.take(AUDIO_QUEUE_MAX_SOURCE_TEXT_LENGTH))
+        .put("offlineOnly", offlineOnly)
         .put("updatedAt", updatedAt)
 }
 
@@ -187,6 +188,7 @@ internal fun audioQueueSnapshotFromJson(value: JSONObject): AudioQueueSnapshot? 
         schemaVersion = AUDIO_QUEUE_SCHEMA_VERSION,
         serverUrl = normalizedServerUrl,
         userId = userId,
+        offlineOnly = value.optBoolean("offlineOnly", false),
         entries = entries,
         currentIndex = value.optInt("currentIndex", 0).coerceIn(0, entries.lastIndex),
         positionSeconds =

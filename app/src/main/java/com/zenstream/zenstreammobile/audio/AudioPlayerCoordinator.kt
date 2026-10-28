@@ -19,10 +19,23 @@ import kotlinx.coroutines.flow.StateFlow
 /** UI-facing commands. All playback state and actual media loading live in AudioPlaybackService. */
 @Stable
 @UnstableApi
-class AudioPlayerCoordinator(
+class AudioPlayerCoordinator
+private constructor(
     context: Context,
-    private val session: AuthSession,
+    private val serverUrl: String,
+    private val userId: String,
+    private val offlineOnly: Boolean,
 ) {
+    constructor(
+        context: Context,
+        session: AuthSession,
+    ) : this(context, session.serverUrl, session.userId, false)
+
+    constructor(
+        context: Context,
+        profile: com.zenstream.zenstreammobile.offline.OfflineProfile,
+    ) : this(context, profile.serverUrl, profile.account, true)
+
     private val appContext = context.applicationContext
     private var mediaController: MediaController? = null
     private val mediaControllerFuture =
@@ -57,8 +70,9 @@ class AudioPlayerCoordinator(
         val playbackOrder = queuePlaybackOrder(entries, selectedIndex, shuffle)
         val snapshot =
             AudioQueueSnapshot(
-                serverUrl = session.serverUrl,
-                userId = session.userId,
+                serverUrl = serverUrl,
+                userId = userId,
+                offlineOnly = offlineOnly,
                 entries = playbackOrder.entries,
                 currentIndex = playbackOrder.currentIndex,
                 shuffle = shuffle,
@@ -92,8 +106,9 @@ class AudioPlayerCoordinator(
             )
         val snapshot =
             AudioQueueSnapshot(
-                serverUrl = session.serverUrl,
-                userId = session.userId,
+                serverUrl = serverUrl,
+                userId = userId,
+                offlineOnly = offlineOnly,
                 entries = playbackOrder.entries,
                 currentIndex = playbackOrder.currentIndex,
                 shuffle = shuffle,
@@ -111,8 +126,9 @@ class AudioPlayerCoordinator(
         if (entries.isEmpty()) return
         val snapshot =
             AudioQueueSnapshot(
-                serverUrl = session.serverUrl,
-                userId = session.userId,
+                serverUrl = serverUrl,
+                userId = userId,
+                offlineOnly = offlineOnly,
                 entries = entries,
                 currentIndex = 0,
             )
@@ -129,8 +145,9 @@ class AudioPlayerCoordinator(
                 putExtra(
                     AudioServiceBridge.EXTRA_SNAPSHOT,
                     AudioQueueSnapshot(
-                            serverUrl = session.serverUrl,
-                            userId = session.userId,
+                            serverUrl = serverUrl,
+                            userId = userId,
+                            offlineOnly = offlineOnly,
                             entries = current.queue,
                             currentIndex = current.currentIndex,
                             positionSeconds = current.positionSeconds.toDouble(),
@@ -179,6 +196,9 @@ class AudioPlayerCoordinator(
     fun toggleMute() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_TOGGLE_MUTE)
 
     fun retry() = AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_RETRY)
+
+    fun streamCurrent() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_STREAM_CURRENT)
 
     fun seekTo(positionSeconds: Long) {
         val position = positionSeconds.coerceAtLeast(0L)

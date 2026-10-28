@@ -12,6 +12,8 @@ import com.zenstream.zenstreammobile.model.MpvPlaybackSettings
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
+import java.io.File
+import java.net.URI
 import kotlin.math.max
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +63,11 @@ internal class MpvSurfaceLifecycle {
         return true
     }
 }
+
+internal fun mpvPlaybackPath(source: String): String =
+    if (source.startsWith("file:", ignoreCase = true))
+        runCatching { File(URI(source)).absolutePath }.getOrDefault(source)
+    else source
 
 data class EngineState(
     val positionSeconds: Double = 0.0,
@@ -159,6 +166,7 @@ private data class PendingPlayback(
     val startPositionSeconds: Double,
     val mimeType: String?,
     val playWhenReady: Boolean,
+    val audioOrdinal: Int? = null,
 )
 
 interface PlaybackEngine {
@@ -180,9 +188,17 @@ interface PlaybackEngine {
 
     fun pause()
 
+    fun stop() = pause()
+
     fun seekTo(positionSeconds: Double)
 
     fun setSpeed(value: Float)
+
+    fun selectAudioTrack(ordinal: Int) = Unit
+
+    fun setKnownHdr(value: Boolean) = Unit
+
+    fun recoverLocal(trackType: Int?): Boolean = false
 
     fun release()
 }
@@ -199,6 +215,50 @@ class MpvPlaybackEngine(
     private val handler = Handler(Looper.getMainLooper())
     private var view: MpvSurfaceView? = null
     private var pending: PendingPlayback? = null
+    private var lastRequest: PendingPlayback? = null
+    private var knownHdr = false
+    private val localRecovery = LocalDecoderRecovery()
+
+    override fun setKnownHdr(value: Boolean) {
+        knownHdr = value
+    }
+
+    override fun recoverLocal(trackType: Int?): Boolean {
+        val request = lastRequest?.takeIf { it.url.startsWith("file:") } ?: return false
+        if (trackType == C.TRACK_TYPE_AUDIO || view == null) return false
+        val hdr =
+            knownHdr ||
+                MPVLib.getPropertyString("video-params/gamma") in
+                    setOf("pq", "hlg", "smpte2084", "arib-std-b67")
+        if (!localRecovery.attempt(trackType, hdr)) return false
+        val position = currentPositionSeconds()
+        val ordinal = audioOrdinal
+        MPVLib.setPropertyString("hwdec", "no")
+        prepare(request.url, position, request.mimeType, request.playWhenReady)
+        ordinal?.let(::selectAudioTrack)
+        return true
+    }
+
+    private var audioOrdinal: Int? = null
+
+    private fun applyAudioSelection() {
+        if (!sourceReady || view == null) return
+        val ordinal = audioOrdinal ?: return
+        val count = MPVLib.getPropertyInt("track-list/count") ?: return
+        val index =
+            (0 until count)
+                .filter { MPVLib.getPropertyString("track-list/$it/type") == "audio" }
+                .getOrNull(ordinal) ?: return
+        MPVLib.getPropertyInt("track-list/$index/id")?.let { MPVLib.setPropertyInt("aid", it) }
+    }
+
+    override fun selectAudioTrack(ordinal: Int) {
+        require(ordinal >= 0)
+        audioOrdinal = ordinal
+        pending = pending?.copy(audioOrdinal = ordinal)
+        applyAudioSelection()
+    }
+
     private val initialSeek = InitialSeekController()
     private val endFileGate = MpvEndFileGate()
     private var released = false
@@ -222,6 +282,7 @@ class MpvPlaybackEngine(
                     sourceReady = true
                     sourceLoadPending = false
                     endFileGate.onSourceReady()
+                    applyAudioSelection()
                     Log.d("ZenStreamPlayback", "MPV source became ready event=$eventId")
                     _state.value = _state.value.copy(ready = true, isBuffering = false)
                 }
@@ -305,6 +366,7 @@ class MpvPlaybackEngine(
                     request.mimeType,
                     request.playWhenReady,
                 )
+                request.audioOrdinal?.let(::selectAudioTrack)
             }
         }
     }
@@ -323,6 +385,9 @@ class MpvPlaybackEngine(
         playWhenReady: Boolean,
     ) {
         if (released) return
+        localRecovery.source(url)
+        lastRequest = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
+        audioOrdinal = null
         this.playWhenReady = playWhenReady
         pending = PendingPlayback(url, startPositionSeconds, mimeType, playWhenReady)
         sourceReady = false
@@ -330,8 +395,10 @@ class MpvPlaybackEngine(
         initialSeek.schedule(startPositionSeconds)
         val current = view ?: return
         pending = null
+        MPVLib.setPropertyString("hwdec", if (localRecovery.softwareVideo) "no" else "mediacodec")
+        MPVLib.setPropertyString("aid", "auto")
         endFileGate.onSourceLoading()
-        current.load(url)
+        current.load(mpvPlaybackPath(url))
         if (current.hasSurface()) MPVLib.setPropertyBoolean("pause", !playWhenReady)
         _state.value = EngineState()
     }
@@ -344,6 +411,14 @@ class MpvPlaybackEngine(
     override fun pause() {
         playWhenReady = false
         if (!released && view != null) MPVLib.setPropertyBoolean("pause", true)
+    }
+
+    override fun stop() {
+        pending = null
+        sourceReady = false
+        sourceLoadPending = false
+        if (!released && view != null) MPVLib.command(arrayOf("stop"))
+        _state.value = EngineState()
     }
 
     override fun seekTo(positionSeconds: Double) {
@@ -447,8 +522,6 @@ private val MPV_READY_EVENTS =
     setOf(
         MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED,
         MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART,
-        MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG,
-        MPVLib.MpvEvent.MPV_EVENT_AUDIO_RECONFIG,
     )
 
 fun createPlaybackEngine(

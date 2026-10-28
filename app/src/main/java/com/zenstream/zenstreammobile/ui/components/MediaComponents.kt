@@ -292,6 +292,10 @@ fun MediaCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
+            com.zenstream.zenstreammobile.offline.DownloadedBadge(
+                item,
+                Modifier.align(Alignment.TopStart).padding(6.dp),
+            )
             if (item.type != "BoxSet" && (item.played || item.unplayedItemCount != null)) {
                 Surface(
                     color = Color.Black.copy(alpha = .65f),

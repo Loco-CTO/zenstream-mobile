@@ -206,6 +206,8 @@ class AppViewModel(
             }
         }
         viewModelScope.launch {
+            if (!com.zenstream.zenstreammobile.offline.ConnectionCoordinator.onlineStartupAllowed())
+                return@launch
             if (!repository.checkForUpdatesOnStartup.first()) return@launch
             try {
                 _availableUpdate.value = checkForUpdateBestEffort(updateSource)
@@ -337,14 +339,27 @@ class AppViewModel(
         }
     }
 
-    fun logout() = viewModelScope.launch {
+    fun logout(keepDownloadsLocked: Boolean) = viewModelScope.launch {
         val active = repository.session.first()
+        if (active != null) {
+            try {
+                repository.offline?.prepareForLogout(active, keepDownloadsLocked)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                AuthLifecycleLog.event("offline_logout_policy_failed")
+                return@launch
+            }
+        }
         if (active != null) runCatching { repository.revokeSession(active) }
         SyncplaySession.clear()
         repository.clearSession()
     }
 
     fun passwordChanged() = viewModelScope.launch {
+        repository.session.first()?.let { session ->
+            repository.offline?.prepareForLogout(session, keepDownloadsLocked = true)
+        }
         SyncplaySession.clear()
         repository.clearSession()
     }
@@ -357,6 +372,7 @@ class AppViewModel(
 
     private suspend fun clearServerConfiguration() {
         val active = repository.session.first()
+        repository.offline?.prepareForServerChange()
         if (active != null) runCatching { repository.revokeSession(active) }
         SyncplaySession.clear()
         repository.clearAll()

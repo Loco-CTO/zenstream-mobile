@@ -15,8 +15,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -24,9 +26,11 @@ import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.zenstream.zenstreammobile.data.Media3NativeDecoders
+import com.zenstream.zenstreammobile.offline.OfflineMediaDataSource
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.DecoderManager
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.DecoderMode
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
@@ -41,6 +45,7 @@ class Media3PlaybackEngine(
     private val mutableState = MutableStateFlow(EngineState(media3 = Media3PlaybackDetails()))
     override val state: StateFlow<EngineState> = mutableState
     private var player: ExoPlayer? = null
+    private var playerView: PlayerView? = null
     private var selector: DefaultTrackSelector? = null
     private var manager: DecoderManager? = null
     private var context = Media3SourceContext("", false)
@@ -57,6 +62,7 @@ class Media3PlaybackEngine(
     private var failureSequence = 0L
     private var terminalFailure = false
     private var released = false
+    private var audioOrdinal: Int? = null
 
     private fun details(update: (Media3PlaybackDetails) -> Media3PlaybackDetails) {
         mutableState.value =
@@ -178,7 +184,10 @@ class Media3PlaybackEngine(
                 }
             }
 
-            override fun onTracksChanged(tracks: Tracks) = inspectTracksLater()
+            override fun onTracksChanged(tracks: Tracks) {
+                applyAudioSelection()
+                inspectTracksLater()
+            }
         }
 
     private val ticker =
@@ -230,6 +239,30 @@ class Media3PlaybackEngine(
                 handler.postDelayed(this, 250L)
             }
         }
+
+    private fun applyAudioSelection() {
+        val current = player ?: return
+        val ordinal = audioOrdinal ?: return
+        val target =
+            current.currentTracks.groups
+                .filter { it.type == C.TRACK_TYPE_AUDIO }
+                .flatMap { group -> (0 until group.length).map { track -> group to track } }
+                .getOrNull(ordinal) ?: return
+        if (target.first.isTrackSelected(target.second)) return
+        current.trackSelectionParameters =
+            current.trackSelectionParameters
+                .buildUpon()
+                .setOverrideForType(
+                    TrackSelectionOverride(target.first.mediaTrackGroup, target.second)
+                )
+                .build()
+    }
+
+    override fun selectAudioTrack(ordinal: Int) {
+        require(ordinal >= 0)
+        audioOrdinal = ordinal
+        applyAudioSelection()
+    }
 
     override fun configureSource(context: Media3SourceContext) {
         if (this.context.identity != context.identity) {
@@ -284,6 +317,16 @@ class Media3PlaybackEngine(
             player =
                 ExoPlayer.Builder(context.applicationContext, factory)
                     .setTrackSelector(requireNotNull(selector))
+                    .setMediaSourceFactory(
+                        DefaultMediaSourceFactory(
+                            androidx.media3.datasource.DataSource.Factory {
+                                OfflineMediaDataSource(
+                                    DefaultDataSource.Factory(context.applicationContext)
+                                        .createDataSource()
+                                )
+                            }
+                        )
+                    )
                     .build()
                     .also { current ->
                         current.trackSelectionParameters =
@@ -297,7 +340,11 @@ class Media3PlaybackEngine(
                     }
             handler.post(ticker)
         }
+        playerView?.let {
+            return it
+        }
         return PlayerView(context).apply {
+            playerView = this
             useController = false
             subtitleView?.visibility = View.GONE
             player = this@Media3PlaybackEngine.player
@@ -320,12 +367,22 @@ class Media3PlaybackEngine(
         playWhenReady: Boolean,
     ) {
         if (released) return
+        audioOrdinal = null
         val current =
             player
                 ?: run {
-                    pending = { prepare(url, startPositionSeconds, mimeType, playWhenReady) }
+                    pending = {
+                        val selectedAudio = audioOrdinal
+                        prepare(url, startPositionSeconds, mimeType, playWhenReady)
+                        selectedAudio?.let(::selectAudioTrack)
+                    }
                     return
                 }
+        current.trackSelectionParameters =
+            current.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .build()
         generation++
         terminalFailure = false
         mutableState.value =
@@ -467,6 +524,24 @@ class Media3PlaybackEngine(
         player?.pause()
     }
 
+    override fun stop() {
+        generation++
+        pending = null
+        audioOrdinal = null
+        terminalFailure = true
+        initialSeek.cancel()
+        counters = null
+        restartWatchdog()
+        player?.stop()
+        player?.clearMediaItems()
+        mutableState.value =
+            mutableState.value.copy(
+                ready = false,
+                isPlaying = false,
+                isBuffering = false,
+            )
+    }
+
     override fun seekTo(positionSeconds: Double) {
         initialSeek.cancel()
         restartWatchdog()
@@ -483,6 +558,10 @@ class Media3PlaybackEngine(
         handler.removeCallbacksAndMessages(null)
         surface?.holder?.removeCallback(surfaceCallback)
         manager?.detach()
+        playerView?.player = null
+        playerView = null
+        surface = null
+        surfaceReady = false
         player?.release()
         player = null
         pending = null

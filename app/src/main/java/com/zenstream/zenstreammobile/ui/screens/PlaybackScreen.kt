@@ -150,8 +150,8 @@ private fun redactTrickplayError(value: String?): String =
 @Composable
 fun PlaybackScreen(
     repository: CatalogRepository,
-    session: AuthSession,
-    syncplay: SyncplayManager,
+    session: AuthSession?,
+    syncplay: SyncplayManager?,
     itemId: String,
     initialItemName: String = "",
     initialAudioStreamId: Int? = null,
@@ -167,13 +167,15 @@ fun PlaybackScreen(
     onMinimize: (() -> Unit)? = null,
     onRestore: (() -> Unit)? = null,
     playbackOwner: ViewModelStoreOwner? = null,
+    offlineProfileId: String? = null,
+    offlineOnly: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: PlaybackViewModel =
         viewModel(
             viewModelStoreOwner = playbackOwner ?: checkNotNull(LocalViewModelStoreOwner.current),
-            key = "playback-${session.serverUrl}-${session.userId}-$itemId",
+            key = "playback-${offlineProfileId ?: session?.serverUrl}-${session?.userId}-$itemId",
             factory =
                 PlaybackViewModel.Factory(
                     repository,
@@ -184,6 +186,8 @@ fun PlaybackScreen(
                     initialSubtitleStreamIndex,
                     hasInitialSubtitleSelection,
                     syncplay,
+                    offlineProfileId,
+                    offlineOnly,
                 ),
         )
     DisposableEffect(vm, playbackOwner) {
@@ -199,7 +203,10 @@ fun PlaybackScreen(
     BackHandler(enabled = !miniPlayer) { navigateBack() }
     val automaticPictureInPicture by
         repository.automaticPictureInPicture.collectAsStateWithLifecycle(initialValue = false)
-    val syncplayState by syncplay.state.collectAsStateWithLifecycle()
+    val manager = syncplay.takeUnless { state.local }
+    val syncplayState by
+        (manager?.state?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(com.zenstream.zenstreammobile.model.SyncplayUiState()) })
     val latestState by rememberUpdatedState(state)
     val playbackScope = rememberCoroutineScope()
     val toast = rememberToastHostState()
@@ -215,13 +222,13 @@ fun PlaybackScreen(
     var debugOpen by remember { mutableStateOf(false) }
     var playerVisible by remember { mutableStateOf(true) }
     val timelineScheduler =
-        remember(vm, syncplay, playbackScope) {
+        remember(vm, manager, playbackScope) {
             SyncplayTimelineScheduler(
                 scope = playbackScope,
-                serverNow = syncplay::serverNow,
-                currentRoom = { syncplay.state.value.active },
+                serverNow = { manager?.serverNow() ?: 0.0 },
+                currentRoom = { manager?.state?.value?.active },
                 apply = { room, serverNow ->
-                    if (syncplay.state.value.currentMember()?.watchingTogether == true) {
+                    if (manager?.state?.value?.currentMember()?.watchingTogether == true) {
                         vm.applySyncplayRoom(room, serverNow)
                     }
                 },
@@ -253,9 +260,9 @@ fun PlaybackScreen(
         PlaybackPipActionBus.actions.collect { event ->
             if (event.instanceId != instanceId) return@collect
             when (event.action) {
-                PlaybackPipAction.Toggle -> vm.syncplayToggle(syncplay)
-                PlaybackPipAction.Previous -> vm.syncplayPrevious(syncplay)
-                PlaybackPipAction.Next -> vm.syncplayNext(syncplay)
+                PlaybackPipAction.Toggle -> vm.syncplayToggle(manager)
+                PlaybackPipAction.Previous -> vm.syncplayPrevious(manager)
+                PlaybackPipAction.Next -> vm.syncplayNext(manager)
                 PlaybackPipAction.Close -> vm.requestClose()
             }
         }
@@ -297,14 +304,14 @@ fun PlaybackScreen(
             pauseRoom: Boolean = false,
             loadingOverride: Boolean? = null,
         ) {
-            val room = syncplay.state.value.active
-            val member = syncplay.state.value.currentMember()
+            val room = manager?.state?.value?.active
+            val member = manager?.state?.value?.currentMember()
             if (
                 member?.watchingTogether == true &&
                     (pauseRoom || !viewing || room?.mediaItemId() == latestState.itemId)
             ) {
                 val effectiveViewing = viewing && latestState.error == null
-                syncplay.reportPresence(
+                manager?.reportPresence(
                     viewing = effectiveViewing,
                     loading =
                         effectiveViewing &&
@@ -412,7 +419,7 @@ fun PlaybackScreen(
                 room?.mediaItemId() == state.itemId &&
                 syncplayState.currentMember()?.watchingTogether == true
         ) {
-            syncplay.reportPresence(
+            manager?.reportPresence(
                 viewing = state.error == null,
                 loading = state.error == null && syncplayPresenceLoading(state),
                 immediate = true,
@@ -432,7 +439,7 @@ fun PlaybackScreen(
                 room?.mediaItemId() == state.itemId &&
                 syncplayState.currentMember()?.watchingTogether == true
         ) {
-            syncplay.reportPresence(
+            manager?.reportPresence(
                 viewing = state.error == null,
                 loading = state.error == null && syncplayPresenceLoading(state),
             )
@@ -453,24 +460,27 @@ fun PlaybackScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         playerView?.let { view ->
-            AndroidView(
-                factory = {
-                    (view.parent as? android.view.ViewGroup)?.removeView(view)
-                    view
-                },
-                update = { it.keepScreenOn = state.engine.isPlaying },
-                modifier = Modifier.fillMaxSize(),
-            )
+            androidx.compose.runtime.key(state.engineType, state.engineInstance) {
+                AndroidView(
+                    factory = {
+                        (view.parent as? android.view.ViewGroup)?.removeView(view)
+                        view
+                    },
+                    update = { it.keepScreenOn = state.engine.isPlaying },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         if (miniPlayer) {
             com.zenstream.zenstreammobile.ui.player.MiniVideoControls(
                 playing = state.engine.isPlaying,
                 canControl =
-                    syncplayState.active == null || syncplayState.canControl(session.userId),
+                    syncplayState.active == null ||
+                        syncplayState.canControl(session?.userId.orEmpty()),
                 positionSeconds = state.engine.positionSeconds,
                 durationSeconds = state.engine.durationSeconds,
-                onToggle = { vm.syncplayToggle(syncplay) },
+                onToggle = { vm.syncplayToggle(manager) },
                 onClose = vm::requestClose,
                 onExpand = { onRestore?.invoke() },
             )
@@ -483,7 +493,7 @@ fun PlaybackScreen(
                 positionSeconds = state.engine.positionSeconds,
                 durationSeconds = state.engine.durationSeconds,
                 onToggleControls = { controlsVisible = !controlsVisible },
-                onSeekBy = { delta -> vm.syncplaySeekBy(syncplay, delta) },
+                onSeekBy = { delta -> vm.syncplaySeekBy(manager, delta) },
                 onSeekFeedback = { seekFeedback = it },
                 onSurfaceDragStart = {
                     seekFeedback = null
@@ -495,7 +505,7 @@ fun PlaybackScreen(
                     surfaceDragPosition = it
                 },
                 onSurfaceDragEnd = {
-                    vm.syncplaySeekTo(syncplay, it)
+                    vm.syncplaySeekTo(manager, it)
                     surfaceDragPosition = null
                 },
                 onSurfaceDragCancel = { surfaceDragPosition = null },
@@ -543,9 +553,9 @@ fun PlaybackScreen(
         if (!isInPictureInPictureMode && !miniPlayer && nextUpVisible && nextEpisode != null) {
             NextUpOverlay(
                 episode = nextEpisode,
-                session = session,
+                session = session.takeUnless { state.local },
                 onStop = vm::requestClose,
-                onPlayNext = { vm.syncplayNext(syncplay) },
+                onPlayNext = { vm.syncplayNext(manager) },
                 modifier =
                     Modifier.align(Alignment.BottomEnd)
                         .padding(end = 20.dp, bottom = if (controlsVisible) 112.dp else 28.dp)
@@ -571,6 +581,19 @@ fun PlaybackScreen(
                     textAlign = TextAlign.Center,
                 )
                 Button(onClick = onBack) { Text(stringResourceCompat(R.string.back)) }
+                if (state.local) {
+                    Button(onClick = vm::tryOtherLocalEngine) {
+                        Text(stringResourceCompat(R.string.offline_video_other_engine))
+                    }
+                    Text(
+                        stringResourceCompat(R.string.offline_video_compatible_help),
+                        color = Color.White,
+                    )
+                }
+                if (state.canStream)
+                    Button(onClick = vm::streamInstead) {
+                        Text(stringResourceCompat(R.string.offline_video_stream))
+                    }
             }
         }
 
@@ -628,16 +651,24 @@ fun PlaybackScreen(
                             )
                         }
                         if (!controlsLocked) {
-                            SyncplayGroupMenu(
-                                manager = syncplay,
-                                session = session,
-                                onReturnToView = { group ->
-                                    if (group.mediaItemId() != null) {
-                                        vm.applySyncplayRoom(group, syncplay.serverNow())
-                                    }
-                                },
-                                playerContext = true,
-                            )
+                            if (state.local && state.canStream) {
+                                PlayerMenuButton(
+                                    LucideR.drawable.lucide_ic_wifi,
+                                    stringResourceCompat(R.string.offline_video_stream),
+                                    onClick = vm::streamInstead,
+                                )
+                            }
+                            if (manager != null && session != null)
+                                SyncplayGroupMenu(
+                                    manager = manager,
+                                    session = session,
+                                    onReturnToView = { group ->
+                                        if (group.mediaItemId() != null) {
+                                            vm.applySyncplayRoom(group, manager.serverNow())
+                                        }
+                                    },
+                                    playerContext = true,
+                                )
                             if (state.showDebugIcon) {
                                 PlayerMenuButton(
                                     LucideR.drawable.lucide_ic_bug,
@@ -704,21 +735,21 @@ fun PlaybackScreen(
                         enabled =
                             state.previousEpisode != null &&
                                 (syncplayState.active == null ||
-                                    syncplayState.canControl(session.userId)),
+                                    syncplayState.canControl(session?.userId.orEmpty())),
                     ) {
-                        vm.syncplayPrevious(syncplay)
+                        vm.syncplayPrevious(manager)
                     }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_rewind,
                         stringResourceCompat(R.string.player_seek_back),
                         enabled =
                             syncplayState.active == null ||
-                                syncplayState.canControl(session.userId),
+                                syncplayState.canControl(session?.userId.orEmpty()),
                     ) {
-                        vm.syncplaySeekBy(syncplay, -10.0)
+                        vm.syncplaySeekBy(manager, -10.0)
                     }
                     Surface(
-                        onClick = { vm.syncplayToggle(syncplay) },
+                        onClick = { vm.syncplayToggle(manager) },
                         modifier = Modifier.size(64.dp),
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = .58f),
@@ -744,9 +775,9 @@ fun PlaybackScreen(
                         stringResourceCompat(R.string.player_seek_forward),
                         enabled =
                             syncplayState.active == null ||
-                                syncplayState.canControl(session.userId),
+                                syncplayState.canControl(session?.userId.orEmpty()),
                     ) {
-                        vm.syncplaySeekBy(syncplay, 10.0)
+                        vm.syncplaySeekBy(manager, 10.0)
                     }
                     PlayerMenuButton(
                         LucideR.drawable.lucide_ic_skip_forward,
@@ -754,9 +785,9 @@ fun PlaybackScreen(
                         enabled =
                             state.nextEpisode != null &&
                                 (syncplayState.active == null ||
-                                    syncplayState.canControl(session.userId)),
+                                    syncplayState.canControl(session?.userId.orEmpty())),
                     ) {
-                        vm.syncplayNext(syncplay)
+                        vm.syncplayNext(manager)
                     }
                 }
                 Column(
@@ -798,7 +829,7 @@ fun PlaybackScreen(
                         },
                         onScrubChanged = { timelineScrub = it },
                         onScrubEnd = {
-                            vm.syncplaySeekTo(syncplay, it.positionSeconds)
+                            vm.syncplaySeekTo(manager, it.positionSeconds)
                             timelineScrub = null
                         },
                         onPreviewError = { previewUnavailable = true },
@@ -810,7 +841,7 @@ fun PlaybackScreen(
         if (!isInPictureInPictureMode && !miniPlayer && !controlsLocked) {
             state.activeSegmentAt(state.engine.positionSeconds)?.let { segment ->
                 Surface(
-                    onClick = { vm.syncplaySeekTo(syncplay, segment.endSeconds) },
+                    onClick = { vm.syncplaySeekTo(manager, segment.endSeconds) },
                     modifier =
                         Modifier.align(Alignment.BottomEnd)
                             .padding(end = 20.dp, bottom = if (controlsVisible) 86.dp else 24.dp),
@@ -897,12 +928,13 @@ fun PlaybackScreen(
                 },
             )
         if (!isInPictureInPictureMode && !miniPlayer) {
-            SyncplayToastNotifications(
-                manager = syncplay,
-                repository = repository,
-                session = session,
-                toast = toast,
-            )
+            if (manager != null && session != null)
+                SyncplayToastNotifications(
+                    manager = manager,
+                    repository = repository,
+                    session = session,
+                    toast = toast,
+                )
             ToastHost(
                 state = toast,
                 playerContext = true,
@@ -1196,7 +1228,7 @@ internal fun timelinePositionAt(x: Float, width: Float, duration: Double): Doubl
 
 @Composable
 private fun PlaybackProgress(
-    session: AuthSession,
+    session: AuthSession?,
     positionSeconds: Double,
     durationSeconds: Double,
     bufferedSeconds: Double,
@@ -1321,7 +1353,7 @@ private fun PlaybackProgress(
 
 @Composable
 internal fun SurfaceTrickplayOverlay(
-    session: AuthSession,
+    session: AuthSession?,
     positionSeconds: Double,
     durationSeconds: Double,
     preview: TrickplayPreview?,
@@ -1390,7 +1422,7 @@ internal fun SurfaceTrickplayOverlay(
 private fun TrickplayBubble(
     preview: TrickplayPreview,
     position: TimelineScrub,
-    session: AuthSession,
+    session: AuthSession?,
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
     onError: () -> Unit,
@@ -1483,7 +1515,7 @@ internal fun playbackTimeText(
 @Composable
 private fun TrickplaySpriteFrame(
     preview: TrickplayPreview,
-    session: AuthSession,
+    session: AuthSession?,
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
     contentDescription: String,
@@ -1492,12 +1524,15 @@ private fun TrickplaySpriteFrame(
 ) {
     val context = LocalContext.current
     val request =
-        remember(preview.url, session.token) {
+        remember(preview.url, session?.token) {
             ImageRequest.Builder(context)
                 .data(preview.url)
                 .httpHeaders(
                     NetworkHeaders.Builder()
-                        .set("Authorization", CatalogApi.authorizationHeader(session.token))
+                        .set(
+                            "Authorization",
+                            CatalogApi.authorizationHeader(requireNotNull(session).token),
+                        )
                         .build()
                 )
                 .build()
@@ -1538,16 +1573,18 @@ private fun TrickplaySpriteFrame(
 @Composable
 private fun NextUpOverlay(
     episode: com.zenstream.zenstreammobile.model.MediaItem,
-    session: AuthSession,
+    session: AuthSession?,
     onStop: () -> Unit,
     onPlayNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val artworkUrl =
-        landscapeImageType(episode)?.let { type ->
-            imageUrl(session.serverUrl, episode, type, 360, 202)
-        }
+        landscapeImageType(episode)
+            ?.takeIf { session != null }
+            ?.let { type ->
+                imageUrl(requireNotNull(session).serverUrl, episode, type, 360, 202)
+            }
     Surface(
         modifier = modifier.widthIn(max = 360.dp).testTag("next-up"),
         shape = RoundedCornerShape(16.dp),
@@ -1580,14 +1617,16 @@ private fun NextUpOverlay(
             ) {
                 if (artworkUrl != null) {
                     val request =
-                        remember(artworkUrl, session.token) {
+                        remember(artworkUrl, session?.token) {
                             ImageRequest.Builder(context)
                                 .data(artworkUrl)
                                 .httpHeaders(
                                     NetworkHeaders.Builder()
                                         .set(
                                             "Authorization",
-                                            CatalogApi.authorizationHeader(session.token),
+                                            CatalogApi.authorizationHeader(
+                                                requireNotNull(session).token
+                                            ),
                                         )
                                         .build()
                                 )

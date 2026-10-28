@@ -235,6 +235,11 @@ fun LoginScreen(repository: CatalogRepository, onChangeServer: () -> Unit) {
         ) {
             Text(stringResource(R.string.change_server))
         }
+        com.zenstream.zenstreammobile.offline.LocalDownloadUi.current?.let { downloads ->
+            TextButton(onClick = downloads.openDownloads, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.offline_downloads))
+            }
+        }
     }
 }
 

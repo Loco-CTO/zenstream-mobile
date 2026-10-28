@@ -275,6 +275,7 @@ fun AudioTrackRow(
                 }
             }
         }
+        com.zenstream.zenstreammobile.offline.DownloadButton(item, Modifier.size(44.dp))
         if (onFavorite != null) {
             IconButton(
                 onClick = { onFavorite(item) },

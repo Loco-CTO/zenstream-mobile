@@ -107,7 +107,8 @@ private const val AUTH_FLOW_HEADER = "X-ZenStream-Auth-Flow"
 private const val AUTH_FLOW_VERSION = "refresh-v1"
 
 class CatalogApi(
-    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val httpClient: OkHttpClient =
+        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client(),
     private var deviceId: String = UUID.randomUUID().toString(),
 ) {
     fun setDeviceId(value: String) {
@@ -1698,6 +1699,59 @@ class CatalogApi(
     private suspend fun getSimilar(session: AuthSession, itemId: String): List<MediaItem> =
         catalogItems(requestJson(session, "/api/catalog/items/$itemId/similar"))
 
+    internal suspend fun offlineRequest(
+        session: AuthSession,
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+    ): JSONObject {
+        require(path.startsWith("/api/offline/") || path == "/api/account/sync")
+        return requestJson(session, path, method = method, body = body?.toString())
+    }
+
+    internal suspend fun offlineSourceDetails(session: AuthSession, itemId: String): JSONObject =
+        requestJson(session, "/api/playback/items/${android.net.Uri.encode(itemId)}/source")
+
+    internal suspend fun offlineBinaryRequest(
+        session: AuthSession,
+        path: String,
+        headers: Map<String, String>,
+        receive: suspend (Response) -> Unit,
+    ) =
+        withContext(Dispatchers.IO) {
+            require(
+                path.startsWith("/api/offline/assets/") ||
+                    path.startsWith("/api/catalog/items/") ||
+                    path.startsWith("/api/playback/items/")
+            )
+            val request =
+                Request.Builder()
+                    .url(session.serverUrl + path)
+                    .header("Authorization", "Bearer ${session.token}")
+                    .header(AUTH_FLOW_HEADER, AUTH_FLOW_VERSION)
+                    .apply { headers.forEach { (key, value) -> header(key, value) } }
+                    .get()
+                    .build()
+            com.zenstream.zenstreammobile.offline
+                .transferClient(
+                    httpClient,
+                    kotlin.coroutines.coroutineContext[
+                            com.zenstream.zenstreammobile.offline.TransferNetwork]
+                        ?.network,
+                )
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    if (!response.isSuccessful && response.code != 416) {
+                        throw CatalogException(
+                            response.code,
+                            "Download authorization needs recovery.",
+                        )
+                    }
+                    receive(response)
+                }
+        }
+
     private suspend fun requestJson(
         session: AuthSession,
         path: String,
@@ -1741,7 +1795,14 @@ class CatalogApi(
                     if (method == "GET") null else (body ?: "{}").toRequestBody(JSON_MEDIA_TYPE),
                 )
                 .build()
-        val call = httpClient.newCall(request)
+        val call =
+            com.zenstream.zenstreammobile.offline
+                .transferClient(
+                    httpClient,
+                    continuation.context[com.zenstream.zenstreammobile.offline.TransferNetwork]
+                        ?.network,
+                )
+                .newCall(request)
         requestTimeoutMillis?.let {
             call.timeout().timeout(it, java.util.concurrent.TimeUnit.MILLISECONDS)
         }
@@ -2450,7 +2511,7 @@ internal fun catalogMediaItem(item: JSONObject): MediaItem {
         played = state.optBoolean("played", false),
         favorite = state.optBoolean("favorite", false),
         following =
-            if (type == "Movie" || type == "Series" || type == "MusicArtist") {
+            if (type == "Movie" || type == "Series" || type == "Episode" || type == "MusicArtist") {
                 state.optBoolean("following", false)
             } else null,
         unplayedItemCount = state.optIntOrNull("unplayedItemCount"),

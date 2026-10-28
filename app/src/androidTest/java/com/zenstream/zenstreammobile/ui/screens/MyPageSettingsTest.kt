@@ -54,6 +54,30 @@ class MyPageSettingsTest {
     }
 
     @Test
+    fun logoutExplainsAndReportsBothDownloadPolicies() {
+        var keepLocked: Boolean? = null
+        composeRule.setContent {
+            ZenStreamTheme { MyPageSettingsFooter(onLogout = { keepLocked = it }) }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_download_policy_description))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_keep_downloads_locked))
+            .performClick()
+        composeRule.runOnIdle { assertEquals(true, keepLocked) }
+
+        composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_remove_downloads))
+            .performClick()
+        composeRule.runOnIdle { assertEquals(false, keepLocked) }
+    }
+
+    @Test
     fun mpvAdvancedSettingsAreShownOnlyForMpvAndCanBeChanged() {
         var state by
             mutableStateOf(
@@ -185,11 +209,11 @@ class MyPageSettingsTest {
     }
 
     @Test
-    fun settingsFooterShowsVersionAndLogsOut() {
-        var loggedOut = false
+    fun settingsFooterShowsVersionAndConfirmsLogoutPolicy() {
+        var keepDownloadsLocked: Boolean? = null
         composeRule.setContent {
             ZenStreamTheme {
-                MyPageSettingsFooter(onLogout = { loggedOut = true })
+                MyPageSettingsFooter(onLogout = { keepDownloadsLocked = it })
             }
         }
 
@@ -198,7 +222,13 @@ class MyPageSettingsTest {
             context.getString(R.string.settings_version_value, BuildConfig.ZENSTREAM_VERSION)
         composeRule.onNodeWithText(versionFooter).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.logout)).performClick()
-        composeRule.runOnIdle { assertTrue(loggedOut) }
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_download_policy_description))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.logout_remove_downloads))
+            .performClick()
+        composeRule.runOnIdle { assertEquals(false, keepDownloadsLocked) }
     }
 
     @Test

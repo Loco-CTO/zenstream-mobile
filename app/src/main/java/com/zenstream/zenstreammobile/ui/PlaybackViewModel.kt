@@ -4,9 +4,11 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.PlaybackPreference
@@ -16,7 +18,6 @@ import com.zenstream.zenstreammobile.data.isCurrentSubtitleRequest
 import com.zenstream.zenstreammobile.data.isStablePlaybackLeaseRenewal
 import com.zenstream.zenstreammobile.data.parseWebVttCues
 import com.zenstream.zenstreammobile.data.playbackMimeType
-import com.zenstream.zenstreammobile.data.playbackUrl
 import com.zenstream.zenstreammobile.data.playbackUrlWithAccess
 import com.zenstream.zenstreammobile.data.runSyncplayAction
 import com.zenstream.zenstreammobile.model.AuthSession
@@ -33,6 +34,13 @@ import com.zenstream.zenstreammobile.model.SubtitleStyle
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.ViewerCommandAck
+import com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy
+import com.zenstream.zenstreammobile.offline.PlaybackSourcePreference
+import com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource
+import com.zenstream.zenstreammobile.offline.downloadedAudioOrdinal
+import com.zenstream.zenstreammobile.offline.knownHdr
+import com.zenstream.zenstreammobile.offline.subtitleText
+import com.zenstream.zenstreammobile.offline.videoData
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import com.zenstream.zenstreammobile.ui.player.Media3DecoderControl
 import com.zenstream.zenstreammobile.ui.player.Media3ServerRecovery
@@ -52,11 +60,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class PlaybackUiState(
     val loading: Boolean = true,
+    val local: Boolean = false,
+    val canStream: Boolean = false,
+    val engineInstance: Long = 0,
     val error: String? = null,
     val itemName: String = "",
     val itemId: String = "",
@@ -78,6 +90,7 @@ data class PlaybackUiState(
     val previousEpisode: MediaItem? = null,
     val nextEpisode: MediaItem? = null,
     val episodeNeighborsLoaded: Boolean = false,
+    val nextEpisodeUnavailable: Boolean = false,
     val closeRequested: Boolean = false,
     val syncplaySettling: Boolean = false,
 ) {
@@ -200,17 +213,25 @@ private fun redactPlaybackUrl(value: String?): String =
 
 class PlaybackViewModel(
     private val repository: CatalogRepository,
-    private val session: AuthSession,
+    private val session: AuthSession?,
     initialItemId: String,
     private val appContext: Context,
     private val initialAudioStreamId: Int? = null,
     private val initialSubtitleStreamIndex: Int? = null,
     private val hasInitialSubtitleSelection: Boolean = false,
     private val syncplay: SyncplayManager? = null,
+    private val offlineProfileId: String? = null,
+    private val offlineOnly: Boolean = false,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PlaybackUiState(itemId = initialItemId))
     val uiState: StateFlow<PlaybackUiState> = _uiState.asStateFlow()
     private var playbackEngine: PlaybackEngine? = null
+    private var resolvedSource: ResolvedPlaybackSource? = null
+    private var streamRequested = false
+    private var policyStopped = false
+    private val remoteSession: AuthSession
+        get() = requireNotNull(session) { "Sign in to stream this item." }
+
     private var engineJob: Job? = null
     private var progressJob: Job? = null
     private var viewerHeartbeatJob: Job? = null
@@ -255,11 +276,31 @@ class PlaybackViewModel(
                 )
             val timeDisplayMode = repository.playbackTimeDisplayMode.first()
             val autoplayNextEpisode = repository.autoplayNextEpisode.first()
+            val localRequested =
+                offlineOnly ||
+                    session == null ||
+                    !OfflineNetworkPolicy.allowed ||
+                    repository.offline?.let { runtime ->
+                        com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
+                            (offlineProfileId
+                                    ?: runtime.connection.state.first { it.initialized }.profile)
+                                ?.let {
+                                    runtime.database
+                                        .offline()
+                                        .playbackCandidates(it, currentItemId, 1)
+                                        .isNotEmpty()
+                                } == true
+                    } == true
             val watchHistoryEnabled =
-                runCatching { repository.loadWatchHistoryPreference() }
+                runCatching {
+                        if (localRequested) repository.watchHistoryEnabled.first()
+                        else repository.loadWatchHistoryPreference()
+                    }
                     .getOrElse { repository.watchHistoryEnabled.first() }
             val subtitleStyle = repository.loadSubtitleStyle()
-            playbackPreference = runCatching { repository.loadPlaybackPreference() }.getOrNull()
+            playbackPreference =
+                if (localRequested) null
+                else runCatching { repository.loadPlaybackPreference() }.getOrNull()
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
@@ -271,10 +312,14 @@ class PlaybackViewModel(
                 )
             createEngine(engineType)
             val preferredAudioStreamId =
-                if (initialAudioStreamId != null || playbackPreference?.audioLanguage == null) {
+                if (
+                    localRequested ||
+                        initialAudioStreamId != null ||
+                        playbackPreference?.audioLanguage == null
+                ) {
                     null
                 } else {
-                    runCatching { repository.playbackSource(session, currentItemId) }
+                    runCatching { repository.playbackSource(remoteSession, currentItemId) }
                         .getOrNull()
                         ?.mediaStreams
                         ?.filter { it.type.equals("audio", true) }
@@ -299,17 +344,61 @@ class PlaybackViewModel(
                 _uiState.value = _uiState.value.copy(watchHistoryEnabled = enabled)
             }
         }
+        repository.offline?.let { runtime ->
+            viewModelScope.launch {
+                combine(runtime.connection.state, runtime.catalogRevision) { policy, _ -> policy }
+                    .collect { policy ->
+                        val local = resolvedSource as? ResolvedPlaybackSource.Local
+                        if (
+                            local != null &&
+                                (policy.profile != local.profile.id ||
+                                    runtime.database.offline().profile(local.profile.id)?.locked !=
+                                        false)
+                        ) {
+                            playbackEngine?.stop()
+                            requestClose()
+                        } else if (
+                            resolvedSource is ResolvedPlaybackSource.Remote &&
+                                policy.mode ==
+                                    com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE
+                        ) {
+                            policyStopped = true
+                            invalidateActivePlaybackLoad()
+                            playbackEngine?.stop()
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    loading = false,
+                                    error =
+                                        appContext.getString(
+                                            com.zenstream.zenstreammobile.R.string
+                                                .offline_video_stream_paused
+                                        ),
+                                    canStream = false,
+                                )
+                        } else {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    canStream = session != null && OfflineNetworkPolicy.allowed
+                                )
+                        }
+                    }
+            }
+        }
     }
 
     private fun createEngine(type: PlayerEngine) {
         engineJob?.cancel()
-        playbackEngine?.release()
+        runCatching { playbackEngine?.release() }
         playbackEngine = createPlaybackEngine(type, appContext, mpvPlaybackSettings)
         engineJob = viewModelScope.launch {
             var lastMedia3Failure = 0L
             playbackEngine?.state?.collectLatest { state ->
-                _uiState.value = _uiState.value.copy(engine = state, error = state.error)
-                val manager = syncplay
+                _uiState.value =
+                    _uiState.value.copy(
+                        engine = state,
+                        error = if (policyStopped) _uiState.value.error else state.error,
+                    )
+                val manager = syncplay.takeUnless { _uiState.value.local }
                 val room = manager?.state?.value?.active
                 settleSyncplayTimelineIfReady(room, state, manager?.serverNow() ?: 0.0)
                 if (state.error != null) {
@@ -322,6 +411,18 @@ class PlaybackViewModel(
                 val media3 = state.media3
                 if (
                     state.error != null &&
+                        _uiState.value.local &&
+                        playbackEngine?.recoverLocal(state.errorTrackType) == true
+                ) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            error = null,
+                            engineInstance = _uiState.value.engineInstance + 1,
+                        )
+                }
+                if (
+                    state.error != null &&
+                        !_uiState.value.local &&
                         media3?.failureKind != null &&
                         media3.failureSequence > lastMedia3Failure
                 ) {
@@ -353,6 +454,7 @@ class PlaybackViewModel(
                 if (
                     _uiState.value.engineType != PlayerEngine.MEDIA3 &&
                         state.error != null &&
+                        !_uiState.value.local &&
                         shouldRecoverPlaybackError(_uiState.value.playback?.mode, recovered)
                 ) {
                     recovered = true
@@ -364,7 +466,6 @@ class PlaybackViewModel(
                     loadPlayback(
                         PlaybackOptions(
                             requestedMode = recoveryMode,
-                            maxStreamingBitrate = 1_000_000,
                             sourceId = _uiState.value.playback?.source?.id,
                             audioStreamId = _uiState.value.selectedAudio,
                         )
@@ -373,6 +474,37 @@ class PlaybackViewModel(
                 if (state.ended) onPlaybackEnded()
             }
         }
+    }
+
+    private fun configurePlaybackSource(
+        data: PlaybackData,
+        local: ResolvedPlaybackSource.Local?,
+    ) {
+        val videoStreams =
+            data.source.mediaStreams.filter {
+                it.type.equals("video", true) && !it.isAttachedPicture
+            }
+        val hdr =
+            local?.knownHdr() == true ||
+                videoStreams.any {
+                    it.colorTransfer in setOf("smpte2084", "arib-std-b67") ||
+                        it.codec in setOf("dvhe", "dvh1")
+                }
+        playbackEngine?.setKnownHdr(hdr)
+        (playbackEngine as? Media3DecoderControl)?.configureSource(
+            Media3SourceContext(
+                identity =
+                    if (local != null)
+                        "${local.profile.id}:${local.asset.id}:${local.asset.sourceRevision}"
+                    else "$currentItemId:${data.source.id.orEmpty()}",
+                expectedVideo =
+                    videoStreams.isNotEmpty() ||
+                        data.item.type.orEmpty().lowercase() in setOf("movie", "episode"),
+                hdr = hdr,
+                mode = data.mode,
+                audioStreamId = _uiState.value.selectedAudio,
+            )
+        )
     }
 
     private fun clearPlayedOnPlaybackStart(state: EngineState) {
@@ -390,8 +522,41 @@ class PlaybackViewModel(
         // Set this before launching so the engine ticker cannot enqueue duplicate
         // DELETE requests while the first request is in flight.
         playedResetRequested = true
+        if (_uiState.value.local) {
+            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            viewModelScope.launch {
+                runCatching {
+                        repository.offline
+                            ?.playbackState
+                            ?.setPlayed(
+                                source.profile.id,
+                                playback.item.id,
+                                false,
+                            )
+                    }
+                    .onSuccess {
+                        val current = _uiState.value.playback
+                        if (current?.item?.id == playback.item.id) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    playback =
+                                        current.copy(
+                                            item =
+                                                current.item.copy(
+                                                    played = false,
+                                                    playedPercentage = 0.0,
+                                                    playbackPositionTicks = 0,
+                                                )
+                                        )
+                                )
+                        }
+                    }
+                    .onFailure { playedResetRequested = false }
+            }
+            return
+        }
         viewModelScope.launch {
-            runCatching { repository.setPlayed(session, playback.item.id, false) }
+            runCatching { repository.setPlayed(remoteSession, playback.item.id, false) }
                 .onSuccess {
                     val current = _uiState.value.playback
                     if (current?.item?.id == playback.item.id) {
@@ -409,29 +574,26 @@ class PlaybackViewModel(
         }
     }
 
-    fun createView(context: Context): View? =
-        runCatching {
-                playbackEngine?.createView(context)
-            }
+    fun createView(context: Context): View? {
+        return runCatching { playbackEngine?.createView(context) }
             .getOrElse {
                 fallbackToMedia3()
                 playbackEngine?.createView(context)
             }
+    }
 
     private fun fallbackToMedia3() {
         if (_uiState.value.engineType == PlayerEngine.MEDIA3) return
         val currentPosition = currentPlayerPositionSeconds()
         createEngine(PlayerEngine.MEDIA3)
         _uiState.value = _uiState.value.copy(engineType = PlayerEngine.MEDIA3, error = null)
-        viewModelScope.launch { repository.savePlayerEngine(PlayerEngine.MEDIA3) }
+        if (!_uiState.value.local)
+            viewModelScope.launch { repository.savePlayerEngine(PlayerEngine.MEDIA3) }
         val playback = _uiState.value.playback
         if (playback != null) {
+            configurePlaybackSource(playback, resolvedSource as? ResolvedPlaybackSource.Local)
             playbackEngine?.prepare(
-                playbackUrl(
-                    session,
-                    currentItemId,
-                    playback.source,
-                ),
+                requireNotNull(resolvedSource).uri,
                 currentPosition,
                 playbackMimeType(playback.source, _uiState.value.selectedQuality),
                 syncplayShouldAutoplayFor(currentItemId),
@@ -450,6 +612,7 @@ class PlaybackViewModel(
         options: PlaybackOptions = PlaybackOptions(),
         playWhenReadyOverride: Boolean? = null,
     ) {
+        policyStopped = false
         val loadGeneration = ++playbackGeneration
         progressFlushJob?.cancel()
         viewerHeartbeatJob?.cancel()
@@ -477,9 +640,19 @@ class PlaybackViewModel(
                         else options.startPositionSeconds,
                 )
             _uiState.value = _uiState.value.copy(loading = true, error = null)
-            val data =
+            val resolved =
                 runCatching {
-                        repository.playback(session, currentItemId, requestOptions)
+                        repository.resolvePlayback(
+                            session,
+                            currentItemId,
+                            requestOptions,
+                            preference =
+                                if (streamRequested) PlaybackSourcePreference.STREAM
+                                else if (offlineOnly || session == null)
+                                    PlaybackSourcePreference.DOWNLOAD_ONLY
+                                else PlaybackSourcePreference.PREFER_DOWNLOAD,
+                            profileId = offlineProfileId,
+                        )
                     }
                     .getOrElse {
                         Log.e(
@@ -497,14 +670,30 @@ class PlaybackViewModel(
                         }
                         return@launch
                     }
-            if (loadGeneration != playbackGeneration) return@launch
+            if (loadGeneration != playbackGeneration) {
+                resolved.close()
+                return@launch
+            }
+            val local = resolved as? ResolvedPlaybackSource.Local
+            val data = local?.videoData() ?: resolved.data
+            val outgoingSource = resolvedSource
+            resolvedSource = resolved
             Log.i(
                 PLAYBACK_TAG,
                 "playback data item=$currentItemId mode=${data.mode} state=${data.sessionState} sessionId=${data.sessionId} url=${redactPlaybackUrl(data.url)}",
             )
 
             val selectedAudio =
-                requestOptions.audioStreamId
+                (if (local != null)
+                    data.audioTracks
+                        .getOrNull(
+                            downloadedAudioOrdinal(
+                                data,
+                                org.json.JSONObject(local.asset.descriptor),
+                            )
+                        )
+                        ?.index
+                else requestOptions.audioStreamId)
                     ?: preferredTrackIndex(
                         data.audioTracks,
                         playbackPreference?.audioLanguage,
@@ -528,41 +717,20 @@ class PlaybackViewModel(
             mediaOriginSeconds = sourceOriginSeconds
             val previousTrickplay = _uiState.value.playback?.source?.trickplay
             val source =
-                if (data.source.trickplay != null || previousTrickplay == null) {
+                if (local != null || data.source.trickplay != null || previousTrickplay == null) {
                     data.source
                 } else {
                     data.source.copy(trickplay = previousTrickplay)
                 }
             val playbackData = data.copy(source = source)
-            val streamUrl =
-                runCatching {
-                        playbackUrl(
-                            session,
-                            currentItemId,
-                            playbackData.source,
-                        )
-                    }
-                    .getOrElse { error ->
-                        Log.e(
-                            PLAYBACK_TAG,
-                            "negotiated playback URL is unusable item=$currentItemId error=${error.message}",
-                        )
-                        _uiState.value =
-                            _uiState.value.copy(
-                                loading = false,
-                                syncplaySettling = false,
-                                error =
-                                    error.message
-                                        ?: "Playback response did not include a usable stream URL",
-                            )
-                        transitionInProgress = false
-                        return@launch
-                    }
+            val streamUrl = resolved.uri
             val subtitleLoadGeneration = ++subtitleGeneration
             subtitleJob?.cancel()
             _uiState.value =
                 _uiState.value.copy(
                     loading = false,
+                    local = local != null,
+                    canStream = session != null && OfflineNetworkPolicy.allowed,
                     itemName = playbackData.item.name,
                     playback = playbackData,
                     selectedAudio = selectedAudio,
@@ -581,46 +749,68 @@ class PlaybackViewModel(
                                     endSeconds = end,
                                 )
                         },
+                    previousEpisode = null,
+                    nextEpisode = null,
+                    episodeNeighborsLoaded = false,
+                    nextEpisodeUnavailable = false,
                     error = null,
                 )
-            val videoStreams =
-                playbackData.source.mediaStreams.filter {
-                    it.type.equals("video", true) && !it.isAttachedPicture
-                }
-            (playbackEngine as? Media3DecoderControl)?.configureSource(
-                Media3SourceContext(
-                    identity = "$currentItemId:${playbackData.source.id.orEmpty()}",
-                    expectedVideo =
-                        videoStreams.isNotEmpty() ||
-                            playbackData.item.type.orEmpty().lowercase() in
-                                setOf("movie", "episode"),
-                    hdr =
-                        videoStreams.any {
-                            it.colorTransfer in setOf("smpte2084", "arib-std-b67") ||
-                                it.codec in setOf("dvhe", "dvh1")
-                        },
-                    mode = data.mode,
-                    audioStreamId = selectedAudio,
-                )
-            )
+            configurePlaybackSource(playbackData, local)
             playbackEngine?.prepare(
                 streamUrl,
                 localStartSeconds,
-                playbackMimeType(playbackData.source, bitrate),
+                if (local != null) playbackData.mimeType
+                else playbackMimeType(playbackData.source, bitrate),
                 playWhenReadyOverride ?: syncplayShouldAutoplayFor(currentItemId),
             )
+            if (local != null)
+                playbackEngine?.selectAudioTrack(
+                    data.audioTracks.indexOfFirst { it.index == selectedAudio }.coerceAtLeast(0)
+                )
+            outgoingSource?.close()
             handledCompletionGeneration = -1L
             transitionInProgress = false
             loadSubtitle(loadGeneration, subtitleLoadGeneration)
             startProgressReporting()
-            startViewerHeartbeat()
-            startPlaybackAccessRefresh(playbackData)
-            loadTrickplay(
-                loadGeneration,
-                playbackData.source.id,
-                shouldLoadTrickplay(playbackData.source.trickplay),
-            )
-            loadEpisodeNeighbors(loadGeneration, playbackData.item)
+            if (local == null) {
+                startViewerHeartbeat()
+                startPlaybackAccessRefresh(playbackData)
+                loadTrickplay(
+                    loadGeneration,
+                    playbackData.source.id,
+                    shouldLoadTrickplay(playbackData.source.trickplay),
+                )
+                loadEpisodeNeighbors(loadGeneration, playbackData.item)
+            } else {
+                episodeNeighborsJob?.cancel()
+                val navigation =
+                    runCatching {
+                            repository.offline
+                                ?.catalog
+                                ?.episodeNavigation(
+                                    local.profile.id,
+                                    playbackData.item.id,
+                                    local.bundle,
+                                )
+                        }
+                        .onFailure { error ->
+                            Log.w(
+                                PLAYBACK_TAG,
+                                "offline episode neighbor lookup failed item=${playbackData.item.id} error=${error.message}",
+                            )
+                        }
+                        .getOrNull()
+                if (loadGeneration == playbackGeneration && currentItemId == playbackData.item.id) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            previousEpisode = navigation?.previous,
+                            nextEpisode = navigation?.next,
+                            episodeNeighborsLoaded = true,
+                            nextEpisodeUnavailable = navigation?.nextUnavailable == true,
+                        )
+                    if (pendingCompletionGeneration == loadGeneration) advanceAfterEpisodeEnd()
+                }
+            }
         }
     }
 
@@ -631,10 +821,11 @@ class PlaybackViewModel(
                 previousEpisode = null,
                 nextEpisode = null,
                 episodeNeighborsLoaded = false,
+                nextEpisodeUnavailable = false,
             )
         episodeNeighborsJob = viewModelScope.launch {
             val neighbors =
-                runCatching { repository.episodeNeighbors(session, item) }
+                runCatching { repository.episodeNeighbors(remoteSession, item) }
                     .onFailure { error ->
                         Log.w(
                             PLAYBACK_TAG,
@@ -663,7 +854,9 @@ class PlaybackViewModel(
         if (!shouldLoad) return
         trickplayJob = viewModelScope.launch {
             repeat(TRICKPLAY_MANIFEST_ATTEMPTS) { attempt ->
-                val result = runCatching { repository.trickplay(session, currentItemId, sourceId) }
+                val result = runCatching {
+                    repository.trickplay(remoteSession, currentItemId, sourceId)
+                }
                 result.exceptionOrNull()?.let { error ->
                     Log.w(
                         PLAYBACK_TAG,
@@ -757,7 +950,7 @@ class PlaybackViewModel(
                 val refreshed =
                     try {
                         repository.refreshPlaybackAccess(
-                            session,
+                            remoteSession,
                             currentItemId,
                             sourceId,
                             current.sessionId,
@@ -801,7 +994,7 @@ class PlaybackViewModel(
                 val shouldPlay = _uiState.value.engine.isPlaying
                 val nextUrl =
                     playbackUrlWithAccess(
-                        session,
+                        remoteSession,
                         currentItemId,
                         latest.source,
                         refreshedTicket,
@@ -839,7 +1032,7 @@ class PlaybackViewModel(
                 viewerCommandAcks.clear()
                 val heartbeatResult = runCatching {
                     repository.heartbeatPlaybackViewer(
-                        session,
+                        remoteSession,
                         viewerSessionId,
                         currentPlayerPositionSeconds(),
                         state.durationSeconds,
@@ -892,12 +1085,28 @@ class PlaybackViewModel(
         snapshot: PlaybackProgressSnapshot?,
         requireCurrentGeneration: Boolean = true,
     ) {
-        if (!_uiState.value.watchHistoryEnabled) return
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
+        if (_uiState.value.local) {
+            if (handledCompletionGeneration == snapshot.playbackGeneration) return
+            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            runCatching {
+                repository.offline
+                    ?.playbackState
+                    ?.checkpoint(
+                        source.profile.id,
+                        snapshot.itemId,
+                        snapshot.positionSeconds,
+                        snapshot.durationSeconds,
+                        _uiState.value.watchHistoryEnabled,
+                    )
+            }
+            return
+        }
+        if (!_uiState.value.watchHistoryEnabled) return
         runCatching {
             repository.reportPlayback(
-                session,
+                remoteSession,
                 snapshot.itemId,
                 snapshot.positionSeconds,
                 snapshot.paused,
@@ -928,10 +1137,14 @@ class PlaybackViewModel(
         if (_uiState.value.engine.isPlaying) playbackEngine?.pause() else playbackEngine?.play()
     }
 
-    fun syncplayToggle(manager: SyncplayManager) {
+    fun syncplayToggle(manager: SyncplayManager?) {
+        if (manager == null || _uiState.value.local) {
+            togglePlay()
+            return
+        }
         val room = manager.state.value.active
         if (room != null) {
-            if (!manager.state.value.canControl(session.userId)) return
+            if (!manager.state.value.canControl(session?.userId.orEmpty())) return
             viewModelScope.launch {
                 runSyncplayAction {
                     manager.command(
@@ -945,14 +1158,18 @@ class PlaybackViewModel(
         } else togglePlay()
     }
 
-    fun syncplaySeekBy(manager: SyncplayManager, deltaSeconds: Double) =
+    fun syncplaySeekBy(manager: SyncplayManager?, deltaSeconds: Double) =
         syncplaySeekTo(manager, currentPlayerPositionSeconds() + deltaSeconds)
 
-    fun syncplaySeekTo(manager: SyncplayManager, positionSeconds: Double) {
+    fun syncplaySeekTo(manager: SyncplayManager?, positionSeconds: Double) {
+        if (manager == null || _uiState.value.local) {
+            seekTo(positionSeconds)
+            return
+        }
         val room = manager.state.value.active
         val target = positionSeconds.coerceAtLeast(0.0)
         if (room != null) {
-            if (!manager.state.value.canControl(session.userId)) return
+            if (!manager.state.value.canControl(session?.userId.orEmpty())) return
             viewModelScope.launch {
                 val shouldResume = room.playbackState == "playing" || room.resumeWhenReady
                 runSyncplayAction {
@@ -962,16 +1179,20 @@ class PlaybackViewModel(
         } else seekTo(target)
     }
 
-    fun syncplayPrevious(manager: SyncplayManager) =
+    fun syncplayPrevious(manager: SyncplayManager?) =
         syncplayEpisode(manager, _uiState.value.previousEpisode)
 
-    fun syncplayNext(manager: SyncplayManager) =
+    fun syncplayNext(manager: SyncplayManager?) =
         syncplayEpisode(manager, _uiState.value.nextEpisode)
 
-    private fun syncplayEpisode(manager: SyncplayManager, target: MediaItem?) {
+    private fun syncplayEpisode(manager: SyncplayManager?, target: MediaItem?) {
         if (target == null) return
+        if (manager == null || _uiState.value.local) {
+            transitionTo(target)
+            return
+        }
         if (manager.state.value.active != null) {
-            if (!manager.state.value.canControl(session.userId)) return
+            if (!manager.state.value.canControl(session?.userId.orEmpty())) return
             viewModelScope.launch {
                 runSyncplayAction { manager.command("media", 0.0, true, target.id) }
             }
@@ -1000,6 +1221,7 @@ class PlaybackViewModel(
     }
 
     fun applySyncplayRoom(room: SyncplayGroup, serverNow: Double) {
+        if (_uiState.value.local || offlineOnly) return
         val itemId = room.itemId ?: return
         Log.d(
             PLAYBACK_TAG,
@@ -1133,7 +1355,7 @@ class PlaybackViewModel(
 
     fun playNextEpisode() = transitionTo(_uiState.value.nextEpisode)
 
-    private fun onPlaybackEnded() {
+    private suspend fun onPlaybackEnded() {
         if (
             !shouldHandlePlaybackCompletion(
                 ended = true,
@@ -1144,6 +1366,43 @@ class PlaybackViewModel(
         )
             return
         handledCompletionGeneration = playbackGeneration
+        if (_uiState.value.local) {
+            val source = resolvedSource as? ResolvedPlaybackSource.Local
+            if (source != null) {
+                runCatching {
+                        repository.offline
+                            ?.playbackState
+                            ?.complete(
+                                source.profile.id,
+                                currentItemId,
+                                _uiState.value.engine.durationSeconds,
+                                _uiState.value.watchHistoryEnabled,
+                            )
+                    }
+                    .onFailure { error ->
+                        Log.w(
+                            PLAYBACK_TAG,
+                            "local playback completion could not be persisted",
+                            error,
+                        )
+                    }
+                val current = _uiState.value.playback
+                if (current?.item?.id == currentItemId && _uiState.value.watchHistoryEnabled) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            playback =
+                                current.copy(
+                                    item =
+                                        current.item.copy(
+                                            played = true,
+                                            playedPercentage = 0.0,
+                                            playbackPositionTicks = 0,
+                                        )
+                                )
+                        )
+                }
+            }
+        }
         advanceAfterEpisodeEnd()
     }
 
@@ -1162,6 +1421,14 @@ class PlaybackViewModel(
             }
             EpisodeCompletionAction.CLOSE -> {
                 pendingCompletionGeneration = null
+                if (_uiState.value.local && _uiState.value.nextEpisodeUnavailable) {
+                    Toast.makeText(
+                            appContext,
+                            R.string.offline_next_episode_not_downloaded,
+                            Toast.LENGTH_SHORT,
+                        )
+                        .show()
+                }
                 requestClose()
                 return
             }
@@ -1170,8 +1437,8 @@ class PlaybackViewModel(
         val target = nextEpisode ?: return
         pendingCompletionGeneration = null
         val manager = syncplay
-        if (manager?.state?.value?.active != null) {
-            if (manager.state.value.active?.hostUserId != session.userId) return
+        if (!_uiState.value.local && manager?.state?.value?.active != null) {
+            if (manager.state.value.active?.hostUserId != session?.userId.orEmpty()) return
             viewModelScope.launch {
                 runSyncplayAction { manager.command("media", 0.0, true, target.id) }
             }
@@ -1215,6 +1482,7 @@ class PlaybackViewModel(
                     previousEpisode = null,
                     nextEpisode = null,
                     episodeNeighborsLoaded = false,
+                    nextEpisodeUnavailable = false,
                 )
             loadPlayback(playWhenReadyOverride = true)
         }
@@ -1234,6 +1502,12 @@ class PlaybackViewModel(
         _uiState.value = _uiState.value.copy(closeRequested = true)
     }
 
+    internal fun releaseResolvedSource() {
+        playbackEngine?.stop()
+        resolvedSource?.close()
+        resolvedSource = null
+    }
+
     private fun invalidateActivePlaybackLoad() {
         playbackGeneration++
         pendingCompletionGeneration = null
@@ -1247,10 +1521,10 @@ class PlaybackViewModel(
     }
 
     private suspend fun cancelPlaybackSession(playback: PlaybackData?) {
-        if (playback == null) return
+        if (playback == null || playback.mode == "local") return
         var stopWorker = playback.mode != "direct"
         playback.viewerSessionId?.let { viewerId ->
-            runCatching { repository.endPlaybackViewer(session, viewerId) }
+            runCatching { repository.endPlaybackViewer(remoteSession, viewerId) }
                 .onSuccess { result -> stopWorker = result.stopWorker }
                 .onFailure { error ->
                     Log.w(
@@ -1261,7 +1535,7 @@ class PlaybackViewModel(
         }
         val sessionId = playback.sessionId ?: return
         if (playback.mode == "direct" || !stopWorker) return
-        runCatching { repository.cancelPlaybackSession(session, sessionId) }
+        runCatching { repository.cancelPlaybackSession(remoteSession, sessionId) }
             .onFailure { error ->
                 Log.w(
                     PLAYBACK_TAG,
@@ -1275,6 +1549,7 @@ class PlaybackViewModel(
     }
 
     fun chooseQuality(value: Int) {
+        if (_uiState.value.local) return
         loadPlayback(
             PlaybackOptions(
                 maxStreamingBitrate = value.takeIf { it > 0 },
@@ -1284,8 +1559,44 @@ class PlaybackViewModel(
         )
     }
 
+    fun streamInstead() {
+        if (!_uiState.value.canStream) return
+        streamRequested = true
+        loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
+    }
+
+    fun tryOtherLocalEngine() {
+        val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+        val position = currentPlayerPositionSeconds()
+        val type =
+            if (_uiState.value.engineType == PlayerEngine.MEDIA3) PlayerEngine.MPV
+            else PlayerEngine.MEDIA3
+        createEngine(type)
+        _uiState.value =
+            _uiState.value.copy(
+                engineType = type,
+                error = null,
+                engineInstance = _uiState.value.engineInstance + 1,
+            )
+        val data = _uiState.value.playback ?: return
+        configurePlaybackSource(data, source)
+        playbackEngine?.prepare(source.uri, position, source.data.mimeType, true)
+        playbackEngine?.selectAudioTrack(
+            data.audioTracks
+                .indexOfFirst { it.index == _uiState.value.selectedAudio }
+                .coerceAtLeast(0)
+        )
+    }
+
     fun chooseAudio(stream: MediaStream) {
         _uiState.value = _uiState.value.copy(selectedAudio = stream.index)
+        if (_uiState.value.local) {
+            val ordinal =
+                _uiState.value.playback?.audioTracks?.indexOfFirst { it.index == stream.index }
+                    ?: -1
+            if (ordinal >= 0) playbackEngine?.selectAudioTrack(ordinal)
+            return
+        }
         loadPlayback(
             PlaybackOptions(
                 sourceId = _uiState.value.playback?.source?.id,
@@ -1309,11 +1620,19 @@ class PlaybackViewModel(
         val selected = _uiState.value.selectedSubtitle ?: return
         val playback = _uiState.value.playback ?: return
         val sourceId = playback.source.id
+        val source = resolvedSource
         subtitleJob?.cancel()
         subtitleJob = viewModelScope.launch {
             val body =
                 runCatching {
-                        repository.subtitleWebVtt(session, currentItemId, sourceId, selected)
+                        if (source is ResolvedPlaybackSource.Local) source.subtitleText(selected)
+                        else
+                            repository.subtitleWebVtt(
+                                remoteSession,
+                                currentItemId,
+                                sourceId,
+                                selected,
+                            )
                     }
                     .getOrNull() ?: return@launch
             if (
@@ -1385,7 +1704,8 @@ class PlaybackViewModel(
         episodeNeighborsJob?.cancel()
         backgroundRecoveryJob?.cancel()
         engineJob?.cancel()
-        playbackEngine?.release()
+        releaseResolvedSource()
+        runCatching { playbackEngine?.release() }
         playbackEngine = null
         closeCleanupJob?.let { job ->
             job.invokeOnCompletion { closeCleanupScope.cancel() }
@@ -1401,13 +1721,15 @@ class PlaybackViewModel(
 
     class Factory(
         private val repository: CatalogRepository,
-        private val session: AuthSession,
+        private val session: AuthSession?,
         private val itemId: String,
         private val context: Context,
         private val initialAudioStreamId: Int? = null,
         private val initialSubtitleStreamIndex: Int? = null,
         private val hasInitialSubtitleSelection: Boolean = false,
         private val syncplay: SyncplayManager? = null,
+        private val offlineProfileId: String? = null,
+        private val offlineOnly: Boolean = false,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -1420,6 +1742,8 @@ class PlaybackViewModel(
                 initialSubtitleStreamIndex,
                 hasInitialSubtitleSelection,
                 syncplay,
+                offlineProfileId,
+                offlineOnly,
             )
                 as T
     }

@@ -28,7 +28,8 @@ fun interface SyncplayRequestAuthenticator {
 }
 
 class SyncplayApi(
-    private val httpClient: OkHttpClient = OkHttpClient(),
+    private val httpClient: OkHttpClient =
+        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client(),
     private val requestAuthenticator: SyncplayRequestAuthenticator? = null,
 ) {
     suspend fun groups(session: AuthSession, participantId: String): List<SyncplayGroup> =

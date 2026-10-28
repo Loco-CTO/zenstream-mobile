@@ -1,6 +1,7 @@
 import java.util.Properties
 
 plugins {
+    alias(libs.plugins.ksp)
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kover)
@@ -115,6 +116,7 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
     if (hasReleaseSigning || hasCiDebugSigning) {
         signingConfigs {
@@ -140,7 +142,11 @@ android {
     buildTypes {
         debug {
             // Keep Android Studio debug installs separate from the stable release app.
-            applicationIdSuffix = ".debug"
+            applicationIdSuffix = configuredValue("zenstreamApplicationIdSuffix")?.also {
+                require(Regex("\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*").matches(it)) {
+                    "zenstreamApplicationIdSuffix must be a dot-prefixed package suffix"
+                }
+            } ?: ".debug"
             if (hasCiDebugSigning) {
                 signingConfig = signingConfigs.getByName("ciDebug")
             }
@@ -167,6 +173,11 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    androidTestImplementation(libs.androidx.room.testing)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -203,4 +214,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

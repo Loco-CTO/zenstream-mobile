@@ -39,6 +39,7 @@ import com.zenstream.zenstreammobile.ui.player.VideoMiniPlayerHost
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 
 class MainActivity : ComponentActivity() {
+    private var openDownloads by mutableStateOf(false)
     private var miniSystemPip by mutableStateOf(false)
     private var miniPlaying = false
     private var miniAutomaticPip = false
@@ -58,12 +59,17 @@ class MainActivity : ComponentActivity() {
         }
 
     private val repository by lazy {
-        CatalogRepository(CatalogApi(), SessionStore(applicationContext))
+        CatalogRepository(
+            CatalogApi(),
+            SessionStore(applicationContext),
+            offline = com.zenstream.zenstreammobile.offline.OfflineRuntime.get(applicationContext),
+        )
     }
     private val appViewModel by viewModels<AppViewModel> { AppViewModel.Factory(repository) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openDownloads = intent?.getBooleanExtra("open_downloads", false) == true
         AuthLifecycleLog.processCreated(android.os.Process.myPid())
         appViewModel.handleNativeAppLink(intent?.data?.toString())
         localNetworkPermissionGranted = hasLocalNetworkPermission()
@@ -83,23 +89,31 @@ class MainActivity : ComponentActivity() {
                                 alpha = if (miniSystemPip) 0f else 1f
                             }
                         ) {
-                            ZenStreamApp(
-                                appState = appState,
-                                repository = repository,
-                                appViewModel = appViewModel,
-                                localNetworkPermissionGranted = localNetworkPermissionGranted,
-                                onRequestLocalNetworkPermission = ::requestLocalNetworkPermission,
-                                onOpenLocalNetworkSettings = ::openLocalNetworkSettings,
-                                onPickAvatar = {
-                                    avatarPicker.launch(
-                                        PickVisualMediaRequest(
-                                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                            com.zenstream.zenstreammobile.offline.OfflineDownloadHost(
+                                runtime = repository.offline,
+                                session = appState.session,
+                                openRequested = openDownloads,
+                                onOpenConsumed = { openDownloads = false },
+                            ) {
+                                ZenStreamApp(
+                                    appState = appState,
+                                    repository = repository,
+                                    appViewModel = appViewModel,
+                                    localNetworkPermissionGranted = localNetworkPermissionGranted,
+                                    onRequestLocalNetworkPermission =
+                                        ::requestLocalNetworkPermission,
+                                    onOpenLocalNetworkSettings = ::openLocalNetworkSettings,
+                                    onPickAvatar = {
+                                        avatarPicker.launch(
+                                            PickVisualMediaRequest(
+                                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                                            )
                                         )
-                                    )
-                                },
-                                avatarPickerResult = avatarPickerResult,
-                                onAvatarPickerResultConsumed = { avatarPickerResult = null },
-                            )
+                                    },
+                                    avatarPickerResult = avatarPickerResult,
+                                    onAvatarPickerResultConsumed = { avatarPickerResult = null },
+                                )
+                            }
                         }
                         VideoMiniPlayerHost(
                             repository,
@@ -223,6 +237,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        openDownloads = intent.getBooleanExtra("open_downloads", false)
         appViewModel.handleNativeAppLink(intent.data?.toString())
     }
 

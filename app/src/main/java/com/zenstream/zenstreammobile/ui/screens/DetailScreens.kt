@@ -183,6 +183,7 @@ fun DetailScreen(
                 else title.ifBlank { stringResource(R.string.detail_title) },
             parentSeries = parentSeries,
             visible = true,
+            downloadItem = state.data?.item,
             scrolled = detailScrolled,
             showTitleWithoutScroll = isEpisode,
             backOnly = state.data == null,
@@ -751,6 +752,7 @@ internal fun DetailOverlayTopBar(
     onBack: () -> Unit,
     onOpenItem: (MediaItem) -> Unit = {},
     onCopyShareLink: (() -> Unit)? = null,
+    downloadItem: MediaItem? = null,
 ) {
     val scrimAlpha by
         animateFloatAsState(
@@ -805,6 +807,7 @@ internal fun DetailOverlayTopBar(
                         onOpenItem = onOpenItem,
                     )
                 }
+                if (!backOnly) com.zenstream.zenstreammobile.offline.DownloadButton(downloadItem)
                 if (!backOnly && onCopyShareLink != null) {
                     IconButton(
                         onClick = onCopyShareLink,

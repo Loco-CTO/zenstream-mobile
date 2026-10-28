@@ -22,6 +22,10 @@ PiP, mini-player gestures, subtitle rendering, route changes, and session restor
 
 Offline source resolution is part of playback correctness. When a verified local file is missing or corrupt, show a recoverable local error rather than silently starting a network stream. See [offline media](offline.md).
 
+A Media3 engine owns one stable `PlayerView`. Repeated Compose updates must reuse it so the player stays attached to the displayed surface; surface lifecycle callbacks own watchdog readiness.
+
+The shared Media3 engine uses the same source-scoped decoder recovery for remote streams and downloaded files. Its media data source enforces Offline mode for HTTP reads, while local audio selection uses output-track ordinals. Configure the source context again when switching engines, and never advance a local failure into server conversion.
+
 ## Verification
 
 For decoder changes, run the native artifact verifier and the focused player unit tests. The full offline change checks are listed in [offline media](offline.md). Physical-device performance and user-media acceptance require separate device validation; a successful build does not establish either.

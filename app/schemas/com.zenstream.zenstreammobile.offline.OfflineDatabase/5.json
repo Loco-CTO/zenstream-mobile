@@ -1,0 +1,1079 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "9e3b74bb7ed12a3946bcb0c96bd98fcd",
+    "entities": [
+      {
+        "tableName": "offline_profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `serverInstance` TEXT NOT NULL, `account` TEXT NOT NULL, `serverUrl` TEXT NOT NULL, `displayName` TEXT NOT NULL, `locked` INTEGER NOT NULL, `nextSequence` INTEGER NOT NULL, `acknowledgedSequence` INTEGER NOT NULL, `historyEpoch` INTEGER NOT NULL, `privacyEpoch` INTEGER NOT NULL, `historyEnabled` INTEGER NOT NULL, `anchorServerMs` INTEGER NOT NULL, `anchorElapsedMs` INTEGER NOT NULL, `anchorBoot` INTEGER NOT NULL, `deletePending` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverInstance",
+            "columnName": "serverInstance",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "account",
+            "columnName": "account",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverUrl",
+            "columnName": "serverUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locked",
+            "columnName": "locked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextSequence",
+            "columnName": "nextSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "acknowledgedSequence",
+            "columnName": "acknowledgedSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historyEpoch",
+            "columnName": "historyEpoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "privacyEpoch",
+            "columnName": "privacyEpoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historyEnabled",
+            "columnName": "historyEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "anchorServerMs",
+            "columnName": "anchorServerMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "anchorElapsedMs",
+            "columnName": "anchorElapsedMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "anchorBoot",
+            "columnName": "anchorBoot",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletePending",
+            "columnName": "deletePending",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_profiles_serverInstance_account",
+            "unique": true,
+            "columnNames": [
+              "serverInstance",
+              "account"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_offline_profiles_serverInstance_account` ON `${TABLE_NAME}` (`serverInstance`, `account`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_catalog",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `id` TEXT NOT NULL, `libraryId` TEXT, `parentId` TEXT, `type` TEXT NOT NULL, `name` TEXT NOT NULL, `season` INTEGER NOT NULL, `episode` INTEGER NOT NULL, `episodeEnd` INTEGER NOT NULL, `disc` INTEGER NOT NULL, `track` INTEGER NOT NULL, `payload` TEXT NOT NULL, `presentationRevision` TEXT NOT NULL, `unavailable` INTEGER NOT NULL, `newSourceAvailable` INTEGER NOT NULL, PRIMARY KEY(`profile`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "libraryId",
+            "columnName": "libraryId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "parentId",
+            "columnName": "parentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episode",
+            "columnName": "episode",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeEnd",
+            "columnName": "episodeEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "disc",
+            "columnName": "disc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "track",
+            "columnName": "track",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "presentationRevision",
+            "columnName": "presentationRevision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unavailable",
+            "columnName": "unavailable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newSourceAvailable",
+            "columnName": "newSourceAvailable",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_catalog_profile_parentId",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "parentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_catalog_profile_parentId` ON `${TABLE_NAME}` (`profile`, `parentId`)"
+          },
+          {
+            "name": "index_offline_catalog_profile_type_name",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "type",
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_catalog_profile_type_name` ON `${TABLE_NAME}` (`profile`, `type`, `name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_selections",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `id` TEXT NOT NULL, `rootId` TEXT NOT NULL, `kind` TEXT NOT NULL, `title` TEXT NOT NULL, `options` TEXT NOT NULL, `state` TEXT NOT NULL, `cursor` INTEGER NOT NULL, `itemCount` INTEGER NOT NULL, `error` TEXT, PRIMARY KEY(`profile`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rootId",
+            "columnName": "rootId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "options",
+            "columnName": "options",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursor",
+            "columnName": "cursor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "itemCount",
+            "columnName": "itemCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "offline_members",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `selection` TEXT NOT NULL, `item` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, PRIMARY KEY(`profile`, `selection`, `item`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selection",
+            "columnName": "selection",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "item",
+            "columnName": "item",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "selection",
+            "item"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_members_profile_item",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "item"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_members_profile_item` ON `${TABLE_NAME}` (`profile`, `item`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_assets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `id` TEXT NOT NULL, `item` TEXT NOT NULL, `quality` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `sourceRevision` TEXT NOT NULL, `size` INTEGER NOT NULL, `sha256` TEXT NOT NULL, `mimeType` TEXT NOT NULL, `descriptor` TEXT NOT NULL, `relativePath` TEXT NOT NULL, `state` TEXT NOT NULL, `verifiedAt` INTEGER NOT NULL, `locked` INTEGER NOT NULL, PRIMARY KEY(`profile`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "item",
+            "columnName": "item",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quality",
+            "columnName": "quality",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceRevision",
+            "columnName": "sourceRevision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descriptor",
+            "columnName": "descriptor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relativePath",
+            "columnName": "relativePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "verifiedAt",
+            "columnName": "verifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locked",
+            "columnName": "locked",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_assets_profile_item",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "item"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_assets_profile_item` ON `${TABLE_NAME}` (`profile`, `item`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_asset_refs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `selection` TEXT NOT NULL, `asset` TEXT NOT NULL, PRIMARY KEY(`profile`, `selection`, `asset`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selection",
+            "columnName": "selection",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "asset",
+            "columnName": "asset",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "selection",
+            "asset"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_asset_refs_profile_asset",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "asset"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_asset_refs_profile_asset` ON `${TABLE_NAME}` (`profile`, `asset`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_transfers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `id` TEXT NOT NULL, `selection` TEXT NOT NULL, `item` TEXT NOT NULL, `options` TEXT NOT NULL, `state` TEXT NOT NULL, `assetId` TEXT, `descriptor` TEXT, `bytes` INTEGER NOT NULL, `total` INTEGER NOT NULL, `etag` TEXT, `attempt` INTEGER NOT NULL, `nextAttemptMs` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `error` TEXT, `reserved` INTEGER NOT NULL, PRIMARY KEY(`profile`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selection",
+            "columnName": "selection",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "item",
+            "columnName": "item",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "options",
+            "columnName": "options",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "descriptor",
+            "columnName": "descriptor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bytes",
+            "columnName": "bytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "total",
+            "columnName": "total",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "etag",
+            "columnName": "etag",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "attempt",
+            "columnName": "attempt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptMs",
+            "columnName": "nextAttemptMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reserved",
+            "columnName": "reserved",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_transfers_profile_state_priority",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "state",
+              "priority"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_transfers_profile_state_priority` ON `${TABLE_NAME}` (`profile`, `state`, `priority`)"
+          },
+          {
+            "name": "index_offline_transfers_profile_selection_state",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "selection",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_transfers_profile_selection_state` ON `${TABLE_NAME}` (`profile`, `selection`, `state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_supplements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `asset` TEXT NOT NULL, `key` TEXT NOT NULL, `relativePath` TEXT NOT NULL, `revision` TEXT NOT NULL, `descriptor` TEXT NOT NULL, PRIMARY KEY(`profile`, `asset`, `key`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "asset",
+            "columnName": "asset",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relativePath",
+            "columnName": "relativePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descriptor",
+            "columnName": "descriptor",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "asset",
+            "key"
+          ]
+        }
+      },
+      {
+        "tableName": "offline_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `target` TEXT NOT NULL, `canonical` TEXT NOT NULL, `overlay` TEXT NOT NULL, `revisions` TEXT NOT NULL, `localOnlyResume` TEXT, PRIMARY KEY(`profile`, `target`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "target",
+            "columnName": "target",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonical",
+            "columnName": "canonical",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "overlay",
+            "columnName": "overlay",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revisions",
+            "columnName": "revisions",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localOnlyResume",
+            "columnName": "localOnlyResume",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "target"
+          ]
+        }
+      },
+      {
+        "tableName": "offline_playback_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `target` TEXT NOT NULL, `positionSeconds` REAL NOT NULL, `durationSeconds` REAL NOT NULL, `played` INTEGER NOT NULL, `activityMs` INTEGER NOT NULL, `previousEpisodeId` TEXT, `nextEpisodeId` TEXT, PRIMARY KEY(`profile`, `target`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "target",
+            "columnName": "target",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionSeconds",
+            "columnName": "positionSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "durationSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "played",
+            "columnName": "played",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activityMs",
+            "columnName": "activityMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "previousEpisodeId",
+            "columnName": "previousEpisodeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nextEpisodeId",
+            "columnName": "nextEpisodeId",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "target"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_playback_states_profile_played_activityMs",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "played",
+              "activityMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_playback_states_profile_played_activityMs` ON `${TABLE_NAME}` (`profile`, `played`, `activityMs`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_playlists",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `id` TEXT NOT NULL, `metadata` TEXT NOT NULL, `revision` TEXT NOT NULL, `complete` INTEGER NOT NULL, `expectedCount` INTEGER NOT NULL, `cursor` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`profile`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadata",
+            "columnName": "metadata",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "complete",
+            "columnName": "complete",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expectedCount",
+            "columnName": "expectedCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursor",
+            "columnName": "cursor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deleted",
+            "columnName": "deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "offline_playlist_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `playlist` TEXT NOT NULL, `track` TEXT NOT NULL, `entryId` TEXT NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`profile`, `playlist`, `track`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playlist",
+            "columnName": "playlist",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "track",
+            "columnName": "track",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entryId",
+            "columnName": "entryId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "playlist",
+            "track"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_playlist_entries_profile_playlist_position",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "playlist",
+              "position"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_playlist_entries_profile_playlist_position` ON `${TABLE_NAME}` (`profile`, `playlist`, `position`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `id` TEXT NOT NULL, `target` TEXT NOT NULL, `kind` TEXT NOT NULL, `activityMs` INTEGER NOT NULL, `clockTrusted` INTEGER NOT NULL, `baseRevision` INTEGER NOT NULL, `historyEpoch` INTEGER NOT NULL, `privacyEpoch` INTEGER NOT NULL, `payload` TEXT NOT NULL, `inFlight` INTEGER NOT NULL, PRIMARY KEY(`profile`, `sequence`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "target",
+            "columnName": "target",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activityMs",
+            "columnName": "activityMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clockTrusted",
+            "columnName": "clockTrusted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseRevision",
+            "columnName": "baseRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historyEpoch",
+            "columnName": "historyEpoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "privacyEpoch",
+            "columnName": "privacyEpoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inFlight",
+            "columnName": "inFlight",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile",
+            "sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_operations_id",
+            "unique": true,
+            "columnNames": [
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_offline_operations_id` ON `${TABLE_NAME}` (`id`)"
+          },
+          {
+            "name": "index_offline_operations_profile_target",
+            "unique": false,
+            "columnNames": [
+              "profile",
+              "target"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_operations_profile_target` ON `${TABLE_NAME}` (`profile`, `target`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_audio_queues",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profile` TEXT NOT NULL, `payload` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`profile`))",
+        "fields": [
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profile"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9e3b74bb7ed12a3946bcb0c96bd98fcd')"
+    ]
+  }
+}

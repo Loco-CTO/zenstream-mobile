@@ -55,6 +55,20 @@ class Media3RecoveryPolicyTest {
     }
 
     @Test
+    fun localSourcesNeverRequestServerConversion() {
+        val recovery = Media3ServerRecovery()
+        for (kind in Media3FailureKind.entries) {
+            for (audio in listOf(false, true)) {
+                assertNull(recovery.nextMode("download", "local", audio, kind, false))
+            }
+        }
+        assertEquals(
+            "video-transcode",
+            recovery.nextMode("download", "direct", false, Media3FailureKind.DECODER, false),
+        )
+    }
+
+    @Test
     fun serverRecoveryAdvancesWithoutRepeatingOrDowngrading() {
         val recovery = Media3ServerRecovery()
         fun next(mode: String, audio: Boolean) =

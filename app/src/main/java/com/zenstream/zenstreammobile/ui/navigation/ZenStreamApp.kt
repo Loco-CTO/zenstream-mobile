@@ -177,6 +177,65 @@ fun ZenStreamApp(
     onAvatarPickerResultConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val offline = repository.offline
+    val offlineConnection by
+        offline?.connection?.state?.collectAsStateWithLifecycle()
+            ?: remember {
+                mutableStateOf<com.zenstream.zenstreammobile.offline.ConnectionState?>(null)
+            }
+    val offlineProfiles by
+        offline
+            ?.database
+            ?.offline()
+            ?.profiles()
+            ?.collectAsStateWithLifecycle(initialValue = emptyList())
+            ?: remember {
+                mutableStateOf(emptyList<com.zenstream.zenstreammobile.offline.OfflineProfile>())
+            }
+    var onlineRequested by remember { mutableStateOf(false) }
+    // Retained downloads render first; automatic authentication may restore independently.
+    LaunchedEffect(appState.serverUrl, offlineConnection?.mode, localNetworkPermissionGranted) {
+        if (
+            offline != null &&
+                com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
+                offlineConnection?.mode ==
+                    com.zenstream.zenstreammobile.offline.ConnectionMode.AUTOMATIC &&
+                localNetworkPermissionGranted
+        )
+            appState.serverUrl?.let { appViewModel.onServerNetworkAccessReady(it) }
+    }
+    if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
+        if (offlineConnection?.initialized != true) {
+            LoadingScreen()
+            return
+        }
+        val localEntry =
+            offlineConnection?.mode ==
+                com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE ||
+                !onlineRequested &&
+                    offlineProfiles.any { !it.locked } &&
+                    (appState.loading ||
+                        !appState.showMain ||
+                        offlineConnection?.reachability in
+                            setOf(
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .UNREACHABLE,
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .CERTIFICATE_ERROR,
+                                com.zenstream.zenstreammobile.offline.ServerReachability
+                                    .PERMISSION_DENIED,
+                            ))
+        if (localEntry) {
+            com.zenstream.zenstreammobile.offline.OfflineEntryScreen(
+                offline,
+                onOnline = {
+                    onlineRequested = true
+                    appViewModel.retryAuthentication()
+                },
+            )
+            return
+        }
+    }
     val activeServerUrl = appState.session?.serverUrl ?: appState.serverUrl
     val shouldGateServerAccess =
         appState.showMain || appState.showLogin || appState.showAuthRecovery
@@ -382,6 +441,11 @@ private fun AuthRestoreUnavailableScreen(
             )
             Spacer(Modifier.size(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+            com.zenstream.zenstreammobile.offline.LocalDownloadUi.current?.let { downloads ->
+                TextButton(onClick = downloads.openDownloads) {
+                    Text(stringResource(R.string.offline_downloads))
+                }
+            }
             TextButton(onClick = onUseSignIn) {
                 Text(stringResource(R.string.auth_use_sign_in))
             }
@@ -420,7 +484,7 @@ private fun MainScaffold(
     onRetryAuthentication: () -> Unit,
     pendingDeepLink: NativeAppDeepLink?,
     onNativeAppLinkConsumed: () -> Unit,
-    onLogout: () -> Unit,
+    onLogout: (keepDownloadsLocked: Boolean) -> Unit,
     onPasswordChanged: () -> Unit,
     onPickAvatar: () -> Unit,
     avatarPickerResult: Uri?,
@@ -799,9 +863,9 @@ private fun MainScaffold(
                             MyPageScreen(
                                 repository = repository,
                                 session = session,
-                                onLogout = {
+                                onLogout = { keepDownloadsLocked ->
                                     audio.stopAndClear()
-                                    onLogout()
+                                    onLogout(keepDownloadsLocked)
                                 },
                                 onPasswordChanged = onPasswordChanged,
                                 outerPadding = padding,

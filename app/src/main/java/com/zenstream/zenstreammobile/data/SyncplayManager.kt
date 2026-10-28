@@ -632,9 +632,11 @@ class SyncplayManager(
                     val url =
                         "${session.serverUrl}/api/ws/syncplay?ticket=${android.net.Uri.encode(ticket)}&participantId=${android.net.Uri.encode(participant())}"
                     val webSocket =
-                        socketClient.newWebSocket(
-                            Request.Builder().url(url.toHttpUrl()).build(),
-                            SocketEvents(ended, opened, generation),
+                        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.track(
+                            socketClient.newWebSocket(
+                                Request.Builder().url(url.toHttpUrl()).build(),
+                                SocketEvents(ended, opened, generation),
+                            )
                         )
                     socket = webSocket
                     if (stopped || connectionGeneration.get() != generation) {
@@ -1028,7 +1030,8 @@ internal class SyncplayNotificationDeduper(private val capacity: Int = 256) {
 }
 
 internal fun syncplaySocketClient(): OkHttpClient =
-    OkHttpClient.Builder()
+    com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client()
+        .newBuilder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(25, TimeUnit.SECONDS)
         .build()

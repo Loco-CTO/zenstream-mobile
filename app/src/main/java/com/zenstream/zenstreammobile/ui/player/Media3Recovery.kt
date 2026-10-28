@@ -98,6 +98,7 @@ internal class Media3ServerRecovery {
             sourceIdentity = identity
             attempted.clear()
         }
+        if (currentMode == "local") return null
         if (kind !in setOf(Media3FailureKind.DECODER, Media3FailureKind.CONTAINER)) return null
         val next =
             when {

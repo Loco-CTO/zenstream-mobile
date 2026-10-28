@@ -21,7 +21,10 @@ data class PlaybackPreference(
     val subtitleLanguages: List<PlaybackLanguageOption>,
 )
 
-class OrchestratorApi(private val httpClient: OkHttpClient = OkHttpClient()) {
+class OrchestratorApi(
+    private val httpClient: OkHttpClient =
+        com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.client()
+) {
     suspend fun fetchPublicWebUrl(orchestratorUrl: String): String? =
         withContext(Dispatchers.IO) {
             val orchestrator = normalizeServerUrl(orchestratorUrl)

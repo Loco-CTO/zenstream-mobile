@@ -401,6 +401,7 @@ class CatalogRepository(
     private val api: CatalogApi,
     private val sessionStore: SessionStore,
     private val orchestratorApi: OrchestratorApi = OrchestratorApi(),
+    val offline: com.zenstream.zenstreammobile.offline.OfflineRuntime? = null,
 ) :
     HomeDataSource,
     HomeLayoutDataSource,
@@ -414,6 +415,29 @@ class CatalogRepository(
     suspend fun revokeSession(session: AuthSession) {
         authenticatedCatalogRequest(session) { current -> api.logout(current) }
     }
+
+    suspend fun offlineRequest(
+        session: AuthSession,
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+    ): JSONObject =
+        authenticatedCatalogRequest(session) { current ->
+            api.offlineRequest(current, path, method, body)
+        }
+
+    suspend fun offlineBinaryRequest(
+        session: AuthSession,
+        path: String,
+        headers: Map<String, String>,
+        receive: suspend (okhttp3.Response) -> Unit,
+    ) =
+        authenticatedCatalogRequest(session) { current ->
+            api.offlineBinaryRequest(current, path, headers, receive)
+        }
+
+    suspend fun offlineSourceDetails(session: AuthSession, itemId: String): JSONObject =
+        authenticatedCatalogRequest(session) { api.offlineSourceDetails(it, itemId) }
 
     private val homeMutex = Mutex()
     private val interfaceLocaleMutex = Mutex()
@@ -1123,6 +1147,12 @@ class CatalogRepository(
         isPrivate: Boolean,
         entityId: String?,
     ): PlaylistData {
+        if (isPrivate && entityId == null) {
+            offline?.createPrivatePlaylist(session, name, description)?.let { local ->
+                invalidateCatalogState()
+                return local
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.createPlaylist(current, name, description, isPrivate, entityId)
@@ -1138,6 +1168,17 @@ class CatalogRepository(
         description: String?,
         isPrivate: Boolean,
     ): PlaylistData {
+        val runtime = offline
+        if (isPrivate && runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(session, playlistId) { profile ->
+                    runtime.playlists.updateDetails(profile, playlistId, name, description)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.updatePlaylist(current, playlistId, name, description, isPrivate)
@@ -1147,6 +1188,17 @@ class CatalogRepository(
     }
 
     override suspend fun deletePlaylist(session: AuthSession, playlistId: String) {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(session, playlistId) { profile ->
+                    runtime.playlists.delete(profile, playlistId)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return
+            }
+        }
         authenticatedCatalogRequest(session) { current -> api.deletePlaylist(current, playlistId) }
         invalidateCatalogState()
     }
@@ -1156,6 +1208,21 @@ class CatalogRepository(
         playlistId: String,
         entityIds: List<String>,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile -> runtime.playlists.canAddTracks(profile, entityIds) },
+                ) { profile ->
+                    runtime.playlists.addTracks(profile, playlistId, entityIds) > 0
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.addPlaylistItems(current, playlistId, entityIds)
@@ -1169,6 +1236,24 @@ class CatalogRepository(
         playlistId: String,
         entryId: String,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = {
+                        runtime.playlists.trackForEntry(it, playlistId, entryId) != null
+                    },
+                ) { profile ->
+                    val track = runtime.playlists.trackForEntry(profile, playlistId, entryId)
+                    track != null && runtime.playlists.removeTrack(profile, playlistId, track)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.removePlaylistEntry(current, playlistId, entryId)
@@ -1197,6 +1282,35 @@ class CatalogRepository(
         beforeEntryId: String?,
         afterEntryId: String?,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile ->
+                        val ids =
+                            runtime.playlists.entries(profile, playlistId, 10_000).map {
+                                it.entryId
+                            }
+                        entryId in ids &&
+                            (beforeEntryId == null || beforeEntryId in ids) &&
+                            (afterEntryId == null || afterEntryId in ids)
+                    },
+                ) { profile ->
+                    runtime.playlists.moveEntry(
+                        profile,
+                        playlistId,
+                        entryId,
+                        beforeEntryId,
+                        afterEntryId,
+                    )
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.movePlaylistEntry(current, playlistId, entryId, beforeEntryId, afterEntryId)
@@ -1210,6 +1324,29 @@ class CatalogRepository(
         playlistId: String,
         entryIds: List<String>,
     ): PlaylistData {
+        val runtime = offline
+        if (runtime != null) {
+            val local =
+                runtime.mutateCachedPlaylist(
+                    session,
+                    playlistId,
+                    canApply = { profile ->
+                        val current =
+                            runtime.playlists.entries(profile, playlistId, 10_000).map {
+                                it.entryId
+                            }
+                        entryIds.size == current.size &&
+                            entryIds.distinct().size == entryIds.size &&
+                            entryIds.toSet() == current.toSet()
+                    },
+                ) { profile ->
+                    runtime.playlists.reorderEntries(profile, playlistId, entryIds)
+                }
+            if (local != null) {
+                invalidateCatalogState()
+                return requireNotNull(local.data) { "Cached playlist state is unavailable." }
+            }
+        }
         val result =
             authenticatedCatalogRequest(session) { current ->
                 api.reorderPlaylist(current, playlistId, entryIds)
@@ -1230,10 +1367,25 @@ class CatalogRepository(
     ): List<MediaItem> =
         authenticatedCatalogRequest(session) { current -> api.musicArtistTracks(current, artistId) }
 
-    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? =
-        AudioLyricsCache.getOrLoad(AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)) {
+    override suspend fun audioLyrics(session: AuthSession, itemId: String): AudioLyrics? {
+        if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
+            val policy = offline.connection.state.first { it.initialized }
+            val identity = offline.audio.identity(policy.profile, session)
+            val profile = identity?.profile
+            if (
+                profile != null &&
+                    offline.database.offline().playable(profile.id, itemId).isNotEmpty()
+            )
+                return offline.audio.lyrics(profile.id, itemId)
+            if (policy.mode == com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE)
+                return null
+        }
+        return AudioLyricsCache.getOrLoad(
+            AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)
+        ) {
             authenticatedCatalogRequest(session) { current -> api.audioLyrics(current, itemId) }
         }
+    }
 
     suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
         try {
@@ -1250,6 +1402,17 @@ class CatalogRepository(
         itemId: String,
         playbackInstanceId: String,
     ) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                "music_play",
+                JSONObject().put("playbackInstanceId", playbackInstanceId),
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.recordAudioPlayStart(current, itemId, playbackInstanceId)
         }
@@ -1281,6 +1444,16 @@ class CatalogRepository(
         }
 
     override suspend fun setFavorite(session: AuthSession, itemId: String, favorite: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (favorite) "favorite" else "unfavorite",
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.setFavorite(current, itemId, favorite)
         }
@@ -1288,11 +1461,31 @@ class CatalogRepository(
     }
 
     suspend fun setPlayed(session: AuthSession, itemId: String, played: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (played) "watched" else "unwatched",
+            ) == true
+        ) {
+            invalidateHomeCache()
+            return
+        }
         authenticatedCatalogRequest(session) { current -> api.setPlayed(current, itemId, played) }
         invalidateHomeCache()
     }
 
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                if (following) "follow" else "unfollow",
+            ) == true
+        ) {
+            invalidateCatalogState()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.setFollowing(current, itemId, following)
         }
@@ -1357,6 +1550,44 @@ class CatalogRepository(
         return authenticatedCatalogRequest(session) { current ->
             api.playback(current, itemId, options)
         }
+    }
+
+    suspend fun resolvePlayback(
+        session: AuthSession?,
+        itemId: String,
+        options: PlaybackOptions = PlaybackOptions(),
+        preference: com.zenstream.zenstreammobile.offline.PlaybackSourcePreference =
+            com.zenstream.zenstreammobile.offline.PlaybackSourcePreference.PREFER_DOWNLOAD,
+        profileId: String? = null,
+        assetId: String? = null,
+    ): com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource {
+        if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED)
+            return offline.playbackSources.resolve(
+                itemId,
+                session,
+                options,
+                preference,
+                profileId,
+                assetId,
+            )
+        if (
+            preference ==
+                com.zenstream.zenstreammobile.offline.PlaybackSourcePreference.DOWNLOAD_ONLY
+        )
+            throw com.zenstream.zenstreammobile.offline.LocalPlaybackUnavailable(
+                com.zenstream.zenstreammobile.offline.LocalPlaybackFailure.UNAVAILABLE
+            )
+        val account =
+            session
+                ?: throw com.zenstream.zenstreammobile.offline.LocalPlaybackUnavailable(
+                    com.zenstream.zenstreammobile.offline.LocalPlaybackFailure
+                        .AUTHENTICATION_REQUIRED
+                )
+        val data = playback(account, itemId, options)
+        return com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource.Remote(
+            data,
+            playbackUrl(account, itemId, data.source.copy(url = data.url ?: data.source.url)),
+        )
     }
 
     suspend fun playbackSource(session: AuthSession, itemId: String) =
@@ -1465,6 +1696,19 @@ class CatalogRepository(
         playSessionId: String?,
         durationSeconds: Double? = null,
     ) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                "checkpoint",
+                JSONObject()
+                    .put("positionSeconds", positionSeconds)
+                    .put("durationSeconds", durationSeconds ?: 0.0),
+            ) == true
+        ) {
+            invalidateHomeCache()
+            return
+        }
         authenticatedCatalogRequest(session) { current ->
             api.reportPlayback(
                 current,
