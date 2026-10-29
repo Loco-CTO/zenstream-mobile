@@ -6,7 +6,7 @@ ZenStream Mobile stores selected media inside the app so it remains available wh
 
 Use the download action on a supported movie, episode, season, series, track, album, artist, collection, or playlist. The server expands group choices into a fixed membership snapshot before file transfers start. New episodes, tracks, and playlist members are not added automatically; use **Download missing members** when you want to update a saved selection.
 
-Choose an original or a server-prepared version when the server offers one. Video choices include portable H.264 MP4 profiles up to 720p or 1080p without upscaling. Audio choices include original audio and AAC profiles at 128 or 256 kbps. Available options depend on the source and the server's conversion support. Select audio languages, subtitles, and other tracks in the download sheet when offered.
+Choose the main media quality in the download sheet. Video choices include the original or portable H.264 MP4 profiles up to 720p or 1080p without upscaling. Track downloads offer the original or AAC profiles at 128 or 256 kbps. Available options depend on the source and the server's conversion support. Downloads include all audio tracks and available subtitle tracks automatically, along with artwork, lyrics, chapters, and segments. Image subtitles require an original download.
 
 Open **My Page → Downloads** to browse saved Movies, TV, and Music, search local metadata, and manage transfers. Pause, resume, retry, cancel, or remove downloads there. Removing a selection preserves a media file that another saved selection still references.
 

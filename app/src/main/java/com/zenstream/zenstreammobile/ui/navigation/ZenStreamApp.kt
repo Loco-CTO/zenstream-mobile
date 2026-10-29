@@ -210,21 +210,12 @@ fun ZenStreamApp(
             return
         }
         val localEntry =
-            offlineConnection?.mode ==
-                com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE ||
-                !onlineRequested &&
-                    offlineProfiles.any { !it.locked } &&
-                    (appState.loading ||
-                        !appState.showMain ||
-                        offlineConnection?.reachability in
-                            setOf(
-                                com.zenstream.zenstreammobile.offline.ServerReachability
-                                    .UNREACHABLE,
-                                com.zenstream.zenstreammobile.offline.ServerReachability
-                                    .CERTIFICATE_ERROR,
-                                com.zenstream.zenstreammobile.offline.ServerReachability
-                                    .PERMISSION_DENIED,
-                            ))
+            com.zenstream.zenstreammobile.offline.shouldOpenOfflineEntry(
+                mode = requireNotNull(offlineConnection).mode,
+                hasRetainedProfile = offlineProfiles.any { !it.locked },
+                showMain = appState.showMain,
+                onlineRequested = onlineRequested,
+            )
         if (localEntry) {
             com.zenstream.zenstreammobile.offline.OfflineEntryScreen(
                 offline,

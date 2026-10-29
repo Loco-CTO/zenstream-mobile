@@ -124,6 +124,7 @@ internal fun sameDownloadChoices(requested: JSONObject, existing: JSONObject): B
             "audioLanguage",
             "subtitleStreamIndices",
             "subtitleLanguages",
+            "includeAllTracks",
             "language",
         )
         .all { key -> requested.opt(key)?.toString() == existing.opt(key)?.toString() }

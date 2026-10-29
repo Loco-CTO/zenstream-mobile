@@ -71,7 +71,7 @@
     <string name="offline_not_supported">このサーバーのバージョンはダウンロードに対応していません。</string>
     <string name="offline_original_tracks">元のファイルでは既存の音声トラックと字幕トラックが保持されます。</string>
     <string name="offline_paused">一時停止中</string>
-    <string name="offline_portable_tracks">変換したダウンロードでは選択した音声と字幕が保持されます。</string>
+    <string name="offline_portable_tracks">変換したダウンロードには、すべての音声トラックと対応する字幕が含まれます。</string>
     <string name="offline_preparing">準備中</string>
     <string name="offline_previous_page">前のページ</string>
     <string name="offline_quality_1080">1080p動画 · 約5 Mbps</string>

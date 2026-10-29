@@ -4,11 +4,15 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import java.io.IOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.CountDownLatch
@@ -55,6 +59,24 @@ data class ConnectionState(
     val authentication: OnlineAuthentication = OnlineAuthentication.UNKNOWN,
     val profile: String? = null,
 )
+
+internal fun reportedServerReachability(status: Int?, error: Throwable?): ServerReachability? =
+    when {
+        status != null -> ServerReachability.REACHABLE
+        error is SSLException -> ServerReachability.CERTIFICATE_ERROR
+        error is SecurityException -> ServerReachability.PERMISSION_DENIED
+        error is ConnectException ||
+            error is NoRouteToHostException ||
+            error is UnknownHostException -> ServerReachability.UNREACHABLE
+        else -> null
+    }
+
+internal fun shouldOpenOfflineEntry(
+    mode: ConnectionMode,
+    hasRetainedProfile: Boolean,
+    showMain: Boolean,
+    onlineRequested: Boolean,
+): Boolean = mode == ConnectionMode.OFFLINE || !onlineRequested && hasRetainedProfile && !showMain
 
 class OfflinePolicyException : IOException("Network access is disabled in Offline mode.")
 
@@ -113,7 +135,8 @@ object OfflineNetworkPolicy {
                     )
                 }
             } catch (error: IOException) {
-                if (allowed) ConnectionCoordinator.current?.report(url, null, error)
+                if (allowed && !chain.call().isCanceled())
+                    ConnectionCoordinator.current?.report(url, null, error)
                 throw error
             }
         }
@@ -144,8 +167,7 @@ class ConnectionCoordinator(context: Context) {
         scope.launch {
             preferences.data
                 .catch {
-                    OfflineNetworkPolicy.publish(false)
-                    _state.update { it.copy(initialized = true, mode = ConnectionMode.OFFLINE) }
+                    if (it is IOException) emit(emptyPreferences()) else throw it
                 }
                 .collect { prefs ->
                     _allowMetered.value = prefs[meteredKey] ?: false
@@ -202,16 +224,10 @@ class ConnectionCoordinator(context: Context) {
                 expected.scheme != actual.scheme
         )
             return
-        val reachability =
-            when {
-                error is SSLException -> ServerReachability.CERTIFICATE_ERROR
-                error is SecurityException -> ServerReachability.PERMISSION_DENIED
-                error != null || status != null && status >= 500 -> ServerReachability.UNREACHABLE
-                else -> ServerReachability.REACHABLE
-            }
+        val reachability = reportedServerReachability(status, error)
         _state.update {
             it.copy(
-                reachability = reachability,
+                reachability = reachability ?: it.reachability,
                 authentication =
                     when (status) {
                         401 -> OnlineAuthentication.NEEDS_SIGN_IN

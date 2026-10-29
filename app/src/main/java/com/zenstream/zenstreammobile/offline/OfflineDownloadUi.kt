@@ -24,7 +24,6 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 
 data class DownloadUiActions(
@@ -295,10 +294,6 @@ private fun DownloadSelectionSheet(
     var capabilities by remember(spec.id) { mutableStateOf<JSONObject?>(null) }
     var source by remember(spec.id) { mutableStateOf<JSONObject?>(null) }
     var quality by remember(spec.id) { mutableStateOf("original") }
-    var audio by remember(spec.id) { mutableStateOf<Int?>(null) }
-    var subtitles by remember(spec.id) { mutableStateOf(emptySet<Int>()) }
-    var audioLanguage by remember(spec.id) { mutableStateOf("") }
-    var subtitleLanguages by remember(spec.id) { mutableStateOf("") }
     var loading by remember(spec.id) { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Int?>(null) }
@@ -316,13 +311,14 @@ private fun DownloadSelectionSheet(
     }
     val streams = source?.optJSONArray("streams")?.objects().orEmpty()
     val hdr = streams.any { it.optString("color_transfer") in setOf("smpte2084", "arib-std-b67") }
-    val profiles = capabilities?.let { downloadProfiles(spec, it, hdr) }.orEmpty()
-    val selectedBitmap =
-        quality != "original" &&
-            streams.any {
-                it.optInt("index") in subtitles &&
-                    it.optString("codec_name") !in downloadableTextSubtitles
-            }
+    val hasBitmapSubtitles = streams.any {
+        streamType(it) == "subtitle" && it.optString("codec_name") !in downloadableTextSubtitles
+    }
+    val profiles =
+        capabilities
+            ?.let { downloadProfiles(spec, it, hdr) }
+            .orEmpty()
+            .filter { it == "original" || !hasBitmapSubtitles }
     val estimated =
         estimateDownloadBytes(
             quality,
@@ -373,70 +369,7 @@ private fun DownloadSelectionSheet(
                 ),
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (source != null) {
-                Row(
-                    Modifier.fillMaxWidth().clickable { audio = null },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = audio == null, onClick = { audio = null })
-                    Text(stringResource(R.string.offline_default_audio))
-                }
-                streams
-                    .filter { streamType(it) == "audio" }
-                    .forEach { stream ->
-                        val index = stream.getInt("index")
-                        Row(
-                            Modifier.fillMaxWidth().clickable { audio = index },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = audio == index, onClick = { audio = index })
-                            Text(streamLabel(stream))
-                        }
-                    }
-                streams
-                    .filter { streamType(it) == "subtitle" }
-                    .forEach { stream ->
-                        val index = stream.getInt("index")
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                subtitles =
-                                    if (index in subtitles) subtitles - index
-                                    else if (subtitles.size < 8) subtitles + index else subtitles
-                            },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = index in subtitles,
-                                onCheckedChange = {
-                                    subtitles =
-                                        if (it && subtitles.size < 8) subtitles + index
-                                        else subtitles - index
-                                },
-                            )
-                            Text(streamLabel(stream))
-                        }
-                    }
-            } else if (!loading && capabilities != null) {
-                OutlinedTextField(
-                    audioLanguage,
-                    { audioLanguage = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.offline_audio_language)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    subtitleLanguages,
-                    { subtitleLanguages = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.offline_subtitle_languages)) },
-                    singleLine = true,
-                )
-                Text(
-                    stringResource(R.string.offline_language_help),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            if (selectedBitmap)
+            if (hasBitmapSubtitles)
                 Text(
                     stringResource(R.string.offline_bitmap_original),
                     color = MaterialTheme.colorScheme.error,
@@ -446,7 +379,7 @@ private fun DownloadSelectionSheet(
                 style = MaterialTheme.typography.bodySmall,
             )
             Button(
-                enabled = !loading && !busy && profiles.isNotEmpty() && !selectedBitmap,
+                enabled = !loading && !busy && profiles.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     busy = true
@@ -458,24 +391,11 @@ private fun DownloadSelectionSheet(
                                     .put("profile", quality)
                                     .put("priorityItem", spec.id)
                                     .put("language", runtime.sessionStore.metadataLanguage.first())
+                                    .put("includeAllTracks", true)
                             source
                                 ?.optString("id")
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { options.put("sourceId", it) }
-                            audio?.let { options.put("audioStreamId", it) }
-                            if (subtitles.isNotEmpty())
-                                options.put("subtitleStreamIndices", JSONArray(subtitles.sorted()))
-                            if (audioLanguage.isNotBlank())
-                                options.put("audioLanguage", audioLanguage.trim())
-                            val languages =
-                                subtitleLanguages
-                                    .split(',')
-                                    .map(String::trim)
-                                    .filter(String::isNotBlank)
-                                    .distinct()
-                            require(languages.size <= 8)
-                            if (languages.isNotEmpty())
-                                options.put("subtitleLanguages", JSONArray(languages))
                             onQueued(runtime.enqueueDownload(context, session, spec, options))
                         } catch (failure: Exception) {
                             if (failure is CancellationException) throw failure
@@ -506,12 +426,3 @@ internal fun qualityLabel(profile: String): String =
             else -> R.string.offline_quality_original
         }
     )
-
-private fun streamLabel(stream: JSONObject): String =
-    listOf(
-            streamLanguage(stream),
-            stream.optJSONObject("tags")?.optString("title").orEmpty(),
-            stream.optString("codec_name"),
-        )
-        .filter { it.isNotBlank() }
-        .joinToString(" · ")
