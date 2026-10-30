@@ -22,6 +22,6 @@ androidComponents {
 dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.annotation:annotation:1.11.0")
-    compileOnly("com.google.errorprone:error_prone_annotations:2.50.0")
+    compileOnly("com.google.errorprone:error_prone_annotations:2.51.0")
     compileOnly("org.checkerframework:checker-qual:4.3.1")
 }
