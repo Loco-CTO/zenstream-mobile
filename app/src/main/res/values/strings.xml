@@ -77,7 +77,7 @@
     <string name="offline_not_supported">Downloads are unavailable on this server version.</string>
     <string name="offline_original_tracks">Original files retain their existing audio and subtitle tracks.</string>
     <string name="offline_paused">Paused</string>
-    <string name="offline_portable_tracks">Portable downloads retain the selected audio and selected subtitle assets.</string>
+    <string name="offline_portable_tracks">Portable downloads include every audio track and all supported text subtitles.</string>
     <string name="offline_preparing">Preparing</string>
     <string name="offline_previous_page">Previous page</string>
     <string name="offline_quality_1080">1080p video · approximately 5 Mbps</string>

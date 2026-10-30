@@ -450,7 +450,8 @@ class DownloadCoordinator(
                 .put("selectionId", transfer.selection)
                 .put("itemId", transfer.item)
                 .put("profile", options.optString("profile", "original"))
-        for (key in listOf("sourceId", "audioStreamId", "subtitleStreamIndices")) {
+        for (key in
+            listOf("sourceId", "audioStreamId", "subtitleStreamIndices", "includeAllTracks")) {
             if (options.has(key) && !options.isNull(key)) body.put(key, options.get(key))
         }
         val result = request(session, "/api/offline/assets", "POST", body)
