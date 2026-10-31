@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.offline
 
 import androidx.room.withTransaction
 import com.zenstream.zenstreammobile.data.catalogMediaItem
+import com.zenstream.zenstreammobile.data.parseLibraries
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import java.security.MessageDigest
@@ -372,16 +373,32 @@ class OfflineCatalogRepository(
         return dao.availability(profile, id)
     }
 
+    fun downloadedLibraries(profile: String): Flow<List<OfflineDownloadLibrary>> =
+        dao.downloadedLibraries(profile)
+
+    suspend fun syncLibraryNames(session: AuthSession, profile: String) {
+        val retained = requireProfile(profile)
+        require(
+            retained.account == session.userId &&
+                retained.serverUrl.trimEnd('/') == session.serverUrl.trimEnd('/')
+        )
+        val libraries =
+            parseLibraries(request(session, "/api/catalog/libraries", "GET", null)).map { library ->
+                OfflineLibraryName(profile, library.id, library.name, library.collectionType)
+            }
+        if (libraries.isNotEmpty()) dao.putLibraryNames(libraries)
+    }
+
     /** Browse playable downloads as titles, while search can still find individual descendants. */
     suspend fun browseDownloads(
         profile: String,
-        category: String,
+        libraryId: String?,
         query: String,
         parent: MediaItem? = null,
         offset: Int = 0,
     ): List<MediaItem> {
         requireProfile(profile)
-        require(category in setOf("", "movies", "tv", "music") && offset >= 0)
+        require((libraryId == null || libraryId.isNotBlank()) && offset >= 0)
         val rows =
             when {
                 parent != null ->
@@ -399,8 +416,14 @@ class OfflineCatalogRepository(
                         offset,
                     )
                 query.isNotBlank() ->
-                    dao.browse(profile, category, searchPattern(query), 100, offset)
-                else -> dao.downloadRoots(profile, category, 100, offset)
+                    dao.searchDownloadsByLibrary(
+                        profile,
+                        libraryId,
+                        searchPattern(query),
+                        100,
+                        offset,
+                    )
+                else -> dao.downloadRootsByLibrary(profile, libraryId, 100, offset)
             }
         return rows.mapNotNull { row ->
             item(profile, row.id)?.let { parsed ->

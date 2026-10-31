@@ -14,6 +14,10 @@ Keep media in app-private storage. Scope local profiles by server instance and a
 
 Automatic reachability is separate from explicit Offline mode. Any HTTP response proves server reachability, including an endpoint error. Cancelled calls, timeouts, and stream failures must not mark the whole server unavailable. Connection/DNS failures and certificate errors remain distinct. Once authenticated content is displayed, background request failures must not replace it with the offline entry screen; retained downloads remain available during startup and through Downloads.
 
+## Downloads browsing
+
+Downloads keeps an All filter and adds one filter for each library that has downloaded media. The filter uses the catalog library ID, so media of the same type from different libraries remains separate. Library names are cached per offline profile and remain available without a connection; libraries with no downloaded media do not appear.
+
 ## Persistence and account state
 
 - `app/src/main/java/com/zenstream/zenstreammobile/offline/` owns Room-backed downloaded catalog data, verified media references, local playback and account-state overlays, and the durable account-operation outbox. Apply a local state change and its sync operation in one `OfflinePlaybackStateRepository` transaction; catalog refreshes replace canonical state while preserving pending overlays.

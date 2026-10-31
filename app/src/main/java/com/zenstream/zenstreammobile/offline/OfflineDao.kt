@@ -49,6 +49,23 @@ interface OfflineDao {
 
     @Upsert suspend fun putProfile(value: OfflineProfile)
 
+    @Upsert suspend fun putLibraryNames(values: List<OfflineLibraryName>)
+
+    @Query("DELETE FROM offline_libraries WHERE profile=:profile")
+    suspend fun deleteAllLibraryNames(profile: String)
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ) SELECT DISTINCT c.libraryId AS id, COALESCE(NULLIF(l.name,''),c.libraryId) AS name, l.type AS type
+          FROM offline_catalog c LEFT JOIN offline_libraries l ON l.profile=c.profile AND l.id=c.libraryId
+          WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved) AND c.libraryId IS NOT NULL AND c.libraryId!=''
+          ORDER BY name COLLATE NOCASE,c.libraryId"""
+    )
+    fun downloadedLibraries(profile: String): Flow<List<OfflineDownloadLibrary>>
+
     @Query("DELETE FROM offline_profiles WHERE id=:id") suspend fun deleteProfileRecord(id: String)
 
     @Query("SELECT * FROM offline_profiles WHERE id=:id")
@@ -416,6 +433,45 @@ interface OfflineDao {
     suspend fun downloadRoots(
         profile: String,
         category: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id
+                WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), candidates AS (
+            SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved)
+        ) SELECT c.* FROM candidates c WHERE (:libraryId IS NULL OR c.libraryId=:libraryId)
+            AND (c.type IN ('movie','series','release') OR
+                 (c.type='season' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='series')) OR
+                 (c.type='episode' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type IN ('series','season'))) OR
+                 (c.type='track' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='release')))
+            ORDER BY c.name COLLATE NOCASE,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun downloadRootsByLibrary(
+        profile: String,
+        libraryId: String?,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ) SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved)
+            AND (:libraryId IS NULL OR c.libraryId=:libraryId)
+            AND c.name LIKE :query ESCAPE '!'
+            ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun searchDownloadsByLibrary(
+        profile: String,
+        libraryId: String?,
+        query: String,
         limit: Int,
         offset: Int,
     ): List<OfflineCatalogItem>

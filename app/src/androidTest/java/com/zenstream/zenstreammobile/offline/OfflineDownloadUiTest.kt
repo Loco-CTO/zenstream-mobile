@@ -146,8 +146,22 @@ class OfflineDownloadUiTest {
                 Triple("series", "series", null),
                 Triple("season", "season", "series"),
                 Triple("episode", "episode", "season"),
+                Triple("series-b", "series", null),
+                Triple("season-b", "season", "series-b"),
+                Triple("episode-b", "episode", "season-b"),
                 Triple("album", "release", null),
                 Triple("track", "track", "album"),
+            )
+        val libraryByItem =
+            mapOf(
+                "series" to "tv-a",
+                "season" to "tv-a",
+                "episode" to "tv-a",
+                "series-b" to "tv-b",
+                "season-b" to "tv-b",
+                "episode-b" to "tv-b",
+                "album" to "music-library",
+                "track" to "music-library",
             )
         runBlocking {
             dao.putProfile(
@@ -159,13 +173,23 @@ class OfflineDownloadUiTest {
                     "Navigation test",
                 )
             )
+            dao.putLibraryNames(
+                listOf(
+                    OfflineLibraryName(id, "tv-a", "TV Library A", "tvshows"),
+                    OfflineLibraryName(id, "tv-b", "TV Library B", "tvshows"),
+                    OfflineLibraryName(id, "music-library", "Music", "music"),
+                    OfflineLibraryName(id, "empty-music", "No downloads", "music"),
+                )
+            )
             items.forEach { (item, type, parent) ->
+                val libraryId = libraryByItem.getValue(item)
                 val payload =
                     JSONObject()
                         .put("id", item)
                         .put("name", item)
                         .put("type", type)
                         .put("parentId", parent)
+                        .put("libraryId", libraryId)
                         .put("seasonNumber", 1)
                         .put("episodeNumber", 1)
                 dao.putItems(
@@ -173,7 +197,7 @@ class OfflineDownloadUiTest {
                         OfflineCatalogItem(
                             id,
                             item,
-                            null,
+                            libraryId,
                             parent,
                             type,
                             item,
@@ -218,7 +242,22 @@ class OfflineDownloadUiTest {
             compose.waitUntil(10000) {
                 runCatching { compose.onNodeWithText("series").assertIsDisplayed() }.isSuccess
             }
+            compose.onNodeWithText("series-b").assertIsDisplayed()
+            compose.onNodeWithText("TV Library A").assertIsDisplayed()
+            compose.onNodeWithText("TV Library B").assertIsDisplayed()
+            compose.onNodeWithText("No downloads").assertDoesNotExist()
             compose.onNodeWithText("track").assertDoesNotExist()
+            compose.onNodeWithText("TV Library A").performClick()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithText("series").assertIsDisplayed() }.isSuccess
+            }
+            compose.onNodeWithText("series-b").assertDoesNotExist()
+            compose.onNodeWithText("TV Library B").performClick()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithText("series-b").assertIsDisplayed() }.isSuccess
+            }
+            compose.onNodeWithText("series").assertDoesNotExist()
+            compose.onNodeWithText(context.getString(R.string.search_filter_all)).performClick()
             compose.onNodeWithText("season").assertDoesNotExist()
             compose.onNodeWithText("series").performClick()
             compose.waitUntil(10000) {
@@ -287,6 +326,7 @@ class OfflineDownloadUiTest {
                 runtime.connection.setMode(previous.mode)
                 runtime.connection.selectProfile(previous.profile)
                 listOf("episode", "track").forEach { dao.deleteAsset(id, "asset-$it") }
+                dao.deleteAllLibraryNames(id)
                 dao.deleteAllCatalog(id)
                 dao.deleteProfileRecord(id)
             }
