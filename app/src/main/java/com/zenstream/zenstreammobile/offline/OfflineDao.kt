@@ -128,7 +128,7 @@ interface OfflineDao {
     fun selectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
 
     @Query(
-        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile ORDER BY CASE WHEN s.state NOT IN ('complete','metadata_complete','cancelled') OR s.id IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')) THEN 0 ELSE 1 END,s.title COLLATE NOCASE,s.id LIMIT :limit OFFSET :offset"
+        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile AND s.state!='removal_pending' ORDER BY CASE WHEN s.state NOT IN ('complete','metadata_complete','cancelled') OR s.id IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')) THEN 0 ELSE 1 END,s.title COLLATE NOCASE,s.id LIMIT :limit OFFSET :offset"
     )
     fun managedSelectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
 

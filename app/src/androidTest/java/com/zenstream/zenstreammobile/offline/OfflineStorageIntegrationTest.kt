@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -246,6 +247,11 @@ class OfflineStorageIntegrationTest {
 
             storage.removeSelectionItem(profile, "series-selection", first.item)
 
+            assertTrue(
+                dao.selectionTransferPage(profile, "series-selection", 10, 0).first().none {
+                    it.item == first.item
+                }
+            )
             assertFalse(firstFile.exists())
             assertNull(dao.asset(profile, first.id))
             assertEquals(0, dao.references(profile, first.id))
