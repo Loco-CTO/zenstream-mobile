@@ -179,6 +179,21 @@ interface OfflineDao {
         offset: Int,
     ): List<OfflineMember>
 
+    @Query(
+        "SELECT * FROM offline_members WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun member(profile: String, selection: String, item: String): OfflineMember?
+
+    @Query(
+        "SELECT COUNT(*) FROM offline_members WHERE profile=:profile AND selection=:selection AND (ordinal<:ordinal OR (ordinal=:ordinal AND item<:item))"
+    )
+    suspend fun memberPosition(
+        profile: String,
+        selection: String,
+        ordinal: Int,
+        item: String,
+    ): Int
+
     @Upsert suspend fun putAsset(value: OfflineAsset)
 
     @Query("SELECT * FROM offline_assets WHERE profile=:profile AND id=:id")
@@ -202,6 +217,9 @@ interface OfflineDao {
     )
     suspend fun playable(profile: String, item: String): List<OfflineAsset>
 
+    @Query("SELECT * FROM offline_assets WHERE profile=:profile AND item=:item")
+    suspend fun assetsForItem(profile: String, item: String): List<OfflineAsset>
+
     @Query(
         "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item ORDER BY (state='complete' AND locked=0) DESC,verifiedAt DESC,id LIMIT :limit"
     )
@@ -223,10 +241,24 @@ interface OfflineDao {
     @Query("DELETE FROM offline_asset_refs WHERE profile=:profile AND selection=:selection")
     suspend fun removeReferences(profile: String, selection: String)
 
+    @Query(
+        "DELETE FROM offline_asset_refs WHERE profile=:profile AND selection=:selection AND asset IN (SELECT id FROM offline_assets WHERE profile=:profile AND item=:item)"
+    )
+    suspend fun removeSelectionItemReferences(profile: String, selection: String, item: String)
+
     @Upsert suspend fun putTransfer(value: OfflineTransfer)
 
     @Query("SELECT * FROM offline_transfers WHERE profile=:profile AND id=:id")
     suspend fun transfer(profile: String, id: String): OfflineTransfer?
+
+    @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun transfersForSelectionItem(
+        profile: String,
+        selection: String,
+        item: String,
+    ): List<OfflineTransfer>
 
     @Query("SELECT * FROM offline_transfers WHERE profile=:profile ORDER BY priority DESC,id")
     fun transfers(profile: String): Flow<List<OfflineTransfer>>
@@ -376,6 +408,11 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_members WHERE profile=:profile AND selection=:selection")
     suspend fun deleteMembers(profile: String, selection: String)
+
+    @Query(
+        "DELETE FROM offline_members WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun deleteSelectionMember(profile: String, selection: String, item: String)
 
     @Query("DELETE FROM offline_assets WHERE profile=:profile AND id=:asset")
     suspend fun deleteAsset(profile: String, asset: String)
@@ -540,6 +577,11 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection")
     suspend fun deleteSelectionTransfers(profile: String, selection: String)
+
+    @Query(
+        "DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun deleteSelectionItemTransfers(profile: String, selection: String, item: String)
 
     @Query(
         "SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN state='complete' THEN 1 ELSE 0 END),0) AS complete,COALESCE(SUM(total),0) AS totalBytes,COALESCE(SUM(bytes),0) AS downloadedBytes FROM offline_transfers WHERE profile=:profile AND state!='cancelled'"

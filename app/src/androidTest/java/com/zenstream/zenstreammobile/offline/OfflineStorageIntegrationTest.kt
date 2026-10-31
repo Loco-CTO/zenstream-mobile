@@ -157,6 +157,120 @@ class OfflineStorageIntegrationTest {
     }
 
     @Test
+    fun removingDownloadedEpisodeKeepsSeriesAndQueueCursor() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "offline-remove-episode-test").apply { mkdirs() }
+        val db = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val profile = "1".repeat(64)
+        val storage = OfflineStorage(db, root, scope, freeBytes = { 8 * OFFLINE_FREE_RESERVE })
+        val dao = db.offline()
+        try {
+            dao.putProfile(
+                OfflineProfile(profile, "server", "user", "https://example.invalid", "User")
+            )
+            dao.putSelection(
+                OfflineSelection(
+                    profile,
+                    "series-selection",
+                    "series",
+                    "catalog",
+                    "Show",
+                    "{}",
+                    state = "queueing",
+                    cursor = 100,
+                    itemCount = 101,
+                )
+            )
+            dao.putMembers(
+                listOf(
+                    OfflineMember(profile, "series-selection", "episode-one", 0),
+                    OfflineMember(profile, "series-selection", "episode-two", 1),
+                ) +
+                    (2..100).map { ordinal ->
+                        OfflineMember(profile, "series-selection", "episode-$ordinal", ordinal)
+                    }
+            )
+
+            suspend fun saveAsset(id: String, item: String): OfflineAsset {
+                val relative = storage.paths.relative(profile, id)
+                val file = storage.paths.resolve(relative)
+                file.parentFile!!.mkdirs()
+                file.writeText(item)
+                val asset =
+                    OfflineAsset(
+                        profile,
+                        id,
+                        item,
+                        "original",
+                        "source",
+                        "revision",
+                        file.length(),
+                        sha256(file),
+                        "video/mp4",
+                        "{}",
+                        relative,
+                        state = "complete",
+                    )
+                dao.putAsset(asset)
+                dao.putReference(OfflineAssetReference(profile, "series-selection", id))
+                return asset
+            }
+
+            val first = saveAsset("a".repeat(64), "episode-one")
+            val second = saveAsset("b".repeat(64), "episode-two")
+            val firstFile = storage.paths.resolve(first.relativePath)
+            val secondFile = storage.paths.resolve(second.relativePath)
+            dao.putTransfer(
+                OfflineTransfer(
+                    profile,
+                    "first-transfer",
+                    "series-selection",
+                    first.item,
+                    "{}",
+                    state = "complete",
+                    assetId = first.id,
+                )
+            )
+            dao.putTransfer(
+                OfflineTransfer(
+                    profile,
+                    "second-transfer",
+                    "series-selection",
+                    second.item,
+                    "{}",
+                    state = "complete",
+                    assetId = second.id,
+                )
+            )
+
+            storage.removeSelectionItem(profile, "series-selection", first.item)
+
+            assertFalse(firstFile.exists())
+            assertNull(dao.asset(profile, first.id))
+            assertEquals(0, dao.references(profile, first.id))
+            assertNull(dao.transfer(profile, "first-transfer"))
+            assertTrue(secondFile.isFile)
+            assertNotNull(dao.asset(profile, second.id))
+            assertEquals(1, dao.references(profile, second.id))
+            assertNotNull(dao.transfer(profile, "second-transfer"))
+            assertEquals(100, dao.selection(profile, "series-selection")?.itemCount)
+            assertEquals(99, dao.selection(profile, "series-selection")?.cursor)
+            assertTrue(
+                dao.members(profile, "series-selection", 10, 0).none { it.item == first.item }
+            )
+            assertEquals(
+                "episode-100",
+                dao.members(profile, "series-selection", 2, 99).single().item,
+            )
+        } finally {
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
+            db.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun publicationJournalRepairsRenameCrashAndDetectsMissingFiles() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.cacheDir, "offline-journal-test").apply { mkdirs() }

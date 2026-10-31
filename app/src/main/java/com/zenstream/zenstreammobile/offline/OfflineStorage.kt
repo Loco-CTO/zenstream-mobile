@@ -330,6 +330,61 @@ class OfflineStorage(
             }
         }
 
+    /** Removes one item from its selection and prunes only assets no longer referenced. */
+    suspend fun removeSelectionItem(profile: String, selectionId: String, item: String) =
+        withContext(Dispatchers.IO) {
+            val selection = dao.selection(profile, selectionId) ?: return@withContext
+            if (selection.rootId == item) {
+                removeSelection(profile, selectionId)
+                return@withContext
+            }
+            val (assets, transfers) =
+                mutex.withLock {
+                    val assets = dao.assetsForItem(profile, item)
+                    val transfers = dao.transfersForSelectionItem(profile, selectionId, item)
+                    database.withTransaction {
+                        val latest = dao.selection(profile, selectionId)
+                        if (latest != null && latest.state != "removal_pending") {
+                            val member = dao.member(profile, selectionId, item)
+                            val memberPosition = member?.let {
+                                dao.memberPosition(profile, selectionId, it.ordinal, item)
+                            }
+                            dao.removeSelectionItemReferences(profile, selectionId, item)
+                            dao.deleteSelectionMember(profile, selectionId, item)
+                            if (member != null) {
+                                val cursor =
+                                    if (
+                                        latest.state in
+                                            setOf(
+                                                "queueing",
+                                                "paused_queueing",
+                                                "identity_paused_queueing",
+                                            ) && memberPosition!! < latest.cursor
+                                    )
+                                        latest.cursor - 1
+                                    else latest.cursor
+                                dao.putSelection(
+                                    latest.copy(
+                                        itemCount = (latest.itemCount - 1).coerceAtLeast(0),
+                                        cursor = cursor,
+                                    )
+                                )
+                            }
+                            dao.deleteSelectionItemTransfers(profile, selectionId, item)
+                        }
+                    }
+                    assets to transfers
+                }
+
+            transfers.forEach { transfer ->
+                transfer.assetId?.let { assetId ->
+                    val part = runCatching { staging(profile, assetId) }.getOrNull()
+                    if (part != null) check(!part.exists() || part.delete())
+                }
+            }
+            assets.forEach { prune(profile, it.id) }
+        }
+
     /**
      * Removes one account profile, retaining only leased files until active playback releases them.
      */
