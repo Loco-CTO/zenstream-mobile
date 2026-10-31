@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.offline
 
 import androidx.room.Room
+import androidx.room.withTransaction
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import kotlinx.coroutines.*
@@ -269,6 +270,78 @@ class OfflineStorageIntegrationTest {
                 "episode-100",
                 dao.members(profile, "series-selection", 2, 99).single().item,
             )
+        } finally {
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
+            db.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun interruptedSelectionRemovalCanFinishDeletingMarkedAssets() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "offline-remove-recovery-test").apply { mkdirs() }
+        val db = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val profile = "c".repeat(64)
+        val assetId = "d".repeat(64)
+        val dao = db.offline()
+        val storage = OfflineStorage(db, root, scope, freeBytes = { 8 * OFFLINE_FREE_RESERVE })
+        try {
+            dao.putProfile(
+                OfflineProfile(profile, "server", "user", "https://example.invalid", "User")
+            )
+            dao.putSelection(
+                OfflineSelection(
+                    profile,
+                    "selection",
+                    "movie",
+                    "catalog",
+                    "Movie",
+                    "{}",
+                    state = "complete",
+                    itemCount = 1,
+                )
+            )
+            val relative = storage.paths.relative(profile, assetId)
+            val file = storage.paths.resolve(relative)
+            file.parentFile!!.mkdirs()
+            file.writeText("media")
+            dao.putAsset(
+                OfflineAsset(
+                    profile,
+                    assetId,
+                    "movie",
+                    "original",
+                    "source",
+                    "revision",
+                    file.length(),
+                    sha256(file),
+                    "video/mp4",
+                    "{}",
+                    relative,
+                    state = "complete",
+                )
+            )
+            dao.putReference(OfflineAssetReference(profile, "selection", assetId))
+
+            db.withTransaction {
+                dao.markSelectionAssetsPendingDelete(profile, "selection")
+                dao.removeReferences(profile, "selection")
+                dao.putSelection(
+                    requireNotNull(dao.selection(profile, "selection"))
+                        .copy(
+                            state = "removal_pending",
+                            itemCount = 0,
+                        )
+                )
+            }
+
+            assertEquals("pending_delete", dao.asset(profile, assetId)?.state)
+            assertTrue(file.isFile)
+            storage.repairPage(profile)
+            assertNull(dao.asset(profile, assetId))
+            assertFalse(file.exists())
         } finally {
             requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
             db.close()

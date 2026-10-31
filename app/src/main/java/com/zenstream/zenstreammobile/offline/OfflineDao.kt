@@ -242,9 +242,23 @@ interface OfflineDao {
     suspend fun removeReferences(profile: String, selection: String)
 
     @Query(
+        "UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND id IN (SELECT asset FROM offline_asset_refs WHERE profile=:profile AND selection=:selection) AND NOT EXISTS (SELECT 1 FROM offline_asset_refs retained WHERE retained.profile=offline_assets.profile AND retained.asset=offline_assets.id AND retained.selection!=:selection)"
+    )
+    suspend fun markSelectionAssetsPendingDelete(profile: String, selection: String)
+
+    @Query(
         "DELETE FROM offline_asset_refs WHERE profile=:profile AND selection=:selection AND asset IN (SELECT id FROM offline_assets WHERE profile=:profile AND item=:item)"
     )
     suspend fun removeSelectionItemReferences(profile: String, selection: String, item: String)
+
+    @Query(
+        "UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND id IN (SELECT asset FROM offline_asset_refs WHERE profile=:profile AND selection=:selection) AND item=:item AND NOT EXISTS (SELECT 1 FROM offline_asset_refs retained WHERE retained.profile=offline_assets.profile AND retained.asset=offline_assets.id AND retained.selection!=:selection)"
+    )
+    suspend fun markSelectionItemAssetsPendingDelete(
+        profile: String,
+        selection: String,
+        item: String,
+    )
 
     @Upsert suspend fun putTransfer(value: OfflineTransfer)
 

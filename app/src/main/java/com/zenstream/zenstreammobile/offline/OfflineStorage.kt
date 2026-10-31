@@ -313,6 +313,7 @@ class OfflineStorage(
             mutex.withLock {
                 database.withTransaction {
                     dao.cancelSelectionTransfers(profile, selection)
+                    dao.markSelectionAssetsPendingDelete(profile, selection)
                     dao.removeReferences(profile, selection)
                     dao.deleteMembers(profile, selection)
                     dao.selection(profile, selection)?.let {
@@ -349,6 +350,7 @@ class OfflineStorage(
                             val memberPosition = member?.let {
                                 dao.memberPosition(profile, selectionId, it.ordinal, item)
                             }
+                            dao.markSelectionItemAssetsPendingDelete(profile, selectionId, item)
                             dao.removeSelectionItemReferences(profile, selectionId, item)
                             dao.deleteSelectionMember(profile, selectionId, item)
                             if (member != null) {
