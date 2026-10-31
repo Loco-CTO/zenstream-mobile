@@ -69,6 +69,9 @@ Signed release APKs are published through [GitHub Releases](https://github.com/L
 
 ## Developer documentation
 
+- [Contributing](CONTRIBUTING.md)
+- [Issue and pull request triage](docs/triage.md)
+
 - [Documentation index](docs/README.md)
 - [Architecture and ownership](docs/architecture.md)
 - [Android interface design](docs/ui-design.md)
