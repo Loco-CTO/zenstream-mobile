@@ -204,7 +204,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             native_contract=com.zenstream.zenstreammobile.ui.player.Media3NativeContractTest
             status=0
             for method in configuredDecodersAreActuallyRegistered media3ThenMpv mpvThenMedia3; do
