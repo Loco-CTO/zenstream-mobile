@@ -208,7 +208,7 @@ class OfflineDownloadUiTest {
                     )
                 )
             }
-            listOf("episode", "track").forEach { item ->
+            listOf("episode", "episode-b", "track").forEach { item ->
                 dao.putAsset(
                     OfflineAsset(
                         id,
@@ -325,7 +325,7 @@ class OfflineDownloadUiTest {
             runBlocking {
                 runtime.connection.setMode(previous.mode)
                 runtime.connection.selectProfile(previous.profile)
-                listOf("episode", "track").forEach { dao.deleteAsset(id, "asset-$it") }
+                listOf("episode", "episode-b", "track").forEach { dao.deleteAsset(id, "asset-$it") }
                 dao.deleteAllLibraryNames(id)
                 dao.deleteAllCatalog(id)
                 dao.deleteProfileRecord(id)
