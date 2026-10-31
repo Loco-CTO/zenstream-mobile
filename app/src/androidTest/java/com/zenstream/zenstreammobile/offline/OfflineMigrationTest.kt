@@ -3,6 +3,7 @@ package com.zenstream.zenstreammobile.offline
 import android.content.Context
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -50,6 +51,7 @@ class OfflineMigrationTest {
                     OfflineDatabase.MIGRATION_2_3,
                     OfflineDatabase.MIGRATION_3_4,
                     OfflineDatabase.MIGRATION_4_5,
+                    OfflineDatabase.MIGRATION_5_6,
                 )
                 .build()
         try {
@@ -58,8 +60,9 @@ class OfflineMigrationTest {
             assertEquals(42L, profile?.nextSequence)
             assertEquals(3L, profile?.historyEpoch)
             assertEquals(4L, profile?.privacyEpoch)
-            assertEquals(5, current.openHelper.readableDatabase.version)
+            assertEquals(6, current.openHelper.readableDatabase.version)
             assertFalse(requireNotNull(profile).deletePending)
+            assertTrue(current.offline().downloadedLibraries("p").first().isEmpty())
             assertNull(current.offline().playbackState("p", "item"))
         } finally {
             current.close()

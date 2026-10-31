@@ -370,6 +370,7 @@ class OfflineStorage(
                 dao.deleteAllPlaylists(profile)
                 dao.deleteAllOperations(profile)
                 dao.deleteAllAudioQueues(profile)
+                dao.deleteAllLibraryNames(profile)
             }
 
             var afterAssetId = ""

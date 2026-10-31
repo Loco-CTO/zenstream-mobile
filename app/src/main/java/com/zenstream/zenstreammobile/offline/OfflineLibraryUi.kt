@@ -38,6 +38,7 @@ import com.zenstream.zenstreammobile.ui.components.musicSubtitle
 import com.zenstream.zenstreammobile.ui.components.progressPercent
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -147,7 +148,7 @@ fun DownloadsScreen(
         var offset = 0
         do {
             val batch =
-                runtime.catalog.browseDownloads(requireNotNull(profile).id, "", "", album, offset)
+                runtime.catalog.browseDownloads(requireNotNull(profile).id, null, "", album, offset)
             tracks += batch.filter { it.type == "Audio" }
             offset += batch.size
         } while (batch.size == 100)
@@ -410,9 +411,9 @@ private fun ColumnScope.SavedDownloadLibrary(
     onPlayAlbum: (MediaItem) -> Unit,
     onItem: (MediaItem) -> Unit,
 ) {
-    var category by rememberSaveable { mutableStateOf("") }
+    var libraryId by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
-    var page by rememberSaveable(category, query) { mutableIntStateOf(0) }
+    var page by rememberSaveable(libraryId, query) { mutableIntStateOf(0) }
     var rows by remember { mutableStateOf(emptyList<MediaItem>()) }
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
@@ -420,11 +421,36 @@ private fun ColumnScope.SavedDownloadLibrary(
     var retry by remember { mutableIntStateOf(0) }
     var resume by remember { mutableStateOf(emptyList<MediaItem>()) }
     var nextUp by remember { mutableStateOf(emptyList<MediaItem>()) }
+    val downloadedLibraries by
+        produceState<List<OfflineDownloadLibrary>?>(null, profile.id) {
+            runtime.catalog.downloadedLibraries(profile.id).collect { value = it }
+        }
+    val selectedLibrary = downloadedLibraries?.firstOrNull { it.id == libraryId }
     val revision by runtime.catalogRevision.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(searching) { if (!searching) query = "" }
-    LaunchedEffect(profile.id, parent?.id, category, query, page, revision, retry) {
+    LaunchedEffect(downloadedLibraries, libraryId) {
+        val libraries = downloadedLibraries
+        val currentLibraryId = libraryId
+        if (
+            libraries != null &&
+                currentLibraryId != null &&
+                libraries.none { it.id == currentLibraryId }
+        ) {
+            libraryId = null
+        }
+    }
+    LaunchedEffect(
+        profile.id,
+        parent?.id,
+        libraryId,
+        downloadedLibraries,
+        query,
+        page,
+        revision,
+        retry,
+    ) {
         loading = true
         failed = false
         try {
@@ -433,7 +459,7 @@ private fun ColumnScope.SavedDownloadLibrary(
                 val result =
                     runtime.catalog.browseDownloads(
                         profile.id,
-                        category,
+                        libraryId,
                         query,
                         parent,
                         index * 100,
@@ -443,13 +469,18 @@ private fun ColumnScope.SavedDownloadLibrary(
                 if (!canLoadMore) break
             }
             rows = loaded.distinctBy { it.id }
+            val showVideoSections = libraryId == null || selectedLibrary?.type == "tvshows"
             resume =
-                if (parent == null && query.isBlank() && category in setOf("", "tv"))
-                    runtime.playbackState.continueWatching(profile.id)
+                if (parent == null && query.isBlank() && showVideoSections)
+                    runtime.playbackState.continueWatching(profile.id).filter {
+                        libraryId == null || it.libraryId == libraryId
+                    }
                 else emptyList()
             nextUp =
-                if (parent == null && query.isBlank() && category in setOf("", "tv"))
-                    runtime.playbackState.nextUp(profile.id)
+                if (parent == null && query.isBlank() && showVideoSections)
+                    runtime.playbackState.nextUp(profile.id).filter {
+                        libraryId == null || it.libraryId == libraryId
+                    }
                 else emptyList()
         } catch (error: Exception) {
             if (error is CancellationException) throw error
@@ -475,21 +506,24 @@ private fun ColumnScope.SavedDownloadLibrary(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(
-                listOf(
-                    "" to R.string.search_filter_all,
-                    "movies" to R.string.offline_movies,
-                    "tv" to R.string.offline_tv,
-                    "music" to R.string.offline_music,
-                )
-            ) { (value, label) ->
+            item {
                 FilterChip(
-                    selected = category == value,
+                    selected = libraryId == null,
                     onClick = {
-                        category = value
+                        libraryId = null
                         scope.launch { listState.scrollToItem(0) }
                     },
-                    label = { Text(stringResource(label)) },
+                    label = { Text(stringResource(R.string.search_filter_all)) },
+                )
+            }
+            items(downloadedLibraries.orEmpty(), key = { it.id }) { library ->
+                FilterChip(
+                    selected = libraryId == library.id,
+                    onClick = {
+                        libraryId = library.id
+                        scope.launch { listState.scrollToItem(0) }
+                    },
+                    label = { Text(library.name) },
                 )
             }
         }
@@ -511,7 +545,7 @@ private fun ColumnScope.SavedDownloadLibrary(
                         Modifier.weight(1f),
                         onManage,
                     )
-                    if (category in setOf("", "music"))
+                    if (libraryId == null || selectedLibrary?.type == "music")
                         OfflineNavigationAction(
                             stringResource(R.string.offline_playlists),
                             pluralStringResource(

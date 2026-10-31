@@ -180,6 +180,13 @@ class OfflineRuntime private constructor(context: Context) {
     ): Boolean {
         OfflineNetworkPolicy.requireNetwork()
         val (profile, capabilities) = catalog.discover(session)
+        try {
+            catalog.syncLibraryNames(session, profile.id)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Library labels improve offline browsing but are not required to create a download.
+        }
         require(options.optString("profile", "original") in downloadProfiles(spec, capabilities))
         require(spec.kind in setOf("catalog", "playlist"))
         val frozen = org.json.JSONObject(options.toString()).put("mediaType", spec.type)
@@ -464,6 +471,13 @@ class OfflineRuntime private constructor(context: Context) {
                 .filter { it.id != profile.id && !it.locked }
                 .forEach { lockProfileForIdentityChange(it) }
             connection.selectProfile(profile.id)
+            try {
+                catalog.syncLibraryNames(session, profile.id)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Keep the downloaded catalog usable if refreshing library labels fails.
+            }
             database.withTransaction {
                 dao.resumeTransfersAfterIdentityChange(profile.id)
                 dao.resumeSelectionsAfterIdentityChange(profile.id)
