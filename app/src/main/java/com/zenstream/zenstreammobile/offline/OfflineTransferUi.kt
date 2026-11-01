@@ -66,6 +66,7 @@ internal fun ColumnScope.TransferDownloadList(runtime: OfflineRuntime, profile: 
                     onClick = {
                         perform {
                             runtime.resumeDownloads(profile.id)
+                            actions?.recoverNotifications?.invoke()
                             DownloadExecution.start(context, profile.id)
                         }
                     },
@@ -319,6 +320,7 @@ private fun DownloadTransferRow(
     online: Boolean,
     onFailure: () -> Unit,
 ) {
+    val actions = LocalDownloadUi.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -364,6 +366,7 @@ private fun DownloadTransferRow(
                         onClick = {
                             perform {
                                 runtime.downloads.retry(profile.id, transfer.id)
+                                actions?.recoverNotifications?.invoke()
                                 DownloadExecution.start(context, profile.id)
                             }
                         },

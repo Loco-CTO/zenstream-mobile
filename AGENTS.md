@@ -38,6 +38,7 @@ This repository owns the ZenStream Android client. It is a Jetpack Compose appli
 
 ## Downloads interface
 
+- `DownloadNotifications` renders system notifications; `DownloadNotificationEstimator` owns transfer speed/ETA and `rememberNotificationPermissionHandler` owns the startup request and blocked-download recovery. Keep UIDT/foreground-service lifecycle ownership in `DownloadExecution` and read [notification guidance](docs/download-notifications.md) before changing these paths.
 - Downloads browsing and local container navigation live in `OfflineLibraryUi.kt`; `OfflineTransferUi.kt` groups transfer controls by selection, and `OfflineDownloadSettings.kt` owns connection/storage preferences. The landing list groups shows and albums, while search may return their descendants. Route containers locally before dispatching individual playback, preserve album queues and local Continue Watching/Next Up, and retain filter/search/scroll state through Back navigation. Keep offline UI on the shared theme background and match Library filters and Favorites media rows.
 
 ## Contribution guidance

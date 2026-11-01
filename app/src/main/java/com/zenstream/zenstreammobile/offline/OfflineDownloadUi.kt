@@ -35,6 +35,7 @@ data class DownloadUiActions(
     val playSaved: (OfflineProfile, MediaItem) -> Unit,
     val playSavedQueue: ((OfflineProfile, MediaItem, List<MediaItem>) -> Unit)? = null,
     val canDownload: (OfflineProfile) -> Boolean = { false },
+    val recoverNotifications: () -> Unit = {},
 )
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
@@ -109,6 +110,7 @@ fun OfflineDownloadHost(
     openRequested: Boolean = false,
     onOpenConsumed: () -> Unit = {},
     onSavedItem: ((OfflineProfile, MediaItem) -> Unit)? = null,
+    requestNotificationsOnStartup: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     var selected by remember { mutableStateOf<DownloadSpec?>(null) }
@@ -134,6 +136,7 @@ fun OfflineDownloadHost(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
+    val recoverNotifications = rememberNotificationPermissionHandler(requestNotificationsOnStartup)
     val actions =
         if (runtime != null && OfflineRuntime.ENABLED)
             DownloadUiActions(
@@ -160,6 +163,7 @@ fun OfflineDownloadHost(
                         }
                 },
                 downloadMissing = { selection ->
+                    recoverNotifications()
                     if (session != null)
                         scope.launch {
                             try {
@@ -186,6 +190,7 @@ fun OfflineDownloadHost(
                         }
                 },
                 playSaved = playSaved,
+                recoverNotifications = recoverNotifications,
                 canDownload = { profile ->
                     session != null &&
                         session.userId == profile.account &&
@@ -266,6 +271,7 @@ fun OfflineDownloadHost(
                     onDismiss = { selected = null },
                     onQueued = { started ->
                         selected = null
+                        recoverNotifications()
                         scope.launch {
                             snackbar.showSnackbar(
                                 resources.getString(
