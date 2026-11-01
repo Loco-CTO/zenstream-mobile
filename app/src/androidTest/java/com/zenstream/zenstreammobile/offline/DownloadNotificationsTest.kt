@@ -58,7 +58,19 @@ class DownloadNotificationsTest {
         assertTrue(title.contains(SERIES_TITLE))
         assertTrue(title.contains(MEDIA_TITLE))
         assertTrue(
-            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("64")
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("640")
+        )
+        assertFalse(
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("%")
+        )
+        assertFalse(
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("/s")
+        )
+        assertTrue(
+            notification.extras
+                .getCharSequence(Notification.EXTRA_SUB_TEXT)
+                .toString()
+                .contains("2")
         )
         assertEquals(2, notification.actions.size)
         if (Build.VERSION.SDK_INT >= 31)
@@ -76,7 +88,7 @@ class DownloadNotificationsTest {
         assertEquals(100, legacy.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
         assertFalse(legacy.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
         assertTrue(
-            legacy.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("64")
+            legacy.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("640")
         )
         val preparing = DownloadNotifications.build(context, NOTIFICATION_PROFILE, api = 35)
         assertTrue(preparing.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))

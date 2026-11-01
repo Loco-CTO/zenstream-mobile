@@ -183,19 +183,59 @@ class DownloadNotificationUiTest {
                 72,
             )
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.notify(
-            DownloadExecution.NOTIFICATION_ID,
-            DownloadNotifications.build(context, profile, progress),
-        )
         shell("cmd statusbar expand-notifications")
-        waitForNotification()
-        capture("05-progress-style")
-        manager.notify(
-            DownloadExecution.NOTIFICATION_ID,
-            DownloadNotifications.build(context, profile, progress, api = 35),
-        )
-        waitForNotification()
-        capture("06-legacy-progress")
+        val requestedState =
+            InstrumentationRegistry.getArguments().getString("notificationDemoState")
+        val scenarios =
+            listOf(
+                    "downloading" to progress,
+                    "concurrent" to
+                        progress.copy(
+                            items = listOf(row, row.copy(id = "demo-second", name = "Oceans")),
+                            active = 2,
+                            bytes = row.bytes * 2,
+                            total = row.total * 2,
+                        ),
+                    "unknown-size" to
+                        progress.copy(total = null, percent = null, remainingSeconds = null),
+                    "preparing" to
+                        progress.copy(
+                            phase = DownloadNotificationPhase.PREPARING,
+                            percent = null,
+                            remainingSeconds = null,
+                        ),
+                    "verifying" to
+                        progress.copy(
+                            phase = DownloadNotificationPhase.VERIFYING,
+                            percent = null,
+                            remainingSeconds = null,
+                        ),
+                    "retrying" to
+                        progress.copy(
+                            phase = DownloadNotificationPhase.RETRYING,
+                            percent = null,
+                            remainingSeconds = null,
+                        ),
+                    "queued" to
+                        progress.copy(
+                            phase = DownloadNotificationPhase.QUEUED,
+                            active = 0,
+                            percent = null,
+                            remainingSeconds = null,
+                        ),
+                    "starting" to DownloadNotificationProgress(),
+                )
+                .filter { requestedState == null || it.first == requestedState }
+        for ((style, api) in listOf("modern" to Build.VERSION.SDK_INT, "legacy" to 35)) {
+            for ((name, snapshot) in scenarios) {
+                manager.notify(
+                    DownloadExecution.NOTIFICATION_ID,
+                    DownloadNotifications.build(context, profile, snapshot, api),
+                )
+                waitForNotification()
+                capture("$style-$name")
+            }
+        }
         shell("cmd statusbar collapse")
     }
 

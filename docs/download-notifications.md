@@ -4,14 +4,20 @@
 
 `DownloadExecution` owns the mandatory notification for each user-initiated transfer job (API 34+) or foreground service (API 24–33). `DownloadNotifications` renders the notification. Both execution paths use the same profile-scoped progress monitor, independently of a queue pass: downloading one large file must continue to update its notification.
 
-API 36+ uses AndroidX `NotificationCompat.ProgressStyle` with a small filled dot tracker and a completion icon. Keep the tracker simple so it remains legible at the system template's small size. API 24–35 uses an explicit `setProgress` bar and expanded `BigTextStyle`. AndroidX's ProgressStyle fallback alone does not supply the legacy progress display. The existing Core dependency already includes these APIs; no dependency upgrade is necessary.
+API 36+ uses AndroidX `NotificationCompat.ProgressStyle` with a small filled dot tracker. Keep the tracker simple so it remains legible at the system template's small size. API 24–35 uses an explicit `setProgress` bar in the standard notification template. AndroidX's ProgressStyle fallback alone does not supply the legacy progress display. The existing Core dependency already includes these APIs; no dependency upgrade is necessary.
 
-Use the low-importance Downloads channel, silent updates, one stable notification ID, private lock-screen visibility, immutable explicit action intents, and the existing Downloads deep link. Pause all and cancel remaining preserve the existing durable queue controls. Completion/stopping removes the execution notification. These are ordinary transfer notifications: do not request Live Update promotion for routine library downloads that do not require continuous attention.
+Use the low-importance Downloads channel, silent updates, one stable notification ID, private lock-screen visibility, immutable explicit action intents, and the existing Downloads deep link. Pause and cancel preserve the existing durable queue controls; label both actions with "all" when multiple transfers remain. Completion/stopping removes the execution notification. These are ordinary transfer notifications: do not request Live Update promotion for routine library downloads that do not require continuous attention.
+
+## Information hierarchy
+
+Follow the compact hierarchy of Chrome's download notification: ETA or current phase in the header, one media title, one transferred/total-size line, progress bar, and two actions. Put the media name first, followed by series/album and episode context. For concurrent transfers, append a localized "+N more" summary rather than listing multiple long titles. Opening the notification reaches the full Downloads screen.
+
+Do not repeat the bar as a text percentage or add speed, queue counts, an estimating-time message, or a completion glyph. Keep the body to bytes during downloading; preparation, verification and retry phases use a concise header and an indeterminate bar. Unknown-size transfers show only bytes received. ETA describes the currently active transfers, rather than all queued work.
 
 ## Progress semantics
 
 - A transaction reads only the pending-work counts and at most two presentation rows. Joins retrieve media titles and series/episode or album context without parsing descriptors or loading the full queue/catalog.
-- The percentage and bytes represent the currently transferring files, weighted by their sizes. Historical completed downloads and queued files are excluded. The header separately reports in-progress and queued counts.
+- The progress bar and bytes represent the currently transferring files, weighted by their sizes. Historical completed downloads and queued files are excluded.
 - ETA describes **active downloads**, not the entire queue. Unknown-length transfers cannot produce a percentage or ETA. Preparation, verification/saving, queue wait and retry wait are explicit indeterminate phases.
 - Each file has its own monotonic-time byte samples, with a ten-second window and three-second warmup. Resume offsets, new files, changed sizes and reset counters do not inflate throughput. After five seconds without byte movement, speed/ETA disappear. Verification/supplementary work is not included in the transfer ETA.
 - Poll no faster than once per second and avoid unchanged posts. Cancel and join the monitor before its owner finishes. Repost after notifications become enabled even if progress has not changed. Replacing a legacy service start must not let its cancelled predecessor remove the new notification.
@@ -38,11 +44,11 @@ Run the full offline check from [offline.md](offline.md), plus the focused notif
 | Permanent denial | Recovery opens app notification settings |
 | Downloads channel disabled | Recovery opens channel settings |
 | Return after enabling notifications | Status updates; active execution reposts notification |
-| One slow large file | Title, bytes and progress update during the transfer |
-| Two transfers | Both titles, byte-weighted progress, aggregate speed and active ETA |
+| One slow large file | Title, bytes and progress update during the transfer; ETA appears in the header |
+| Two transfers | Primary title with "+1 more", byte-weighted progress and active ETA |
 | Unknown size, preparation, verification, retry | Accurate phase and indeterminate bar |
 | Pause/cancel/finish or replace execution | No stale monitor posts or orphaned ongoing notification |
-| API 24–35 | Expanded text and classic progress bar |
+| API 24–35 | Compact size line and classic progress bar |
 | API 36+ | Native ProgressStyle rendered by System UI |
 
 Screenshots generated by instrumentation demos use production composables and the production notification builder with explicit fixture media. They demonstrate rendering, not a completed server-backed media transfer. Keep demo artifacts local and outside tracked source.

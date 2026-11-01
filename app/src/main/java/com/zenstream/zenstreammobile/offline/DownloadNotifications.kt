@@ -15,7 +15,6 @@ import androidx.core.graphics.drawable.IconCompat
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.MainActivity
 import com.zenstream.zenstreammobile.R
-import java.text.NumberFormat
 import kotlin.math.ceil
 
 private const val EPISODE_TYPE = "episode"
@@ -54,17 +53,24 @@ internal object DownloadNotifications {
                     .putExtra(DownloadExecution.PROFILE, profile),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-        val titles = progress.items.map { title(context, it) }
+        val primaryTitle =
+            progress.items.firstOrNull()?.let { title(context, it) }
+                ?: context.getString(R.string.offline_downloads)
         val title =
-            titles.joinToString(" · ").ifBlank { context.getString(R.string.offline_downloads) }
+            if (progress.active > 1)
+                context.getString(
+                    R.string.download_notification_more,
+                    primaryTitle,
+                    progress.active - 1,
+                )
+            else primaryTitle
         val details = contentText(context, progress)
-        val queue = queueText(context, progress)
         val builder =
             NotificationCompat.Builder(context, DownloadExecution.CHANNEL)
                 .setSmallIcon(LucideR.drawable.lucide_ic_download)
                 .setContentTitle(title)
                 .setContentText(details)
-                .setSubText(queue)
+                .setSubText(statusText(context, progress))
                 .setContentIntent(open)
                 .setCategory(NotificationCompat.CATEGORY_PROGRESS)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -75,15 +81,21 @@ internal object DownloadNotifications {
                 .setOngoing(true)
                 .addAction(
                     LucideR.drawable.lucide_ic_pause,
-                    context.getString(R.string.offline_pause_all),
+                    context.getString(
+                        if (progress.pending > 1) R.string.offline_pause_all
+                        else R.string.offline_pause
+                    ),
                     action("pause"),
                 )
                 .addAction(
                     LucideR.drawable.lucide_ic_x,
-                    context.getString(R.string.offline_cancel_remaining),
+                    context.getString(
+                        if (progress.pending > 1) R.string.download_notification_cancel_all
+                        else R.string.cancel
+                    ),
                     action("cancel"),
                 )
-        applyProgressStyle(builder, context, progress, titles, details, api)
+        applyProgressStyle(builder, context, progress, api)
         // ProgressStyle does not require Live Update promotion. Routine library downloads do
         // not require continuous attention, so do not request promoted ongoing/status-bar chips.
         return builder.build()
@@ -107,82 +119,39 @@ internal object DownloadNotifications {
         }
     }
 
-    private fun contentText(context: Context, progress: DownloadNotificationProgress): String {
-        val phase =
-            context.getString(
-                when (progress.phase) {
-                    DownloadNotificationPhase.DOWNLOADING -> R.string.offline_downloading
-                    DownloadNotificationPhase.PREPARING -> R.string.offline_preparing
-                    DownloadNotificationPhase.VERIFYING -> R.string.offline_verifying
-                    DownloadNotificationPhase.RETRYING -> R.string.download_notification_retrying
-                    DownloadNotificationPhase.QUEUED -> R.string.offline_queued
-                    DownloadNotificationPhase.STARTING -> R.string.offline_transfer_running
-                }
-            )
-        val percentage =
-            progress.percent?.let {
-                NumberFormat.getPercentInstance(context.resources.configuration.locales[0])
-                    .format(it / 100.0)
+    private fun statusText(context: Context, progress: DownloadNotificationProgress): String {
+        if (progress.phase == DownloadNotificationPhase.DOWNLOADING) {
+            progress.remainingSeconds?.let {
+                return eta(context, it)
             }
-        return buildList {
-                add(phase)
-                if (progress.phase == DownloadNotificationPhase.DOWNLOADING) {
-                    percentage?.let(::add)
-                    add(
-                        progress.total?.let {
-                            context.getString(
-                                R.string.download_notification_bytes,
-                                Formatter.formatShortFileSize(
-                                    context,
-                                    progress.bytes.coerceAtMost(it),
-                                ),
-                                Formatter.formatShortFileSize(context, it),
-                            )
-                        } ?: Formatter.formatShortFileSize(context, progress.bytes)
-                    )
-                    progress.bytesPerSecond?.let {
-                        add(
-                            context.getString(
-                                R.string.download_notification_speed,
-                                Formatter.formatShortFileSize(context, it),
-                            )
-                        )
-                    }
-                    add(
-                        progress.remainingSeconds?.let { eta(context, it) }
-                            ?: context.getString(R.string.download_notification_estimating)
-                    )
-                }
+        }
+        return context.getString(
+            when (progress.phase) {
+                DownloadNotificationPhase.DOWNLOADING -> R.string.offline_downloading
+                DownloadNotificationPhase.PREPARING -> R.string.offline_preparing
+                DownloadNotificationPhase.VERIFYING -> R.string.offline_verifying
+                DownloadNotificationPhase.RETRYING -> R.string.download_notification_retrying
+                DownloadNotificationPhase.QUEUED -> R.string.offline_queued
+                DownloadNotificationPhase.STARTING -> R.string.download_notification_starting
             }
-            .joinToString(" · ")
+        )
     }
 
-    private fun queueText(context: Context, progress: DownloadNotificationProgress): String {
-        return if (progress.pending == 0) context.getString(R.string.offline_downloads)
-        else
+    private fun contentText(context: Context, progress: DownloadNotificationProgress): String? {
+        if (progress.phase != DownloadNotificationPhase.DOWNLOADING) return null
+        return progress.total?.let {
             context.getString(
-                R.string.download_notification_queue,
-                context.resources.getQuantityString(
-                    R.plurals.download_notification_active,
-                    progress.active,
-                    progress.active,
-                ),
-                (progress.pending - progress.active).coerceAtLeast(0).let {
-                    context.resources.getQuantityString(
-                        R.plurals.download_notification_queued,
-                        it,
-                        it,
-                    )
-                },
+                R.string.download_notification_bytes,
+                Formatter.formatShortFileSize(context, progress.bytes.coerceAtMost(it)),
+                Formatter.formatShortFileSize(context, it),
             )
+        } ?: Formatter.formatShortFileSize(context, progress.bytes)
     }
 
     private fun applyProgressStyle(
         builder: NotificationCompat.Builder,
         context: Context,
         progress: DownloadNotificationProgress,
-        titles: List<String>,
-        details: String,
         api: Int,
     ) {
         // Compat ProgressStyle falls back to a plain template below 36, not a progress bar.
@@ -195,23 +164,9 @@ internal object DownloadNotifications {
                     .setProgressTrackerIcon(
                         IconCompat.createWithResource(context, R.drawable.ic_download_progress_dot)
                     )
-                    .setProgressEndIcon(
-                        IconCompat.createWithResource(context, LucideR.drawable.lucide_ic_check)
-                    )
             )
         } else {
-            builder
-                .setProgress(100, progress.percent ?: 0, progress.percent == null)
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(
-                            buildList {
-                                    if (titles.size > 1) addAll(titles)
-                                    add(details)
-                                }
-                                .joinToString("\n")
-                        )
-                )
+            builder.setProgress(100, progress.percent ?: 0, progress.percent == null)
         }
     }
 
@@ -235,7 +190,7 @@ internal object DownloadNotifications {
                 context.getString(R.string.download_notification_episode, item.season ?: 0, number)
             } else null
         val bidi = BidiFormatter.getInstance()
-        return listOfNotNull(parent?.takeIf { it.isNotBlank() }, episode, name).joinToString(
+        return listOfNotNull(name, parent?.takeIf { it.isNotBlank() }, episode).joinToString(
             " · "
         ) {
             bidi.unicodeWrap(it.replace('\n', ' ').replace('\r', ' ').take(160))

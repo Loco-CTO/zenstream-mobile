@@ -660,17 +660,15 @@
     <string name="player_frame_rendered">表示済み</string>
     <string name="player_frame_pending">映像を待機中</string>
     <string name="download_notification_channel_description">メディアのダウンロード状況と転送操作</string>
-    <string name="download_notification_bytes">%2$s 中 %1$s</string>
-    <string name="download_notification_speed">%1$s/秒</string>
-    <string name="download_notification_queue">%1$s · %2$s</string>
-    <plurals name="download_notification_active"><item quantity="other">%1$d 件を処理中</item></plurals>
-    <plurals name="download_notification_queued"><item quantity="other">%1$d 件が待機中</item></plurals>
+    <string name="download_notification_bytes">%1$s / %2$s</string>
+    <string name="download_notification_more">%1$s、ほか %2$d 件</string>
+    <string name="download_notification_cancel_all">すべてキャンセル</string>
     <string name="download_notification_retrying">再試行を待機中</string>
-    <string name="download_notification_estimating">残り時間を計算中…</string>
-    <string name="download_notification_eta_short">現在の転送：残り 1 分未満</string>
-    <string name="download_notification_eta_long">現在の転送：残り 1 日以上</string>
-    <plurals name="download_notification_eta_minutes"><item quantity="other">現在の転送：残り約 %1$d 分</item></plurals>
-    <plurals name="download_notification_eta_hours"><item quantity="other">現在の転送：残り約 %1$d 時間</item></plurals>
+    <string name="download_notification_starting">開始中</string>
+    <string name="download_notification_eta_short">残り 1 分未満</string>
+    <string name="download_notification_eta_long">残り 1 日以上</string>
+    <plurals name="download_notification_eta_minutes"><item quantity="other">残り約 %1$d 分</item></plurals>
+    <plurals name="download_notification_eta_hours"><item quantity="other">残り約 %1$d 時間</item></plurals>
     <string name="download_notification_episode">シーズン %1$d 第 %2$s 話</string>
     <string name="download_notification_settings">ダウンロード通知</string>
     <string name="download_notification_enabled">ダウンロード中にタイトル、進行状況、転送操作を表示します。</string>
