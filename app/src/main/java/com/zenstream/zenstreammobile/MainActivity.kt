@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                                 session = appState.session,
                                 openRequested = openDownloads,
                                 onOpenConsumed = { openDownloads = false },
+                                requestNotificationsOnStartup = true,
                             ) {
                                 ZenStreamApp(
                                     appState = appState,

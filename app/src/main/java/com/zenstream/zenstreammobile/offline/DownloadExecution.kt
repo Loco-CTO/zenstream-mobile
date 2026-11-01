@@ -1,9 +1,7 @@
 package com.zenstream.zenstreammobile.offline
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.app.job.JobInfo
 import android.app.job.JobParameters
@@ -21,13 +19,9 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PersistableBundle
 import androidx.annotation.RequiresApi
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
 import androidx.work.*
-import com.composables.icons.lucide.R as LucideR
-import com.zenstream.zenstreammobile.MainActivity
-import com.zenstream.zenstreammobile.R
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -172,90 +166,61 @@ object DownloadExecution {
         WorkManager.getInstance(context).cancelUniqueWork(RECONCILE_DEBOUNCED)
     }
 
-    fun notification(
+    internal fun notification(
         context: Context,
         profile: String,
-        totals: DownloadTotals? = null,
-        resume: Boolean = false,
-    ): Notification {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26)
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL,
-                    context.getString(R.string.offline_downloads),
-                    NotificationManager.IMPORTANCE_LOW,
-                )
-            )
-        val open =
-            PendingIntent.getActivity(
-                context,
-                0,
-                Intent(context, MainActivity::class.java).putExtra("open_downloads", true),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        fun action(name: String): PendingIntent =
-            PendingIntent.getBroadcast(
-                context,
-                name.hashCode(),
-                Intent(context, DownloadActionReceiver::class.java)
-                    .setAction(name)
-                    .setData(android.net.Uri.parse("zenstream://downloads/$profile/$name"))
-                    .putExtra(PROFILE, profile),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val builder =
-            NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(LucideR.drawable.lucide_ic_download)
-                .setContentTitle(context.getString(R.string.offline_downloads))
-                .setContentText(
-                    context.getString(
-                        if (resume) R.string.offline_resume_needed
-                        else R.string.offline_transfer_running
-                    )
-                )
-                .setContentIntent(open)
-                .setOnlyAlertOnce(true)
-                .setOngoing(!resume)
-        if (!resume) {
-            builder
-                .addAction(
-                    LucideR.drawable.lucide_ic_pause,
-                    context.getString(R.string.offline_pause),
-                    action("pause"),
-                )
-                .addAction(
-                    LucideR.drawable.lucide_ic_x,
-                    context.getString(R.string.offline_cancel_remaining),
-                    action("cancel"),
-                )
-            if (totals != null) {
-                builder.setContentText(
-                    context.getString(
-                        R.string.offline_transfer_progress,
-                        totals.complete,
-                        totals.total,
-                    )
-                )
-                builder.setProgress(
-                    100,
-                    if (totals.totalBytes > 0)
-                        ((totals.downloadedBytes * 100) / totals.totalBytes)
-                            .coerceIn(0, 100)
-                            .toInt()
-                    else 0,
-                    totals.totalBytes <= 0,
-                )
-            }
-        } else builder.setAutoCancel(true)
-        return builder.build()
-    }
+        progress: DownloadNotificationProgress = DownloadNotificationProgress(),
+    ): Notification = DownloadNotifications.build(context, profile, progress)
 
+    /**
+     * Independent from queue passes: a single large file must keep updating while runOnce blocks.
+     */
     internal suspend fun runQueue(
         context: Context,
         profileId: String,
-        progress: (DownloadTotals) -> Unit,
-    ) {
+        progress: (Notification) -> Unit,
+    ) = coroutineScope {
+        val runtime = OfflineRuntime.get(context)
+        val updates = launch {
+            val locale = runtime.sessionStore.locale.first()
+            val configuration =
+                android.content.res.Configuration(context.resources.configuration).apply {
+                    setLocale(java.util.Locale.forLanguageTag(locale))
+                }
+            val localized = context.createConfigurationContext(configuration)
+            monitorDownloadNotifications(
+                read = { now ->
+                    val session = runtime.sessionStore.session.first()
+                    runtime.database.withTransaction {
+                        val dao = runtime.database.offline()
+                        val profile = dao.profile(profileId)
+                        if (
+                            profile == null ||
+                                profile.locked ||
+                                session == null ||
+                                profile.account != session.userId ||
+                                profile.serverUrl != session.serverUrl
+                        )
+                            null
+                        else
+                            dao.notificationQueue(profileId, now) to
+                                dao.notificationItems(profileId, now)
+                    }
+                },
+                enabled = { downloadNotificationsEnabled(context) },
+                elapsedMillis = { android.os.SystemClock.elapsedRealtime() },
+                wallMillis = { System.currentTimeMillis() },
+                publish = { progress(notification(localized, profileId, it)) },
+            )
+        }
+        try {
+            executeQueue(context, profileId)
+        } finally {
+            withContext(NonCancellable) { updates.cancelAndJoin() }
+        }
+    }
+
+    private suspend fun executeQueue(context: Context, profileId: String) {
         val runtime = OfflineRuntime.get(context)
         if (runtime.connection.state.first { it.initialized }.mode == ConnectionMode.OFFLINE) return
         val initialProfile = runtime.database.offline().profile(profileId) ?: return
@@ -341,7 +306,6 @@ object DownloadExecution {
                 continue
             }
             failures = 0
-            progress(runtime.database.offline().downloadTotals(profileId))
             delay(2000)
         }
     }
@@ -360,21 +324,20 @@ class DownloadJobService : JobService() {
             DownloadExecution.notification(this, profile),
             JOB_END_NOTIFICATION_POLICY_REMOVE,
         )
-        running?.cancel()
+        val previous = running
+        previous?.cancel()
         running = scope.launch {
+            previous?.join()
             val assigned = params.network
             try {
                 if (assigned != null)
                     withContext(TransferNetwork(assigned)) {
-                        DownloadExecution.runQueue(this@DownloadJobService, profile) { totals ->
+                        DownloadExecution.runQueue(this@DownloadJobService, profile) { notification
+                            ->
                             setNotification(
                                 params,
                                 DownloadExecution.NOTIFICATION_ID,
-                                DownloadExecution.notification(
-                                    this@DownloadJobService,
-                                    profile,
-                                    totals,
-                                ),
+                                notification,
                                 JOB_END_NOTIFICATION_POLICY_REMOVE,
                             )
                         }
@@ -413,22 +376,25 @@ class DownloadTransferService : Service() {
             DownloadExecution.NOTIFICATION_ID,
             DownloadExecution.notification(this, profile),
         )
-        running?.cancel()
+        val previous = running
+        previous?.cancel()
         running = scope.launch {
+            previous?.join()
             try {
-                DownloadExecution.runQueue(this@DownloadTransferService, profile) { totals ->
-                    (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(
-                        DownloadExecution.NOTIFICATION_ID,
-                        DownloadExecution.notification(
-                            this@DownloadTransferService,
-                            profile,
-                            totals,
-                        ),
-                    )
+                DownloadExecution.runQueue(this@DownloadTransferService, profile) { notification ->
+                    try {
+                        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                            .notify(
+                                DownloadExecution.NOTIFICATION_ID,
+                                notification,
+                            )
+                    } catch (_: SecurityException) {
+                        // Notification permission can be revoked while transferring.
+                    }
                 }
             } finally {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf(startId)
+                // A cancelled older start must not remove the newer start's notification.
+                if (stopSelfResult(startId)) stopForeground(STOP_FOREGROUND_REMOVE)
             }
         }
         return START_REDELIVER_INTENT

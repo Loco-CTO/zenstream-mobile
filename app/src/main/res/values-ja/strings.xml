@@ -659,4 +659,26 @@
     <string name="player_debug_recovery">復旧</string>
     <string name="player_frame_rendered">表示済み</string>
     <string name="player_frame_pending">映像を待機中</string>
+    <string name="download_notification_channel_description">メディアのダウンロード状況と転送操作</string>
+    <string name="download_notification_bytes">%1$s / %2$s</string>
+    <string name="download_notification_more">%1$s、ほか %2$d 件</string>
+    <string name="download_notification_cancel_all">すべてキャンセル</string>
+    <string name="download_notification_retrying">再試行を待機中</string>
+    <string name="download_notification_starting">開始中</string>
+    <string name="download_notification_eta_short">残り 1 分未満</string>
+    <string name="download_notification_eta_long">残り 1 日以上</string>
+    <plurals name="download_notification_eta_minutes"><item quantity="other">残り約 %1$d 分</item></plurals>
+    <plurals name="download_notification_eta_hours"><item quantity="other">残り約 %1$d 時間</item></plurals>
+    <string name="download_notification_episode">シーズン %1$d 第 %2$s 話</string>
+    <string name="download_notification_settings">ダウンロード通知</string>
+    <string name="download_notification_enabled">ダウンロード中にタイトル、進行状況、転送操作を表示します。</string>
+    <string name="download_notification_disabled">通知がオフです。アプリの外で進行状況を確認するには、Android の設定で通知を有効にしてください。ダウンロードはこの画面でも確認できます。</string>
+    <string name="download_notification_open_settings">通知設定</string>
+    <string name="notification_permission_title">ダウンロードの状況を確認</string>
+    <string name="notification_permission_message">ZenStream の通知を許可すると、アプリを開かずにダウンロード中の作品や進行状況を確認し、転送を一時停止できます。設定はいつでも変更できます。</string>
+    <string name="notification_permission_allow">通知を許可</string>
+    <string name="notification_permission_not_now">今はしない</string>
+    <string name="notification_recovery_title">ダウンロード通知がオフです</string>
+    <string name="notification_recovery_message">ダウンロードは続行できますが、アプリの外では進行状況が表示されません。通知を許可すると、通知欄で進行状況を確認し、転送を操作できます。</string>
+    <string name="notification_recovery_settings_message">ダウンロードは続行できます。アプリの外で進行状況を確認するには、Android の通知設定で ZenStream と「ダウンロード」の通知を有効にしてください。</string>
 </resources>

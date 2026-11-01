@@ -232,6 +232,16 @@ interface OfflineDao {
     fun transfers(profile: String): Flow<List<OfflineTransfer>>
 
     @Query(
+        "SELECT COUNT(*) AS pending, COALESCE(SUM(CASE WHEN state IN ('resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now THEN 1 ELSE 0 END),0) AS active FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing')"
+    )
+    suspend fun notificationQueue(profile: String, now: Long): DownloadNotificationQueue
+
+    @Query(
+        "SELECT t.id,t.state,t.bytes,t.total,t.nextAttemptMs,COALESCE(NULLIF(c.name,''),s.title) AS name,c.type,p.name AS parentName,p.type AS parentType,g.name AS seriesName,c.season,c.episode,c.episodeEnd FROM offline_transfers t LEFT JOIN offline_catalog c ON c.profile=t.profile AND c.id=t.item LEFT JOIN offline_catalog p ON p.profile=c.profile AND p.id=c.parentId LEFT JOIN offline_catalog g ON g.profile=p.profile AND g.id=p.parentId LEFT JOIN offline_selections s ON s.profile=t.profile AND s.id=t.selection WHERE t.profile=:profile AND t.state IN ('queued','resolving','preparing','transferring','verifying','publishing') ORDER BY (t.nextAttemptMs>:now),CASE t.state WHEN 'transferring' THEN 0 WHEN 'verifying' THEN 1 WHEN 'publishing' THEN 2 WHEN 'resolving' THEN 3 WHEN 'preparing' THEN 4 ELSE 5 END,t.priority DESC,t.id LIMIT 2"
+    )
+    suspend fun notificationItems(profile: String, now: Long): List<DownloadNotificationItem>
+
+    @Query(
         "SELECT * FROM offline_transfers WHERE profile=:profile AND state IN ('queued','resolving','preparing','transferring','verifying','publishing') AND nextAttemptMs<=:now AND (assetId IS NOT NULL OR (SELECT COUNT(*) FROM offline_transfers p WHERE p.profile=:profile AND p.state='preparing')<2) AND EXISTS(SELECT 1 FROM offline_selections s WHERE s.profile=offline_transfers.profile AND s.id=offline_transfers.selection AND s.state IN ('queued','downloading','complete','partial')) ORDER BY priority DESC,id LIMIT :limit"
     )
     suspend fun pendingTransfers(profile: String, now: Long, limit: Int): List<OfflineTransfer>
