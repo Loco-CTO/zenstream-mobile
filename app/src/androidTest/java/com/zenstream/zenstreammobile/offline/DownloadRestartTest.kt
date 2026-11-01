@@ -122,6 +122,7 @@ class DownloadRestartTest {
         val bytes = ByteArray(2 * 1024 * 1024) { (it % 251).toByte() }
         val source = File(root, "source").apply { writeBytes(bytes) }
         val digest = sha256(source)
+        val etag = "\"$digest\""
         MockWebServer().use { server ->
             server.start()
             val session =
@@ -183,7 +184,7 @@ class DownloadRestartTest {
                     MockResponse()
                         .setBody(okio.Buffer().write(bytes, 0, 1024 * 1024))
                         .setHeader("Content-Length", bytes.size)
-                        .setHeader(etagHeader, "\"$digest\"")
+                        .setHeader(etagHeader, etag)
                 )
                 val first = coordinator(storage)
                 running = launch(Dispatchers.IO) { first.runOnce(session, profileId) }
@@ -203,7 +204,7 @@ class DownloadRestartTest {
                 server.enqueue(
                     MockResponse()
                         .setResponseCode(206)
-                        .setHeader(etagHeader, "\"$digest\"")
+                        .setHeader(etagHeader, etag)
                         .setHeader(
                             "Content-Range",
                             "bytes $offset-${bytes.lastIndex}/${bytes.size}",
@@ -216,7 +217,7 @@ class DownloadRestartTest {
                 server.takeRequest(5, TimeUnit.SECONDS)
                 val resumed = requireNotNull(server.takeRequest(5, TimeUnit.SECONDS))
                 assertEquals("bytes=$offset-", resumed.getHeader("Range"))
-                assertEquals("\"$digest\"", resumed.getHeader("If-Range"))
+                assertEquals(etag, resumed.getHeader("If-Range"))
                 assertEquals("complete", db.offline().transfer(profileId, transferId)?.state)
                 val asset = requireNotNull(db.offline().asset(profileId, assetId))
                 assertEquals(digest, sha256(storage.paths.resolve(asset.relativePath)))
