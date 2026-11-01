@@ -4,7 +4,7 @@
 
 `DownloadExecution` owns the mandatory notification for each user-initiated transfer job (API 34+) or foreground service (API 24–33). `DownloadNotifications` renders the notification. Both execution paths use the same profile-scoped progress monitor, independently of a queue pass: downloading one large file must continue to update its notification.
 
-API 36+ uses AndroidX `NotificationCompat.ProgressStyle` with download tracker and completion icons. API 24–35 uses an explicit `setProgress` bar and expanded `BigTextStyle`. AndroidX's ProgressStyle fallback alone does not supply the legacy progress display. The existing Core dependency already includes these APIs; no dependency upgrade is necessary.
+API 36+ uses AndroidX `NotificationCompat.ProgressStyle` with a small filled dot tracker and a completion icon. Keep the tracker simple so it remains legible at the system template's small size. API 24–35 uses an explicit `setProgress` bar and expanded `BigTextStyle`. AndroidX's ProgressStyle fallback alone does not supply the legacy progress display. The existing Core dependency already includes these APIs; no dependency upgrade is necessary.
 
 Use the low-importance Downloads channel, silent updates, one stable notification ID, private lock-screen visibility, immutable explicit action intents, and the existing Downloads deep link. Pause all and cancel remaining preserve the existing durable queue controls. Completion/stopping removes the execution notification. These are ordinary transfer notifications: do not request Live Update promotion for routine library downloads that do not require continuous attention.
 

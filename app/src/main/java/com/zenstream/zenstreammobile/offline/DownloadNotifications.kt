@@ -193,7 +193,7 @@ internal object DownloadNotifications {
                     .setProgress(progress.percent ?: 0)
                     .setProgressIndeterminate(progress.percent == null)
                     .setProgressTrackerIcon(
-                        IconCompat.createWithResource(context, LucideR.drawable.lucide_ic_download)
+                        IconCompat.createWithResource(context, R.drawable.ic_download_progress_dot)
                     )
                     .setProgressEndIcon(
                         IconCompat.createWithResource(context, LucideR.drawable.lucide_ic_check)
@@ -225,12 +225,13 @@ internal object DownloadNotifications {
                 item.type in setOf(EPISODE_TYPE, "track") -> item.parentName
                 else -> null
             }
+        val episodeNumber = item.episode ?: 0
+        val episodeEnd = item.episodeEnd ?: 0
         val episode =
-            if (item.type == EPISODE_TYPE && (item.episode ?: 0) > 0) {
+            if (item.type == EPISODE_TYPE && episodeNumber > 0) {
                 val number =
-                    if ((item.episodeEnd ?: 0) > requireNotNull(item.episode))
-                        "${item.episode}–${item.episodeEnd}"
-                    else "${item.episode}"
+                    if (episodeEnd > episodeNumber) "$episodeNumber–$episodeEnd"
+                    else episodeNumber.toString()
                 context.getString(R.string.download_notification_episode, item.season ?: 0, number)
             } else null
         val bidi = BidiFormatter.getInstance()
