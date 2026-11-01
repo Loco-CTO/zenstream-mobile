@@ -24,6 +24,9 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class DownloadRestartTest {
+    private val originalMarker = "original"
+    private val etagHeader = "ETag"
+
     @Test
     fun reopeningKeepsTheExistingJobButReplacesChangedProfileOrNetworkConstraints() {
         assumeTrue(Build.VERSION.SDK_INT >= 34)
@@ -32,6 +35,8 @@ class DownloadRestartTest {
             context
                 .getSystemService(JobScheduler::class.java)
                 .forNamespace("zenstream.offline.restart-test")
+        val currentProfile = "profile"
+        val otherProfile = "other"
         fun job(profile: String, wifiOnly: Boolean = true, marker: Boolean = false): JobInfo =
             JobInfo.Builder(1, ComponentName(context, DownloadJobService::class.java))
                 .setMinimumLatency(60_000)
@@ -46,29 +51,29 @@ class DownloadRestartTest {
                 .setExtras(
                     PersistableBundle().apply {
                         putString(DownloadExecution.PROFILE, profile)
-                        putBoolean("original", marker)
+                        putBoolean(originalMarker, marker)
                     }
                 )
                 .build()
         try {
-            assertTrue(scheduleTransferJob(scheduler, job("profile", marker = true)))
-            assertTrue(scheduleTransferJob(scheduler, job("profile")))
-            assertTrue(requireNotNull(scheduler.getPendingJob(1)).extras.getBoolean("original"))
-            assertTrue(scheduleTransferJob(scheduler, job("other")))
+            assertTrue(scheduleTransferJob(scheduler, job(currentProfile, marker = true)))
+            assertTrue(scheduleTransferJob(scheduler, job(currentProfile)))
+            assertTrue(requireNotNull(scheduler.getPendingJob(1)).extras.getBoolean(originalMarker))
+            assertTrue(scheduleTransferJob(scheduler, job(otherProfile)))
             assertEquals(
-                "other",
+                otherProfile,
                 requireNotNull(scheduler.getPendingJob(1))
                     .extras
                     .getString(DownloadExecution.PROFILE),
             )
-            assertTrue(scheduleTransferJob(scheduler, job("other", wifiOnly = false)))
+            assertTrue(scheduleTransferJob(scheduler, job(otherProfile, wifiOnly = false)))
             assertEquals(
-                job("other", wifiOnly = false).requiredNetwork,
+                job(otherProfile, wifiOnly = false).requiredNetwork,
                 requireNotNull(scheduler.getPendingJob(1)).requiredNetwork,
             )
             scheduler.cancel(1)
-            assertTrue(scheduleTransferJob(scheduler, job("other", marker = true)))
-            assertTrue(requireNotNull(scheduler.getPendingJob(1)).extras.getBoolean("original"))
+            assertTrue(scheduleTransferJob(scheduler, job(otherProfile, marker = true)))
+            assertTrue(requireNotNull(scheduler.getPendingJob(1)).extras.getBoolean(originalMarker))
         } finally {
             scheduler.cancelAll()
         }
@@ -111,6 +116,9 @@ class DownloadRestartTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val profileId = "a".repeat(64)
         val assetId = "b".repeat(64)
+        val selectionId = "selection"
+        val transferId = "transfer"
+        val itemId = "movie"
         val bytes = ByteArray(2 * 1024 * 1024) { (it % 251).toByte() }
         val source = File(root, "source").apply { writeBytes(bytes) }
         val digest = sha256(source)
@@ -159,34 +167,34 @@ class DownloadRestartTest {
                     .putSelection(
                         OfflineSelection(
                             profileId,
-                            "selection",
-                            "movie",
-                            "movie",
+                            selectionId,
+                            itemId,
+                            itemId,
                             "Movie",
                             "{}",
                             state = "queued",
                         )
                     )
                 db.offline()
-                    .putTransfer(OfflineTransfer(profileId, "transfer", "selection", "movie", "{}"))
+                    .putTransfer(OfflineTransfer(profileId, transferId, selectionId, itemId, "{}"))
                 // Send a checkpoint, then leave the body open as a connection can during app
                 // closure.
                 server.enqueue(
                     MockResponse()
                         .setBody(okio.Buffer().write(bytes, 0, 1024 * 1024))
                         .setHeader("Content-Length", bytes.size)
-                        .setHeader("ETag", "\"$digest\"")
+                        .setHeader(etagHeader, "\"$digest\"")
                 )
                 val first = coordinator(storage)
                 running = launch(Dispatchers.IO) { first.runOnce(session, profileId) }
                 withTimeout(10_000) {
                     while (
-                        (db.offline().transfer(profileId, "transfer")?.bytes ?: 0) < 1024 * 1024
+                        (db.offline().transfer(profileId, transferId)?.bytes ?: 0) < 1024 * 1024
                     ) delay(20)
                 }
                 running.cancel()
                 withTimeout(2_000) { running.join() }
-                assertEquals("transferring", db.offline().transfer(profileId, "transfer")?.state)
+                assertEquals("transferring", db.offline().transfer(profileId, transferId)?.state)
                 val offset = storage.staging(profileId, assetId).length()
                 assertTrue(offset in 1 until bytes.size.toLong())
                 db.close()
@@ -195,7 +203,7 @@ class DownloadRestartTest {
                 server.enqueue(
                     MockResponse()
                         .setResponseCode(206)
-                        .setHeader("ETag", "\"$digest\"")
+                        .setHeader(etagHeader, "\"$digest\"")
                         .setHeader(
                             "Content-Range",
                             "bytes $offset-${bytes.lastIndex}/${bytes.size}",
@@ -209,7 +217,7 @@ class DownloadRestartTest {
                 val resumed = requireNotNull(server.takeRequest(5, TimeUnit.SECONDS))
                 assertEquals("bytes=$offset-", resumed.getHeader("Range"))
                 assertEquals("\"$digest\"", resumed.getHeader("If-Range"))
-                assertEquals("complete", db.offline().transfer(profileId, "transfer")?.state)
+                assertEquals("complete", db.offline().transfer(profileId, transferId)?.state)
                 val asset = requireNotNull(db.offline().asset(profileId, assetId))
                 assertEquals(digest, sha256(storage.paths.resolve(asset.relativePath)))
             } finally {
