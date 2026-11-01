@@ -47,6 +47,21 @@ internal fun executionForApi(api: Int): TransferExecution =
 internal fun transferRetryDelay(attempt: Int): Long =
     (1000L shl attempt.coerceIn(0, 6)).coerceAtMost(60000L)
 
+@RequiresApi(28)
+@Synchronized
+internal fun scheduleTransferJob(scheduler: JobScheduler, job: JobInfo): Boolean {
+    val existing = scheduler.getPendingJob(job.id)
+    // Restoring the activity must not replace a live (or system-retrying) job.
+    if (
+        existing != null &&
+            existing.extras.getString(DownloadExecution.PROFILE) ==
+                job.extras.getString(DownloadExecution.PROFILE) &&
+            existing.requiredNetwork == job.requiredNetwork
+    )
+        return true
+    return scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS
+}
+
 class TransferNetwork(val network: Network) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<TransferNetwork>
 }
@@ -105,7 +120,7 @@ object DownloadExecution {
                         )
                         .setExtras(PersistableBundle().apply { putString(PROFILE, profile) })
                         .build()
-                scheduler(context).schedule(job) == JobScheduler.RESULT_SUCCESS
+                scheduleTransferJob(scheduler(context), job)
             } else {
                 ContextCompat.startForegroundService(
                     context,
@@ -351,6 +366,9 @@ object DownloadExecution {
 class DownloadJobService : JobService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var running: Job? = null
+    private var assignedNetwork: Network? = null
+    private var runningProfile: String? = null
+    private var activeParams: JobParameters? = null
 
     override fun onStartJob(params: JobParameters): Boolean {
         val profile = params.extras.getString(DownloadExecution.PROFILE) ?: return false
@@ -360,10 +378,29 @@ class DownloadJobService : JobService() {
             DownloadExecution.notification(this, profile),
             JOB_END_NOTIFICATION_POLICY_REMOVE,
         )
-        running?.cancel()
+        activeParams = params
+        runOnNetwork(params, profile)
+        return true
+    }
+
+    override fun onNetworkChanged(params: JobParameters) {
+        val active = activeParams ?: return
+        val profile = active.extras.getString(DownloadExecution.PROFILE) ?: return
+        runOnNetwork(params, profile)
+    }
+
+    private fun runOnNetwork(params: JobParameters, profile: String) {
+        val assigned = params.network
+        if (running?.isActive == true && runningProfile == profile && assignedNetwork == assigned)
+            return
+        runningProfile = profile
+        assignedNetwork = assigned
+        val previous = running
+        previous?.cancel()
         running = scope.launch {
-            val assigned = params.network
             try {
+                // Let the cancelled writer release its file and queue locks before resuming.
+                previous?.join()
                 if (assigned != null)
                     withContext(TransferNetwork(assigned)) {
                         DownloadExecution.runQueue(this@DownloadJobService, profile) { totals ->
@@ -379,17 +416,22 @@ class DownloadJobService : JobService() {
                             )
                         }
                     }
-                withContext(Dispatchers.Main) { jobFinished(params, false) }
+                withContext(Dispatchers.Main) {
+                    activeParams = null
+                    jobFinished(params, assigned == null)
+                }
             } catch (_: CancellationException) {
                 /* onStopJob owns rescheduling. */
             }
         }
-        return true
     }
 
     override fun onStopJob(params: JobParameters): Boolean {
         running?.cancel()
         running = null
+        activeParams = null
+        assignedNetwork = null
+        runningProfile = null
         return OfflineNetworkPolicy.allowed &&
             params.stopReason !in
                 setOf(JobParameters.STOP_REASON_USER, JobParameters.STOP_REASON_CANCELLED_BY_APP)
@@ -404,6 +446,7 @@ class DownloadJobService : JobService() {
 class DownloadTransferService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var running: Job? = null
+    private var runningProfile: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -413,9 +456,14 @@ class DownloadTransferService : Service() {
             DownloadExecution.NOTIFICATION_ID,
             DownloadExecution.notification(this, profile),
         )
-        running?.cancel()
+        if (running?.isActive == true && runningProfile == profile) return START_REDELIVER_INTENT
+        runningProfile = profile
+        val previous = running
+        previous?.cancel()
         running = scope.launch {
+            val execution = currentCoroutineContext()[Job]
             try {
+                previous?.join()
                 DownloadExecution.runQueue(this@DownloadTransferService, profile) { totals ->
                     (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(
                         DownloadExecution.NOTIFICATION_ID,
@@ -427,8 +475,14 @@ class DownloadTransferService : Service() {
                     )
                 }
             } finally {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf(startId)
+                withContext(NonCancellable + Dispatchers.Main) {
+                    if (running === execution) {
+                        running = null
+                        runningProfile = null
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                }
             }
         }
         return START_REDELIVER_INTENT
