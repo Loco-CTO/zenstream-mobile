@@ -12,6 +12,8 @@ The offline feature lives in `app/src/main/java/com/zenstream/zenstreammobile/of
 
 Keep media in app-private storage. Scope local profiles by server instance and account, and keep downloaded files separate from server-issued playback URLs.
 
+Restoring an authenticated activity reuses an existing download job for the same profile and network constraints. The legacy foreground service also keeps its current runner on repeated starts. When Android assigns a different network to a transfer job, cancel and join the previous runner before resuming on that network. Binary calls must close their sockets on coroutine cancellation so a blocked response cannot retain the queue or staging-file writer. Interrupted transfers resume from the actual staging-file length with Range/If-Range checks and verify the completed digest before publication.
+
 Automatic reachability is separate from explicit Offline mode. Any HTTP response proves server reachability, including an endpoint error. Cancelled calls, timeouts, and stream failures must not mark the whole server unavailable. Connection/DNS failures and certificate errors remain distinct. Once authenticated content is displayed, background request failures must not replace it with the offline entry screen; retained downloads remain available during startup and through Downloads.
 
 ## Persistence and account state
