@@ -18,6 +18,8 @@ import com.zenstream.zenstreammobile.R
 import java.text.NumberFormat
 import kotlin.math.ceil
 
+private const val EPISODE_TYPE = "episode"
+
 internal object DownloadNotifications {
     fun build(
         context: Context,
@@ -25,21 +27,7 @@ internal object DownloadNotifications {
         progress: DownloadNotificationProgress = DownloadNotificationProgress(),
         api: Int = Build.VERSION.SDK_INT,
     ): Notification {
-        val manager = context.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                        DownloadExecution.CHANNEL,
-                        context.getString(R.string.offline_downloads),
-                        NotificationManager.IMPORTANCE_LOW,
-                    )
-                    .apply {
-                        description =
-                            context.getString(R.string.download_notification_channel_description)
-                        setShowBadge(false)
-                    }
-            )
-        }
+        createChannel(context)
         val open =
             PendingIntent.getActivity(
                 context,
@@ -69,72 +57,8 @@ internal object DownloadNotifications {
         val titles = progress.items.map { title(context, it) }
         val title =
             titles.joinToString(" · ").ifBlank { context.getString(R.string.offline_downloads) }
-        val phase =
-            context.getString(
-                when (progress.phase) {
-                    DownloadNotificationPhase.DOWNLOADING -> R.string.offline_downloading
-                    DownloadNotificationPhase.PREPARING -> R.string.offline_preparing
-                    DownloadNotificationPhase.VERIFYING -> R.string.offline_verifying
-                    DownloadNotificationPhase.RETRYING -> R.string.download_notification_retrying
-                    DownloadNotificationPhase.QUEUED -> R.string.offline_queued
-                    DownloadNotificationPhase.STARTING -> R.string.offline_transfer_running
-                }
-            )
-        val percentage =
-            progress.percent?.let {
-                NumberFormat.getPercentInstance(context.resources.configuration.locales[0])
-                    .format(it / 100.0)
-            }
-        val details =
-            buildList {
-                    add(phase)
-                    if (progress.phase == DownloadNotificationPhase.DOWNLOADING) {
-                        percentage?.let(::add)
-                        add(
-                            progress.total?.let {
-                                context.getString(
-                                    R.string.download_notification_bytes,
-                                    Formatter.formatShortFileSize(
-                                        context,
-                                        progress.bytes.coerceAtMost(it),
-                                    ),
-                                    Formatter.formatShortFileSize(context, it),
-                                )
-                            } ?: Formatter.formatShortFileSize(context, progress.bytes)
-                        )
-                        progress.bytesPerSecond?.let {
-                            add(
-                                context.getString(
-                                    R.string.download_notification_speed,
-                                    Formatter.formatShortFileSize(context, it),
-                                )
-                            )
-                        }
-                        add(
-                            progress.remainingSeconds?.let { eta(context, it) }
-                                ?: context.getString(R.string.download_notification_estimating)
-                        )
-                    }
-                }
-                .joinToString(" · ")
-        val queue =
-            if (progress.pending == 0) context.getString(R.string.offline_downloads)
-            else
-                context.getString(
-                    R.string.download_notification_queue,
-                    context.resources.getQuantityString(
-                        R.plurals.download_notification_active,
-                        progress.active,
-                        progress.active,
-                    ),
-                    (progress.pending - progress.active).coerceAtLeast(0).let {
-                        context.resources.getQuantityString(
-                            R.plurals.download_notification_queued,
-                            it,
-                            it,
-                        )
-                    },
-                )
+        val details = contentText(context, progress)
+        val queue = queueText(context, progress)
         val builder =
             NotificationCompat.Builder(context, DownloadExecution.CHANNEL)
                 .setSmallIcon(LucideR.drawable.lucide_ic_download)
@@ -159,6 +83,108 @@ internal object DownloadNotifications {
                     context.getString(R.string.offline_cancel_remaining),
                     action("cancel"),
                 )
+        applyProgressStyle(builder, context, progress, titles, details, api)
+        // ProgressStyle does not require Live Update promotion. Routine library downloads do
+        // not require continuous attention, so do not request promoted ongoing/status-bar chips.
+        return builder.build()
+    }
+
+    private fun createChannel(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                        DownloadExecution.CHANNEL,
+                        context.getString(R.string.offline_downloads),
+                        NotificationManager.IMPORTANCE_LOW,
+                    )
+                    .apply {
+                        description =
+                            context.getString(R.string.download_notification_channel_description)
+                        setShowBadge(false)
+                    }
+            )
+        }
+    }
+
+    private fun contentText(context: Context, progress: DownloadNotificationProgress): String {
+        val phase =
+            context.getString(
+                when (progress.phase) {
+                    DownloadNotificationPhase.DOWNLOADING -> R.string.offline_downloading
+                    DownloadNotificationPhase.PREPARING -> R.string.offline_preparing
+                    DownloadNotificationPhase.VERIFYING -> R.string.offline_verifying
+                    DownloadNotificationPhase.RETRYING -> R.string.download_notification_retrying
+                    DownloadNotificationPhase.QUEUED -> R.string.offline_queued
+                    DownloadNotificationPhase.STARTING -> R.string.offline_transfer_running
+                }
+            )
+        val percentage =
+            progress.percent?.let {
+                NumberFormat.getPercentInstance(context.resources.configuration.locales[0])
+                    .format(it / 100.0)
+            }
+        return buildList {
+                add(phase)
+                if (progress.phase == DownloadNotificationPhase.DOWNLOADING) {
+                    percentage?.let(::add)
+                    add(
+                        progress.total?.let {
+                            context.getString(
+                                R.string.download_notification_bytes,
+                                Formatter.formatShortFileSize(
+                                    context,
+                                    progress.bytes.coerceAtMost(it),
+                                ),
+                                Formatter.formatShortFileSize(context, it),
+                            )
+                        } ?: Formatter.formatShortFileSize(context, progress.bytes)
+                    )
+                    progress.bytesPerSecond?.let {
+                        add(
+                            context.getString(
+                                R.string.download_notification_speed,
+                                Formatter.formatShortFileSize(context, it),
+                            )
+                        )
+                    }
+                    add(
+                        progress.remainingSeconds?.let { eta(context, it) }
+                            ?: context.getString(R.string.download_notification_estimating)
+                    )
+                }
+            }
+            .joinToString(" · ")
+    }
+
+    private fun queueText(context: Context, progress: DownloadNotificationProgress): String {
+        return if (progress.pending == 0) context.getString(R.string.offline_downloads)
+        else
+            context.getString(
+                R.string.download_notification_queue,
+                context.resources.getQuantityString(
+                    R.plurals.download_notification_active,
+                    progress.active,
+                    progress.active,
+                ),
+                (progress.pending - progress.active).coerceAtLeast(0).let {
+                    context.resources.getQuantityString(
+                        R.plurals.download_notification_queued,
+                        it,
+                        it,
+                    )
+                },
+            )
+    }
+
+    private fun applyProgressStyle(
+        builder: NotificationCompat.Builder,
+        context: Context,
+        progress: DownloadNotificationProgress,
+        titles: List<String>,
+        details: String,
+        api: Int,
+    ) {
         // Compat ProgressStyle falls back to a plain template below 36, not a progress bar.
         if (Build.VERSION.SDK_INT >= 36 && api >= 36) {
             builder.setStyle(
@@ -187,9 +213,6 @@ internal object DownloadNotifications {
                         )
                 )
         }
-        // ProgressStyle does not require Live Update promotion. Routine library downloads do
-        // not require continuous attention, so do not request promoted ongoing/status-bar chips.
-        return builder.build()
     }
 
     private fun title(context: Context, item: DownloadNotificationItem): String {
@@ -198,12 +221,12 @@ internal object DownloadNotifications {
                 ?: context.getString(R.string.offline_unknown_item)
         val parent =
             when {
-                item.type == "episode" && item.parentType == "season" -> item.seriesName
-                item.type in setOf("episode", "track") -> item.parentName
+                item.type == EPISODE_TYPE && item.parentType == "season" -> item.seriesName
+                item.type in setOf(EPISODE_TYPE, "track") -> item.parentName
                 else -> null
             }
         val episode =
-            if (item.type == "episode" && (item.episode ?: 0) > 0) {
+            if (item.type == EPISODE_TYPE && (item.episode ?: 0) > 0) {
                 val number =
                     if ((item.episodeEnd ?: 0) > requireNotNull(item.episode))
                         "${item.episode}–${item.episodeEnd}"

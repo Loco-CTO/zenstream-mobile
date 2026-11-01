@@ -17,13 +17,6 @@ fun ZenStreamLocale(locale: String, content: @Composable () -> Unit) {
     // Preserve the owners before replacing LocalContext so permission/picker launchers still work.
     val activity = LocalActivity.current
     val registryOwner = LocalActivityResultRegistryOwner.current
-    val owners =
-        if (registryOwner != null)
-            arrayOf(
-                LocalActivity provides activity,
-                LocalActivityResultRegistryOwner provides registryOwner,
-            )
-        else arrayOf(LocalActivity provides activity)
     val baseConfiguration = LocalConfiguration.current
     val configuration =
         remember(baseConfiguration, locale) {
@@ -35,10 +28,20 @@ fun ZenStreamLocale(locale: String, content: @Composable () -> Unit) {
         remember(baseContext, configuration) {
             baseContext.createConfigurationContext(configuration)
         }
-    CompositionLocalProvider(
-        *owners,
-        LocalConfiguration provides configuration,
-        LocalContext provides localizedContext,
-        content = content,
-    )
+    val localizedContent: @Composable () -> Unit = {
+        CompositionLocalProvider(
+            LocalConfiguration provides configuration,
+            LocalContext provides localizedContext,
+            content = content,
+        )
+    }
+    if (registryOwner != null) {
+        CompositionLocalProvider(
+            LocalActivity provides activity,
+            LocalActivityResultRegistryOwner provides registryOwner,
+            content = localizedContent,
+        )
+    } else {
+        CompositionLocalProvider(LocalActivity provides activity, content = localizedContent)
+    }
 }

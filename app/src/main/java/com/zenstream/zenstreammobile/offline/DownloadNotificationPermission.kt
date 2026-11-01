@@ -45,13 +45,15 @@ internal fun rememberNotificationPermissionHandler(requestOnStartup: Boolean): (
         }
     LaunchedEffect(requestOnStartup) {
         if (
-            requestOnStartup &&
-                Build.VERSION.SDK_INT >= 33 &&
+            shouldIntroduceNotificationPermission(
+                requestOnStartup,
+                Build.VERSION.SDK_INT,
                 ContextCompat.checkSelfPermission(
                     context,
                     Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED &&
-                !preferences.getBoolean("startup-shown", false)
+                ) == PackageManager.PERMISSION_GRANTED,
+                preferences.getBoolean("startup-shown", false),
+            )
         ) {
             preferences.edit { putBoolean("startup-shown", true) }
             prompt = "startup"
@@ -66,17 +68,19 @@ internal fun rememberNotificationPermissionHandler(requestOnStartup: Boolean): (
     if (prompt != null) {
         val startup = prompt == "startup"
         val canRequest =
-            Build.VERSION.SDK_INT >= 33 &&
-                activity != null &&
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED &&
-                (!preferences.getBoolean("permission-requested", false) ||
+            activity != null &&
+                canRequestNotificationPermission(
+                    Build.VERSION.SDK_INT,
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) == PackageManager.PERMISSION_GRANTED,
+                    preferences.getBoolean("permission-requested", false),
                     ActivityCompat.shouldShowRequestPermissionRationale(
                         activity,
                         Manifest.permission.POST_NOTIFICATIONS,
-                    ))
+                    ),
+                )
         NotificationPermissionDialog(
             startup = startup,
             canRequest = canRequest,

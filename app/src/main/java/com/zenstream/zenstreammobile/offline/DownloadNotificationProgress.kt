@@ -50,7 +50,28 @@ internal class DownloadNotificationEstimator {
         val total: Long,
         val samples: ArrayDeque<Sample> = ArrayDeque(),
         var lastMovementMs: Long = 0,
-    )
+    ) {
+        fun mustReset(item: DownloadNotificationItem, elapsedMs: Long): Boolean {
+            val last = samples.last()
+            return total != item.total ||
+                item.bytes < last.bytes ||
+                elapsedMs - last.elapsedMs > 10_000 ||
+                elapsedMs <= last.elapsedMs
+        }
+
+        fun record(item: DownloadNotificationItem, elapsedMs: Long): Long? {
+            if (samples.lastOrNull()?.bytes != item.bytes) lastMovementMs = elapsedMs
+            samples.addLast(Sample(elapsedMs, item.bytes.coerceAtLeast(0)))
+            while (samples.size > 2 && elapsedMs - samples.first().elapsedMs > 10_000) samples
+                .removeFirst()
+            val first = samples.first()
+            val duration = elapsedMs - first.elapsedMs
+            if (duration < 3_000 || elapsedMs - lastMovementMs >= 5_000) return null
+            return ((item.bytes - first.bytes).coerceAtLeast(0).toDouble() * 1000 / duration)
+                .toLong()
+                .takeIf { it > 0 }
+        }
+    }
 
     private val windows = mutableMapOf<String, Window>()
 
@@ -65,43 +86,10 @@ internal class DownloadNotificationEstimator {
         }
         windows.keys.retainAll(downloading.map { it.id }.toSet())
         val rates = downloading.map { item ->
-            var window = windows[item.id]
-            if (
-                window == null ||
-                    window.total != item.total ||
-                    item.bytes < window.samples.last().bytes ||
-                    elapsedMs - window.samples.last().elapsedMs > 10_000 ||
-                    elapsedMs <= window.samples.last().elapsedMs
-            ) {
-                window = Window(item.total, lastMovementMs = elapsedMs)
-                windows[item.id] = window
-            }
-            if (window.samples.lastOrNull()?.bytes != item.bytes) window.lastMovementMs = elapsedMs
-            window.samples.addLast(Sample(elapsedMs, item.bytes.coerceAtLeast(0)))
-            while (
-                window.samples.size > 2 && elapsedMs - window.samples.first().elapsedMs > 10_000
-            ) window.samples.removeFirst()
-            val first = window.samples.first()
-            val duration = elapsedMs - first.elapsedMs
-            if (duration < 3_000 || elapsedMs - window.lastMovementMs >= 5_000) null
-            else
-                ((item.bytes - first.bytes).coerceAtLeast(0).toDouble() * 1000 / duration)
-                    .toLong()
-                    .takeIf { it > 0 }
+            val window = windowFor(item, elapsedMs)
+            window.record(item, elapsedMs)
         }
-        val phase =
-            when {
-                downloading.isNotEmpty() -> DownloadNotificationPhase.DOWNLOADING
-                items.any { it.state in setOf("verifying", "publishing") } ->
-                    DownloadNotificationPhase.VERIFYING
-                items.any {
-                    it.state in setOf("resolving", "preparing") && it.nextAttemptMs <= wallTimeMs
-                } -> DownloadNotificationPhase.PREPARING
-                items.isNotEmpty() && items.all { it.nextAttemptMs > wallTimeMs } ->
-                    DownloadNotificationPhase.RETRYING
-                queue.pending > 0 -> DownloadNotificationPhase.QUEUED
-                else -> DownloadNotificationPhase.STARTING
-            }
+        val phase = phaseFor(queue, items, downloading.isNotEmpty(), wallTimeMs)
         // This is the current transfer set, never a percentage polluted by historical downloads.
         val bytes =
             downloading
@@ -136,4 +124,28 @@ internal class DownloadNotificationEstimator {
             remaining,
         )
     }
+
+    private fun windowFor(item: DownloadNotificationItem, elapsedMs: Long): Window {
+        val previous = windows[item.id]
+        if (previous != null && !previous.mustReset(item, elapsedMs)) return previous
+        return Window(item.total, lastMovementMs = elapsedMs).also { windows[item.id] = it }
+    }
+
+    private fun phaseFor(
+        queue: DownloadNotificationQueue,
+        items: List<DownloadNotificationItem>,
+        downloading: Boolean,
+        now: Long,
+    ): DownloadNotificationPhase =
+        when {
+            downloading -> DownloadNotificationPhase.DOWNLOADING
+            items.any { it.state in setOf("verifying", "publishing") } ->
+                DownloadNotificationPhase.VERIFYING
+            items.any { it.state in setOf("resolving", "preparing") && it.nextAttemptMs <= now } ->
+                DownloadNotificationPhase.PREPARING
+            items.isNotEmpty() && items.all { it.nextAttemptMs > now } ->
+                DownloadNotificationPhase.RETRYING
+            queue.pending > 0 -> DownloadNotificationPhase.QUEUED
+            else -> DownloadNotificationPhase.STARTING
+        }
 }

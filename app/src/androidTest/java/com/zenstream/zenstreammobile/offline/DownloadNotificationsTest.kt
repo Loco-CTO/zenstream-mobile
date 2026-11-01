@@ -9,6 +9,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DownloadNotificationsTest {
+    private companion object {
+        const val MEDIA_TITLE = "Mountains"
+        const val MEDIA_TYPE = "episode"
+        const val SEASON_ID = "season"
+        const val SERIES_TITLE = "Planet Earth"
+        const val NOTIFICATION_PROFILE = "test-profile"
+        const val SERIES_ID = "series"
+        const val QUEUED_STATE = "queued"
+    }
+
     private val context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -19,11 +29,11 @@ class DownloadNotificationsTest {
             640_000_000,
             1_000_000_000,
             0,
-            "Mountains",
-            "episode",
+            MEDIA_TITLE,
+            MEDIA_TYPE,
             "Season 1",
-            "season",
-            "Planet Earth",
+            SEASON_ID,
+            SERIES_TITLE,
             1,
             2,
             2,
@@ -43,10 +53,10 @@ class DownloadNotificationsTest {
                 5_000_000,
                 72,
             )
-        val notification = DownloadNotifications.build(context, "test-profile", progress)
+        val notification = DownloadNotifications.build(context, NOTIFICATION_PROFILE, progress)
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
-        assertTrue(title.contains("Planet Earth"))
-        assertTrue(title.contains("Mountains"))
+        assertTrue(title.contains(SERIES_TITLE))
+        assertTrue(title.contains(MEDIA_TITLE))
         assertTrue(
             notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("64")
         )
@@ -61,14 +71,14 @@ class DownloadNotificationsTest {
                 "android.app.Notification\$ProgressStyle",
                 notification.extras.getString(Notification.EXTRA_TEMPLATE),
             )
-        val legacy = DownloadNotifications.build(context, "test-profile", progress, api = 35)
+        val legacy = DownloadNotifications.build(context, NOTIFICATION_PROFILE, progress, api = 35)
         assertEquals(64, legacy.extras.getInt(Notification.EXTRA_PROGRESS))
         assertEquals(100, legacy.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
         assertFalse(legacy.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
         assertTrue(
             legacy.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString().contains("64")
         )
-        val preparing = DownloadNotifications.build(context, "test-profile", api = 35)
+        val preparing = DownloadNotifications.build(context, NOTIFICATION_PROFILE, api = 35)
         assertTrue(preparing.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
     }
 
@@ -82,7 +92,7 @@ class DownloadNotificationsTest {
                     "p",
                     "first",
                     "selection",
-                    "episode",
+                    MEDIA_TYPE,
                     "{}",
                     state = "transferring",
                     bytes = 640,
@@ -92,29 +102,29 @@ class DownloadNotificationsTest {
                 listOf(
                     OfflineCatalogItem(
                         "p",
-                        "series",
+                        SERIES_ID,
                         null,
                         null,
-                        "series",
-                        "Planet Earth",
+                        SERIES_ID,
+                        SERIES_TITLE,
                         payload = "{}",
                     ),
                     OfflineCatalogItem(
                         "p",
-                        "season",
+                        SEASON_ID,
                         null,
-                        "series",
-                        "season",
+                        SERIES_ID,
+                        SEASON_ID,
                         "Season 1",
                         payload = "{}",
                     ),
                     OfflineCatalogItem(
                         "p",
-                        "episode",
+                        MEDIA_TYPE,
                         null,
-                        "season",
-                        "episode",
-                        "Mountains",
+                        SEASON_ID,
+                        MEDIA_TYPE,
+                        MEDIA_TITLE,
                         season = 1,
                         episode = 2,
                         payload = "{}",
@@ -123,8 +133,8 @@ class DownloadNotificationsTest {
             )
             dao.putTransfer(transfer)
             dao.putTransfer(transfer.copy(id = "second", state = "verifying"))
-            dao.putTransfer(transfer.copy(id = "queued", state = "queued"))
-            dao.putTransfer(transfer.copy(id = "retry", state = "queued", nextAttemptMs = 5000))
+            dao.putTransfer(transfer.copy(id = QUEUED_STATE, state = QUEUED_STATE))
+            dao.putTransfer(transfer.copy(id = "retry", state = QUEUED_STATE, nextAttemptMs = 5000))
             for (state in
                 listOf("complete", "cancelled", "paused", "failed", "identity_paused")) dao
                 .putTransfer(transfer.copy(id = state, state = state))
@@ -132,8 +142,8 @@ class DownloadNotificationsTest {
             assertEquals(DownloadNotificationQueue(4, 2), dao.notificationQueue("p", 1000))
             val rows = dao.notificationItems("p", 1000)
             assertEquals(listOf("first", "second"), rows.map { it.id })
-            assertEquals("Planet Earth", rows.first().seriesName)
-            assertEquals("Mountains", rows.first().name)
+            assertEquals(SERIES_TITLE, rows.first().seriesName)
+            assertEquals(MEDIA_TITLE, rows.first().name)
             assertEquals(DownloadNotificationQueue(0, 0), dao.notificationQueue("empty", 1000))
         } finally {
             database.close()

@@ -29,13 +29,12 @@ class DownloadNotificationUiTest {
     private val context
         get() = instrumentation.targetContext
 
-    private lateinit var runtime: OfflineRuntime
+    private val runtime by lazy { OfflineRuntime.get(context) }
     private var previous: ConnectionState? = null
     private val profile = OfflineProfile.identity("notification-ui-test", "user")
 
     @Before
     fun prepare() = runBlocking {
-        runtime = OfflineRuntime.get(context)
         previous = runtime.connection.state.first { it.initialized }
         runtime.database
             .offline()
