@@ -244,6 +244,18 @@ fun DownloadsScreen(
                         )
                     }
                 }
+                if (connection.mode == ConnectionMode.OFFLINE) {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                runtime.connection.setMode(ConnectionMode.AUTOMATIC)
+                                onOnline()
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.offline_go_online), maxLines = 1)
+                    }
+                }
             }
             if (
                 connection.mode == ConnectionMode.OFFLINE ||
@@ -270,17 +282,6 @@ fun DownloadsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (connection.mode == ConnectionMode.OFFLINE)
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    runtime.connection.setMode(ConnectionMode.AUTOMATIC)
-                                    onOnline()
-                                }
-                            }
-                        ) {
-                            Text(stringResource(R.string.offline_go_online))
-                        }
                 }
             }
             if (
@@ -361,7 +362,7 @@ fun DownloadsScreen(
                                         } else play(item)
                                     },
                                 )
-                                OfflineMusicMiniPlayer(profile) { onItem(profile, it) }
+                                OfflineMusicMiniPlayer(runtime, profile) { onItem(profile, it) }
                             }
                             DownloadPage.PLAYLISTS ->
                                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {

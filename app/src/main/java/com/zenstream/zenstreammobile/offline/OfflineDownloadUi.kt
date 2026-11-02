@@ -248,6 +248,11 @@ fun OfflineDownloadHost(
                             profile,
                             item,
                             onBack = { localMusic = null },
+                            onGoOnline = {
+                                localMusic = null
+                                localQueue = null
+                                open = false
+                            },
                             initialQueue = localQueue,
                             onItem = { next, queue ->
                                 localQueue = queue
