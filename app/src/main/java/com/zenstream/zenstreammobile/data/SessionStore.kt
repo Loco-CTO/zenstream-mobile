@@ -103,6 +103,7 @@ class SessionStore(
         val subtitleStyle = stringPreferencesKey("subtitle_style")
         val librarySorts = stringPreferencesKey("library_sorts")
         val homeSectionLayouts = stringPreferencesKey("home_section_layouts")
+        val playbackPreferences = stringPreferencesKey("playback_preferences")
         val syncplayParticipantId = stringPreferencesKey("syncplay_participant_id")
         val syncplayPresenceSequence = longPreferencesKey("syncplay_presence_sequence")
         val deviceId = stringPreferencesKey("device_id")
@@ -503,6 +504,28 @@ class SessionStore(
         dataStore.edit { it[Keys.subtitleStyle] = subtitleStyleToJson(style) }
     }
 
+    suspend fun cachedPlaybackPreference(serverUrl: String, userId: String): PlaybackPreference? {
+        val stored = dataStore.data.first()[Keys.playbackPreferences] ?: return null
+        val root = runCatching { JSONObject(stored) }.getOrNull() ?: return null
+        val value = root.optJSONObject(homeLayoutScope(serverUrl, userId)) ?: return null
+        return runCatching { playbackPreferenceFromJson(value) }.getOrNull()
+    }
+
+    suspend fun cachePlaybackPreference(
+        serverUrl: String,
+        userId: String,
+        preference: PlaybackPreference,
+    ) {
+        dataStore.edit { stored ->
+            val root =
+                stored[Keys.playbackPreferences]?.let {
+                    runCatching { JSONObject(it) }.getOrNull()
+                } ?: JSONObject()
+            root.put(homeLayoutScope(serverUrl, userId), playbackPreferenceToJson(preference))
+            stored[Keys.playbackPreferences] = root.toString()
+        }
+    }
+
     suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort? {
         val preferences = dataStore.data.first()
         val stored = preferences[Keys.librarySorts].orEmpty()
@@ -640,6 +663,7 @@ class SessionStore(
             it.remove(Keys.watchHistoryEnabled)
             it.remove(Keys.librarySorts)
             it.remove(Keys.audioQueueSnapshots)
+            it.remove(Keys.playbackPreferences)
         }
         AuthLifecycleLog.event("credentials_cleared", detail = "server_or_account_change")
     }
@@ -686,6 +710,50 @@ private fun favoriteSortKey(userId: String): String = "$userId\u0000favorites"
 
 private fun homeLayoutScope(serverUrl: String, userId: String): String =
     "${serverUrl.trimEnd('/')}\u0000$userId"
+
+private fun playbackPreferenceToJson(preference: PlaybackPreference): JSONObject =
+    JSONObject()
+        .put("audioLanguage", preference.audioLanguage ?: JSONObject.NULL)
+        .put("subtitleLanguage", preference.subtitleLanguage ?: JSONObject.NULL)
+        .put(
+            "audioLanguages",
+            JSONArray().apply {
+                preference.audioLanguages.forEach { option ->
+                    put(JSONObject().put("value", option.value).put("label", option.label))
+                }
+            },
+        )
+        .put(
+            "subtitleLanguages",
+            JSONArray().apply {
+                preference.subtitleLanguages.forEach { option ->
+                    put(JSONObject().put("value", option.value).put("label", option.label))
+                }
+            },
+        )
+
+private fun playbackPreferenceFromJson(value: JSONObject): PlaybackPreference =
+    PlaybackPreference(
+        audioLanguage = value.optPreferenceString("audioLanguage"),
+        subtitleLanguage = value.optPreferenceString("subtitleLanguage"),
+        audioLanguages = value.optJSONArray("audioLanguages").toPlaybackLanguageOptions(),
+        subtitleLanguages = value.optJSONArray("subtitleLanguages").toPlaybackLanguageOptions(),
+    )
+
+private fun JSONObject.optPreferenceString(name: String): String? =
+    if (!has(name) || isNull(name)) null else optString(name).takeIf { it.isNotBlank() }
+
+private fun JSONArray?.toPlaybackLanguageOptions(): List<PlaybackLanguageOption> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            val option = optJSONObject(index) ?: continue
+            val language = option.optPreferenceString("value") ?: continue
+            val label = option.optPreferenceString("label") ?: continue
+            add(PlaybackLanguageOption(language, label))
+        }
+    }
+}
 
 private fun JSONArray?.toStringListOrNull(): List<String>? {
     if (this == null) return null

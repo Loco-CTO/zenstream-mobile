@@ -37,6 +37,7 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy
 import com.zenstream.zenstreammobile.offline.PlaybackSourcePreference
 import com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource
+import com.zenstream.zenstreammobile.offline.ServerReachability
 import com.zenstream.zenstreammobile.offline.downloadedAudioOrdinal
 import com.zenstream.zenstreammobile.offline.knownHdr
 import com.zenstream.zenstreammobile.offline.subtitleText
@@ -276,20 +277,21 @@ class PlaybackViewModel(
                 )
             val timeDisplayMode = repository.playbackTimeDisplayMode.first()
             val autoplayNextEpisode = repository.autoplayNextEpisode.first()
+            val offlineRuntime = repository.offline
+            val connectionState = offlineRuntime?.connection?.state?.first { it.initialized }
+            val localProfileId = offlineProfileId ?: connectionState?.profile
             val localRequested =
                 offlineOnly ||
                     session == null ||
                     !OfflineNetworkPolicy.allowed ||
-                    repository.offline?.let { runtime ->
+                    offlineRuntime?.let { runtime ->
                         com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
-                            (offlineProfileId
-                                    ?: runtime.connection.state.first { it.initialized }.profile)
-                                ?.let {
-                                    runtime.database
-                                        .offline()
-                                        .playbackCandidates(it, currentItemId, 1)
-                                        .isNotEmpty()
-                                } == true
+                            localProfileId?.let {
+                                runtime.database
+                                    .offline()
+                                    .playbackCandidates(it, currentItemId, 1)
+                                    .isNotEmpty()
+                            } == true
                     } == true
             val watchHistoryEnabled =
                 runCatching {
@@ -298,9 +300,21 @@ class PlaybackViewModel(
                     }
                     .getOrElse { repository.watchHistoryEnabled.first() }
             val subtitleStyle = repository.loadSubtitleStyle()
+            val cachedPlaybackPreference =
+                runCatching { repository.cachedPlaybackPreference(localProfileId) }.getOrNull()
+            val shouldRefreshPlaybackPreference =
+                !localRequested ||
+                    (!offlineOnly &&
+                        session != null &&
+                        OfflineNetworkPolicy.allowed &&
+                        connectionState?.reachability == ServerReachability.REACHABLE)
             playbackPreference =
-                if (localRequested) null
-                else runCatching { repository.loadPlaybackPreference() }.getOrNull()
+                if (shouldRefreshPlaybackPreference) {
+                    runCatching { repository.loadPlaybackPreference() }.getOrNull()
+                        ?: cachedPlaybackPreference
+                } else {
+                    cachedPlaybackPreference
+                }
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
