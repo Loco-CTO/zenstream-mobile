@@ -16,6 +16,14 @@ internal enum class VideoPresentation {
     TO_FULL,
 }
 
+internal fun canReuseVideoPlaybackSession(
+    existingArgs: PlaybackLaunchArgs,
+    requestedArgs: PlaybackLaunchArgs,
+    currentItemId: String,
+    reopenFromDownloads: Boolean,
+): Boolean =
+    existingArgs == requestedArgs && (!reopenFromDownloads || currentItemId == requestedArgs.itemId)
+
 internal class VideoPlaybackSession(
     val args: PlaybackLaunchArgs,
     val session: AuthSession?,
@@ -27,6 +35,14 @@ internal class VideoPlaybackSession(
     val handingOff: Boolean
         get() =
             presentation == VideoPresentation.TO_MINI || presentation == VideoPresentation.TO_FULL
+
+    fun canReuse(args: PlaybackLaunchArgs, reopenFromDownloads: Boolean): Boolean =
+        canReuseVideoPlaybackSession(
+            existingArgs = this.args,
+            requestedArgs = args,
+            currentItemId = playbackModel?.uiState?.value?.itemId ?: this.args.itemId,
+            reopenFromDownloads = reopenFromDownloads,
+        )
 
     fun matches(session: AuthSession) =
         (profile?.serverUrl ?: this.session?.serverUrl) == session.serverUrl &&
@@ -41,14 +57,16 @@ internal object VideoPlaybackSessions {
         args: PlaybackLaunchArgs,
         session: AuthSession?,
         profile: OfflineProfile? = null,
+        reopenFromDownloads: Boolean = false,
     ): VideoPlaybackSession {
         require(session != null || profile != null)
         val existing = active
         if (
             existing != null &&
                 (session?.let(existing::matches) ?: (existing.profile?.id == profile?.id)) &&
-                existing.args == args
+                existing.canReuse(args, reopenFromDownloads)
         ) {
+            if (reopenFromDownloads) existing.playbackModel?.playDownloadedInstead()
             existing.presentation = VideoPresentation.FULL
             return existing
         }

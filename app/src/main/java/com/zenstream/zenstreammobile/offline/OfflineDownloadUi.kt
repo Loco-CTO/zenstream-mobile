@@ -128,6 +128,7 @@ fun OfflineDownloadHost(
                         item.id,
                         item.name,
                         offlineProfileId = profile.id,
+                        reopenFromDownloads = true,
                     )
                 }
             }
