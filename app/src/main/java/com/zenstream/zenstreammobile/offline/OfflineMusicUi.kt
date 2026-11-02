@@ -29,6 +29,22 @@ import kotlinx.coroutines.CancellationException
 internal fun MediaItem.isOfflineMusic(): Boolean =
     type in setOf("Audio", "MusicAlbum", "MusicArtist")
 
+internal fun downloadedAudioTracks(
+    tracks: List<MediaItem>,
+    downloadedIds: Set<String>,
+): List<MediaItem> = tracks.filter { it.type == "Audio" && it.id in downloadedIds }
+
+internal fun shouldReselectDownloadedAudio(
+    currentTrackId: String?,
+    requestedTrackId: String,
+    currentProfileId: String?,
+    requestedProfileId: String,
+    playbackMode: String?,
+): Boolean =
+    currentTrackId == requestedTrackId &&
+        currentProfileId == requestedProfileId &&
+        playbackMode != "local"
+
 @Composable
 internal fun OfflineMusicMiniPlayer(profile: OfflineProfile, onOpen: (MediaItem) -> Unit) {
     val state by AudioServiceBridge.state.collectAsState()
@@ -92,9 +108,24 @@ internal fun OfflineSavedMusicScreen(
         }
     }
     LaunchedEffect(profile.id, root.id) {
-        if (isTrack && (initialQueue != null || state.currentEntry?.track?.id != root.id)) {
-            val queue = initialQueue ?: listOf(root)
-            controller.playTracks(queue, queue.indexOfFirst { it.id == root.id }.coerceAtLeast(0))
+        if (isTrack) {
+            if (initialQueue != null || state.currentEntry?.track?.id != root.id) {
+                val queue = initialQueue ?: listOf(root)
+                controller.playTracks(
+                    queue,
+                    queue.indexOfFirst { it.id == root.id }.coerceAtLeast(0),
+                )
+            } else if (
+                shouldReselectDownloadedAudio(
+                    currentTrackId = state.currentEntry?.track?.id,
+                    requestedTrackId = root.id,
+                    currentProfileId = state.offlineProfileId,
+                    requestedProfileId = profile.id,
+                    playbackMode = state.playbackMode,
+                )
+            ) {
+                controller.playDownloadedCurrent()
+            }
         }
     }
     Column(
@@ -266,17 +297,10 @@ internal fun OfflineSavedMusicScreen(
             }
         } else {
             val tracks = rows.filter { it.type == "Audio" }
-            if (tracks.isNotEmpty())
-                TextButton(
-                    enabled = tracks.any { it.id in downloaded },
-                    onClick = {
-                        controller.playTracks(
-                            tracks,
-                            tracks.indexOfFirst { it.id in downloaded }.coerceAtLeast(0),
-                        )
-                    },
-                ) {
-                    Text(stringResource(R.string.offline_queue_this_page, tracks.size))
+            val playableTracks = downloadedAudioTracks(tracks, downloaded)
+            if (playableTracks.isNotEmpty())
+                TextButton(onClick = { controller.playTracks(playableTracks) }) {
+                    Text(stringResource(R.string.offline_queue_this_page, playableTracks.size))
                 }
             LazyColumn(Modifier.weight(1f)) {
                 items(rows, key = { it.id }) { item ->
@@ -292,8 +316,10 @@ internal fun OfflineSavedMusicScreen(
                                 )
                         },
                         modifier =
-                            Modifier.clickable {
-                                onItem(item, tracks.takeIf { item.type == "Audio" })
+                            Modifier.clickable(
+                                enabled = item.type != "Audio" || item.id in downloaded
+                            ) {
+                                onItem(item, playableTracks.takeIf { item.type == "Audio" })
                             },
                     )
                 }

@@ -200,6 +200,9 @@ private constructor(
     fun streamCurrent() =
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_STREAM_CURRENT)
 
+    fun playDownloadedCurrent() =
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_PLAY_DOWNLOADED_CURRENT)
+
     fun seekTo(positionSeconds: Long) {
         val position = positionSeconds.coerceAtLeast(0L)
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SEEK) {
