@@ -11,6 +11,12 @@ import java.util.UUID
 import kotlin.math.abs
 import org.json.JSONObject
 
+internal fun offlinePlaybackCheckpointProfileId(
+    isLocalPlayback: Boolean,
+    localSourceProfileId: String?,
+    activeOfflineProfileId: String?,
+): String? = if (isLocalPlayback) localSourceProfileId else activeOfflineProfileId
+
 /** Applies local playback state and its future server operation in one Room transaction. */
 class OfflinePlaybackStateRepository(
     private val context: Context,
