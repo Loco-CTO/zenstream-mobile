@@ -1,6 +1,8 @@
 package com.zenstream.zenstreammobile.offline
 
 import com.zenstream.zenstreammobile.model.MediaItem
+import java.io.File
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -61,5 +63,35 @@ class LocalPlaybackDataTest {
                 0.0,
             )
         }
+    }
+
+    @Test
+    fun downloadedSubtitleUsesDisplayNameFromNameOrTitle() {
+        val source =
+            ResolvedPlaybackSource.Local(
+                profile = OfflineProfile("p", "server", "account", "url", "Account"),
+                asset = asset("""{"durationSeconds":60,"trackManifest":[]}"""),
+                data = localPlaybackData(MediaItem("item", "Movie"), asset("{}"), 0.0),
+                lease = OfflineFileLease(File("video.mp4")) {},
+                supplements =
+                    listOf(
+                        LocalSupplement(
+                            "subtitle:4",
+                            File("subtitle-4.vtt"),
+                            JSONObject("""{"name":"Signs","language":"ja"}"""),
+                        ),
+                        LocalSupplement(
+                            "subtitle:5",
+                            File("subtitle-5.vtt"),
+                            JSONObject("""{"title":"Forced","language":"en"}"""),
+                        ),
+                    ),
+                bundle = JSONObject(),
+            )
+
+        val subtitles = source.videoData().subtitles
+
+        assertEquals(listOf("Signs", "Forced"), subtitles.map { it.displayTitle })
+        assertEquals(listOf("ja", "en"), subtitles.map { it.language })
     }
 }
