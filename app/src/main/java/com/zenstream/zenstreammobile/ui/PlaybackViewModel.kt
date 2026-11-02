@@ -39,6 +39,7 @@ import com.zenstream.zenstreammobile.offline.PlaybackSourcePreference
 import com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource
 import com.zenstream.zenstreammobile.offline.downloadedAudioOrdinal
 import com.zenstream.zenstreammobile.offline.knownHdr
+import com.zenstream.zenstreammobile.offline.offlinePlaybackCheckpointProfileId
 import com.zenstream.zenstreammobile.offline.subtitleText
 import com.zenstream.zenstreammobile.offline.videoData
 import com.zenstream.zenstreammobile.ui.player.EngineState
@@ -1087,14 +1088,20 @@ class PlaybackViewModel(
     ) {
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
+        val localSource = resolvedSource as? ResolvedPlaybackSource.Local
         if (_uiState.value.local) {
             if (handledCompletionGeneration == snapshot.playbackGeneration) return
-            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            val profileId =
+                offlinePlaybackCheckpointProfileId(
+                    isLocalPlayback = true,
+                    localSourceProfileId = localSource?.profile?.id,
+                    activeOfflineProfileId = offlineProfileId,
+                ) ?: return
             runCatching {
                 repository.offline
                     ?.playbackState
                     ?.checkpoint(
-                        source.profile.id,
+                        profileId,
                         snapshot.itemId,
                         snapshot.positionSeconds,
                         snapshot.durationSeconds,
@@ -1102,6 +1109,25 @@ class PlaybackViewModel(
                     )
             }
             return
+        }
+        val profileId =
+            offlinePlaybackCheckpointProfileId(
+                isLocalPlayback = false,
+                localSourceProfileId = localSource?.profile?.id,
+                activeOfflineProfileId = offlineProfileId,
+            )
+        if (profileId != null) {
+            runCatching {
+                repository.offline
+                    ?.playbackState
+                    ?.checkpoint(
+                        profileId,
+                        snapshot.itemId,
+                        snapshot.positionSeconds,
+                        snapshot.durationSeconds,
+                        _uiState.value.watchHistoryEnabled,
+                    )
+            }
         }
         if (!_uiState.value.watchHistoryEnabled) return
         runCatching {
