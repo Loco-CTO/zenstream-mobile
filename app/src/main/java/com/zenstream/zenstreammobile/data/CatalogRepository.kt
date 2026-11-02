@@ -1809,8 +1809,27 @@ class CatalogRepository(
             authenticatedOrchestratorRequest(current) { value ->
                     orchestratorApi.fetchPlaybackPreference(value.serverUrl, value.token)
                 }
-                .also { playbackPreferenceCache = System.currentTimeMillis() to it }
+                .also {
+                    playbackPreferenceCache = System.currentTimeMillis() to it
+                    runCatching {
+                        sessionStore.cachePlaybackPreference(
+                            current.serverUrl,
+                            current.userId,
+                            it,
+                        )
+                    }
+                }
         }
+
+    suspend fun cachedPlaybackPreference(offlineProfileId: String? = null): PlaybackPreference? {
+        val profile = offlineProfileId?.let { id ->
+            runCatching { offline?.database?.offline()?.profile(id) }.getOrNull()
+        }
+        val current = session.first()
+        val serverUrl = profile?.serverUrl ?: current?.serverUrl ?: return null
+        val userId = profile?.account ?: current?.userId ?: return null
+        return sessionStore.cachedPlaybackPreference(serverUrl, userId)
+    }
 
     override suspend fun savePlaybackPreference(
         audioLanguage: String?,
@@ -1825,7 +1844,16 @@ class CatalogRepository(
                     subtitleLanguage,
                 )
             }
-            .also { playbackPreferenceCache = System.currentTimeMillis() to it }
+            .also {
+                playbackPreferenceCache = System.currentTimeMillis() to it
+                runCatching {
+                    sessionStore.cachePlaybackPreference(
+                        current.serverUrl,
+                        current.userId,
+                        it,
+                    )
+                }
+            }
     }
 
     suspend fun home(session: AuthSession, forceRefresh: Boolean = false): HomeData =

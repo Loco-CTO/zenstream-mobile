@@ -177,6 +177,32 @@ class SessionStoreTest {
     }
 
     @Test
+    fun playbackPreferenceCachePersistsAndIsScopedToServerAndAccount() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "${INSTRUMENTATION_SESSION_DATA_STORE_NAME}_playback_${UUID.randomUUID()}"
+        val preference =
+            PlaybackPreference(
+                audioLanguage = "en",
+                subtitleLanguage = "ja",
+                audioLanguages = listOf(PlaybackLanguageOption("en", "English")),
+                subtitleLanguages = listOf(PlaybackLanguageOption("ja", "Japanese")),
+            )
+        val store = SessionStore(context, dataStoreName = name)
+        store.cachePlaybackPreference("https://server-one.example", "user-1", preference)
+
+        val recreatedStore = SessionStore(context, dataStoreName = name)
+        assertEquals(
+            preference,
+            recreatedStore.cachedPlaybackPreference("https://server-one.example", "user-1"),
+        )
+        assertNull(recreatedStore.cachedPlaybackPreference("https://server-one.example", "user-2"))
+        assertNull(recreatedStore.cachedPlaybackPreference("https://server-two.example", "user-1"))
+
+        recreatedStore.clearAll()
+        assertNull(recreatedStore.cachedPlaybackPreference("https://server-one.example", "user-1"))
+    }
+
+    @Test
     fun interfaceLocaleModeIsDeviceLocalAndSurvivesAllClears() = runBlocking {
         val store =
             SessionStore(
