@@ -711,33 +711,62 @@ private fun favoriteSortKey(userId: String): String = "$userId\u0000favorites"
 private fun homeLayoutScope(serverUrl: String, userId: String): String =
     "${serverUrl.trimEnd('/')}\u0000$userId"
 
+private object PlaybackPreferenceJsonKeys {
+    const val AUDIO_LANGUAGE = "audioLanguage"
+    const val SUBTITLE_LANGUAGE = "subtitleLanguage"
+    const val AUDIO_LANGUAGES = "audioLanguages"
+    const val SUBTITLE_LANGUAGES = "subtitleLanguages"
+    const val VALUE = "value"
+    const val LABEL = "label"
+}
+
 private fun playbackPreferenceToJson(preference: PlaybackPreference): JSONObject =
     JSONObject()
-        .put("audioLanguage", preference.audioLanguage ?: JSONObject.NULL)
-        .put("subtitleLanguage", preference.subtitleLanguage ?: JSONObject.NULL)
         .put(
-            "audioLanguages",
+            PlaybackPreferenceJsonKeys.AUDIO_LANGUAGE,
+            preference.audioLanguage ?: JSONObject.NULL,
+        )
+        .put(
+            PlaybackPreferenceJsonKeys.SUBTITLE_LANGUAGE,
+            preference.subtitleLanguage ?: JSONObject.NULL,
+        )
+        .put(
+            PlaybackPreferenceJsonKeys.AUDIO_LANGUAGES,
             JSONArray().apply {
                 preference.audioLanguages.forEach { option ->
-                    put(JSONObject().put("value", option.value).put("label", option.label))
+                    put(
+                        JSONObject()
+                            .put(PlaybackPreferenceJsonKeys.VALUE, option.value)
+                            .put(PlaybackPreferenceJsonKeys.LABEL, option.label)
+                    )
                 }
             },
         )
         .put(
-            "subtitleLanguages",
+            PlaybackPreferenceJsonKeys.SUBTITLE_LANGUAGES,
             JSONArray().apply {
                 preference.subtitleLanguages.forEach { option ->
-                    put(JSONObject().put("value", option.value).put("label", option.label))
+                    put(
+                        JSONObject()
+                            .put(PlaybackPreferenceJsonKeys.VALUE, option.value)
+                            .put(PlaybackPreferenceJsonKeys.LABEL, option.label)
+                    )
                 }
             },
         )
 
 private fun playbackPreferenceFromJson(value: JSONObject): PlaybackPreference =
     PlaybackPreference(
-        audioLanguage = value.optPreferenceString("audioLanguage"),
-        subtitleLanguage = value.optPreferenceString("subtitleLanguage"),
-        audioLanguages = value.optJSONArray("audioLanguages").toPlaybackLanguageOptions(),
-        subtitleLanguages = value.optJSONArray("subtitleLanguages").toPlaybackLanguageOptions(),
+        audioLanguage = value.optPreferenceString(PlaybackPreferenceJsonKeys.AUDIO_LANGUAGE),
+        subtitleLanguage = value.optPreferenceString(PlaybackPreferenceJsonKeys.SUBTITLE_LANGUAGE),
+        audioLanguages =
+            value
+                .optJSONArray(PlaybackPreferenceJsonKeys.AUDIO_LANGUAGES)
+                .toPlaybackLanguageOptions(),
+        subtitleLanguages =
+            value
+                .optJSONArray(PlaybackPreferenceJsonKeys.SUBTITLE_LANGUAGES)
+                .toPlaybackLanguageOptions(),
     )
 
 private fun JSONObject.optPreferenceString(name: String): String? =
@@ -748,8 +777,8 @@ private fun JSONArray?.toPlaybackLanguageOptions(): List<PlaybackLanguageOption>
     return buildList {
         for (index in 0 until length()) {
             val option = optJSONObject(index) ?: continue
-            val language = option.optPreferenceString("value") ?: continue
-            val label = option.optPreferenceString("label") ?: continue
+            val language = option.optPreferenceString(PlaybackPreferenceJsonKeys.VALUE) ?: continue
+            val label = option.optPreferenceString(PlaybackPreferenceJsonKeys.LABEL) ?: continue
             add(PlaybackLanguageOption(language, label))
         }
     }

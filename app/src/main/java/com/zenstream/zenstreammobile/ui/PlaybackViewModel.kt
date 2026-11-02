@@ -286,12 +286,11 @@ class PlaybackViewModel(
                     !OfflineNetworkPolicy.allowed ||
                     offlineRuntime?.let { runtime ->
                         com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
-                            localProfileId?.let {
-                                runtime.database
-                                    .offline()
-                                    .playbackCandidates(it, currentItemId, 1)
-                                    .isNotEmpty()
-                            } == true
+                            localProfileId != null &&
+                            runtime.database
+                                .offline()
+                                .playbackCandidates(localProfileId, currentItemId, 1)
+                                .isNotEmpty()
                     } == true
             val watchHistoryEnabled =
                 runCatching {
