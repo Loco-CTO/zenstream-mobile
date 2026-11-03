@@ -57,6 +57,16 @@ internal val POSTER_CARD_MIN_WIDTH = 140.dp
 internal val POSTER_CARD_MAX_WIDTH = 180.dp
 
 @Composable
+internal fun CardBadgeSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Surface(
+        modifier = modifier,
+        color = Color.Black.copy(alpha = .65f),
+        shape = RoundedCornerShape(50),
+        content = content,
+    )
+}
+
+@Composable
 fun MediaRowView(
     row: MediaRow,
     session: AuthSession,
@@ -217,11 +227,7 @@ private fun StackedEpisodeCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MediaImage(item, session, wide = false, useSeriesPoster = true)
-                Surface(
-                    color = Color.Black.copy(alpha = .65f),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-                ) {
+                CardBadgeSurface(modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
                     Text(
                         text = stack.items.size.toString(),
                         style = MaterialTheme.typography.labelSmall,
@@ -297,11 +303,7 @@ fun MediaCard(
                 Modifier.align(Alignment.TopStart).padding(6.dp),
             )
             if (item.type != "BoxSet" && (item.played || item.unplayedItemCount != null)) {
-                Surface(
-                    color = Color.Black.copy(alpha = .65f),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
-                ) {
+                CardBadgeSurface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),

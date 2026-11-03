@@ -81,6 +81,7 @@
     <string name="offline_quality_original">元のファイル</string>
     <string name="offline_queued">待機中</string>
     <string name="offline_remove_selection">このダウンロードを削除</string>
+    <string name="offline_remove_downloaded_item">エピソードのダウンロードを削除</string>
     <string name="offline_request_failed">準備できませんでした。接続、アクセス権、選択した言語を確認してください。</string>
     <string name="offline_restart_needed">元のファイルが変更されました。再試行して最初からダウンロードしてください。</string>
     <string name="offline_resume_all">ダウンロードを再開</string>

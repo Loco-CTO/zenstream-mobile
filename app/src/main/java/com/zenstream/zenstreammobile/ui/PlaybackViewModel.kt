@@ -37,8 +37,10 @@ import com.zenstream.zenstreammobile.model.ViewerCommandAck
 import com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy
 import com.zenstream.zenstreammobile.offline.PlaybackSourcePreference
 import com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource
+import com.zenstream.zenstreammobile.offline.ServerReachability
 import com.zenstream.zenstreammobile.offline.downloadedAudioOrdinal
 import com.zenstream.zenstreammobile.offline.knownHdr
+import com.zenstream.zenstreammobile.offline.offlinePlaybackCheckpointProfileId
 import com.zenstream.zenstreammobile.offline.subtitleText
 import com.zenstream.zenstreammobile.offline.videoData
 import com.zenstream.zenstreammobile.ui.player.EngineState
@@ -118,6 +120,18 @@ internal fun shouldClearPlayedOnPlaybackStart(
 
 internal fun shouldRecoverPlaybackError(mode: String?, alreadyRecovered: Boolean): Boolean =
     !alreadyRecovered && mode in setOf(null, "direct", "remux")
+
+internal fun playbackSourcePreference(
+    streamRequestedForItemId: String?,
+    currentItemId: String,
+    offlineOnly: Boolean,
+    hasSession: Boolean,
+): PlaybackSourcePreference =
+    when {
+        streamRequestedForItemId == currentItemId -> PlaybackSourcePreference.STREAM
+        offlineOnly || !hasSession -> PlaybackSourcePreference.DOWNLOAD_ONLY
+        else -> PlaybackSourcePreference.PREFER_DOWNLOAD
+    }
 
 internal fun syncplayShouldAutoplay(
     room: SyncplayGroup?,
@@ -227,7 +241,7 @@ class PlaybackViewModel(
     val uiState: StateFlow<PlaybackUiState> = _uiState.asStateFlow()
     private var playbackEngine: PlaybackEngine? = null
     private var resolvedSource: ResolvedPlaybackSource? = null
-    private var streamRequested = false
+    private var streamRequestedForItemId: String? = null
     private var policyStopped = false
     private val remoteSession: AuthSession
         get() = requireNotNull(session) { "Sign in to stream this item." }
@@ -276,20 +290,20 @@ class PlaybackViewModel(
                 )
             val timeDisplayMode = repository.playbackTimeDisplayMode.first()
             val autoplayNextEpisode = repository.autoplayNextEpisode.first()
+            val offlineRuntime = repository.offline
+            val connectionState = offlineRuntime?.connection?.state?.first { it.initialized }
+            val localProfileId = offlineProfileId ?: connectionState?.profile
             val localRequested =
                 offlineOnly ||
                     session == null ||
                     !OfflineNetworkPolicy.allowed ||
-                    repository.offline?.let { runtime ->
+                    offlineRuntime?.let { runtime ->
                         com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED &&
-                            (offlineProfileId
-                                    ?: runtime.connection.state.first { it.initialized }.profile)
-                                ?.let {
-                                    runtime.database
-                                        .offline()
-                                        .playbackCandidates(it, currentItemId, 1)
-                                        .isNotEmpty()
-                                } == true
+                            localProfileId != null &&
+                            runtime.database
+                                .offline()
+                                .playbackCandidates(localProfileId, currentItemId, 1)
+                                .isNotEmpty()
                     } == true
             val watchHistoryEnabled =
                 runCatching {
@@ -298,9 +312,21 @@ class PlaybackViewModel(
                     }
                     .getOrElse { repository.watchHistoryEnabled.first() }
             val subtitleStyle = repository.loadSubtitleStyle()
+            val cachedPlaybackPreference =
+                runCatching { repository.cachedPlaybackPreference(localProfileId) }.getOrNull()
+            val shouldRefreshPlaybackPreference =
+                !localRequested ||
+                    (!offlineOnly &&
+                        session != null &&
+                        OfflineNetworkPolicy.allowed &&
+                        connectionState?.reachability == ServerReachability.REACHABLE)
             playbackPreference =
-                if (localRequested) null
-                else runCatching { repository.loadPlaybackPreference() }.getOrNull()
+                if (shouldRefreshPlaybackPreference) {
+                    runCatching { repository.loadPlaybackPreference() }.getOrNull()
+                        ?: cachedPlaybackPreference
+                } else {
+                    cachedPlaybackPreference
+                }
             _uiState.value =
                 _uiState.value.copy(
                     engineType = engineType,
@@ -647,10 +673,12 @@ class PlaybackViewModel(
                             currentItemId,
                             requestOptions,
                             preference =
-                                if (streamRequested) PlaybackSourcePreference.STREAM
-                                else if (offlineOnly || session == null)
-                                    PlaybackSourcePreference.DOWNLOAD_ONLY
-                                else PlaybackSourcePreference.PREFER_DOWNLOAD,
+                                playbackSourcePreference(
+                                    streamRequestedForItemId = streamRequestedForItemId,
+                                    currentItemId = currentItemId,
+                                    offlineOnly = offlineOnly,
+                                    hasSession = session != null,
+                                ),
                             profileId = offlineProfileId,
                         )
                     }
@@ -1087,14 +1115,20 @@ class PlaybackViewModel(
     ) {
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
+        val localSource = resolvedSource as? ResolvedPlaybackSource.Local
         if (_uiState.value.local) {
             if (handledCompletionGeneration == snapshot.playbackGeneration) return
-            val source = resolvedSource as? ResolvedPlaybackSource.Local ?: return
+            val profileId =
+                offlinePlaybackCheckpointProfileId(
+                    isLocalPlayback = true,
+                    localSourceProfileId = localSource?.profile?.id,
+                    activeOfflineProfileId = offlineProfileId,
+                ) ?: return
             runCatching {
                 repository.offline
                     ?.playbackState
                     ?.checkpoint(
-                        source.profile.id,
+                        profileId,
                         snapshot.itemId,
                         snapshot.positionSeconds,
                         snapshot.durationSeconds,
@@ -1102,6 +1136,25 @@ class PlaybackViewModel(
                     )
             }
             return
+        }
+        val profileId =
+            offlinePlaybackCheckpointProfileId(
+                isLocalPlayback = false,
+                localSourceProfileId = localSource?.profile?.id,
+                activeOfflineProfileId = offlineProfileId,
+            )
+        if (profileId != null) {
+            runCatching {
+                repository.offline
+                    ?.playbackState
+                    ?.checkpoint(
+                        profileId,
+                        snapshot.itemId,
+                        snapshot.positionSeconds,
+                        snapshot.durationSeconds,
+                        _uiState.value.watchHistoryEnabled,
+                    )
+            }
         }
         if (!_uiState.value.watchHistoryEnabled) return
         runCatching {
@@ -1255,6 +1308,7 @@ class PlaybackViewModel(
             invalidateActivePlaybackLoad()
             cancelPlaybackSession(outgoing)
             currentItemId = itemId
+            streamRequestedForItemId = null
             _uiState.value =
                 _uiState.value.copy(
                     loading = true,
@@ -1460,6 +1514,7 @@ class PlaybackViewModel(
             invalidateActivePlaybackLoad()
             cancelPlaybackSession(outgoing)
             currentItemId = target.id
+            streamRequestedForItemId = null
             recovered = false
             playedResetRequested = false
             subtitleSelectionInitialized = false
@@ -1561,7 +1616,12 @@ class PlaybackViewModel(
 
     fun streamInstead() {
         if (!_uiState.value.canStream) return
-        streamRequested = true
+        streamRequestedForItemId = currentItemId
+        loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
+    }
+
+    fun playDownloadedInstead() {
+        streamRequestedForItemId = null
         loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
     }
 

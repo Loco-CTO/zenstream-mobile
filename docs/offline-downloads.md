@@ -8,7 +8,7 @@ Use the download action on a supported movie, episode, season, series, track, al
 
 Choose the main media quality in the download sheet. Video choices include the original or portable H.264 MP4 profiles up to 720p or 1080p without upscaling. Track downloads offer the original or AAC profiles at 128 or 256 kbps. Available options depend on the source and the server's conversion support. Downloads include all audio tracks and available subtitle tracks automatically, along with artwork, lyrics, chapters, and segments. Image subtitles require an original download.
 
-Open **My Page → Downloads** to browse saved Movies, TV, and Music, search local metadata, and manage transfers. Pause, resume, retry, cancel, or remove downloads there. Removing a selection preserves a media file that another saved selection still references.
+Open **My Page → Downloads** to browse saved Movies, TV, and Music, search local metadata, and manage transfers. Pause, resume, retry, cancel, or remove downloads there. In **Manage downloads**, expand a show and remove a completed episode from its actions while keeping the rest of the series. Removing a selection preserves a media file that another saved selection still references.
 
 ## Use offline mode
 
