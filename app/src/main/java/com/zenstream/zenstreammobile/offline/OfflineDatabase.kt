@@ -64,6 +64,20 @@ data class OfflineCatalogItem(
     val newSourceAvailable: Boolean = false,
 )
 
+@Entity(tableName = "offline_libraries", primaryKeys = ["profile", "id"])
+data class OfflineLibraryName(
+    val profile: String,
+    val id: String,
+    val name: String,
+    val type: String?,
+)
+
+data class OfflineDownloadLibrary(
+    val id: String,
+    val name: String,
+    val type: String?,
+)
+
 @Entity(tableName = "offline_selections", primaryKeys = ["profile", "id"])
 data class OfflineSelection(
     val profile: String,
@@ -240,6 +254,7 @@ data class OfflineAudioQueue(
         [
             OfflineProfile::class,
             OfflineCatalogItem::class,
+            OfflineLibraryName::class,
             OfflineSelection::class,
             OfflineMember::class,
             OfflineAsset::class,
@@ -253,7 +268,7 @@ data class OfflineAudioQueue(
             OfflineOperation::class,
             OfflineAudioQueue::class,
         ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
@@ -295,6 +310,14 @@ abstract class OfflineDatabase : RoomDatabase() {
                     )
                 }
             }
+        val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS offline_libraries (profile TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, type TEXT, PRIMARY KEY(profile, id))"
+                    )
+                }
+            }
         @Volatile private var instance: OfflineDatabase? = null
 
         fun get(context: Context): OfflineDatabase =
@@ -311,6 +334,7 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 MIGRATION_2_3,
                                 MIGRATION_3_4,
                                 MIGRATION_4_5,
+                                MIGRATION_5_6,
                             )
                             .build()
                             .also { instance = it }

@@ -65,6 +65,7 @@ import com.zenstream.zenstreammobile.offline.AudioQueueIdentity
 import com.zenstream.zenstreammobile.offline.ConnectionMode
 import com.zenstream.zenstreammobile.offline.OfflineRuntime
 import com.zenstream.zenstreammobile.offline.ResolvedPlaybackSource
+import com.zenstream.zenstreammobile.offline.offlinePlaybackCheckpointProfileId
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +82,18 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
+
+internal fun streamEntryIdAfterRetry(
+    currentStreamEntryId: String?,
+    currentEntryId: String,
+    stream: Boolean,
+    playDownloaded: Boolean,
+): String? =
+    when {
+        playDownloaded -> null
+        stream -> currentEntryId
+        else -> currentStreamEntryId
+    }
 
 /**
  * The one audio authority in the app. Video remains owned by PlaybackActivity; this service never
@@ -444,6 +457,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 AudioServiceBridge.ACTION_RETRY -> retryCurrent(commandSequence)
                 AudioServiceBridge.ACTION_STREAM_CURRENT ->
                     retryCurrent(commandSequence, stream = true)
+                AudioServiceBridge.ACTION_PLAY_DOWNLOADED_CURRENT ->
+                    retryCurrent(commandSequence, playDownloaded = true)
                 AudioServiceBridge.ACTION_SEEK ->
                     seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
                 AudioServiceBridge.ACTION_REMOVE_QUEUE ->
@@ -1005,12 +1020,22 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
     }
 
-    private suspend fun retryCurrent(commandSequence: Long, stream: Boolean = false) {
+    private suspend fun retryCurrent(
+        commandSequence: Long,
+        stream: Boolean = false,
+        playDownloaded: Boolean = false,
+    ) {
         var request: PlaybackRequest? = null
         queueCommandMutex.withLock {
             val entry = currentState.currentEntry ?: return@withLock
             val previousStreamEntryId = streamEntryId
-            if (stream) streamEntryId = entry.entryId
+            streamEntryId =
+                streamEntryIdAfterRetry(
+                    currentStreamEntryId = streamEntryId,
+                    currentEntryId = entry.entryId,
+                    stream = stream,
+                    playDownloaded = playDownloaded,
+                )
             val resumePositionMs = recoveryPositionMs(entry.entryId)
             request =
                 acceptPlaybackSelection(
@@ -2297,11 +2322,18 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private suspend fun sendProgress(sample: ProgressSample) {
         val localSource = resolvedAudioSource as? ResolvedPlaybackSource.Local
-        if (localSource != null) {
-            if (sample.scope != currentQueueIdentity()?.scope) return
+        val identity = currentQueueIdentity()
+        if (sample.scope != identity?.scope) return
+        val checkpointProfileId =
+            offlinePlaybackCheckpointProfileId(
+                isLocalPlayback = localSource != null,
+                localSourceProfileId = localSource?.profile?.id,
+                activeOfflineProfileId = identity?.profile?.id,
+            )
+        if (checkpointProfileId != null) {
             try {
                 offline.playbackState.checkpoint(
-                    localSource.profile.id,
+                    checkpointProfileId,
                     sample.itemId,
                     sample.positionSeconds,
                     sample.durationSeconds ?: 0.0,
@@ -2310,15 +2342,13 @@ class AudioPlaybackService : MediaLibraryService() {
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                Log.w(AUDIO_TAG, "Offline audio progress could not be persisted", error)
+                Log.w(AUDIO_TAG, "Offline playback progress could not be persisted", error)
             }
+        }
+        if (localSource != null) {
             return
         }
-        if (
-            !com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.allowed ||
-                sample.scope != currentQueueIdentity()?.scope
-        )
-            return
+        if (!com.zenstream.zenstreammobile.offline.OfflineNetworkPolicy.allowed) return
         val account = sessionStore.session.first() ?: return
         if (!sessionStore.watchHistoryEnabled.first()) return
         try {
