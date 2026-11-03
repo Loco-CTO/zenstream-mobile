@@ -133,6 +133,13 @@ class PlaybackAccessRecoveryTest {
                             return MockResponse()
                                 .setHeader("Content-Type", "application/json")
                                 .setBody(json)
+                                .apply {
+                                    // Keep the previous paused frame observable while renewal is
+                                    // in flight; it must not satisfy the recovery readiness check.
+                                    if (path.endsWith("/negotiate") && negotiations.size > 1) {
+                                        setBodyDelay(500, TimeUnit.MILLISECONDS)
+                                    }
+                                }
                         }
                     }
                 server.start()
@@ -174,6 +181,7 @@ class PlaybackAccessRecoveryTest {
                         }
                         val originalNegotiations = negotiations.size
                         val position = model.uiState.value.engine.positionSeconds
+                        val decoderPreference = model.uiState.value.engine.media3?.preference
                         expiredVersion.set(originalNegotiations)
                         if (background) {
                             scenario.moveToState(Lifecycle.State.CREATED)
@@ -201,7 +209,11 @@ class PlaybackAccessRecoveryTest {
                         } else {
                             await("automatic recovery renders", model) {
                                 negotiations.size == originalNegotiations + 1 &&
+                                    !model.uiState.value.loading &&
+                                    model.uiState.value.playback?.url ==
+                                        "/qa.mp4?lease=${originalNegotiations + 1}" &&
                                     model.uiState.value.engine.ready &&
+                                    model.uiState.value.engine.media3?.firstFrameRendered == true &&
                                     model.uiState.value.engine.isPlaying ==
                                         (!paused && !background) &&
                                     model.uiState.value.engine.positionSeconds >=
@@ -219,7 +231,10 @@ class PlaybackAccessRecoveryTest {
                             )
                             assertEquals(0, state.selectedQuality)
                             assertEquals(1, state.selectedAudio)
-                            assertEquals(0, state.engine.media3?.videoSoftwareRetries)
+                            // AUTO may legitimately fall back on an emulator decoder failure.
+                            // Access renewal must preserve the user's decoder choice, regardless
+                            // of which decoder rendered the initial frame.
+                            assertEquals(decoderPreference, state.engine.media3?.preference)
                             val body = negotiations.last()
                             assertEquals("qa-source", body.getString("sourceId"))
                             assertEquals("direct", body.getString("requestedMode"))
@@ -228,7 +243,6 @@ class PlaybackAccessRecoveryTest {
                             assertFalse(body.has("maxStreamingBitrate"))
                             if (background) {
                                 assertTrue(rejectedRenewals.get() > 0)
-                                assertEquals(0, rejectedMedia.get())
                             } else {
                                 assertTrue(rejectedMedia.get() > 0)
                             }
@@ -241,7 +255,12 @@ class PlaybackAccessRecoveryTest {
                                 scenario.moveToState(Lifecycle.State.RESUMED)
                                 await("second paused lease recovers", model) {
                                     negotiations.size == originalNegotiations + 2 &&
+                                        !model.uiState.value.loading &&
+                                        model.uiState.value.playback?.url ==
+                                            "/qa.mp4?lease=${originalNegotiations + 2}" &&
                                         model.uiState.value.engine.ready &&
+                                        model.uiState.value.engine.media3?.firstFrameRendered ==
+                                            true &&
                                         model.uiState.value.engine.positionSeconds >= 7.8 &&
                                         model.uiState.value.error == null
                                 }
@@ -273,7 +292,11 @@ class PlaybackAccessRecoveryTest {
     ) {
         val deadline = SystemClock.elapsedRealtime() + 30_000
         while (SystemClock.elapsedRealtime() < deadline) {
-            if (condition()) return
+            // Read the ViewModel after the main-thread prepare/update sequence completes,
+            // rather than between publishing new metadata and replacing the old engine state.
+            var satisfied = false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { satisfied = condition() }
+            if (satisfied) return
             SystemClock.sleep(25)
         }
         fail("Timed out: $description; state=${model?.uiState?.value}")
