@@ -6,6 +6,17 @@ import org.junit.Test
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class Media3RecoveryPolicyTest {
     @Test
+    fun httpAuthorizationFailuresRemainDistinctFromConnectivityAndServerFailures() {
+        val code = androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+        for (status in listOf(401, 403)) {
+            assertEquals(Media3FailureKind.AUTHENTICATION, classifyMedia3Failure(code, status))
+        }
+        for (status in listOf(null, 404, 500, 503)) {
+            assertEquals(Media3FailureKind.NETWORK, classifyMedia3Failure(code, status))
+        }
+    }
+
+    @Test
     fun failuresRemainSpecificRatherThanTreatingEveryErrorAsAVideoDecoderProblem() {
         assertEquals(
             Media3FailureKind.CONTAINER,

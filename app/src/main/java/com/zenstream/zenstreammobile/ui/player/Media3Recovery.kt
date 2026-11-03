@@ -26,6 +26,7 @@ data class Media3PlaybackDetails(
     val audioSoftwareRetries: Int = 0,
     val recoveryStage: String? = null,
     val failureKind: Media3FailureKind? = null,
+    val httpStatusCode: Int? = null,
     val failureSequence: Long = 0,
     val hdr: Boolean = false,
     val playWhenReady: Boolean = true,

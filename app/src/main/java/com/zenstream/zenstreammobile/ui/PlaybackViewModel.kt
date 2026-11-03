@@ -246,6 +246,7 @@ class PlaybackViewModel(
     private var subtitleGeneration = 0L
     private var mediaOriginSeconds = 0.0
     private val media3ServerRecovery = Media3ServerRecovery()
+    private val playbackAccessRecovery = PlaybackAccessRecovery()
     private var recovered = false
     private var playedResetRequested = false
     private var subtitleSelectionInitialized = false
@@ -396,8 +397,22 @@ class PlaybackViewModel(
                 _uiState.value =
                     _uiState.value.copy(
                         engine = state,
-                        error = if (policyStopped) _uiState.value.error else state.error,
+                        error =
+                            when {
+                                policyStopped -> _uiState.value.error
+                                _uiState.value.loading -> null
+                                else -> state.error
+                            },
                     )
+                playbackAccessRecovery.observeProgress(
+                    playbackAccessIdentity(),
+                    state.positionSeconds,
+                    state.ready && state.isPlaying && !_uiState.value.loading,
+                    pausedReady =
+                        state.ready &&
+                            state.media3?.playWhenReady == false &&
+                            !_uiState.value.loading,
+                )
                 val manager = syncplay.takeUnless { _uiState.value.local }
                 val room = manager?.state?.value?.active
                 settleSyncplayTimelineIfReady(room, state, manager?.serverNow() ?: 0.0)
@@ -437,6 +452,9 @@ class PlaybackViewModel(
                             kind = media3.failureKind,
                             hdr = media3.hdr,
                         )
+                    if (recoverPlaybackAccess(media3.httpStatusCode, media3.playWhenReady)) {
+                        return@collectLatest
+                    }
                     if (nextMode != null) {
                         Log.i(PLAYBACK_TAG, "Media3 server recovery mode=$nextMode")
                         loadPlayback(
@@ -619,6 +637,7 @@ class PlaybackViewModel(
         playbackLoadJob?.cancel()
         playbackAccessJob?.cancel()
         trickplayJob?.cancel()
+        _uiState.value = _uiState.value.copy(loading = true, error = null)
         playbackLoadJob = viewModelScope.launch {
             _uiState.value.playback?.let { outgoing ->
                 if (outgoing.viewerSessionId != null) cancelPlaybackSession(outgoing)
@@ -932,20 +951,54 @@ class PlaybackViewModel(
         }
     }
 
-    private fun startPlaybackAccessRefresh(playback: PlaybackData) {
+    private fun playbackAccessIdentity(): String =
+        "$currentItemId:${_uiState.value.playback?.source?.id.orEmpty()}"
+
+    private fun recoverPlaybackAccess(httpStatus: Int?, playWhenReady: Boolean): Boolean {
+        val current = _uiState.value
+        val playback = current.playback ?: return false
+        if (
+            session == null ||
+                backgrounded ||
+                current.loading ||
+                policyStopped ||
+                !playbackAccessRecovery.tryRecover(
+                    playbackAccessIdentity(),
+                    httpStatus,
+                    current.local || offlineOnly,
+                    OfflineNetworkPolicy.allowed,
+                    currentPlayerPositionSeconds(),
+                )
+        )
+            return false
+        Log.i(PLAYBACK_TAG, "renewing rejected remote playback access status=$httpStatus")
+        streamRequested = true
+        loadPlayback(
+            PlaybackOptions(
+                requestedMode = playback.mode,
+                sourceId = playback.source.id,
+                audioStreamId = current.selectedAudio,
+                maxStreamingBitrate = current.selectedQuality.takeIf { it > 0 },
+            ),
+            playWhenReadyOverride = playWhenReady,
+        )
+        return true
+    }
+
+    private fun startPlaybackAccessRefresh(playback: PlaybackData, immediately: Boolean = false) {
         playbackAccessJob?.cancel()
         val sourceId = playback.source.id ?: return
-        var expiresInSeconds = playback.accessExpiresIn ?: return
+        val expiresInSeconds = playback.accessExpiresIn ?: return
+        val generation = playbackGeneration
         playbackAccessJob = viewModelScope.launch {
-            while (true) {
-                delay((expiresInSeconds * 1_000L - 60_000L).coerceAtLeast(30_000L))
+            refreshPlaybackAccessLoop(expiresInSeconds, immediately) {
                 val current = _uiState.value.playback
                 if (
                     current?.item?.id != currentItemId ||
                         current.source.id != sourceId ||
-                        playbackGeneration <= 0L
+                        playbackGeneration != generation
                 ) {
-                    return@launch
+                    throw CancellationException("Playback source changed")
                 }
                 val refreshed =
                     try {
@@ -960,16 +1013,27 @@ class PlaybackViewModel(
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Throwable) {
+                        if (playbackGeneration != generation) {
+                            throw CancellationException("Playback source changed")
+                        }
                         Log.w(
                             PLAYBACK_TAG,
                             "playback access refresh failed item=$currentItemId error=${error.message}",
                         )
-                        delay(30_000L)
-                        continue
+                        recoverPlaybackAccess(
+                            (error as? CatalogException)?.statusCode,
+                            _uiState.value.engine.media3?.playWhenReady
+                                ?: _uiState.value.engine.isPlaying,
+                        )
+                        return@refreshPlaybackAccessLoop null
                     }
                 val latest = _uiState.value.playback
-                if (latest?.item?.id != currentItemId || latest.source.id != sourceId) {
-                    return@launch
+                if (
+                    playbackGeneration != generation ||
+                        latest?.item?.id != currentItemId ||
+                        latest.source.id != sourceId
+                ) {
+                    throw CancellationException("Playback source changed")
                 }
                 if (
                     isStablePlaybackLeaseRenewal(
@@ -981,17 +1045,16 @@ class PlaybackViewModel(
                         _uiState.value.copy(
                             playback = latest.copy(accessExpiresIn = refreshed.expiresInSeconds)
                         )
-                    expiresInSeconds = refreshed.expiresInSeconds
-                    continue
+                    return@refreshPlaybackAccessLoop refreshed.expiresInSeconds
                 }
                 val refreshedTicket = refreshed.ticket
                 if (refreshedTicket.isNullOrBlank()) {
                     Log.w(PLAYBACK_TAG, "legacy playback access refresh returned no ticket")
-                    delay(30_000L)
-                    continue
+                    return@refreshPlaybackAccessLoop null
                 }
                 val position = currentPlayerPositionSeconds()
-                val shouldPlay = _uiState.value.engine.isPlaying
+                val shouldPlay =
+                    _uiState.value.engine.media3?.playWhenReady ?: _uiState.value.engine.isPlaying
                 val nextUrl =
                     playbackUrlWithAccess(
                         remoteSession,
@@ -1007,13 +1070,14 @@ class PlaybackViewModel(
                         accessExpiresIn = refreshed.expiresInSeconds,
                     )
                 _uiState.value = _uiState.value.copy(playback = nextPlayback)
+                resolvedSource = ResolvedPlaybackSource.Remote(nextPlayback, nextUrl)
                 playbackEngine?.prepare(
                     nextUrl,
                     position,
                     playbackMimeType(nextSource, _uiState.value.selectedQuality),
                     shouldPlay,
                 )
-                expiresInSeconds = refreshed.expiresInSeconds
+                refreshed.expiresInSeconds
             }
         }
     }
@@ -1274,6 +1338,7 @@ class PlaybackViewModel(
         playbackGeneration++
         playbackLoadJob?.cancel()
         viewerHeartbeatJob?.cancel()
+        playbackAccessJob?.cancel()
         syncplayTimelineKey = null
         playbackEngine?.pause()
         _uiState.value =
@@ -1297,12 +1362,20 @@ class PlaybackViewModel(
                 !current.engine.ready ||
                 current.engine.isBuffering
         if (needsPlaybackLoad) {
+            if (!current.local && current.playback != null) streamRequested = true
             loadPlayback(
-                PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()),
+                PlaybackOptions(
+                    startPositionSeconds = currentPlayerPositionSeconds(),
+                    sourceId = current.playback?.source?.id,
+                    requestedMode = current.playback?.mode.takeUnless { current.local },
+                    audioStreamId = current.selectedAudio,
+                    maxStreamingBitrate = current.selectedQuality.takeIf { it > 0 },
+                ),
                 playWhenReadyOverride = false,
             )
         } else {
             startViewerHeartbeat()
+            if (!current.local) startPlaybackAccessRefresh(current.playback, immediately = true)
         }
         backgroundRecoveryJob = viewModelScope.launch {
             delay(BACKGROUND_RECOVERY_TIMEOUT_MILLIS)
@@ -1561,6 +1634,7 @@ class PlaybackViewModel(
 
     fun streamInstead() {
         if (!_uiState.value.canStream) return
+        playbackAccessRecovery.reset()
         streamRequested = true
         loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
     }

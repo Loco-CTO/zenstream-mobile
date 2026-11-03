@@ -19,6 +19,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -164,7 +165,8 @@ class Media3PlaybackEngine(
                         )
                     } ?: C.TRACK_TYPE_VIDEO
                 Log.w(TAG, "playback failure code=${error.errorCodeName} track=$track")
-                fail(classifyMedia3Failure(error.errorCode), track)
+                val httpStatus = media3HttpStatus(error)
+                fail(classifyMedia3Failure(error.errorCode, httpStatus), track, httpStatus)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -214,6 +216,9 @@ class Media3PlaybackEngine(
                                     !terminalFailure &&
                                     videoReady,
                             speed = current.playbackParameters.speed,
+                            media3 =
+                                if (terminalFailure) old.media3
+                                else old.media3?.copy(playWhenReady = current.playWhenReady),
                         )
                     counters?.ensureUpdated()
                     val now = SystemClock.elapsedRealtime()
@@ -386,7 +391,14 @@ class Media3PlaybackEngine(
         generation++
         terminalFailure = false
         mutableState.value =
-            EngineState(media3 = Media3PlaybackDetails(preference = preference, hdr = context.hdr))
+            EngineState(
+                media3 =
+                    Media3PlaybackDetails(
+                        preference = preference,
+                        hdr = context.hdr,
+                        playWhenReady = playWhenReady,
+                    )
+            )
         counters = null
         restartWatchdog()
         initialSeek.schedule(startPositionSeconds)
@@ -439,7 +451,7 @@ class Media3PlaybackEngine(
         }
     }
 
-    private fun fail(kind: Media3FailureKind, track: Int) {
+    private fun fail(kind: Media3FailureKind, track: Int, httpStatus: Int? = null) {
         if (terminalFailure || released) return
         val current = player ?: return
         val video = track != C.TRACK_TYPE_AUDIO
@@ -497,12 +509,14 @@ class Media3PlaybackEngine(
                 error =
                     if (finalKind == Media3FailureKind.HDR_UNSUPPORTED)
                         "This HDR video cannot be rendered by the selected decoder."
+                    else if (httpStatus in setOf(401, 403)) "The server rejected playback access."
                     else
                         "Media3 could not play the ${if (video) "video" else "audio"} track ($finalKind).",
                 errorTrackType = track,
                 media3 =
                     mutableState.value.media3?.copy(
                         failureKind = finalKind,
+                        httpStatusCode = httpStatus,
                         failureSequence = failureSequence,
                         hdr = hdr,
                         playWhenReady = current.playWhenReady,
@@ -518,10 +532,12 @@ class Media3PlaybackEngine(
 
     override fun play() {
         player?.play()
+        details { it.copy(playWhenReady = true) }
     }
 
     override fun pause() {
         player?.pause()
+        details { it.copy(playWhenReady = false) }
     }
 
     override fun stop() {
@@ -580,7 +596,13 @@ class Media3PlaybackEngine(
     }
 }
 
-internal fun classifyMedia3Failure(code: Int): Media3FailureKind =
+internal fun media3HttpStatus(error: Throwable): Int? =
+    generateSequence(error) { it.cause }
+        .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+        .firstOrNull()
+        ?.responseCode
+
+internal fun classifyMedia3Failure(code: Int, httpStatus: Int? = null): Media3FailureKind =
     when (code) {
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
@@ -592,7 +614,9 @@ internal fun classifyMedia3Failure(code: Int): Media3FailureKind =
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> Media3FailureKind.CONTAINER
         PlaybackException.ERROR_CODE_IO_NO_PERMISSION -> Media3FailureKind.AUTHENTICATION
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> Media3FailureKind.NETWORK
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> Media3FailureKind.NETWORK
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+            if (httpStatus in setOf(401, 403)) Media3FailureKind.AUTHENTICATION
+            else Media3FailureKind.NETWORK
         else -> Media3FailureKind.OTHER
     }
