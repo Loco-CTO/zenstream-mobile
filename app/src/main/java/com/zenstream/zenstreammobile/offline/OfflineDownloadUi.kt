@@ -21,6 +21,7 @@ import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.ui.components.CardBadgeSurface
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -162,11 +163,7 @@ fun DownloadedBadge(item: MediaItem, modifier: Modifier = Modifier) {
                 } ?: 0
         }
     if (count > 0)
-        Surface(
-            modifier,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = .9f),
-            shape = MaterialTheme.shapes.small,
-        ) {
+        CardBadgeSurface(modifier) {
             Icon(
                 painterResource(LucideR.drawable.lucide_ic_download),
                 stringResource(R.string.offline_saved_badge),
@@ -202,6 +199,7 @@ fun OfflineDownloadHost(
                         item.id,
                         item.name,
                         offlineProfileId = profile.id,
+                        reopenFromDownloads = true,
                     )
                 }
             }

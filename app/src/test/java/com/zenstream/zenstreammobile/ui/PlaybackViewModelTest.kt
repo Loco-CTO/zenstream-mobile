@@ -7,6 +7,7 @@ import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.SyncplayMember
 import com.zenstream.zenstreammobile.model.TrickplayManifest
 import com.zenstream.zenstreammobile.model.TrickplaySheet
+import com.zenstream.zenstreammobile.offline.PlaybackSourcePreference
 import com.zenstream.zenstreammobile.ui.player.EngineState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
@@ -21,6 +22,37 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackViewModelTest {
+    @Test
+    fun explicitStreamingAppliesOnlyToTheItemThatRequestedIt() {
+        assertEquals(
+            PlaybackSourcePreference.STREAM,
+            playbackSourcePreference(
+                streamRequestedForItemId = "episode-1",
+                currentItemId = "episode-1",
+                offlineOnly = true,
+                hasSession = true,
+            ),
+        )
+        assertEquals(
+            PlaybackSourcePreference.DOWNLOAD_ONLY,
+            playbackSourcePreference(
+                streamRequestedForItemId = "episode-1",
+                currentItemId = "episode-2",
+                offlineOnly = true,
+                hasSession = true,
+            ),
+        )
+        assertEquals(
+            PlaybackSourcePreference.PREFER_DOWNLOAD,
+            playbackSourcePreference(
+                streamRequestedForItemId = null,
+                currentItemId = "movie-1",
+                offlineOnly = false,
+                hasSession = true,
+            ),
+        )
+    }
+
     @Test
     fun clearsWatchedStateWhenPlaybackStartsForWatchedItem() {
         assertTrue(
@@ -238,6 +270,17 @@ class PlaybackViewModelTest {
         assertEquals(1, preferredTrackIndex(tracks, "ja"))
         assertEquals(2, preferredTrackIndex(tracks, "fr"))
         assertNull(preferredSubtitleIndex(tracks, "off"))
+    }
+
+    @Test
+    fun prefersSavedLanguageWhenSelectingLocalSubtitleTracks() {
+        val subtitles =
+            listOf(
+                MediaStream(2, "Subtitle", language = "en", isDefault = true),
+                MediaStream(5, "Subtitle", language = "ja"),
+            )
+
+        assertEquals(5, selectSubtitleTrack(null, false, subtitles, preferredLanguage = "ja"))
     }
 
     @Test

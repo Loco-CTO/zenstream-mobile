@@ -143,6 +143,43 @@ class OfflineDownloadManagementTest {
         }
     }
 
+    @Test
+    fun managedDownloadsHideSelectionsBeingRemoved() = runBlocking {
+        val db = database()
+        val dao = db.offline()
+        try {
+            dao.putSelection(
+                OfflineSelection(
+                    "p",
+                    "kept",
+                    "movie",
+                    "movie",
+                    "Saved movie",
+                    "{}",
+                    state = "complete",
+                )
+            )
+            dao.putSelection(
+                OfflineSelection(
+                    "p",
+                    "removing",
+                    "movie",
+                    "movie",
+                    "Removing movie",
+                    "{}",
+                    state = "removal_pending",
+                )
+            )
+
+            assertEquals(
+                listOf("kept"),
+                dao.managedSelectionPage("p", 20, 0).first().map { it.id },
+            )
+        } finally {
+            db.close()
+        }
+    }
+
     private fun database() =
         Room.inMemoryDatabaseBuilder(
                 InstrumentationRegistry.getInstrumentation().targetContext,

@@ -662,9 +662,11 @@ private fun MainScaffold(
         contentScrollable = false
         bottomBarVisibilityFraction = bottomBarVisibility.resetForRoute()
         topBarVisibilityFraction = topBarVisibility.resetForRoute()
-        if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh()
+        if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh(markOnOpen = true)
     }
-    LaunchedEffect(session.serverUrl, session.userId) { notificationsViewModel.refresh() }
+    LaunchedEffect(session.serverUrl, session.userId) {
+        if (mainRoute != NOTIFICATIONS) notificationsViewModel.refresh()
+    }
 
     val detailRoute =
         mainRoute in
@@ -873,7 +875,7 @@ private fun MainScaffold(
                         }
                         composable(NOTIFICATIONS) {
                             NotificationsScreen(
-                                repository = repository,
+                                vm = notificationsViewModel,
                                 session = session,
                                 // The nested Material top bar owns status-bar insets.
                                 // Only carry the root mini-player slot into detail content.

@@ -22,7 +22,9 @@ internal fun ResolvedPlaybackSource.Local.videoData(): PlaybackData {
                 MediaStream(
                     index,
                     "Subtitle",
-                    displayTitle = asset.descriptor.optString("title").takeIf { it.isNotBlank() },
+                    displayTitle =
+                        asset.descriptor.optString("title").takeIf { it.isNotBlank() }
+                            ?: asset.descriptor.optString("name").takeIf { it.isNotBlank() },
                     language = asset.descriptor.optString("language").takeIf { it.isNotBlank() },
                     codec = "webvtt",
                     isDefault = asset.descriptor.optBoolean("isDefault"),

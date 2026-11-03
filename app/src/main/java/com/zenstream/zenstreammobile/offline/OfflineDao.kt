@@ -49,6 +49,23 @@ interface OfflineDao {
 
     @Upsert suspend fun putProfile(value: OfflineProfile)
 
+    @Upsert suspend fun putLibraryNames(values: List<OfflineLibraryName>)
+
+    @Query("DELETE FROM offline_libraries WHERE profile=:profile")
+    suspend fun deleteAllLibraryNames(profile: String)
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ) SELECT DISTINCT c.libraryId AS id, COALESCE(NULLIF(l.name,''),c.libraryId) AS name, l.type AS type
+          FROM offline_catalog c LEFT JOIN offline_libraries l ON l.profile=c.profile AND l.id=c.libraryId
+          WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved) AND c.libraryId IS NOT NULL AND c.libraryId!=''
+          ORDER BY name COLLATE NOCASE,c.libraryId"""
+    )
+    fun downloadedLibraries(profile: String): Flow<List<OfflineDownloadLibrary>>
+
     @Query("DELETE FROM offline_profiles WHERE id=:id") suspend fun deleteProfileRecord(id: String)
 
     @Query("SELECT * FROM offline_profiles WHERE id=:id")
@@ -128,7 +145,7 @@ interface OfflineDao {
     fun selectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
 
     @Query(
-        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile ORDER BY CASE WHEN s.state NOT IN ('complete','metadata_complete','cancelled') OR s.id IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')) THEN 0 ELSE 1 END,s.title COLLATE NOCASE,s.id LIMIT :limit OFFSET :offset"
+        "SELECT s.* FROM offline_selections s WHERE s.profile=:profile AND s.state!='removal_pending' ORDER BY CASE WHEN s.state NOT IN ('complete','metadata_complete','cancelled') OR s.id IN (SELECT t.selection FROM offline_transfers t WHERE t.profile=:profile AND t.state NOT IN ('complete','cancelled')) THEN 0 ELSE 1 END,s.title COLLATE NOCASE,s.id LIMIT :limit OFFSET :offset"
     )
     fun managedSelectionPage(profile: String, limit: Int, offset: Int): Flow<List<OfflineSelection>>
 
@@ -179,6 +196,21 @@ interface OfflineDao {
         offset: Int,
     ): List<OfflineMember>
 
+    @Query(
+        "SELECT * FROM offline_members WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun member(profile: String, selection: String, item: String): OfflineMember?
+
+    @Query(
+        "SELECT COUNT(*) FROM offline_members WHERE profile=:profile AND selection=:selection AND (ordinal<:ordinal OR (ordinal=:ordinal AND item<:item))"
+    )
+    suspend fun memberPosition(
+        profile: String,
+        selection: String,
+        ordinal: Int,
+        item: String,
+    ): Int
+
     @Upsert suspend fun putAsset(value: OfflineAsset)
 
     @Query("SELECT * FROM offline_assets WHERE profile=:profile AND id=:id")
@@ -201,6 +233,9 @@ interface OfflineDao {
         "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item AND state='complete' AND locked=0 ORDER BY verifiedAt DESC,id"
     )
     suspend fun playable(profile: String, item: String): List<OfflineAsset>
+
+    @Query("SELECT * FROM offline_assets WHERE profile=:profile AND item=:item")
+    suspend fun assetsForItem(profile: String, item: String): List<OfflineAsset>
 
     @Query(
         "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item ORDER BY (state='complete' AND locked=0) DESC,verifiedAt DESC,id LIMIT :limit"
@@ -256,10 +291,38 @@ interface OfflineDao {
         limit: Int,
     ): List<OfflineAsset>
 
+    @Query(
+        "UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND id IN (SELECT asset FROM offline_asset_refs WHERE profile=:profile AND selection=:selection) AND NOT EXISTS (SELECT 1 FROM offline_asset_refs retained WHERE retained.profile=offline_assets.profile AND retained.asset=offline_assets.id AND retained.selection!=:selection)"
+    )
+    suspend fun markSelectionAssetsPendingDelete(profile: String, selection: String)
+
+    @Query(
+        "DELETE FROM offline_asset_refs WHERE profile=:profile AND selection=:selection AND asset IN (SELECT id FROM offline_assets WHERE profile=:profile AND item=:item)"
+    )
+    suspend fun removeSelectionItemReferences(profile: String, selection: String, item: String)
+
+    @Query(
+        "UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND id IN (SELECT asset FROM offline_asset_refs WHERE profile=:profile AND selection=:selection) AND item=:item AND NOT EXISTS (SELECT 1 FROM offline_asset_refs retained WHERE retained.profile=offline_assets.profile AND retained.asset=offline_assets.id AND retained.selection!=:selection)"
+    )
+    suspend fun markSelectionItemAssetsPendingDelete(
+        profile: String,
+        selection: String,
+        item: String,
+    )
+
     @Upsert suspend fun putTransfer(value: OfflineTransfer)
 
     @Query("SELECT * FROM offline_transfers WHERE profile=:profile AND id=:id")
     suspend fun transfer(profile: String, id: String): OfflineTransfer?
+
+    @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun transfersForSelectionItem(
+        profile: String,
+        selection: String,
+        item: String,
+    ): List<OfflineTransfer>
 
     @Query("SELECT * FROM offline_transfers WHERE profile=:profile ORDER BY priority DESC,id")
     fun transfers(profile: String): Flow<List<OfflineTransfer>>
@@ -410,6 +473,11 @@ interface OfflineDao {
     @Query("DELETE FROM offline_members WHERE profile=:profile AND selection=:selection")
     suspend fun deleteMembers(profile: String, selection: String)
 
+    @Query(
+        "DELETE FROM offline_members WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun deleteSelectionMember(profile: String, selection: String, item: String)
+
     @Query("DELETE FROM offline_assets WHERE profile=:profile AND id=:asset")
     suspend fun deleteAsset(profile: String, asset: String)
 
@@ -449,6 +517,45 @@ interface OfflineDao {
     suspend fun downloadRoots(
         profile: String,
         category: String,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id
+                WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), candidates AS (
+            SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved)
+        ) SELECT c.* FROM candidates c WHERE (:libraryId IS NULL OR c.libraryId=:libraryId)
+            AND (c.type IN ('movie','series','release') OR
+                 (c.type='season' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='series')) OR
+                 (c.type='episode' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type IN ('series','season'))) OR
+                 (c.type='track' AND NOT EXISTS(SELECT 1 FROM candidates p WHERE p.id=c.parentId AND p.type='release')))
+            ORDER BY c.name COLLATE NOCASE,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun downloadRootsByLibrary(
+        profile: String,
+        libraryId: String?,
+        limit: Int,
+        offset: Int,
+    ): List<OfflineCatalogItem>
+
+    @Query(
+        """WITH RECURSIVE saved(id) AS (
+            SELECT item FROM offline_assets WHERE profile=:profile AND state='complete' AND locked=0
+            UNION SELECT s.rootId FROM offline_selections s JOIN offline_asset_refs r ON r.profile=s.profile AND r.selection=s.id JOIN offline_assets a ON a.profile=r.profile AND a.id=r.asset WHERE s.profile=:profile AND a.state='complete' AND a.locked=0
+            UNION SELECT c.parentId FROM offline_catalog c JOIN saved d ON c.id=d.id WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ) SELECT c.* FROM offline_catalog c WHERE c.profile=:profile AND c.id IN (SELECT id FROM saved)
+            AND (:libraryId IS NULL OR c.libraryId=:libraryId)
+            AND c.name LIKE :query ESCAPE '!'
+            ORDER BY c.name COLLATE NOCASE,c.disc,c.track,c.id LIMIT :limit OFFSET :offset"""
+    )
+    suspend fun searchDownloadsByLibrary(
+        profile: String,
+        libraryId: String?,
+        query: String,
         limit: Int,
         offset: Int,
     ): List<OfflineCatalogItem>
@@ -573,6 +680,11 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection")
     suspend fun deleteSelectionTransfers(profile: String, selection: String)
+
+    @Query(
+        "DELETE FROM offline_transfers WHERE profile=:profile AND selection=:selection AND item=:item"
+    )
+    suspend fun deleteSelectionItemTransfers(profile: String, selection: String, item: String)
 
     @Query(
         "SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN state='complete' THEN 1 ELSE 0 END),0) AS complete,COALESCE(SUM(total),0) AS totalBytes,COALESCE(SUM(bytes),0) AS downloadedBytes FROM offline_transfers WHERE profile=:profile AND state!='cancelled'"
