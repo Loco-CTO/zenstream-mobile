@@ -40,6 +40,8 @@ object AudioServiceBridge {
     const val ACTION_TOGGLE_MUTE = "com.zenstream.zenstreammobile.audio.TOGGLE_MUTE"
     const val ACTION_RETRY = "com.zenstream.zenstreammobile.audio.RETRY"
     const val ACTION_STREAM_CURRENT = "com.zenstream.zenstreammobile.audio.STREAM_CURRENT"
+    const val ACTION_PLAY_DOWNLOADED_CURRENT =
+        "com.zenstream.zenstreammobile.audio.PLAY_DOWNLOADED_CURRENT"
     const val ACTION_SEEK = "com.zenstream.zenstreammobile.audio.SEEK"
     const val ACTION_ADD_QUEUE = "com.zenstream.zenstreammobile.audio.ADD_QUEUE"
     const val ACTION_REMOVE_QUEUE = "com.zenstream.zenstreammobile.audio.REMOVE_QUEUE"

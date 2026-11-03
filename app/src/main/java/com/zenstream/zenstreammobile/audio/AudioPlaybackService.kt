@@ -82,6 +82,18 @@ import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
+internal fun streamEntryIdAfterRetry(
+    currentStreamEntryId: String?,
+    currentEntryId: String,
+    stream: Boolean,
+    playDownloaded: Boolean,
+): String? =
+    when {
+        playDownloaded -> null
+        stream -> currentEntryId
+        else -> currentStreamEntryId
+    }
+
 /**
  * The one audio authority in the app. Video remains owned by PlaybackActivity; this service never
  * joins SyncPlay and never persists a negotiated URL.
@@ -444,6 +456,8 @@ class AudioPlaybackService : MediaLibraryService() {
                 AudioServiceBridge.ACTION_RETRY -> retryCurrent(commandSequence)
                 AudioServiceBridge.ACTION_STREAM_CURRENT ->
                     retryCurrent(commandSequence, stream = true)
+                AudioServiceBridge.ACTION_PLAY_DOWNLOADED_CURRENT ->
+                    retryCurrent(commandSequence, playDownloaded = true)
                 AudioServiceBridge.ACTION_SEEK ->
                     seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
                 AudioServiceBridge.ACTION_REMOVE_QUEUE ->
@@ -1005,12 +1019,22 @@ class AudioPlaybackService : MediaLibraryService() {
         persistSnapshot()
     }
 
-    private suspend fun retryCurrent(commandSequence: Long, stream: Boolean = false) {
+    private suspend fun retryCurrent(
+        commandSequence: Long,
+        stream: Boolean = false,
+        playDownloaded: Boolean = false,
+    ) {
         var request: PlaybackRequest? = null
         queueCommandMutex.withLock {
             val entry = currentState.currentEntry ?: return@withLock
             val previousStreamEntryId = streamEntryId
-            if (stream) streamEntryId = entry.entryId
+            streamEntryId =
+                streamEntryIdAfterRetry(
+                    currentStreamEntryId = streamEntryId,
+                    currentEntryId = entry.entryId,
+                    stream = stream,
+                    playDownloaded = playDownloaded,
+                )
             val resumePositionMs = recoveryPositionMs(entry.entryId)
             request =
                 acceptPlaybackSelection(
