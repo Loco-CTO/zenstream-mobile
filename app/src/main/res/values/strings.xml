@@ -87,6 +87,7 @@
     <string name="offline_quality_original">Original file</string>
     <string name="offline_queued">Queued</string>
     <string name="offline_remove_selection">Remove this download selection</string>
+    <string name="offline_remove_downloaded_item">Remove episode download</string>
     <string name="offline_request_failed">Unable to prepare this request. Check your connection, access, and selected languages.</string>
     <string name="offline_restart_needed">The source changed. Retry to restart safely.</string>
     <string name="offline_resume_all">Resume downloads</string>

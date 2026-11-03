@@ -322,6 +322,7 @@ private fun DownloadTransferRow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
     val item by
         produceState<MediaItem?>(null, profile.id, transfer.item) {
             value = offlineUiRead(null) { runtime.catalog.item(profile.id, transfer.item) }
@@ -382,7 +383,10 @@ private fun DownloadTransferRow(
                         Text(stringResource(R.string.offline_pause))
                     }
             }
-            if (transfer.state !in setOf("complete", "cancelled"))
+            if (
+                transfer.state !in setOf("complete", "cancelled") ||
+                    (transfer.state == "complete" && item?.type == "Episode")
+            )
                 Box {
                     IconButton(onClick = { menu = true }) {
                         Icon(
@@ -394,13 +398,27 @@ private fun DownloadTransferRow(
                         )
                     }
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.cancel)) },
-                            onClick = {
-                                menu = false
-                                perform { runtime.downloads.cancel(profile.id, transfer.id) }
-                            },
-                        )
+                        if (transfer.state == "complete")
+                            DropdownMenuItem(
+                                text = {
+                                    Text(stringResource(R.string.offline_remove_downloaded_item))
+                                },
+                                leadingIcon = {
+                                    Icon(painterResource(LucideR.drawable.lucide_ic_trash_2), null)
+                                },
+                                onClick = {
+                                    menu = false
+                                    removing = true
+                                },
+                            )
+                        else
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cancel)) },
+                                onClick = {
+                                    menu = false
+                                    perform { runtime.downloads.cancel(profile.id, transfer.id) }
+                                },
+                            )
                     }
                 }
         }
@@ -420,6 +438,40 @@ private fun DownloadTransferRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    if (removing)
+        AlertDialog(
+            onDismissRequest = { removing = false },
+            title = { Text(stringResource(R.string.offline_remove_downloaded_item)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.offline_remove_download_help,
+                        item?.name ?: stringResource(R.string.offline_unknown_item),
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        removing = false
+                        perform {
+                            runtime.downloads.removeDownloadedItem(
+                                profile.id,
+                                transfer.selection,
+                                transfer.item,
+                            )
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.offline_remove_downloaded_item))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { removing = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
 }
 
 @Composable
