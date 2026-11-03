@@ -64,12 +64,86 @@ fun DownloadButton(item: MediaItem?, modifier: Modifier = Modifier) {
 @Composable
 fun DownloadButton(spec: DownloadSpec, modifier: Modifier = Modifier) {
     val actions = LocalDownloadUi.current ?: return
-    IconButton(onClick = { actions.request(spec) }, modifier = modifier) {
+    val connection by actions.runtime.connection.state.collectAsState()
+    val revision by actions.runtime.catalogRevision.collectAsState()
+    val scope = rememberCoroutineScope()
+    var confirm by remember(spec.id) { mutableStateOf(false) }
+    var busy by remember(spec.id) { mutableStateOf(false) }
+    var failed by remember(spec.id) { mutableStateOf(false) }
+    val downloaded by
+        produceState<Int?>(null, spec.id, connection.profile, revision) {
+            value = null
+            value =
+                connection.profile?.let { profile ->
+                    try {
+                        actions.runtime.catalog.availability(profile, spec.id).downloaded
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        null
+                    }
+                } ?: if (connection.profile == null) 0 else null
+        }
+    IconButton(
+        onClick = {
+            if (downloaded != null && downloaded!! > 0) confirm = true else actions.request(spec)
+        },
+        enabled = downloaded != null && !busy,
+        modifier = modifier,
+    ) {
         Icon(
-            painterResource(LucideR.drawable.lucide_ic_download),
-            stringResource(R.string.offline_download_item, spec.title),
+            painterResource(
+                if ((downloaded ?: 0) > 0) LucideR.drawable.lucide_ic_trash_2
+                else LucideR.drawable.lucide_ic_download
+            ),
+            stringResource(
+                if ((downloaded ?: 0) > 0) R.string.offline_delete_item
+                else R.string.offline_download_item,
+                spec.title,
+            ),
         )
     }
+    if (confirm)
+        AlertDialog(
+            onDismissRequest = { if (!busy) confirm = false },
+            title = { Text(stringResource(R.string.offline_delete_item, spec.title)) },
+            text = { Text(stringResource(R.string.offline_delete_item_help)) },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        val profile = connection.profile ?: return@TextButton
+                        busy = true
+                        scope.launch {
+                            try {
+                                actions.runtime.storage.removeDownloadedItem(profile, spec.id)
+                                confirm = false
+                            } catch (error: Exception) {
+                                if (error is CancellationException) throw error
+                                confirm = false
+                                failed = true
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.offline_delete_download))
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { confirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    if (failed)
+        AlertDialog(
+            onDismissRequest = { failed = false },
+            text = { Text(stringResource(R.string.offline_request_failed)) },
+            confirmButton = {
+                TextButton(onClick = { failed = false }) { Text(stringResource(R.string.close)) }
+            },
+        )
 }
 
 @Composable

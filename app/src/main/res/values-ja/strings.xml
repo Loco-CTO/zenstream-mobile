@@ -1,4 +1,7 @@
 <resources>
+    <string name="offline_delete_item">%1$sのダウンロードを削除</string>
+    <string name="offline_delete_download">ダウンロードを削除</string>
+    <string name="offline_delete_item_help">保存したメディアをこの端末から削除します。他のダウンロードと共有されているファイルも削除されます。再生中のメディアは再生終了後に削除されます。</string>
     <string name="offline_manage_downloads">ダウンロード管理</string>
     <string name="offline_close_search">検索を閉じる</string>
     <string name="offline_actions_for">%1$s の操作</string>

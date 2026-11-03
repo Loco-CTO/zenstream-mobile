@@ -9,6 +9,100 @@ import org.junit.Test
 
 class OfflineStorageIntegrationTest {
     @Test
+    fun deletingEpisodeRemovesSharedCopiesButKeepsOtherEpisodes() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "offline-delete-item-test").apply { mkdirs() }
+        val db = Room.inMemoryDatabaseBuilder(context, OfflineDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val profile = "a".repeat(64)
+        val storage = OfflineStorage(db, root, scope, freeBytes = { 8 * OFFLINE_FREE_RESERVE })
+        val dao = db.offline()
+        try {
+            dao.putProfile(
+                OfflineProfile(profile, "server", "user", "https://example.invalid", "User")
+            )
+            dao.putItems(
+                listOf(
+                    OfflineCatalogItem(
+                        profile,
+                        "series",
+                        null,
+                        null,
+                        "series",
+                        "Series",
+                        payload = "{}",
+                    ),
+                    OfflineCatalogItem(
+                        profile,
+                        "one",
+                        null,
+                        "series",
+                        "episode",
+                        "One",
+                        payload = "{}",
+                    ),
+                    OfflineCatalogItem(
+                        profile,
+                        "two",
+                        null,
+                        "series",
+                        "episode",
+                        "Two",
+                        payload = "{}",
+                    ),
+                )
+            )
+            for ((item, id) in listOf("one" to "b".repeat(64), "two" to "c".repeat(64))) {
+                val relative = storage.paths.relative(profile, id)
+                val file = storage.paths.resolve(relative)
+                file.parentFile!!.mkdirs()
+                file.writeText("data")
+                dao.putAsset(
+                    OfflineAsset(
+                        profile,
+                        id,
+                        item,
+                        "original",
+                        "source",
+                        "revision",
+                        4,
+                        sha256(file),
+                        "video/mp4",
+                        "{}",
+                        relative,
+                        state = "complete",
+                    )
+                )
+                dao.putReference(OfflineAssetReference(profile, "series-selection", id))
+                dao.putTransfer(
+                    OfflineTransfer(
+                        profile,
+                        "transfer-$item",
+                        "series-selection",
+                        item,
+                        "{}",
+                        state = "complete",
+                        assetId = id,
+                    )
+                )
+            }
+            val firstId = "b".repeat(64)
+            dao.putReference(OfflineAssetReference(profile, "other-selection", firstId))
+            storage.removeDownloadedItem(profile, "one")
+            assertNull(dao.asset(profile, firstId))
+            assertEquals("cancelled", dao.transfer(profile, "transfer-one")?.state)
+            assertEquals(0, dao.references(profile, firstId))
+            assertNotNull(dao.asset(profile, "c".repeat(64)))
+            storage.removeDownloadedItem(profile, "series")
+            assertNull(dao.asset(profile, "c".repeat(64)))
+        } finally {
+            requireNotNull(scope.coroutineContext[Job]).cancelAndJoin()
+            db.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun identityPausedTransferCannotPublishOrAdoptACompletedAsset() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.cacheDir, "offline-identity-pause-test").apply { mkdirs() }
