@@ -3,8 +3,13 @@ package com.zenstream.zenstreammobile.offline
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.model.AuthSession
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -138,6 +143,31 @@ class OfflineDownloadManagementTest {
                 listOf("queued"),
                 dao.selectionTransferPage("p", "building", 20, 0).first().map { it.id },
             )
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun managedSelectionsUpdateWhenRemovalIsPending() = runBlocking {
+        val db = database()
+        val dao = db.offline()
+        try {
+            val selection = OfflineSelection("p", "removed", "series", "series", "Series", "{}")
+            dao.putSelection(selection)
+            dao.putSelection(OfflineSelection("p", "remaining", "movie", "movie", "Movie", "{}"))
+            val page = dao.managedSelectionPage("p", 1, 0)
+            assertEquals("remaining", page.first().single().id)
+            val nextPage = dao.managedSelectionPage("p", 1, 1)
+            assertEquals("removed", nextPage.first().single().id)
+            val observing = CompletableDeferred<Unit>()
+            val update = async {
+                withTimeout(5_000) { nextPage.onEach { observing.complete(Unit) }.drop(1).first() }
+            }
+            observing.await()
+            dao.putSelection(selection.copy(state = "removal_pending"))
+            assertTrue(update.await().isEmpty())
+            assertEquals("removal_pending", dao.selection("p", "removed")?.state)
         } finally {
             db.close()
         }
