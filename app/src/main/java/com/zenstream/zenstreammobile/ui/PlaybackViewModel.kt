@@ -119,6 +119,18 @@ internal fun shouldClearPlayedOnPlaybackStart(
 internal fun shouldRecoverPlaybackError(mode: String?, alreadyRecovered: Boolean): Boolean =
     !alreadyRecovered && mode in setOf(null, "direct", "remux")
 
+internal fun playbackSourcePreference(
+    streamRequestedForItemId: String?,
+    currentItemId: String,
+    offlineOnly: Boolean,
+    hasSession: Boolean,
+): PlaybackSourcePreference =
+    when {
+        streamRequestedForItemId == currentItemId -> PlaybackSourcePreference.STREAM
+        offlineOnly || !hasSession -> PlaybackSourcePreference.DOWNLOAD_ONLY
+        else -> PlaybackSourcePreference.PREFER_DOWNLOAD
+    }
+
 internal fun syncplayShouldAutoplay(
     room: SyncplayGroup?,
     participantId: String,
@@ -227,7 +239,7 @@ class PlaybackViewModel(
     val uiState: StateFlow<PlaybackUiState> = _uiState.asStateFlow()
     private var playbackEngine: PlaybackEngine? = null
     private var resolvedSource: ResolvedPlaybackSource? = null
-    private var streamRequested = false
+    private var streamRequestedForItemId: String? = null
     private var policyStopped = false
     private val remoteSession: AuthSession
         get() = requireNotNull(session) { "Sign in to stream this item." }
@@ -647,10 +659,12 @@ class PlaybackViewModel(
                             currentItemId,
                             requestOptions,
                             preference =
-                                if (streamRequested) PlaybackSourcePreference.STREAM
-                                else if (offlineOnly || session == null)
-                                    PlaybackSourcePreference.DOWNLOAD_ONLY
-                                else PlaybackSourcePreference.PREFER_DOWNLOAD,
+                                playbackSourcePreference(
+                                    streamRequestedForItemId = streamRequestedForItemId,
+                                    currentItemId = currentItemId,
+                                    offlineOnly = offlineOnly,
+                                    hasSession = session != null,
+                                ),
                             profileId = offlineProfileId,
                         )
                     }
@@ -1255,6 +1269,7 @@ class PlaybackViewModel(
             invalidateActivePlaybackLoad()
             cancelPlaybackSession(outgoing)
             currentItemId = itemId
+            streamRequestedForItemId = null
             _uiState.value =
                 _uiState.value.copy(
                     loading = true,
@@ -1460,6 +1475,7 @@ class PlaybackViewModel(
             invalidateActivePlaybackLoad()
             cancelPlaybackSession(outgoing)
             currentItemId = target.id
+            streamRequestedForItemId = null
             recovered = false
             playedResetRequested = false
             subtitleSelectionInitialized = false
@@ -1561,7 +1577,12 @@ class PlaybackViewModel(
 
     fun streamInstead() {
         if (!_uiState.value.canStream) return
-        streamRequested = true
+        streamRequestedForItemId = currentItemId
+        loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
+    }
+
+    fun playDownloadedInstead() {
+        streamRequestedForItemId = null
         loadPlayback(PlaybackOptions(startPositionSeconds = currentPlayerPositionSeconds()))
     }
 

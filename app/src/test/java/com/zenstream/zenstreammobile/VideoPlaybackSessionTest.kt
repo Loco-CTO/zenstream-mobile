@@ -58,6 +58,28 @@ class VideoPlaybackSessionTest {
     }
 
     @Test
+    fun downloadsReopeningDoesNotReuseAPlayerThatAdvancedToAnotherItem() {
+        val args = PlaybackLaunchArgs("episode-1", "Episode 1")
+
+        assertFalse(
+            canReuseVideoPlaybackSession(
+                existingArgs = args,
+                requestedArgs = args,
+                currentItemId = "episode-2",
+                reopenFromDownloads = true,
+            )
+        )
+        assertTrue(
+            canReuseVideoPlaybackSession(
+                existingArgs = args,
+                requestedArgs = args,
+                currentItemId = "episode-2",
+                reopenFromDownloads = false,
+            )
+        )
+    }
+
+    @Test
     fun maximumSizeFitsEveryCornerAndRotationWithPadding() {
         for ((w, h) in listOf(360f to 720f, 720f to 360f, 800f to 1280f)) {
             for (right in listOf(false, true)) for (bottom in listOf(false, true)) {

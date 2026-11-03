@@ -46,6 +46,8 @@ object PlaybackActivityContract {
     const val EXTRA_HAS_SUBTITLE_SELECTION =
         "com.zenstream.zenstreammobile.extra.HAS_SUBTITLE_SELECTION"
     const val EXTRA_OFFLINE_PROFILE = "com.zenstream.zenstreammobile.extra.OFFLINE_PROFILE"
+    const val EXTRA_REOPEN_FROM_DOWNLOADS =
+        "com.zenstream.zenstreammobile.extra.REOPEN_FROM_DOWNLOADS"
     internal const val EXTRA_SESSION_DATA_STORE =
         "com.zenstream.zenstreammobile.extra.SESSION_DATA_STORE"
 }
@@ -151,11 +153,13 @@ fun playbackIntent(
     itemName: String,
     tracks: PlaybackTrackSelection? = null,
     offlineProfileId: String? = null,
+    reopenFromDownloads: Boolean = false,
 ): Intent =
     Intent(context, PlaybackActivity::class.java).apply {
         putExtra(PlaybackActivityContract.EXTRA_ITEM_ID, itemId)
         putExtra(PlaybackActivityContract.EXTRA_ITEM_NAME, itemName)
         putExtra(PlaybackActivityContract.EXTRA_OFFLINE_PROFILE, offlineProfileId)
+        putExtra(PlaybackActivityContract.EXTRA_REOPEN_FROM_DOWNLOADS, reopenFromDownloads)
         tracks?.let { selection ->
             selection.audioStreamId?.let {
                 putExtra(PlaybackActivityContract.EXTRA_AUDIO_STREAM_ID, it)
@@ -176,9 +180,18 @@ fun launchPlayback(
     itemName: String,
     tracks: PlaybackTrackSelection? = null,
     offlineProfileId: String? = null,
+    reopenFromDownloads: Boolean = false,
 ) {
     if (!playbackActivityLaunchGate.beginLaunch()) return
-    val intent = playbackIntent(context, itemId, itemName, tracks, offlineProfileId)
+    val intent =
+        playbackIntent(
+            context,
+            itemId,
+            itemName,
+            tracks,
+            offlineProfileId,
+            reopenFromDownloads,
+        )
     val activity = context.findActivity()
     try {
         if (activity != null) {
@@ -288,7 +301,17 @@ class PlaybackActivity : ComponentActivity() {
                 finish()
                 return@launch
             }
-            videoSession = VideoPlaybackSessions.open(args, session, profile)
+            videoSession =
+                VideoPlaybackSessions.open(
+                    args,
+                    session,
+                    profile,
+                    reopenFromDownloads =
+                        intent.getBooleanExtra(
+                            PlaybackActivityContract.EXTRA_REOPEN_FROM_DOWNLOADS,
+                            false,
+                        ),
+                )
             val locale = repository.locale.first()
             setContent {
                 ZenStreamTheme {
