@@ -67,7 +67,10 @@ import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -1732,16 +1735,21 @@ class CatalogApi(
                     .apply { headers.forEach { (key, value) -> header(key, value) } }
                     .get()
                     .build()
-            com.zenstream.zenstreammobile.offline
-                .transferClient(
-                    httpClient,
-                    kotlin.coroutines.coroutineContext[
-                            com.zenstream.zenstreammobile.offline.TransferNetwork]
-                        ?.network,
-                )
-                .newCall(request)
-                .execute()
-                .use { response ->
+            val call =
+                com.zenstream.zenstreammobile.offline
+                    .transferClient(
+                        httpClient,
+                        kotlin.coroutines.coroutineContext[
+                                com.zenstream.zenstreammobile.offline.TransferNetwork]
+                            ?.network,
+                    )
+                    .newCall(request)
+            // A child job closes the socket immediately on cancellation, including while a
+            // blocking execute/body read is waiting. The queue mutex can then be handed off.
+            val lifetime = Job(currentCoroutineContext()[Job])
+            lifetime.invokeOnCompletion { cause -> if (cause != null) call.cancel() }
+            try {
+                call.execute().use { response ->
                     if (!response.isSuccessful && response.code != 416) {
                         throw CatalogException(
                             response.code,
@@ -1750,6 +1758,12 @@ class CatalogApi(
                     }
                     receive(response)
                 }
+            } catch (error: IOException) {
+                currentCoroutineContext().ensureActive()
+                throw error
+            } finally {
+                lifetime.complete()
+            }
         }
 
     private suspend fun requestJson(
