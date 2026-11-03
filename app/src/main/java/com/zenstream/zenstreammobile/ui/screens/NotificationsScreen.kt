@@ -29,7 +29,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,10 +43,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
-import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.NotificationItem
 import com.zenstream.zenstreammobile.ui.NotificationsViewModel
@@ -81,19 +78,13 @@ internal fun notificationDestination(item: NotificationItem): NotificationDestin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
-    repository: CatalogRepository,
+    vm: NotificationsViewModel,
     session: AuthSession,
     outerPadding: PaddingValues = PaddingValues(),
     onBack: () -> Unit,
     onOpenDestination: (NotificationDestination) -> Unit,
 ) {
-    val vm: NotificationsViewModel =
-        viewModel(
-            key = "notifications-${session.serverUrl}-${session.userId}",
-            factory = NotificationsViewModel.Factory(repository, session),
-        )
     val state by vm.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { vm.refresh() }
 
     Scaffold(
         modifier = Modifier.padding(outerPadding),
@@ -126,7 +117,7 @@ fun NotificationsScreen(
         when {
             state.loading && state.items.isEmpty() -> NotificationCenterLoading(padding)
             state.error && state.items.isEmpty() ->
-                NotificationErrorState(padding, R.string.notifications_load_failed, vm::refresh)
+                NotificationErrorState(padding, R.string.notifications_load_failed) { vm.refresh() }
             state.items.isEmpty() ->
                 NotificationEmptyState(
                     stringResource(R.string.notifications_empty),

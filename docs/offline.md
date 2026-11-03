@@ -12,7 +12,13 @@ The offline feature lives in `app/src/main/java/com/zenstream/zenstreammobile/of
 
 Keep media in app-private storage. Scope local profiles by server instance and account, and keep downloaded files separate from server-issued playback URLs.
 
+Restoring an authenticated activity reuses an existing download job for the same profile and network constraints. The legacy foreground service also keeps its current runner on repeated starts. When Android assigns a different network to a transfer job, cancel and join the previous runner before resuming on that network. Binary calls must close their sockets on coroutine cancellation so a blocked response cannot retain the queue or staging-file writer. Interrupted transfers resume from the actual staging-file length with Range/If-Range checks and verify the completed digest before publication.
+
 Automatic reachability is separate from explicit Offline mode. Any HTTP response proves server reachability, including an endpoint error. Cancelled calls, timeouts, and stream failures must not mark the whole server unavailable. Connection/DNS failures and certificate errors remain distinct. Once authenticated content is displayed, background request failures must not replace it with the offline entry screen; retained downloads remain available during startup and through Downloads.
+
+## Downloads browsing
+
+Downloads keeps an All filter and adds one filter for each library that has downloaded media. The filter uses the catalog library ID, so media of the same type from different libraries remains separate. Library names are cached per offline profile and remain available without a connection; libraries with no downloaded media do not appear.
 
 ## Persistence and account state
 
@@ -20,6 +26,7 @@ Automatic reachability is separate from explicit Offline mode. Any HTTP response
 - `OfflineAccountSyncCoordinator` owns ordered, single-flight account reconciliation. It refreshes server time and history/privacy generations before upload, freezes operations until terminal acknowledgements, retries uncertain batches unchanged, and applies canonical state without replacing later pending overlays. WorkManager reconciliation requires connectivity and pauses in explicit Offline mode or when sign-in is required.
 - `OfflinePlaylistRepository` owns private offline playlist edits. It requires a complete cached membership snapshot, updates its local playlist rows and ordered account-operation outbox in one Room transaction, and never changes media asset references when playlist entries are removed.
 - When the playback source is `ResolvedPlaybackSource.Local`, persist progress through the offline playback repository without relying on server reachability or an online session. Audio queue `playbackInstanceId` values identify one music play event across recovery; reset them only when the user starts a new play or replay.
+- Playback language preferences remain Orchestrator-owned and are cached in `SessionStore` by server and account. Local playback uses the cached selections without a network request in explicit Offline mode.
 - Keep Room schema snapshots under `app/schemas/` checked in with explicit migrations. Cover migration and offline transaction behavior with Android instrumentation tests.
 
 ## Orchestrator boundary

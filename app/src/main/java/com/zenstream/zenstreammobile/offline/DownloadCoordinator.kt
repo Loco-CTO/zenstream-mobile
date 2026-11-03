@@ -170,6 +170,12 @@ class DownloadCoordinator(
         worked || pending.isNotEmpty()
     }
 
+    /** Serialize removal with transfers so a deleted episode cannot be republished. */
+    suspend fun removeDownloadedItem(profile: String, selection: String, item: String) =
+        runMutex.withLock {
+            storage.removeSelectionItem(profile, selection, item)
+        }
+
     private suspend fun queuePage(selection: OfflineSelection) {
         val offset = if (selection.state == "ready") 0 else selection.cursor
         val members = dao.members(selection.profile, selection.id, 100, offset)
