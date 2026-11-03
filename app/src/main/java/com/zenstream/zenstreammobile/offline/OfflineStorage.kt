@@ -308,6 +308,34 @@ class OfflineStorage(
         }
     }
 
+    /** Remove saved media under a catalog item, including references from other selections. */
+    suspend fun removeDownloadedItem(profile: String, root: String) =
+        withContext(Dispatchers.IO) {
+            var after = ""
+            while (true) {
+                val items = dao.downloadedItemsUnder(profile, root, after, 100)
+                if (items.isEmpty()) break
+                for (item in items) {
+                    mutex.withLock {
+                        database.withTransaction {
+                            dao.cancelItemDownloads(profile, item)
+                            dao.removeItemReferences(profile, item)
+                            dao.markItemAssetsForDeletion(profile, item)
+                        }
+                    }
+                    // Leased files remain pending until playback releases them.
+                    var afterAsset = ""
+                    while (true) {
+                        val assets = dao.itemAssetPage(profile, item, afterAsset, 100)
+                        if (assets.isEmpty()) break
+                        assets.forEach { prune(profile, it.id) }
+                        afterAsset = assets.last().id
+                    }
+                }
+                after = items.last()
+            }
+        }
+
     suspend fun removeSelection(profile: String, selection: String) =
         withContext(Dispatchers.IO) {
             mutex.withLock {

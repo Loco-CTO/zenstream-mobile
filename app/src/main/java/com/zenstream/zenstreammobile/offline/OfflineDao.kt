@@ -259,6 +259,39 @@ interface OfflineDao {
     suspend fun removeReferences(profile: String, selection: String)
 
     @Query(
+        "DELETE FROM offline_asset_refs WHERE profile=:profile AND asset IN (SELECT id FROM offline_assets WHERE profile=:profile AND item=:item)"
+    )
+    suspend fun removeItemReferences(profile: String, item: String)
+
+    @Query(
+        "UPDATE offline_transfers SET state='cancelled',reserved=0 WHERE profile=:profile AND item=:item"
+    )
+    suspend fun cancelItemDownloads(profile: String, item: String)
+
+    @Query("UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND item=:item")
+    suspend fun markItemAssetsForDeletion(profile: String, item: String)
+
+    @Query(
+        "WITH RECURSIVE descendants(id) AS (SELECT :root UNION SELECT c.id FROM offline_catalog c JOIN descendants d ON c.parentId=d.id WHERE c.profile=:profile), candidates(item) AS (SELECT item FROM offline_assets WHERE profile=:profile UNION SELECT item FROM offline_transfers WHERE profile=:profile AND state!='cancelled') SELECT item FROM candidates WHERE item > :after AND (item IN (SELECT id FROM descendants) OR item IN (SELECT m.item FROM offline_members m JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection WHERE m.profile=:profile AND s.rootId=:root)) ORDER BY item LIMIT :limit"
+    )
+    suspend fun downloadedItemsUnder(
+        profile: String,
+        root: String,
+        after: String,
+        limit: Int,
+    ): List<String>
+
+    @Query(
+        "SELECT * FROM offline_assets WHERE profile=:profile AND item=:item AND id>:after ORDER BY id LIMIT :limit"
+    )
+    suspend fun itemAssetPage(
+        profile: String,
+        item: String,
+        after: String,
+        limit: Int,
+    ): List<OfflineAsset>
+
+    @Query(
         "UPDATE offline_assets SET state='pending_delete' WHERE profile=:profile AND id IN (SELECT asset FROM offline_asset_refs WHERE profile=:profile AND selection=:selection) AND NOT EXISTS (SELECT 1 FROM offline_asset_refs retained WHERE retained.profile=offline_assets.profile AND retained.asset=offline_assets.id AND retained.selection!=:selection)"
     )
     suspend fun markSelectionAssetsPendingDelete(profile: String, selection: String)

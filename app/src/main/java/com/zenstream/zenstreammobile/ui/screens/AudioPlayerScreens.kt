@@ -149,11 +149,12 @@ fun AudioMiniPlayer(
 @Composable
 internal fun AudioMiniPlayerContent(
     state: AudioPlayerState,
-    session: AuthSession,
+    session: AuthSession?,
     onOpenNowPlaying: () -> Unit,
     onFavorite: (MediaItem) -> Unit = {},
     onStop: () -> Unit,
     onTogglePlayback: () -> Unit,
+    artworkContent: (@Composable (MediaItem, Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.currentEntry ?: return
@@ -208,11 +209,11 @@ internal fun AudioMiniPlayerContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    MusicArtwork(
-                        entry.track,
-                        session,
+                    AudioTrackArtwork(
+                        item = entry.track,
+                        session = session,
+                        artworkContent = artworkContent,
                         modifier = Modifier.size(46.dp),
-                        contentDescription = entry.track.name,
                         requestedSize = 256,
                     )
                     Column(Modifier.weight(1f)) {
@@ -596,10 +597,44 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun NowPlayingMain(
+private fun AudioTrackArtwork(
+    item: MediaItem,
+    session: AuthSession?,
+    artworkContent: (@Composable (MediaItem, Modifier) -> Unit)?,
+    modifier: Modifier,
+    requestedSize: Int,
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
+) {
+    when {
+        artworkContent != null -> artworkContent(item, modifier.clip(shape))
+        session != null ->
+            MusicArtwork(
+                item = item,
+                session = session,
+                modifier = modifier,
+                contentDescription = item.name,
+                requestedSize = requestedSize,
+                shape = shape,
+            )
+        else ->
+            Box(
+                modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "♪",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .72f),
+                )
+            }
+    }
+}
+
+@Composable
+internal fun NowPlayingMain(
     state: AudioPlayerState,
     current: MediaItem,
-    session: AuthSession,
+    session: AuthSession?,
     timerMode: PlaybackTimeDisplayMode,
     palette: ArtworkPalette,
     onToggleTimer: () -> Unit,
@@ -611,6 +646,7 @@ private fun NowPlayingMain(
     lyricsLoading: Boolean = false,
     lyricsError: Boolean = false,
     onRetryLyrics: () -> Unit = {},
+    artworkContent: (@Composable (MediaItem, Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val accent = palette.accent
@@ -621,6 +657,7 @@ private fun NowPlayingMain(
                 state = state,
                 current = current,
                 session = session,
+                artworkContent = artworkContent,
                 timerMode = timerMode,
                 palette = palette,
                 onToggleTimer = onToggleTimer,
@@ -697,11 +734,11 @@ private fun NowPlayingMain(
                                 shape = RoundedCornerShape(18.dp),
                                 color = palette.surface,
                             ) {
-                                MusicArtwork(
-                                    current,
-                                    session,
+                                AudioTrackArtwork(
+                                    item = current,
+                                    session = session,
+                                    artworkContent = artworkContent,
                                     modifier = Modifier.fillMaxSize(),
-                                    contentDescription = current.name,
                                     requestedSize = 512,
                                     shape = RoundedCornerShape(18.dp),
                                 )
@@ -962,7 +999,8 @@ internal fun NowPlayingInnerTabs(
 private fun NowPlayingLandscape(
     state: AudioPlayerState,
     current: MediaItem,
-    session: AuthSession,
+    session: AuthSession?,
+    artworkContent: (@Composable (MediaItem, Modifier) -> Unit)?,
     timerMode: PlaybackTimeDisplayMode,
     palette: ArtworkPalette,
     onToggleTimer: () -> Unit,
@@ -1041,11 +1079,11 @@ private fun NowPlayingLandscape(
                                 shape = RoundedCornerShape(18.dp),
                                 color = palette.surface,
                             ) {
-                                MusicArtwork(
-                                    current,
-                                    session,
+                                AudioTrackArtwork(
+                                    item = current,
+                                    session = session,
+                                    artworkContent = artworkContent,
                                     modifier = Modifier.fillMaxSize(),
-                                    contentDescription = current.name,
                                     requestedSize = 512,
                                     shape = RoundedCornerShape(18.dp),
                                 )
@@ -1438,18 +1476,19 @@ internal fun AudioProgressScrubber(
 }
 
 @Immutable
-private data class QueuePanelSnapshot(
+internal data class QueuePanelSnapshot(
     val entries: List<AudioQueueEntry>,
     val currentEntryId: String?,
 )
 
 @Composable
-private fun QueuePanel(
+internal fun QueuePanel(
     modifier: Modifier = Modifier,
     snapshot: QueuePanelSnapshot,
-    session: AuthSession,
+    session: AuthSession?,
     coordinator: AudioPlayerCoordinator,
     accent: Color,
+    artworkContent: (@Composable (MediaItem, Modifier) -> Unit)? = null,
 ) {
     var pendingQueueOrder by remember { mutableStateOf<List<AudioQueueEntry>?>(null) }
     val list = pendingQueueOrder ?: snapshot.entries
@@ -1686,11 +1725,11 @@ private fun QueuePanel(
                                     .testTag("audio-queue-entry-${entry.entryId}"),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                MusicArtwork(
+                                AudioTrackArtwork(
                                     item = entry.track,
                                     session = session,
+                                    artworkContent = artworkContent,
                                     modifier = Modifier.size(56.dp),
-                                    contentDescription = entry.track.name,
                                     requestedSize = 256,
                                     shape = RoundedCornerShape(10.dp),
                                 )
@@ -1749,11 +1788,11 @@ private fun QueuePanel(
                         Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MusicArtwork(
+                        AudioTrackArtwork(
                             item = dragged.track,
                             session = session,
+                            artworkContent = artworkContent,
                             modifier = Modifier.size(56.dp),
-                            contentDescription = dragged.track.name,
                             requestedSize = 256,
                             shape = RoundedCornerShape(10.dp),
                         )

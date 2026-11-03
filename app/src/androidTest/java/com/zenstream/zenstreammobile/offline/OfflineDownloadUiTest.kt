@@ -40,7 +40,7 @@ class OfflineDownloadUiTest {
                     )
                 )
             runtime.connection.selectProfile(profile)
-            runtime.connection.setMode(ConnectionMode.AUTOMATIC)
+            runtime.connection.setModeAndAwait(ConnectionMode.AUTOMATIC)
         }
         try {
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
@@ -125,7 +125,7 @@ class OfflineDownloadUiTest {
                 )
             }
             runBlocking {
-                runtime.connection.setMode(previous.mode)
+                runtime.connection.setModeAndAwait(previous.mode)
                 runtime.connection.selectProfile(previous.profile)
                 runtime.database.offline().deleteProfileRecord(profile)
             }
@@ -227,7 +227,7 @@ class OfflineDownloadUiTest {
                 )
             }
             runtime.connection.selectProfile(id)
-            runtime.connection.setMode(ConnectionMode.OFFLINE)
+            runtime.connection.setModeAndAwait(ConnectionMode.OFFLINE)
         }
         try {
             restoration.setContent {
@@ -323,7 +323,7 @@ class OfflineDownloadUiTest {
                 .assertIsDisplayed()
         } finally {
             runBlocking {
-                runtime.connection.setMode(previous.mode)
+                runtime.connection.setModeAndAwait(previous.mode)
                 runtime.connection.selectProfile(previous.profile)
                 listOf("episode", "episode-b", "track").forEach { dao.deleteAsset(id, "asset-$it") }
                 dao.deleteAllLibraryNames(id)
