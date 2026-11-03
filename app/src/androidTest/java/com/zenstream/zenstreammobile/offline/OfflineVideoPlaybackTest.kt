@@ -187,7 +187,7 @@ class OfflineVideoPlaybackTest {
                 )
             )
             runtime.connection.selectProfile(profile.id)
-            runtime.connection.setMode(ConnectionMode.OFFLINE)
+            runtime.connection.setModeAndAwait(ConnectionMode.OFFLINE)
             activity =
                 ActivityScenario.launch(
                     playbackIntent(
@@ -268,7 +268,7 @@ class OfflineVideoPlaybackTest {
             dao.deleteProfileRecord(profile.id)
             preferences.savePlayerEngine(previousEngine)
             runtime.connection.selectProfile(previous.profile)
-            runtime.connection.setMode(previous.mode)
+            runtime.connection.setModeAndAwait(previous.mode)
         }
     }
 

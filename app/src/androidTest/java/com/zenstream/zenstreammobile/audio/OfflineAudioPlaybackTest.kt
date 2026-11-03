@@ -210,7 +210,7 @@ class OfflineAudioPlaybackTest {
                 )
             )
             runtime.connection.selectProfile(profile.id)
-            runtime.connection.setMode(ConnectionMode.OFFLINE)
+            runtime.connection.setModeAndAwait(ConnectionMode.OFFLINE)
             val identity = requireNotNull(runtime.audio.identity(profile.id, null))
             runtime.audio.save(
                 identity,
@@ -350,7 +350,7 @@ class OfflineAudioPlaybackTest {
             )
             runtime.database.offline().deleteProfileRecord(profile.id)
             runtime.connection.selectProfile(before.profile)
-            runtime.connection.setMode(before.mode)
+            runtime.connection.setModeAndAwait(before.mode)
         }
     }
 
