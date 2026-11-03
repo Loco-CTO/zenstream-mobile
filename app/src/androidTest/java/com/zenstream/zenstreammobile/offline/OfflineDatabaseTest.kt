@@ -31,7 +31,7 @@ class OfflineDatabaseTest {
             db = open()
             assertEquals("{\"played\":true}", db.offline().state("p", "item")?.overlay)
             assertEquals(1L, db.offline().profile("p")?.nextSequence)
-            assertEquals(5, db.openHelper.readableDatabase.version)
+            assertEquals(6, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
             context.deleteDatabase(name)
