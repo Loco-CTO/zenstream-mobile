@@ -19,6 +19,9 @@
     <string name="offline_pause_all">Pause all</string>
     <string name="offline_resume">Resume</string>
     <string name="offline_remove_download_help">Remove “%1$s”? Media saved by another download will stay on this device.</string>
+    <string name="offline_delete_item">Delete download for %1$s</string>
+    <string name="offline_delete_download">Delete download</string>
+    <string name="offline_delete_item_help">This removes the saved media from this device, including copies shared with other downloads. Media currently playing is removed when playback stops.</string>
     <string name="offline_no_transfers">No downloads to manage. Choose Download on a movie, show, or album to get started.</string>
     <string name="offline_connection_settings">Connection</string>
     <string name="offline_mode_help">Browse and play your downloads without contacting your server.</string>
