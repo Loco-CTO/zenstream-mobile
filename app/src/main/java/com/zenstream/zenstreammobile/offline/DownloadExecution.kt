@@ -367,7 +367,8 @@ class DownloadJobService : JobService() {
                 previous?.join()
                 if (assigned != null)
                     withContext(TransferNetwork(assigned)) {
-                        DownloadExecution.runQueue(this@DownloadJobService, profile) { notification ->
+                        DownloadExecution.runQueue(this@DownloadJobService, profile) { notification
+                            ->
                             setNotification(
                                 params,
                                 DownloadExecution.NOTIFICATION_ID,
@@ -426,10 +427,11 @@ class DownloadTransferService : Service() {
                 previous?.join()
                 DownloadExecution.runQueue(this@DownloadTransferService, profile) { notification ->
                     try {
-                        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(
-                            DownloadExecution.NOTIFICATION_ID,
-                            notification,
-                        )
+                        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                            .notify(
+                                DownloadExecution.NOTIFICATION_ID,
+                                notification,
+                            )
                     } catch (_: SecurityException) {
                         // Notification permission can be revoked while transferring.
                     }
