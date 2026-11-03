@@ -405,17 +405,37 @@ class NotificationsViewModel(
         refresh()
     }
 
-    fun refresh() {
+    fun refresh(markOnOpen: Boolean = false) {
         loadJob?.cancel()
         _uiState.value = _uiState.value.copy(loading = true, error = false)
         loadJob = viewModelScope.launch {
             runCatching { repository.notifications(session) }
                 .onSuccess { page ->
+                    val markedRead =
+                        if (markOnOpen && page.unreadCount > 0) {
+                            try {
+                                repository.markAllNotificationsRead(session)
+                                true
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                if ((error as? CatalogException)?.statusCode == 401) {
+                                    repository.clearSessionIfCurrent(session)
+                                }
+                                false
+                            }
+                        } else {
+                            false
+                        }
                     _uiState.value =
                         NotificationsUiState(
                             loading = false,
-                            items = page.items,
-                            unreadCount = page.unreadCount,
+                            items =
+                                page.items.map {
+                                    if (markedRead && it.readAt == null) it.copy(readAt = "local")
+                                    else it
+                                },
+                            unreadCount = if (markedRead) 0 else page.unreadCount,
                             nextCursor = page.nextCursor,
                         )
                 }
