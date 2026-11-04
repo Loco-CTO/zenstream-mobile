@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,8 +89,6 @@ import com.zenstream.zenstreammobile.audio.AudioCommandResult
 import com.zenstream.zenstreammobile.audio.AudioPlayerCoordinator
 import com.zenstream.zenstreammobile.data.AppUpdate
 import com.zenstream.zenstreammobile.data.AuthLifecycleLog
-import com.zenstream.zenstreammobile.data.AuthPhase
-import com.zenstream.zenstreammobile.data.AuthState
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.LocalNetworkPermissionStatus
 import com.zenstream.zenstreammobile.data.NativeAppDeepLink
@@ -279,8 +276,6 @@ fun ZenStreamApp(
                 MainScaffold(
                     repository = repository,
                     session = requireNotNull(appState.session),
-                    authState = appState.authState,
-                    onRetryAuthentication = appViewModel::retryAuthentication,
                     pendingDeepLink = appState.pendingDeepLink,
                     onNativeAppLinkConsumed = appViewModel::consumeNativeAppLink,
                     onLogout = appViewModel::logout,
@@ -444,35 +439,11 @@ private fun AuthRestoreUnavailableScreen(
     }
 }
 
-@Composable
-private fun AuthRetryBanner(onRetry: () -> Unit) {
-    androidx.compose.material3.Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-    ) {
-        Row(
-            modifier =
-                Modifier.fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(R.string.auth_temporarily_unavailable),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun MainScaffold(
     repository: CatalogRepository,
     session: AuthSession,
-    authState: AuthState,
-    onRetryAuthentication: () -> Unit,
     pendingDeepLink: NativeAppDeepLink?,
     onNativeAppLinkConsumed: () -> Unit,
     onLogout: (keepDownloadsLocked: Boolean) -> Unit,
@@ -685,9 +656,6 @@ private fun MainScaffold(
         androidx.compose.material3.Scaffold(
             topBar = {
                 Column {
-                    if (authState.phase == AuthPhase.TEMPORARILY_UNAVAILABLE) {
-                        AuthRetryBanner(onRetryAuthentication)
-                    }
                     if (!topBarHidden) {
                         val topBarContent: @Composable () -> Unit = {
                             MainTopBar(
