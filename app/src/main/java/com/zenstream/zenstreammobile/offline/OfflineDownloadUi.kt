@@ -317,7 +317,11 @@ fun OfflineDownloadHost(
             if (runtime != null)
                 Dialog(
                     onDismissRequest = { localMusic = null },
-                    properties = DialogProperties(usePlatformDefaultWidth = false),
+                    properties =
+                        DialogProperties(
+                            usePlatformDefaultWidth = false,
+                            decorFitsSystemWindows = false,
+                        ),
                 ) {
                     Surface(Modifier.fillMaxSize()) {
                         OfflineSavedMusicScreen(

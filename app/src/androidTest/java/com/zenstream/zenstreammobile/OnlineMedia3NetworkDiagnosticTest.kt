@@ -34,7 +34,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class OnlineMedia3NetworkDiagnosticTest {
     @Test
-    fun onlineStreamWithRejectedLeaseRetriesOnceAndCanRenegotiate() =
+    fun onlineStreamWithRejectedAccessShowsAuthenticationErrorAndCanRenegotiate() =
         runBlocking<Unit> {
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val context = instrumentation.targetContext
