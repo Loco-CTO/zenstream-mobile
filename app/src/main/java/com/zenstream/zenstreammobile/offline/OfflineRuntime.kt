@@ -181,7 +181,7 @@ class OfflineRuntime private constructor(context: Context) {
         OfflineNetworkPolicy.requireNetwork()
         val (profile, capabilities) = catalog.discover(session)
         try {
-            catalog.syncLibraryNames(session, profile.id)
+            catalog.syncLibraryNames(session, profile.id, network.libraries(session))
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -472,7 +472,7 @@ class OfflineRuntime private constructor(context: Context) {
                 .forEach { lockProfileForIdentityChange(it) }
             connection.selectProfile(profile.id)
             try {
-                catalog.syncLibraryNames(session, profile.id)
+                catalog.syncLibraryNames(session, profile.id, network.libraries(session))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
