@@ -47,7 +47,7 @@ Reuse the relevant shared composable or extend it for a reusable variation. Ordi
 ## Interaction and feedback
 
 - Reflect pressed, selected, pending, success, and error states immediately. Prevent unsafe duplicate actions while keeping Back and recovery available where safe.
-- Keep useful content during refresh. Distinguish no media, no matches, offline availability, missing local assets, permission limits, and request failures.
+- Keep useful content during refresh. Distinguish no media, no matches, offline availability, missing local assets, permission limits, and request failures. Show request failures in the affected screen's error state without a redundant app-wide banner.
 - Retain entered values after failure. Keep labels visible, put errors by the affected field, and use suitable input types and keyboard actions.
 - Follow the existing save model and describe changes that require a restart or affect playback. Confirm consequential destructive actions with their specific effect; avoid confirmations for routine movement.
 - Use visible explanations for unavailable actions. A disabled icon without context does not explain whether the cause is connectivity, permissions, or missing media.
