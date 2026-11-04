@@ -2,8 +2,8 @@ package com.zenstream.zenstreammobile.offline
 
 import androidx.room.withTransaction
 import com.zenstream.zenstreammobile.data.catalogMediaItem
-import com.zenstream.zenstreammobile.data.parseLibraries
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.MediaItem
 import java.security.MessageDigest
 import java.time.Instant
@@ -376,17 +376,20 @@ class OfflineCatalogRepository(
     fun downloadedLibraries(profile: String): Flow<List<OfflineDownloadLibrary>> =
         dao.downloadedLibraries(profile)
 
-    suspend fun syncLibraryNames(session: AuthSession, profile: String) {
+    suspend fun syncLibraryNames(
+        session: AuthSession,
+        profile: String,
+        libraries: List<Library>,
+    ) {
         val retained = requireProfile(profile)
         require(
             retained.account == session.userId &&
                 retained.serverUrl.trimEnd('/') == session.serverUrl.trimEnd('/')
         )
-        val libraries =
-            parseLibraries(request(session, "/api/catalog/libraries", "GET", null)).map { library ->
-                OfflineLibraryName(profile, library.id, library.name, library.collectionType)
-            }
-        if (libraries.isNotEmpty()) dao.putLibraryNames(libraries)
+        val names = libraries.map { library ->
+            OfflineLibraryName(profile, library.id, library.name, library.collectionType)
+        }
+        if (names.isNotEmpty()) dao.putLibraryNames(names)
     }
 
     /** Browse playable downloads as titles, while search can still find individual descendants. */
