@@ -34,7 +34,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class OnlineMedia3NetworkDiagnosticTest {
     @Test
-    fun onlineStreamWithRejectedLeaseShowsNetworkErrorAndCanRenegotiate() =
+    fun onlineStreamWithRejectedAccessShowsAuthenticationErrorAndCanRenegotiate() =
         runBlocking<Unit> {
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val context = instrumentation.targetContext
@@ -146,18 +146,19 @@ class OnlineMedia3NetworkDiagnosticTest {
                         assertTrue(model.uiState.value.canStream)
                         reject.set(true)
                         instrumentation.runOnMainSync { model.seekTo(10.0) }
-                        await("HTTP 401 appears as NETWORK", 25_000) {
+                        await("HTTP 401 appears as an authentication error", 25_000) {
                             model.uiState.value.error != null
                         }
                         assertTrue(rejectedReads.get() > 0)
                         assertEquals(
-                            "Media3 could not play the video track (NETWORK).",
+                            "The server rejected playback access.",
                             model.uiState.value.error,
                         )
                         assertEquals(
-                            Media3FailureKind.NETWORK,
+                            Media3FailureKind.AUTHENTICATION,
                             model.uiState.value.engine.media3?.failureKind,
                         )
+                        assertEquals(401, model.uiState.value.engine.media3?.httpStatusCode)
                         assertFalse(model.uiState.value.local)
                         assertTrue(OfflineNetworkPolicy.allowed)
                         assertTrue(model.uiState.value.canStream)
