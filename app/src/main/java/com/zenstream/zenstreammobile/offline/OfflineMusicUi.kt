@@ -445,14 +445,27 @@ private fun OfflineNowPlayingScreen(
                     actions = {
                         when {
                             connection.mode == ConnectionMode.OFFLINE ->
-                                TextButton(onClick = onGoOnline) {
-                                    Text(stringResource(R.string.offline_go_online), maxLines = 1)
+                                IconButton(
+                                    onClick = onGoOnline,
+                                    modifier = Modifier.size(48.dp),
+                                ) {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_wifi),
+                                        contentDescription =
+                                            stringResource(R.string.offline_go_online),
+                                        tint = palette.accent,
+                                    )
                                 }
                             streamAvailable ->
-                                TextButton(onClick = controller::streamCurrent) {
-                                    Text(
-                                        stringResource(R.string.offline_stream_track),
-                                        maxLines = 1,
+                                IconButton(
+                                    onClick = controller::streamCurrent,
+                                    modifier = Modifier.size(48.dp),
+                                ) {
+                                    Icon(
+                                        painterResource(LucideR.drawable.lucide_ic_wifi),
+                                        contentDescription =
+                                            stringResource(R.string.offline_stream_track),
+                                        tint = palette.accent,
                                     )
                                 }
                             else -> Spacer(Modifier.size(48.dp))
