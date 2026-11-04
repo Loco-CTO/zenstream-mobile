@@ -1,16 +1,11 @@
 package com.zenstream.zenstreammobile.audio
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -2232,7 +2227,6 @@ class AudioPlaybackService : MediaLibraryService() {
 
     private fun attachAudioSession() {
         if (librarySession != null && !sessionDetached) return
-        startServiceForeground()
         val sessionActivity =
             PendingIntent.getActivity(
                 this,
@@ -2901,53 +2895,6 @@ class AudioPlaybackService : MediaLibraryService() {
         serviceScope.coroutineContext.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
-    }
-
-    /**
-     * Restore is issued when the app starts, before there is necessarily a current MediaItem for
-     * Media3's own notification provider. Starting foreground work immediately prevents Android's
-     * foreground-service timeout from turning a normal cold start into an ANR. Media3 updates its
-     * session notification once the player has queue metadata.
-     */
-    private fun startServiceForeground() {
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(
-                        AudioNotificationConfig.CHANNEL_ID,
-                        getString(R.string.app_name),
-                        NotificationManager.IMPORTANCE_LOW,
-                    )
-                    .apply {
-                        description = "Audio playback controls"
-                        setShowBadge(false)
-                    }
-            )
-        }
-        val contentIntent =
-            PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val notification =
-            NotificationCompat.Builder(this, AudioNotificationConfig.CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setContentTitle(getString(R.string.app_name))
-                .setContentText("Audio player ready")
-                .setContentIntent(contentIntent)
-                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-                .setOngoing(true)
-                .setShowWhen(false)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build()
-        ServiceCompat.startForeground(
-            this,
-            AudioNotificationConfig.NOTIFICATION_ID,
-            notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-        )
     }
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {

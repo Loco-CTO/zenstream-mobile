@@ -2,7 +2,6 @@ package com.zenstream.zenstreammobile.audio
 
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import com.zenstream.zenstreammobile.data.toJson
 import com.zenstream.zenstreammobile.model.AudioPlayerState
@@ -25,7 +24,7 @@ sealed class AudioCommandResult {
     data object TimedOut : AudioCommandResult()
 }
 
-/** Process-local command/state bridge. The MediaLibraryService remains the player authority. */
+/** Process-local bridge. MediaLibraryService manages foreground state while playback is ongoing. */
 @UnstableApi
 object AudioServiceBridge {
     const val ACTION_RESTORE = "com.zenstream.zenstreammobile.audio.RESTORE"
@@ -79,13 +78,13 @@ object AudioServiceBridge {
     ) {
         val intent = newIntent(context, action)
         snapshot?.let { intent.putExtra(EXTRA_SNAPSHOT, it.toJson().toString()) }
-        ContextCompat.startForegroundService(context.applicationContext, intent)
+        context.applicationContext.startService(intent)
     }
 
     fun command(context: Context, action: String, configure: Intent.() -> Unit = {}) {
         val intent = newIntent(context, action)
         intent.configure()
-        ContextCompat.startForegroundService(context.applicationContext, intent)
+        context.applicationContext.startService(intent)
     }
 
     suspend fun commandAndAwait(
@@ -102,7 +101,7 @@ object AudioServiceBridge {
                 configure()
             }
         return try {
-            ContextCompat.startForegroundService(context.applicationContext, intent)
+            context.applicationContext.startService(intent)
             withTimeoutOrNull(COMMAND_ACK_TIMEOUT_MILLIS) { deferred.await() }
                 ?: AudioCommandResult.TimedOut
         } catch (error: CancellationException) {
