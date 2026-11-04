@@ -146,8 +146,11 @@ class OnlineMedia3NetworkDiagnosticTest {
                         assertTrue(model.uiState.value.canStream)
                         reject.set(true)
                         instrumentation.runOnMainSync { model.seekTo(10.0) }
-                        await("HTTP 401 appears as an authentication error", 25_000) {
-                            model.uiState.value.error != null
+                        await(
+                            "HTTP 401 remains an authentication error after one automatic renegotiation",
+                            25_000,
+                        ) {
+                            model.uiState.value.error != null && negotiations.get() == 2
                         }
                         assertTrue(rejectedReads.get() > 0)
                         assertEquals(
@@ -163,8 +166,8 @@ class OnlineMedia3NetworkDiagnosticTest {
                         assertTrue(OfflineNetworkPolicy.allowed)
                         assertTrue(model.uiState.value.canStream)
                         assertEquals(
-                            "No automatic renegotiation on HTTP 401",
-                            1,
+                            "One automatic renegotiation after HTTP 401",
+                            2,
                             negotiations.get(),
                         )
                         // Hold the reproduced error for external UI-tree inspection and visual QA.
@@ -183,7 +186,7 @@ class OnlineMedia3NetworkDiagnosticTest {
                         reject.set(false)
                         instrumentation.runOnMainSync { model.streamInstead() }
                         await("manual retry renegotiates and renders", 45_000) {
-                            negotiations.get() == 2 &&
+                            negotiations.get() == 3 &&
                                 model.uiState.value.error == null &&
                                 model.uiState.value.engine.ready
                         }
