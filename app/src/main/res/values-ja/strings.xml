@@ -37,6 +37,7 @@
     <string name="offline_next_episode_not_downloaded">次のエピソードはダウンロードされていません。オフラインで続けるにはダウンロード一覧から保存してください。</string>
     <string name="offline_video_other_engine">別のインストール済みプレーヤーを試す</string>
     <string name="offline_video_stream">別のバージョンをストリーミング再生</string>
+    <string name="retry_streaming">ストリーミングを再試行</string>
     <string name="offline_video_compatible_help">このデバイスで元のファイルを再生できない場合は、接続時に互換性のある720pまたは1080pバージョンをダウンロードしてください。</string>
     <string name="offline_audio_not_downloaded">未ダウンロード</string>
     <string name="offline_stream_track">この曲をストリーミング再生</string>

@@ -592,7 +592,12 @@ fun PlaybackScreen(
                 }
                 if (state.canStream)
                     Button(onClick = vm::streamInstead) {
-                        Text(stringResourceCompat(R.string.offline_video_stream))
+                        Text(
+                            stringResourceCompat(
+                                if (state.local) R.string.offline_video_stream
+                                else R.string.retry_streaming
+                            )
+                        )
                     }
             }
         }

@@ -20,6 +20,7 @@ This repository owns the ZenStream Android client. It is a Jetpack Compose appli
 - `AudioPlaybackService` owns audio queue and Android media-session behavior. The active negotiated source is separate from the queue snapshot.
 - Offline playback must resolve a verified local asset and must not silently fall back to streaming. Read `docs/offline.md` before changing offline flows.
 - Read `docs/playback.md` before changing Media3, MPV, audio service, PiP, decoder recovery, or player UI behavior.
+- Remote playback access renewal and bounded HTTP authorization recovery belong to `ui/PlaybackAccessRecovery.kt` and `PlaybackViewModel.kt`; keep them separate from decoder/transcoding recovery and local playback.
 - Use Material 3 and the generated Lucide resources for new or changed controls. Follow `docs/ui-design.md` and keep music artwork accents routed through `ui/components/ArtworkPalette.kt`.
 - Before interface changes, read `docs/ui-design.md` and inspect the closest existing screen. Reuse its visual system and navigation patterns, and review the changed flow against that reference.
 

@@ -6,6 +6,10 @@
 
 Retain working hardware HDR. Recognized HDR must not enter a software renderer until tone mapping is implemented. Changes to the checked-in NextLib AAR or native source require `python third_party/media3-nextlib/verify.py`; the ordinary app build consumes the checked-in artifact.
 
+Remote Media3 HTTP 401/403 failures trigger one automatic access re-negotiation, preserving position, play/pause intent, source, mode, quality, and audio selection. They must not trigger decoder retries or transcoding. Resumed playback progress or a successfully rendered paused frame permits another automatic access attempt for the same source; persistent rejection remains bounded. Local files and explicit Offline mode never enter this path.
+
+`ui/PlaybackAccessRecovery.kt` owns the retry budget and renewal scheduling. Retry a failed renewal after 30 seconds, renew immediately when returning from the background, and discard renewal results after playback changes. Stable `lease-v1` renewal keeps the existing media URL; legacy ticket renewal replaces its access value while preserving playback intent.
+
 PiP, mini-player gestures, subtitle rendering, route changes, and session restoration have separate lifecycle owners. Read their implementation and focused tests before changing how they hand off or release playback.
 
 ## Audio playback
@@ -29,3 +33,5 @@ The shared Media3 engine uses the same source-scoped decoder recovery for remote
 ## Verification
 
 For decoder changes, run the native artifact verifier and the focused player unit tests. The full offline change checks are listed in [offline media](offline.md). Physical-device performance and user-media acceptance require separate device validation; a successful build does not establish either.
+
+For remote access recovery, run the `PlaybackAccessRecoveryTest` JVM and device suites plus `Media3RecoveryPolicyTest`. Device coverage must include an expired media read, paused playback, foreground lease rejection, and persistent rejection, using a local HTTP fixture without live account credentials.

@@ -43,6 +43,7 @@
     <string name="offline_next_episode_not_downloaded">Next episode is not downloaded. Download it from Downloads to continue offline.</string>
     <string name="offline_video_other_engine">Try the other installed player</string>
     <string name="offline_video_stream">Stream another version instead</string>
+    <string name="retry_streaming">Retry streaming</string>
     <string name="offline_video_compatible_help">If this original cannot play on this device, download a compatible 720p or 1080p version while connected.</string>
     <string name="offline_audio_not_downloaded">Not downloaded</string>
     <string name="offline_stream_track">Stream this track instead</string>
