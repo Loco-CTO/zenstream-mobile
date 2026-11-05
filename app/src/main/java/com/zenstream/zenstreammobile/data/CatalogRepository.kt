@@ -1475,6 +1475,23 @@ class CatalogRepository(
         invalidateCatalogState()
     }
 
+    suspend fun completePlayback(session: AuthSession, itemId: String, durationSeconds: Double) {
+        if (
+            offline?.submitOnlineMutation(
+                session,
+                itemId,
+                "complete",
+                JSONObject().put("durationSeconds", durationSeconds),
+            ) != true
+        ) {
+            // The progress API enforces automatic watch-history privacy on older servers too.
+            authenticatedCatalogRequest(session) { current ->
+                api.reportPlayback(current, itemId, durationSeconds, true, null, durationSeconds)
+            }
+        }
+        invalidateCatalogState()
+    }
+
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
         if (
             offline?.submitOnlineMutation(

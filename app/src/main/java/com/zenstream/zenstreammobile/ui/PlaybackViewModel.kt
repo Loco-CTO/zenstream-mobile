@@ -65,6 +65,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class PlaybackUiState(
     val loading: Boolean = true,
@@ -257,6 +259,7 @@ class PlaybackViewModel(
     private var playbackAccessJob: Job? = null
     private var progressFlushJob: Job? = null
     private val progressReportingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val progressMutationMutex = Mutex()
     private var playbackLoadJob: Job? = null
     private var trickplayJob: Job? = null
     private var subtitleJob: Job? = null
@@ -1181,12 +1184,17 @@ class PlaybackViewModel(
     private suspend fun reportProgress(
         snapshot: PlaybackProgressSnapshot?,
         requireCurrentGeneration: Boolean = true,
+    ) = progressMutationMutex.withLock { persistProgress(snapshot, requireCurrentGeneration) }
+
+    private suspend fun persistProgress(
+        snapshot: PlaybackProgressSnapshot?,
+        requireCurrentGeneration: Boolean,
     ) {
         if (snapshot == null) return
         if (requireCurrentGeneration && snapshot.playbackGeneration != playbackGeneration) return
+        if (handledCompletionGeneration == snapshot.playbackGeneration) return
         val localSource = resolvedSource as? ResolvedPlaybackSource.Local
         if (_uiState.value.local) {
-            if (handledCompletionGeneration == snapshot.playbackGeneration) return
             val profileId =
                 offlinePlaybackCheckpointProfileId(
                     isLocalPlayback = true,
@@ -1239,6 +1247,9 @@ class PlaybackViewModel(
     }
 
     private fun playbackProgressSnapshot(): PlaybackProgressSnapshot? {
+        // Closing invalidates the load generation while the old player can still report a
+        // position. Lifecycle callbacks must not label that position as a new playback session.
+        if (_uiState.value.closeRequested) return null
         val state = _uiState.value.engine
         val position = currentPlayerPositionSeconds()
         return position
@@ -1487,7 +1498,7 @@ class PlaybackViewModel(
 
     fun playNextEpisode() = transitionTo(_uiState.value.nextEpisode)
 
-    private suspend fun onPlaybackEnded() {
+    private fun onPlaybackEnded() {
         if (
             !shouldHandlePlaybackCompletion(
                 ended = true,
@@ -1498,17 +1509,37 @@ class PlaybackViewModel(
         )
             return
         handledCompletionGeneration = playbackGeneration
-        if (_uiState.value.local) {
-            val source = resolvedSource as? ResolvedPlaybackSource.Local
+        val completedGeneration = playbackGeneration
+        val completedItemId = currentItemId
+        val completedState = _uiState.value
+        val completedSource = resolvedSource as? ResolvedPlaybackSource.Local
+        // Finish any in-flight checkpoint before persisting completion. Later checkpoints for
+        // this generation are ignored, including the player's close/next-episode flush.
+        // Engine state uses collectLatest; a later engine emission must not cancel an in-flight
+        // save after this generation has already been marked as handled.
+        viewModelScope.launch {
+            progressMutationMutex.withLock {
+                persistPlaybackCompletion(completedItemId, completedState, completedSource)
+            }
+            if (completedGeneration == playbackGeneration) advanceAfterEpisodeEnd()
+        }
+    }
+
+    private suspend fun persistPlaybackCompletion(
+        completedItemId: String,
+        completedState: PlaybackUiState,
+        source: ResolvedPlaybackSource.Local?,
+    ) {
+        if (completedState.local) {
             if (source != null) {
                 runCatching {
                         repository.offline
                             ?.playbackState
                             ?.complete(
                                 source.profile.id,
-                                currentItemId,
-                                _uiState.value.engine.durationSeconds,
-                                _uiState.value.watchHistoryEnabled,
+                                completedItemId,
+                                completedState.engine.durationSeconds,
+                                completedState.watchHistoryEnabled,
                             )
                     }
                     .onFailure { error ->
@@ -1519,7 +1550,7 @@ class PlaybackViewModel(
                         )
                     }
                 val current = _uiState.value.playback
-                if (current?.item?.id == currentItemId && _uiState.value.watchHistoryEnabled) {
+                if (current?.item?.id == completedItemId && completedState.watchHistoryEnabled) {
                     _uiState.value =
                         _uiState.value.copy(
                             playback =
@@ -1536,38 +1567,22 @@ class PlaybackViewModel(
             }
         } else if (
             shouldPersistRemoteCompletion(
-                isLocalPlayback = _uiState.value.local,
-                watchHistoryEnabled = _uiState.value.watchHistoryEnabled,
+                isLocalPlayback = completedState.local,
+                watchHistoryEnabled = completedState.watchHistoryEnabled,
             )
         ) {
-            val completedItemId = currentItemId
-            runCatching { repository.setPlayed(remoteSession, completedItemId, true) }
-                .onSuccess {
-                    val current = _uiState.value.playback
-                    if (current?.item?.id == completedItemId) {
-                        _uiState.value =
-                            _uiState.value.copy(
-                                playback =
-                                    current.copy(
-                                        item =
-                                            current.item.copy(
-                                                played = true,
-                                                playedPercentage = 0.0,
-                                                playbackPositionTicks = 0,
-                                            )
-                                    )
-                            )
-                    }
-                }
-                .onFailure { error ->
-                    Log.w(
-                        PLAYBACK_TAG,
-                        "remote playback completion could not be persisted",
-                        error,
-                    )
-                }
+            try {
+                repository.completePlayback(
+                    remoteSession,
+                    completedItemId,
+                    completedState.engine.durationSeconds,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(PLAYBACK_TAG, "remote playback completion could not be persisted", error)
+            }
         }
-        advanceAfterEpisodeEnd()
     }
 
     private fun advanceAfterEpisodeEnd() {
