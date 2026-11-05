@@ -246,8 +246,8 @@ class OfflineRuntime private constructor(context: Context) {
 
     /**
      * Route supported Android account mutations through the same durable ordered outbox used
-     * offline. Returns false only when this server has no offline-v1 support, so callers can keep
-     * the compatible REST path for older Orchestrators.
+     * offline. Returns false when callers must use the compatible catalog REST path, including
+     * container watch-state changes rejected by account sync.
      */
     suspend fun submitOnlineMutation(
         session: com.zenstream.zenstreammobile.model.AuthSession,
@@ -297,17 +297,21 @@ class OfflineRuntime private constructor(context: Context) {
                     )
                 else -> return false
             }
-        if (!applied) return true
-
         val latest = database.offline().targetOperations(profile.id, target).lastOrNull()
         val newOperation = latest?.takeIf { it != before }
+        val explicitWatchChange = kind == "watched" || kind == "unwatched"
         val requiresSignIn =
             connection.state.value.authentication == OnlineAuthentication.NEEDS_SIGN_IN
+        // A cached no-op is not proof that the server has the requested state. Retry an existing
+        // operation, or let the catalog PATCH confirm an already-acknowledged explicit change.
+        if (!applied && latest == null) return !online || !explicitWatchChange
+        val operationToSync =
+            newOperation ?: latest?.takeIf { explicitWatchChange || kind == "complete" }
         if (
             shouldSynchronizeAccountMutationImmediately(
                 kind = kind,
                 online = online,
-                hasNewOperation = newOperation != null,
+                hasNewOperation = operationToSync != null,
                 requiresSignIn = requiresSignIn,
             )
         ) {
@@ -319,16 +323,17 @@ class OfflineRuntime private constructor(context: Context) {
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
+                    // Keep uncertain operations durable for the background retry.
                     null
                 }
-            val syncOutcome = syncPass?.outcomes?.get(newOperation?.id)
+            val syncOutcome = syncPass?.outcomes?.get(operationToSync?.id)
             if (shouldFallbackToCatalogStateMutation(kind, syncOutcome)) {
                 // The sync protocol accepts playable targets only, but the catalog PATCH
                 // also supports aggregate items such as seasons and series.
                 return false
             }
         }
-        if (online && newOperation != null && !requiresSignIn) {
+        if (online && operationToSync != null && !requiresSignIn) {
             DownloadExecution.scheduleAccountSync(appContext)
         }
         return true
