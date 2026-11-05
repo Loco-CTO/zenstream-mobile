@@ -107,6 +107,19 @@ class PlaybackViewModelTest {
     }
 
     @Test
+    fun persistsRemoteCompletionOnlyWhenWatchHistoryIsEnabled() {
+        assertTrue(
+            shouldPersistRemoteCompletion(isLocalPlayback = false, watchHistoryEnabled = true)
+        )
+        assertFalse(
+            shouldPersistRemoteCompletion(isLocalPlayback = false, watchHistoryEnabled = false)
+        )
+        assertFalse(
+            shouldPersistRemoteCompletion(isLocalPlayback = true, watchHistoryEnabled = true)
+        )
+    }
+
+    @Test
     fun completionWaitsForNeighborsBeforeChoosingAnAction() {
         assertEquals(
             EpisodeCompletionAction.WAIT_FOR_NEIGHBORS,

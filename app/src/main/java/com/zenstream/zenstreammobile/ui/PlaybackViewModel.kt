@@ -162,6 +162,11 @@ internal fun shouldHandlePlaybackCompletion(
     playbackGeneration: Long,
 ): Boolean = ended && !transitionInProgress && handledCompletionGeneration != playbackGeneration
 
+internal fun shouldPersistRemoteCompletion(
+    isLocalPlayback: Boolean,
+    watchHistoryEnabled: Boolean,
+): Boolean = !isLocalPlayback && watchHistoryEnabled
+
 internal enum class EpisodeCompletionAction {
     WAIT_FOR_NEIGHBORS,
     PLAY_NEXT,
@@ -1529,6 +1534,38 @@ class PlaybackViewModel(
                         )
                 }
             }
+        } else if (
+            shouldPersistRemoteCompletion(
+                isLocalPlayback = _uiState.value.local,
+                watchHistoryEnabled = _uiState.value.watchHistoryEnabled,
+            )
+        ) {
+            val completedItemId = currentItemId
+            runCatching { repository.setPlayed(remoteSession, completedItemId, true) }
+                .onSuccess {
+                    val current = _uiState.value.playback
+                    if (current?.item?.id == completedItemId) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                playback =
+                                    current.copy(
+                                        item =
+                                            current.item.copy(
+                                                played = true,
+                                                playedPercentage = 0.0,
+                                                playbackPositionTicks = 0,
+                                            )
+                                    )
+                            )
+                    }
+                }
+                .onFailure { error ->
+                    Log.w(
+                        PLAYBACK_TAG,
+                        "remote playback completion could not be persisted",
+                        error,
+                    )
+                }
         }
         advanceAfterEpisodeEnd()
     }

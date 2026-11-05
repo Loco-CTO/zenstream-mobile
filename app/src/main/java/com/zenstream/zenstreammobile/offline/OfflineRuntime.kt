@@ -24,6 +24,20 @@ import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+internal fun shouldSynchronizeAccountMutationImmediately(
+    kind: String,
+    online: Boolean,
+    hasNewOperation: Boolean,
+    requiresSignIn: Boolean,
+): Boolean =
+    online &&
+        hasNewOperation &&
+        !requiresSignIn &&
+        kind in setOf("watched", "unwatched", "complete")
+
+internal fun shouldFallbackToCatalogStateMutation(kind: String, syncOutcome: String?): Boolean =
+    kind in setOf("watched", "unwatched") && syncOutcome == "rejected"
+
 class OfflineRuntime private constructor(context: Context) {
     private val appContext = context.applicationContext
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -286,12 +300,37 @@ class OfflineRuntime private constructor(context: Context) {
         if (!applied) return true
 
         val latest = database.offline().targetOperations(profile.id, target).lastOrNull()
+        val newOperation = latest?.takeIf { it != before }
+        val requiresSignIn =
+            connection.state.value.authentication == OnlineAuthentication.NEEDS_SIGN_IN
         if (
-            online &&
-                latest != before &&
-                connection.state.value.authentication != OnlineAuthentication.NEEDS_SIGN_IN
-        )
+            shouldSynchronizeAccountMutationImmediately(
+                kind = kind,
+                online = online,
+                hasNewOperation = newOperation != null,
+                requiresSignIn = requiresSignIn,
+            )
+        ) {
+            // Explicit watch-state changes must reach the server before returning success:
+            // the detail and library screens reload canonical catalog state from the API.
+            val syncPass =
+                try {
+                    accountSync.reconcile(profile.id, session)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+            val syncOutcome = syncPass?.outcomes?.get(newOperation?.id)
+            if (shouldFallbackToCatalogStateMutation(kind, syncOutcome)) {
+                // The sync protocol accepts playable targets only, but the catalog PATCH
+                // also supports aggregate items such as seasons and series.
+                return false
+            }
+        }
+        if (online && newOperation != null && !requiresSignIn) {
             DownloadExecution.scheduleAccountSync(appContext)
+        }
         return true
     }
 
