@@ -1468,11 +1468,11 @@ class CatalogRepository(
                 if (played) "watched" else "unwatched",
             ) == true
         ) {
-            invalidateHomeCache()
+            invalidateCatalogState()
             return
         }
         authenticatedCatalogRequest(session) { current -> api.setPlayed(current, itemId, played) }
-        invalidateHomeCache()
+        invalidateCatalogState()
     }
 
     override suspend fun setFollowing(session: AuthSession, itemId: String, following: Boolean) {
