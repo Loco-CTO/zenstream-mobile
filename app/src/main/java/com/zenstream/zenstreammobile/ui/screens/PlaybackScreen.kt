@@ -47,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1845,6 +1846,8 @@ internal fun PlayerBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState =
+            rememberModalBottomSheetState(skipPartiallyExpanded = sheet == PlayerSheet.Subtitles),
         containerColor = Color.Transparent,
         contentColor = Color.White,
         scrimColor = Color.Black.copy(alpha = .72f),
