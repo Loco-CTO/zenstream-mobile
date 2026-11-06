@@ -1,7 +1,7 @@
 [versions]
 agp = "9.5.1"
 kotlin = "2.4.21"
-spotless = "8.10.4"
+spotless = "8.11.0"
 kover = "0.9.11"
 ktfmt = "0.63"
 coreKtx = "1.19.1"
