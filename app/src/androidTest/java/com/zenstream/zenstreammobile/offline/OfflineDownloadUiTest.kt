@@ -259,6 +259,9 @@ class OfflineDownloadUiTest {
             compose.onNodeWithText("series").assertDoesNotExist()
             compose.onNodeWithText(context.getString(R.string.search_filter_all)).performClick()
             compose.onNodeWithText("season").assertDoesNotExist()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithText("series").assertIsDisplayed() }.isSuccess
+            }
             compose.onNodeWithText("series").performClick()
             compose.waitUntil(10000) {
                 runCatching {
