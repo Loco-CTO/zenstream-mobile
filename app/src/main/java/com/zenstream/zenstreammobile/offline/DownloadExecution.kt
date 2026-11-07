@@ -77,6 +77,73 @@ object DownloadExecution {
     const val RECONCILE = "offline-reconcile"
     const val RECONCILE_NOW = "offline-reconcile-now"
     const val RECONCILE_DEBOUNCED = "offline-reconcile-debounced"
+    const val MAINTENANCE_CONTINUATION = "offline-maintenance-continuation"
+    @Volatile private var foregroundOwner: Pair<String, Any>? = null
+
+    internal fun hasForegroundTransfer(profile: String): Boolean = foregroundOwner?.first == profile
+
+    fun scheduleMaintenanceRetry(context: Context, profile: String, at: Long) {
+        val work =
+            OneTimeWorkRequestBuilder<OfflineReconcileWorker>()
+                .addTag("offline-maintenance-retry")
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+                .setInitialDelay(
+                    (at - System.currentTimeMillis()).coerceAtLeast(10_000L),
+                    TimeUnit.MILLISECONDS,
+                )
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                "offline-maintenance-retry:$profile:${at / 60_000L}",
+                ExistingWorkPolicy.KEEP,
+                work,
+            )
+    }
+
+    fun scheduleMediaUpdates(context: Context, profile: String, replace: Boolean = false) {
+        if (hasForegroundTransfer(profile)) return
+        val runtime = OfflineRuntime.get(context)
+        val work =
+            OneTimeWorkRequestBuilder<OfflineMediaUpdateWorker>()
+                .addTag("offline-media-updates")
+                .setInputData(workDataOf(PROFILE to profile))
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(
+                            if (runtime.connection.allowMetered.value) NetworkType.CONNECTED
+                            else NetworkType.UNMETERED
+                        )
+                        .setRequiresBatteryNotLow(true)
+                        .setRequiresStorageNotLow(true)
+                        .build()
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                "offline-media-update:$profile",
+                if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+                work,
+            )
+    }
+
+    fun scheduleMaintenanceContinuation(context: Context, delayMs: Long = 10_000L) {
+        val work =
+            OneTimeWorkRequestBuilder<OfflineReconcileWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+                .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+                .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                MAINTENANCE_CONTINUATION,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                work,
+            )
+    }
 
     @RequiresApi(34)
     private fun scheduler(context: Context): JobScheduler =
@@ -84,6 +151,7 @@ object DownloadExecution {
 
     /** Call from a visible, explicit user action. Failure leaves the durable queue intact. */
     suspend fun start(context: Context, profile: String): Boolean {
+        WorkManager.getInstance(context).cancelUniqueWork("offline-media-update:$profile")
         val runtime = OfflineRuntime.get(context)
         val policy = runtime.connection.state.first { it.initialized }
         if (
@@ -176,9 +244,12 @@ object DownloadExecution {
     }
 
     fun cancelReconciliation(context: Context) {
+        WorkManager.getInstance(context).cancelAllWorkByTag("offline-maintenance-retry")
+        WorkManager.getInstance(context).cancelAllWorkByTag("offline-media-updates")
         WorkManager.getInstance(context).cancelUniqueWork(RECONCILE)
         WorkManager.getInstance(context).cancelUniqueWork(RECONCILE_NOW)
         WorkManager.getInstance(context).cancelUniqueWork(RECONCILE_DEBOUNCED)
+        WorkManager.getInstance(context).cancelUniqueWork(MAINTENANCE_CONTINUATION)
     }
 
     internal fun notification(
@@ -193,8 +264,11 @@ object DownloadExecution {
     internal suspend fun runQueue(
         context: Context,
         profileId: String,
+        updatesOnly: Boolean = false,
         progress: (Notification) -> Unit,
     ) = coroutineScope {
+        val owner = if (!updatesOnly) Any() else null
+        if (owner != null) foregroundOwner = profileId to owner
         val runtime = OfflineRuntime.get(context)
         val updates = launch {
             val locale = runtime.sessionStore.locale.first()
@@ -229,13 +303,14 @@ object DownloadExecution {
             )
         }
         try {
-            executeQueue(context, profileId)
+            executeQueue(context, profileId, updatesOnly)
         } finally {
             withContext(NonCancellable) { updates.cancelAndJoin() }
+            if (owner != null && foregroundOwner?.second === owner) foregroundOwner = null
         }
     }
 
-    private suspend fun executeQueue(context: Context, profileId: String) {
+    private suspend fun executeQueue(context: Context, profileId: String, updatesOnly: Boolean) {
         val runtime = OfflineRuntime.get(context)
         if (runtime.connection.state.first { it.initialized }.mode == ConnectionMode.OFFLINE) return
         val initialProfile = runtime.database.offline().profile(profileId) ?: return
@@ -294,7 +369,20 @@ object DownloadExecution {
                         ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) != true
                 else connectivity.isActiveNetworkMetered
             if (!runtime.connection.allowMetered.value && metered) return
-            val pending = runtime.database.offline().pendingWorkCount(profileId)
+            val pending =
+                if (updatesOnly)
+                    runtime.database.offline().mediaUpdateTransfers(profileId).count {
+                        it.state in
+                            setOf(
+                                "queued",
+                                "resolving",
+                                "preparing",
+                                "transferring",
+                                "verifying",
+                                "publishing",
+                            )
+                    }
+                else runtime.database.offline().pendingWorkCount(profileId)
             if (pending == 0) return
             val dao = runtime.database.offline()
             val next =
@@ -306,7 +394,7 @@ object DownloadExecution {
                 continue
             }
             try {
-                runtime.downloads.runOnce(session, profileId)
+                runtime.downloads.runOnce(session, profileId, updatesOnly)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -499,6 +587,48 @@ class OfflineReconcileWorker(context: Context, params: WorkerParameters) :
         } catch (_: Exception) {
             Result.retry()
         }
+    }
+}
+
+/** Scheduled replacements use WorkManager, never a user-initiated job from the background. */
+class OfflineMediaUpdateWorker(context: Context, params: WorkerParameters) :
+    CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val profile = inputData.getString(DownloadExecution.PROFILE) ?: return Result.failure()
+        if (DownloadExecution.hasForegroundTransfer(profile)) return Result.success()
+        val runtime = OfflineRuntime.get(applicationContext)
+        if (runtime.connection.state.first { it.initialized }.mode == ConnectionMode.OFFLINE)
+            return Result.success()
+        if (!runtime.attachmentNetworkAllowed()) return Result.retry()
+        return try {
+            setForeground(getForegroundInfo())
+            DownloadExecution.runQueue(applicationContext, profile, updatesOnly = true) {
+                notification ->
+                try {
+                    androidx.core.app.NotificationManagerCompat.from(applicationContext)
+                        .notify(2702, notification)
+                } catch (_: SecurityException) {
+                    /* Transfers continue if notifications are blocked. */
+                }
+            }
+            Result.success()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            Result.retry()
+        }
+    }
+
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val profile = requireNotNull(inputData.getString(DownloadExecution.PROFILE))
+        val notification = DownloadExecution.notification(applicationContext, profile)
+        return if (Build.VERSION.SDK_INT >= 29)
+            ForegroundInfo(
+                2702,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        else ForegroundInfo(2702, notification)
     }
 }
 

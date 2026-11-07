@@ -98,6 +98,54 @@ class OfflineStorage(
     private val dao = database.offline()
     private val mutex = Mutex()
     private val leases = ConcurrentHashMap<String, Int>()
+    private val supplementLeases = ConcurrentHashMap<String, Int>()
+
+    suspend fun canStoreSupplement(profile: String, bytes: Long): Boolean = mutex.withLock {
+        fitsOfflineBudget(
+            freeBytes(),
+            dao.reservedBytes(),
+            bytes,
+            dao.totalAssetBytes() + dao.totalPartialBytes(),
+            limitBytes(),
+        )
+    }
+
+    suspend fun deleteSupplementWhenUnused(profile: String, relative: String) = mutex.withLock {
+        if (
+            (supplementLeases[relative] ?: 0) == 0 && dao.fileReferences(profile, relative, "") == 0
+        ) {
+            paths.resolve(relative).let { if (it.exists()) it.delete() }
+        }
+    }
+
+    suspend fun leaseSupplements(
+        profile: String,
+        asset: String,
+    ): Pair<List<LocalSupplement>, Closeable> = mutex.withLock {
+        val records = dao.supplements(profile, asset)
+        val rows = records.mapNotNull { row ->
+            val file = paths.resolve(row.relativePath)
+            if (!file.isFile) null
+            else {
+                supplementLeases.compute(row.relativePath) { _, value -> (value ?: 0) + 1 }
+                LocalSupplement(row.key, file, JSONObject(row.descriptor))
+            }
+        }
+        val closed = AtomicBoolean(false)
+        rows to
+            Closeable {
+                if (closed.compareAndSet(false, true))
+                    rows.forEach { row ->
+                        val relative = records.first { it.key == row.key }.relativePath
+                        supplementLeases.compute(relative) { _, count ->
+                            ((count ?: 1) - 1).takeIf { it > 0 }
+                        }
+                        scope.launch {
+                            runCatching { deleteSupplementWhenUnused(profile, relative) }
+                        }
+                    }
+            }
+    }
 
     internal fun leaseCount(profile: String, assetId: String): Int =
         leases["$profile:$assetId"] ?: 0
@@ -137,6 +185,15 @@ class OfflineStorage(
                 }
                 val profile = requireNotNull(dao.profile(asset.profile))
                 check(!profile.locked) { "Offline profile is locked." }
+                val replacing = JSONObject(transfer.options).optString("replacesAssetId")
+                if (replacing.isNotBlank()) {
+                    check(
+                        dao.asset(asset.profile, replacing)?.state == "complete" &&
+                            dao.references(asset.profile, replacing) > 0
+                    ) {
+                        "The original download was removed."
+                    }
+                }
                 val relative = paths.relative(asset.profile, asset.id)
                 val target = paths.resolve(relative)
                 val temporary = staging(asset.profile, asset.id)
@@ -184,11 +241,51 @@ class OfflineStorage(
     private suspend fun complete(asset: OfflineAsset, transfer: OfflineTransfer) {
         database.withTransaction {
             val latest = requireNotNull(dao.transfer(transfer.profile, transfer.id))
+            check(dao.profile(asset.profile)?.locked == false)
+            check(latest.state != "identity_paused")
             check(latest.state !in setOf("paused", "cancelled", "identity_paused")) {
                 "Download was cancelled."
             }
             dao.putAsset(asset)
-            dao.putReference(OfflineAssetReference(asset.profile, transfer.selection, asset.id))
+            val replacedId = JSONObject(latest.options).optString("replacesAssetId")
+            check(replacedId != asset.id) { "The download is already up to date." }
+            if (replacedId.isBlank()) {
+                dao.putReference(OfflineAssetReference(asset.profile, transfer.selection, asset.id))
+            } else {
+                val previous = requireNotNull(dao.asset(asset.profile, replacedId))
+                check(previous.state == "complete" && dao.references(asset.profile, replacedId) > 0)
+                dao.assetSelections(asset.profile, replacedId).forEach { selection ->
+                    if (dao.selection(asset.profile, selection)?.state != "removal_pending")
+                        dao.putReference(OfflineAssetReference(asset.profile, selection, asset.id))
+                }
+                dao.removeAssetReferences(asset.profile, replacedId)
+                dao.putAsset(previous.copy(state = "pending_delete"))
+                dao.transfersForAsset(asset.profile, replacedId)
+                    .filter { it.id != latest.id }
+                    .forEach { old ->
+                        if (old.state == "complete")
+                            dao.putTransfer(
+                                old.copy(
+                                    assetId = asset.id,
+                                    descriptor = asset.descriptor,
+                                    bytes = asset.size,
+                                    total = asset.size,
+                                )
+                            )
+                    }
+                dao.item(asset.profile, asset.item)?.let { item ->
+                    val observed = dao.maintenance(asset.profile, replacedId)?.sourceRevision
+                    dao.putItems(
+                        listOf(
+                            item.copy(
+                                newSourceAvailable =
+                                    observed != null && observed != asset.sourceRevision
+                            )
+                        )
+                    )
+                }
+                scope.launch { prune(asset.profile, replacedId) }
+            }
             dao.putTransfer(
                 latest.copy(
                     state = "complete",
@@ -456,6 +553,7 @@ class OfflineStorage(
                 dao.deleteAllOperations(profile)
                 dao.deleteAllAudioQueues(profile)
                 dao.deleteAllLibraryNames(profile)
+                dao.deleteMaintenance(profile)
             }
 
             var afterAssetId = ""
@@ -479,10 +577,15 @@ class OfflineStorage(
         database.withTransaction {
             dao.deleteSupplements(profile, assetId)
             dao.deleteAsset(profile, assetId)
+            dao.deleteAssetMaintenance(profile, assetId)
         }
         supplements.forEach {
             val file = paths.resolve(it.relativePath)
-            if (dao.fileReferences(profile, it.relativePath, file.name.substringBefore('.')) == 0)
+            if (
+                (supplementLeases[it.relativePath] ?: 0) == 0 &&
+                    dao.fileReferences(profile, it.relativePath, file.name.substringBefore('.')) ==
+                        0
+            )
                 check(!file.exists() || file.delete())
         }
         finalizeProfileDeletion(profile)
@@ -543,10 +646,11 @@ class OfflineStorage(
             for (file in page) {
                 if (!file.isFile || System.currentTimeMillis() - file.lastModified() < 86400000)
                     continue
-                val relative = file.relativeTo(paths.root).invariantSeparatorsPath
+                val relative = file.relativeTo(paths.root.canonicalFile).invariantSeparatorsPath
                 val id = file.name.substringBefore('.')
                 if (
                     dao.fileReferences(profile, relative, id) == 0 &&
+                        (supplementLeases[relative] ?: 0) == 0 &&
                         paths.resolve(relative) == file.canonicalFile
                 )
                     file.delete()

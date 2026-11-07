@@ -9,7 +9,9 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -22,6 +24,183 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OfflineMetadataRefreshCoordinatorTest {
+    @Test
+    fun externalSnapshotPreservesEmbeddedSubtitlesWithNullFileIdentity() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed("Old title", bundle("p1", "s1"))
+            val text = "WEBVTT\n\nSaved embedded subtitle".toByteArray()
+            val embedded = bundle("p2", "s2", subtitleBytes = text)
+            embedded.getJSONArray("subtitles").getJSONObject(0).put("fileId", JSONObject.NULL)
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                embedded,
+                binaryResponses = mapOf("subtitle" to text),
+            )
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundle("p3", "s3")
+                    .put("subtitleScope", "external")
+                    .put("sourceStatus", "unchanged")
+                    .put("sourceRevision", "source-revision-1"),
+                itemBundles = true,
+            )
+            val row = fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+            assertEquals("subtitle:0", row.key)
+            assertArrayEquals(text, fixture.storage.paths.resolve(row.relativePath).readBytes())
+            assertEquals(0, fixture.binaryCalls)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun itemRefreshAddsSubtitlesAndLyricsAndPreservesStableTrackSelection() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed("Old title", bundle("p1", "s1").put("lyrics", JSONObject.NULL))
+            val subtitle = "WEBVTT\n\nNew language".toByteArray()
+            fun updated(version: String, index: Int) =
+                bundle("p2", version, subtitleBytes = subtitle).apply {
+                    put("subtitleScope", "external")
+                    put("sourceStatus", "unchanged")
+                    put("sourceRevision", "source-revision-1")
+                    getJSONArray("subtitles")
+                        .getJSONObject(0)
+                        .put("id", "file:japanese")
+                        .put("fileId", "japanese")
+                        .put("index", index)
+                        .put("language", "ja")
+                }
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                updated("s2", 1000),
+                binaryResponses = mapOf("subtitle" to subtitle),
+                itemBundles = true,
+            )
+            val first = fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+            assertEquals("ja", JSONObject(first.descriptor).getString("language"))
+            assertEquals(
+                "Updated lyrics",
+                JSONObject(fixture.dao.asset(fixture.profileId, fixture.assetId)!!.descriptor)
+                    .getJSONObject("bundle")
+                    .getJSONObject("lyrics")
+                    .getString("text"),
+            )
+            val lease = fixture.storage.leaseSupplements(fixture.profileId, fixture.assetId)
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                updated("s3", 1008),
+                binaryResponses = mapOf("subtitle" to subtitle),
+                itemBundles = true,
+            )
+            assertEquals(
+                first.key,
+                fixture.dao.supplements(fixture.profileId, fixture.assetId).single().key,
+            )
+            assertTrue(lease.first.single().file.isFile)
+            lease.second.close()
+            assertArrayEquals(
+                fixture.mediaBytes,
+                fixture.storage.paths.resolve(fixture.mediaPath).readBytes(),
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun changedMediaKeepsSavedLyricsUntilMediaIsReplaced() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed(
+                "Old title",
+                bundle("p1", "s1").put("lyrics", JSONObject().put("text", "Saved lyrics")),
+            )
+            fixture.refresh(
+                reconcileResult("unchanged", "changed"),
+                bundle("p2", "s2")
+                    .put("subtitleScope", "external")
+                    .put("sourceStatus", "changed")
+                    .put("sourceRevision", "new-revision")
+                    .put("lyrics", JSONObject.NULL),
+                itemBundles = true,
+            )
+            assertEquals(
+                "Saved lyrics",
+                JSONObject(fixture.dao.asset(fixture.profileId, fixture.assetId)!!.descriptor)
+                    .getJSONObject("bundle")
+                    .getJSONObject("lyrics")
+                    .getString("text"),
+            )
+            assertTrue(fixture.dao.item(fixture.profileId, "movie")!!.newSourceAvailable)
+            assertEquals(
+                "new-revision",
+                fixture.dao.maintenance(fixture.profileId, fixture.assetId)?.sourceRevision,
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun maintenanceContinuesBeyondSixteenAssetsAndDoesNotRevisitSuccessfulOnes() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed("Old title", bundle("p1", "s1"))
+            val original = fixture.dao.asset(fixture.profileId, fixture.assetId)!!
+            val ids = mutableListOf(fixture.assetId)
+            repeat(19) {
+                val id = sha256("asset-$it".toByteArray())
+                ids += id
+                fixture.dao.putAsset(original.copy(id = id))
+            }
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundle("p1", "s1"),
+                force = false,
+            )
+            assertEquals(
+                16,
+                ids.count { fixture.dao.maintenance(fixture.profileId, it)?.lastSuccess != null },
+            )
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundle("p1", "s1"),
+                force = false,
+            )
+            assertEquals(
+                20,
+                ids.count {
+                    (fixture.dao.maintenance(fixture.profileId, it)?.lastSuccess ?: 0) > 0
+                },
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun unchangedSupplementBytesAreReusedWhenOnlyPresentationChanges() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.seed("Old title", bundle("p1", "s1"))
+            val subtitle = "WEBVTT\n\nUnchanged".toByteArray()
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundle("p2", "s2", subtitleBytes = subtitle),
+                binaryResponses = mapOf("subtitle" to subtitle),
+            )
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundle("p3", "s2", subtitleBytes = subtitle),
+            )
+            assertEquals(0, fixture.binaryCalls)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @Test
     fun refreshUpdatesPresentationAndCanonicalStateWithoutReplacingMediaOrPendingOverlay() =
         runBlocking {
@@ -221,7 +400,11 @@ class OfflineMetadataRefreshCoordinatorTest {
                     }
                     .exceptionOrNull()
 
-            assertNotNull(failure)
+            assertNull(failure)
+            assertEquals(
+                "check_failed",
+                fixture.dao.maintenance(fixture.profileId, fixture.assetId)?.error,
+            )
             assertEquals(2, binaryCalls)
             assertEquals(
                 oldDescriptor,
@@ -285,8 +468,8 @@ class OfflineMetadataRefreshCoordinatorTest {
         val dao = database.offline()
         val profileId = OfflineProfile.identity("server-instance", "account")
         private val root = File(context.cacheDir, "offline-metadata-${UUID.randomUUID()}")
-        val storage =
-            OfflineStorage(database, root, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+        private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val storage = OfflineStorage(database, root, storageScope)
         private val session = AuthSession("https://example.invalid", "token", "account", "Local")
         val assetId = sha256("offline-media-asset".toByteArray())
         val mediaBytes = "verified media bytes".toByteArray()
@@ -309,7 +492,7 @@ class OfflineMetadataRefreshCoordinatorTest {
         private var currentBundle = JSONObject()
         private var binaryResponses = emptyMap<String, ByteArray>()
         private var failBinaryCall: (Int) -> Boolean = { false }
-        private var binaryCalls = 0
+        var binaryCalls = 0
         private lateinit var requestHandler: suspend (String, JSONObject?) -> JSONObject
 
         suspend fun seed(title: String, bundle: JSONObject) {
@@ -354,7 +537,10 @@ class OfflineMetadataRefreshCoordinatorTest {
             bundle: JSONObject,
             binaryResponses: Map<String, ByteArray> = emptyMap(),
             failBinaryCall: (Int) -> Boolean = { false },
+            itemBundles: Boolean = false,
+            force: Boolean = true,
         ) {
+            if (force) dao.requestMetadataCheck(profileId)
             reconcileResponse =
                 JSONObject()
                     .put("serverInstanceId", "server-instance")
@@ -367,6 +553,8 @@ class OfflineMetadataRefreshCoordinatorTest {
                 when {
                     path == "/api/offline/reconcile" -> reconcileResponse
                     path.startsWith("/api/offline/assets/") && path.contains("/bundle?") ->
+                        currentBundle
+                    path.startsWith("/api/offline/items/") && path.contains("/bundle?") ->
                         currentBundle
                     else -> error("Unexpected refresh request: $path")
                 }
@@ -390,11 +578,13 @@ class OfflineMetadataRefreshCoordinatorTest {
                     },
                     loadCursor = { 0 },
                     saveCursor = { _, _ -> },
+                    supportsItemBundles = { itemBundles },
                 )
                 .refresh(profileId, session, "en")
         }
 
         override fun close() {
+            runBlocking { storageScope.coroutineContext[Job]!!.cancelAndJoin() }
             database.close()
             root.deleteRecursively()
         }

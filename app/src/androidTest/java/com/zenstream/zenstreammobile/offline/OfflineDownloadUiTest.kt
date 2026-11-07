@@ -1,12 +1,18 @@
 package com.zenstream.zenstreammobile.offline
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
@@ -20,6 +26,92 @@ import org.junit.Test
 
 class OfflineDownloadUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun automaticMediaSettingDefaultsOffAndRemainsUsableWithLargeText() {
+        verifyAutomaticMediaSetting(false, 1.5f)
+    }
+
+    @Test
+    fun automaticMediaSettingRemainsUsableInLandscape() {
+        verifyAutomaticMediaSetting(true, 1f)
+    }
+
+    private fun verifyAutomaticMediaSetting(landscape: Boolean, fontScale: Float) {
+        compose.activity.requestedOrientation =
+            if (landscape) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        compose.waitUntil(5000) {
+            compose.activity.resources.configuration.orientation ==
+                if (landscape) android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                else android.content.res.Configuration.ORIENTATION_PORTRAIT
+        }
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val runtime = OfflineRuntime.get(context)
+        val oldAuto = runtime.connection.autoUpdateMedia.value
+        val previous = runBlocking { runtime.connection.state.first { it.initialized } }
+        val profile =
+            OfflineProfile(
+                OfflineProfile.identity("update-ui", "user"),
+                "update-ui",
+                "user",
+                "https://example.invalid",
+                "Download updates",
+            )
+        runBlocking {
+            runtime.database.offline().putProfile(profile)
+            runtime.connection.selectProfile(profile.id)
+            runtime.connection.setModeAndAwait(ConnectionMode.OFFLINE)
+            runtime.setAutoUpdateMedia(false)
+        }
+        try {
+            compose.setContent {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides
+                        androidx.compose.ui.unit.Density(
+                            androidx.compose.ui.platform.LocalDensity.current.density,
+                            fontScale,
+                        )
+                ) {
+                    ZenStreamTheme { DownloadSettings(runtime, profile, listOf(profile)) }
+                }
+            }
+            val label = context.getString(R.string.offline_auto_media_updates)
+            compose
+                .onNodeWithContentDescription(label)
+                .performScrollTo()
+                .assertIsOff()
+                .performClick()
+            compose.waitUntil(5000) { runtime.connection.autoUpdateMedia.value }
+            compose.onNodeWithContentDescription(label).assertIsOn()
+            compose
+                .onNodeWithText(context.getString(R.string.offline_refresh_metadata))
+                .performScrollTo()
+                .assertIsDisplayed()
+            val image = compose.onRoot().captureToImage().asAndroidBitmap()
+            java.io
+                .File(
+                    context.filesDir,
+                    if (landscape) "download-update-settings-landscape.png"
+                    else "download-update-settings-large-text.png",
+                )
+                .outputStream()
+                .use {
+                    image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            compose
+                .onNodeWithText(context.getString(R.string.offline_refresh_metadata))
+                .performScrollTo()
+                .assertIsDisplayed()
+        } finally {
+            runBlocking {
+                runtime.setAutoUpdateMedia(oldAuto)
+                runtime.storage.removeProfile(profile.id)
+                runtime.connection.selectProfile(previous.profile)
+                runtime.connection.setModeAndAwait(previous.mode)
+            }
+        }
+    }
 
     @Test
     fun downloadsRemainNavigableWhenExplicitlyOffline() {

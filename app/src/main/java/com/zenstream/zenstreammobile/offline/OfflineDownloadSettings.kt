@@ -29,6 +29,12 @@ internal fun DownloadSettings(
     val used by runtime.database.offline().storageUsed(profile.id).collectAsState(initial = 0L)
     val connection by runtime.connection.state.collectAsState()
     val metered by runtime.connection.allowMetered.collectAsState()
+    val autoMedia by runtime.connection.autoUpdateMedia.collectAsState()
+    val lastCheck by
+        runtime.database.offline().lastMetadataSuccess(profile.id).collectAsState(initial = null)
+    val maintenance by
+        runtime.database.offline().maintenanceStatus(profile.id).collectAsState(initial = null)
+    var checking by remember { mutableStateOf(false) }
     val limit by runtime.connection.downloadLimitBytes.collectAsState()
     var text by
         remember(limit) {
@@ -42,6 +48,7 @@ internal fun DownloadSettings(
     val offlineLabel = stringResource(R.string.offline_use_mode)
     val meteredLabel = stringResource(R.string.offline_allow_metered)
     val noLimitLabel = stringResource(R.string.offline_no_limit)
+    val autoMediaLabel = stringResource(R.string.offline_auto_media_updates)
     Column(
         Modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -121,7 +128,25 @@ internal fun DownloadSettings(
                         metered,
                         modifier = Modifier.semantics { contentDescription = meteredLabel },
                         onCheckedChange = {
-                            scope.launch { runtime.connection.setAllowMetered(it) }
+                            scope.launch {
+                                runtime.connection.setAllowMetered(it)
+                                runtime.database.offline().retryDeferredMetadata(profile.id)
+                                runtime.checkDownloadedLibrary(profile.id)
+                                if (
+                                    runtime.database
+                                        .offline()
+                                        .mediaUpdateTransfers(profile.id)
+                                        .any { row ->
+                                            row.state !in
+                                                setOf("complete", "cancelled", "failed", "paused")
+                                        }
+                                )
+                                    DownloadExecution.scheduleMediaUpdates(
+                                        context,
+                                        profile.id,
+                                        replace = true,
+                                    )
+                            }
                         },
                     )
                 }
@@ -199,11 +224,80 @@ internal fun DownloadSettings(
                 )
             }
         }
+        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface) {
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        stringResource(R.string.offline_auto_media_updates),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        stringResource(R.string.offline_auto_media_updates_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    autoMedia,
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = autoMediaLabel
+                        },
+                    onCheckedChange = { enabled ->
+                        scope.launch {
+                            runtime.setAutoUpdateMedia(enabled)
+                            if (enabled) runtime.refreshMetadata(profile.id)
+                        }
+                    },
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.offline_automatic_updates_help),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        lastCheck?.let { timestamp ->
+            Text(
+                stringResource(
+                    R.string.offline_last_checked,
+                    java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.SHORT,
+                            java.text.DateFormat.SHORT,
+                        )
+                        .format(java.util.Date(timestamp)),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (checking) Text(stringResource(R.string.offline_checking_updates))
+        maintenance?.error?.let { error ->
+            Text(
+                stringResource(
+                    if (error == "checking") R.string.offline_checking_updates
+                    else if (error == "manual_update_required")
+                        R.string.offline_update_manual_needed
+                    else if (error == "waiting_for_network")
+                        R.string.offline_updates_waiting_network
+                    else R.string.offline_update_check_failed
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        LaunchedEffect(maintenance?.lastChecked) { checking = false }
+        LaunchedEffect(checking) {
+            if (checking) {
+                kotlinx.coroutines.delay(30_000)
+                checking = false
+            }
+        }
         TextButton(
             enabled =
                 connection.mode == ConnectionMode.AUTOMATIC &&
                     actions?.canDownload?.invoke(profile) == true,
-            onClick = { scope.launch { runtime.refreshMetadata(profile.id) } },
+            onClick = { scope.launch { checking = runtime.refreshMetadata(profile.id) } },
         ) {
             Icon(painterResource(LucideR.drawable.lucide_ic_refresh_cw), null, Modifier.size(18.dp))
             Text(stringResource(R.string.offline_refresh_metadata), Modifier.padding(start = 8.dp))

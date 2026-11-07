@@ -363,8 +363,11 @@ fun NowPlayingScreen(
     var lyricsError by remember(current?.id) { mutableStateOf(false) }
     var lyricsRetry by remember(current?.id) { mutableIntStateOf(0) }
 
-    LaunchedEffect(current?.id, lyricsRetry) {
-        if (current != null && lyrics == null && !lyricsLoading) {
+    val offlineRevision by
+        (repository.offline?.catalogRevision ?: kotlinx.coroutines.flow.MutableStateFlow(0L))
+            .collectAsStateWithLifecycle()
+    LaunchedEffect(current?.id, lyricsRetry, offlineRevision) {
+        if (current != null) {
             lyricsLoading = true
             lyricsError = false
             try {
