@@ -155,6 +155,9 @@ class ConnectionCoordinator(context: Context) {
     private val meteredKey = booleanPreferencesKey("allow_metered_downloads")
     private val _allowMetered = MutableStateFlow(false)
     val allowMetered = _allowMetered.asStateFlow()
+    private val autoMediaKey = booleanPreferencesKey("automatically_update_media")
+    private val _autoUpdateMedia = MutableStateFlow(false)
+    val autoUpdateMedia = _autoUpdateMedia.asStateFlow()
     private val _downloadLimitBytes = MutableStateFlow<Long?>(null)
     val downloadLimitBytes = _downloadLimitBytes.asStateFlow()
     private val _state = MutableStateFlow(ConnectionState())
@@ -171,6 +174,7 @@ class ConnectionCoordinator(context: Context) {
                 }
                 .collect { prefs ->
                     _allowMetered.value = prefs[meteredKey] ?: false
+                    _autoUpdateMedia.value = prefs[autoMediaKey] ?: false
                     _downloadLimitBytes.value = prefs[limitKey]
                     val mode =
                         if (prefs[modeKey] == "offline") ConnectionMode.OFFLINE
@@ -206,6 +210,11 @@ class ConnectionCoordinator(context: Context) {
 
     suspend fun setAllowMetered(value: Boolean) {
         preferences.edit { it[meteredKey] = value }
+    }
+
+    suspend fun setAutoUpdateMedia(value: Boolean) {
+        _autoUpdateMedia.value = value
+        preferences.edit { it[autoMediaKey] = value }
     }
 
     suspend fun maintenanceCursor(profile: String): Int =

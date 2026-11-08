@@ -23,6 +23,8 @@ internal class RepresentationChanged :
 
 private class TransferSuspended : IOException("Download paused.")
 
+private class UpdateSelectionPending : IOException("Preparing the updated download.")
+
 internal data class TransferRange(val append: Boolean, val verifyOnly: Boolean = false)
 
 internal fun validateTransferRange(
@@ -61,6 +63,8 @@ class DownloadCoordinator(
     private val binary: OfflineBinaryRequest,
     private val activeSession: suspend () -> AuthSession?,
     private val sourceDetails: (suspend (AuthSession, String) -> JSONObject)? = null,
+    private val automaticUpdatesAllowed: () -> Boolean = { true },
+    private val binaryAllowed: () -> Boolean = { true },
 ) {
     private val database = catalog.database
     private val dao = database.offline()
@@ -85,24 +89,53 @@ class DownloadCoordinator(
         }
     }
 
-    private suspend fun saveActive(candidate: OfflineTransfer, allowSkip: Boolean = false) {
+    private suspend fun saveActive(
+        candidate: OfflineTransfer,
+        allowSkip: Boolean = false,
+        updateOptions: Boolean = false,
+    ) {
         database.withTransaction {
             val latest = dao.transfer(candidate.profile, candidate.id) ?: throw TransferSuspended()
             if (latest.state in setOf("paused", "cancelled")) {
                 if (allowSkip) return@withTransaction
                 throw TransferSuspended()
             }
-            dao.putTransfer(candidate)
+            dao.putTransfer(
+                candidate.copy(options = if (updateOptions) candidate.options else latest.options)
+            )
         }
     }
 
     /** All Android execution mechanisms call this same persistent queue. */
-    suspend fun runOnce(session: AuthSession, profileId: String): Boolean = runMutex.withLock {
+    suspend fun runOnce(
+        session: AuthSession,
+        profileId: String,
+        updatesOnly: Boolean = false,
+    ): Boolean = runMutex.withLock {
         val profile = catalog.requireProfile(profileId)
         checkSession(profile, session)
         val capabilities = request(session, "/api/offline/capabilities", "GET", null)
         if (capabilities.optString("serverInstanceId") != profile.serverInstance)
             throw RepresentationChanged()
+        cleanupMediaUpdates(session, profileId)
+        if (updatesOnly) {
+            val updates =
+                dao.mediaUpdateTransfers(profileId)
+                    .filter {
+                        it.state in
+                            setOf(
+                                "queued",
+                                "resolving",
+                                "preparing",
+                                "transferring",
+                                "verifying",
+                                "publishing",
+                            ) && it.nextAttemptMs <= System.currentTimeMillis()
+                    }
+                    .take(2)
+            for (update in updates) process(session, profile, update)
+            return@withLock updates.isNotEmpty()
+        }
         for (selection in dao.cleanupSelections(profileId)) {
             try {
                 request(session, "/api/offline/selections/${selection.id}", "DELETE", null)
@@ -230,6 +263,14 @@ class DownloadCoordinator(
         checkSession(profile, session)
         if (dao.transfer(profile.id, id)?.state in setOf(null, "paused", "cancelled"))
             throw TransferSuspended()
+        if (!binaryAllowed()) throw TransferSuspended()
+        val transfer = dao.transfer(profile.id, id) ?: throw TransferSuspended()
+        if (
+            JSONObject(transfer.options).optBoolean("automaticUpdate") && !automaticUpdatesAllowed()
+        ) {
+            dao.putTransfer(transfer.copy(state = "paused", reserved = 0))
+            throw TransferSuspended()
+        }
     }
 
     private suspend fun process(
@@ -329,6 +370,7 @@ class DownloadCoordinator(
                                 while (true) {
                                     currentCoroutineContext().ensureActive()
                                     if (!OfflineNetworkPolicy.allowed) throw TransferSuspended()
+                                    if (!binaryAllowed()) throw TransferSuspended()
                                     val count = input.read(buffer)
                                     if (count < 0) break
                                     if (written > size - count) throw RepresentationChanged()
@@ -403,6 +445,7 @@ class DownloadCoordinator(
                     ),
                     original.id,
                 )
+                cleanupMediaUpdates(session, profile.id)
             }
         } catch (error: CancellationException) {
             throw error
@@ -439,21 +482,58 @@ class DownloadCoordinator(
     }
 
     private suspend fun resolve(session: AuthSession, transfer: OfflineTransfer): JSONObject {
+        var options =
+            JSONObject(requireNotNull(dao.transfer(transfer.profile, transfer.id)).options)
+        val replacing = options.optString("replacesAssetId").isNotBlank()
+        var selectionId = transfer.selection
+        if (replacing) {
+            selectionId = options.optString("updateSelectionId")
+            if (selectionId.isBlank()) {
+                val selection =
+                    request(
+                        session,
+                        "/api/offline/selections",
+                        "POST",
+                        JSONObject()
+                            .put("itemId", transfer.item)
+                            .put("kind", "catalog")
+                            .put("language", options.optString("language", "en")),
+                    )
+                selectionId = selection.getString("id")
+                options.put("updateSelectionId", selectionId)
+                saveActive(
+                    requireNotNull(dao.transfer(transfer.profile, transfer.id))
+                        .copy(options = options.toString()),
+                    updateOptions = true,
+                )
+            }
+            val selected = request(session, "/api/offline/selections/$selectionId", "GET", null)
+            if (selected.optString("state") == "failed")
+                error("Updated download selection is unavailable.")
+            if (selected.optString("state") != "ready") throw UpdateSelectionPending()
+        }
         if (transfer.assetId != null) {
             try {
-                return request(session, "/api/offline/assets/${transfer.assetId}", "GET", null)
+                val result =
+                    request(session, "/api/offline/assets/${transfer.assetId}", "GET", null)
+                if (
+                    replacing &&
+                        result.optString("sourceRevision") !=
+                            options.optString("targetSourceRevision")
+                )
+                    throw RepresentationChanged()
+                return result
             } catch (error: CatalogException) {
                 if (error.statusCode != 404) throw error
             }
         }
-        var options = JSONObject(transfer.options)
         if (options.has("audioLanguage") || options.has("subtitleLanguages")) {
             options =
                 languageSelections(requireNotNull(sourceDetails)(session, transfer.item), options)
         }
         val body =
             JSONObject()
-                .put("selectionId", transfer.selection)
+                .put("selectionId", selectionId)
                 .put("itemId", transfer.item)
                 .put("profile", options.optString("profile", "original"))
         for (key in
@@ -461,9 +541,52 @@ class DownloadCoordinator(
             if (options.has(key) && !options.isNull(key)) body.put(key, options.get(key))
         }
         val result = request(session, "/api/offline/assets", "POST", body)
+        if (
+            replacing &&
+                result.optString("sourceRevision") != options.optString("targetSourceRevision")
+        )
+            throw RepresentationChanged()
         if (transfer.assetId != null && transfer.assetId != result.getString("id"))
             throw RepresentationChanged()
         return result
+    }
+
+    private suspend fun cleanupMediaUpdates(session: AuthSession, profile: String) {
+        for (transfer in
+            dao.mediaUpdateTransfers(profile).filter {
+                it.state in setOf("complete", "cancelled")
+            }) {
+            val selection = JSONObject(transfer.options).optString("updateSelectionId")
+            if (selection.isNotBlank()) {
+                try {
+                    request(session, "/api/offline/selections/$selection", "DELETE", null)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: CatalogException) {
+                    if (error.statusCode != 404) continue
+                } catch (_: IOException) {
+                    continue
+                }
+            }
+            database.withTransaction {
+                val latest = dao.transfer(profile, transfer.id) ?: return@withTransaction
+                if (
+                    latest.state !in setOf("complete", "cancelled") ||
+                        JSONObject(latest.options).optString("updateSelectionId") != selection
+                )
+                    return@withTransaction
+                if (latest.state == "complete") dao.deleteTransfer(profile, latest.id)
+                else
+                    dao.putTransfer(
+                        latest.copy(
+                            options =
+                                JSONObject(latest.options)
+                                    .apply { remove("updateSelectionId") }
+                                    .toString()
+                        )
+                    )
+            }
+        }
     }
 
     private suspend fun supplementary(
@@ -583,6 +706,7 @@ class DownloadCoordinator(
         dao.putTransfer(
             current.copy(
                 state = "queued",
+                options = JSONObject(current.options).put("automaticUpdate", false).toString(),
                 error = null,
                 attempt = 0,
                 nextAttemptMs = 0,

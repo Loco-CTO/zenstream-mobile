@@ -86,6 +86,7 @@ fun DownloadsScreen(
     var navigationProfile by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(profile?.id) {
         if (profile != null) {
+            runtime.checkDownloadedLibrary(profile.id)
             if (navigationProfile != null && navigationProfile != profile.id) {
                 containers = emptyList()
                 previousSearches = emptyList()
@@ -870,11 +871,14 @@ private fun OfflineMediaRow(
                 }
             }
             if (count.newSourceAvailable > 0)
-                Text(
-                    stringResource(R.string.offline_new_version_available),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Column {
+                    Text(
+                        stringResource(R.string.offline_new_version_available),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    UpdateDownloadAction(runtime, profile, item.id, item.name, group)
+                }
         }
         if (group)
             Icon(

@@ -20,6 +20,20 @@ Automatic reachability is separate from explicit Offline mode. Any HTTP response
 
 Downloads keeps an All filter and adds one filter for each library that has downloaded media. The filter uses the catalog library ID, so media of the same type from different libraries remains separate. Library names are cached per offline profile and remain available without a connection; libraries with no downloaded media do not appear.
 
+## Automatic maintenance and media updates
+
+Subtitles, lyrics, artwork, chapters, and presentation metadata refresh automatically. Periodic maintenance runs approximately every six hours, with additional checks on reconnect, authenticated startup, opening Downloads, and local playback. Foreground checks become eligible after fifteen minutes. Android scheduling may defer background work; explicit Offline mode prevents network access.
+
+Servers advertising `item-bundle-refresh` expose an item-based snapshot independent of the prepared asset reservation. The external-subtitle snapshot merges with saved embedded tracks; stable file identities map to persistent local track IDs. Lyrics use the same saved bundle and update the local Now Playing screen. Timing-dependent attachments stay with the saved copy when its source changes. Older servers retain the legacy asset-bundle refresh path.
+
+Room stores each asset's successful check, retry deadline, and observed source revision. Maintenance processes sixteen due assets per pass and continues until the library is covered. Failed items back off independently. Subtitle and artwork transfers respect the existing metered-download preference, reuse verified unchanged files, and publish new references only after successful download. Playback leases retain obsolete files until active users release them.
+
+Downloads settings offers **Check for updates**, check status, and an off-by-default **Automatically update downloaded media** preference. Full replacements normally start from the visible **Update download** action. Container actions cover downloaded members, retaining source and quality; individual actions allow choosing another available source or quality. Automatic replacements retain both choices and leave unsupported combinations for manual selection.
+
+Replacement intent is persisted in transfer options (`replacesAssetId`, target source revision, automatic/manual origin, and the preparation selection ID). Reuse the resumable transfer queue, reserve space for both copies, and verify before atomically moving all surviving selection references. The old file remains playable; its leases defer cleanup. Cancellation, item removal, sign-out, or disabling automatic media updates must not allow a queued replacement to republish removed media. Scheduled replacements use a WorkManager data-sync foreground worker, never background UIDT starts.
+
+Release Orchestrator item-bundle support before this client. Cover database migrations, new and corrected lyrics/subtitles, libraries larger than a maintenance page, replacement recovery, shared references, and active playback in device tests.
+
 ## Persistence and account state
 
 - `app/src/main/java/com/zenstream/zenstreammobile/offline/` owns Room-backed downloaded catalog data, verified media references, local playback and account-state overlays, and the durable account-operation outbox. Apply a local state change and its sync operation in one `OfflinePlaybackStateRepository` transaction; catalog refreshes replace canonical state while preserving pending overlays.

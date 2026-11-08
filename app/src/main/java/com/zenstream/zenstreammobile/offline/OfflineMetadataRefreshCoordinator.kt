@@ -16,6 +16,8 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
+internal class AttachmentNetworkDeferred : IOException("waiting_for_network")
+
 /** Refreshes local presentation and account snapshots without changing verified media files. */
 class OfflineMetadataRefreshCoordinator(
     private val catalog: OfflineCatalogRepository,
@@ -24,6 +26,8 @@ class OfflineMetadataRefreshCoordinator(
     private val binary: OfflineBinaryRequest,
     private val loadCursor: suspend (String) -> Int,
     private val saveCursor: suspend (String, Int) -> Unit,
+    private val supportsItemBundles: suspend (AuthSession) -> Boolean = { false },
+    private val canFetchSupplements: () -> Boolean = { true },
 ) {
     private val database = catalog.database
     private val dao = database.offline()
@@ -36,9 +40,25 @@ class OfflineMetadataRefreshCoordinator(
             require(profile.account == session.userId)
             require(profile.serverUrl.trimEnd('/') == session.serverUrl.trimEnd('/'))
             refreshCatalogPage(profile, session, language)
-            refreshAssetPage(profile, session, language)
+            val more = refreshAssetPage(profile, session, language, supportsItemBundles(session))
             refreshPlaylistPage(profile, session, language)
+            more
         }
+
+    suspend fun refreshItem(
+        profileId: String,
+        session: AuthSession,
+        item: String,
+        language: String,
+    ) = refreshMutex.withLock {
+        val profile = catalog.requireProfile(profileId)
+        require(profile.account == session.userId && profile.serverUrl == session.serverUrl)
+        val asset = dao.latestCompleteAsset(profileId, item) ?: return@withLock
+        val now = System.currentTimeMillis()
+        val previous = dao.maintenance(profileId, asset.id)
+        if (previous != null && now - previous.lastSuccess < 15 * 60_000L) return@withLock
+        refreshOne(profile, session, asset, language, supportsItemBundles(session))
+    }
 
     private suspend fun refreshCatalogPage(
         profile: OfflineProfile,
@@ -150,28 +170,60 @@ class OfflineMetadataRefreshCoordinator(
         profile: OfflineProfile,
         session: AuthSession,
         language: String,
-    ) {
-        val key = "${profile.id}:metadata-assets"
-        val offset = loadCursor(key).coerceAtLeast(0)
-        val assets = dao.metadataAssetPage(profile.id, ASSET_PAGE_SIZE, offset)
-        if (assets.isEmpty()) {
-            saveCursor(key, 0)
-            return
-        }
+        itemBundles: Boolean,
+    ): Boolean {
+        val assets = dao.dueMetadataAssets(profile.id, System.currentTimeMillis(), ASSET_PAGE_SIZE)
         for (asset in assets) {
-            try {
-                refreshAssetBundle(profile, session, asset, language)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: CatalogException) {
-                if (error.statusCode in RETRYABLE_HTTP_STATUS) throw error
-                // Revoked or removed assets stay playable locally; reconcile marks their catalog
-                // row.
-            } catch (error: IOException) {
-                throw error
-            }
+            refreshOne(profile, session, asset, language, itemBundles)
         }
-        saveCursor(key, if (assets.size < ASSET_PAGE_SIZE) 0 else offset + assets.size)
+        return dao.dueMetadataAssets(profile.id, System.currentTimeMillis(), 1).isNotEmpty()
+    }
+
+    private suspend fun refreshOne(
+        profile: OfflineProfile,
+        session: AuthSession,
+        asset: OfflineAsset,
+        language: String,
+        itemBundles: Boolean,
+    ) {
+        val previous =
+            dao.maintenance(profile.id, asset.id) ?: OfflineAssetMaintenance(profile.id, asset.id)
+        val now = System.currentTimeMillis()
+        dao.putMaintenance(
+            previous.copy(lastChecked = now, nextAttempt = now + 60_000L, error = "checking")
+        )
+        try {
+            refreshAssetBundle(profile, session, asset, language, itemBundles)
+            val latest = dao.maintenance(profile.id, asset.id) ?: previous
+            dao.putMaintenance(
+                latest.copy(
+                    lastChecked = now,
+                    lastSuccess = now,
+                    nextAttempt = now + 6 * 60 * 60_000L,
+                    attempts = 0,
+                    error = null,
+                )
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            val latest = dao.maintenance(profile.id, asset.id) ?: previous
+            dao.putMaintenance(
+                latest.copy(
+                    lastChecked = now,
+                    attempts = previous.attempts + 1,
+                    nextAttempt =
+                        now +
+                            (60_000L shl previous.attempts.coerceAtMost(8)).coerceAtMost(
+                                6 * 60 * 60_000L
+                            ),
+                    error =
+                        if (error is AttachmentNetworkDeferred) "waiting_for_network"
+                        else "check_failed",
+                )
+            )
+            if (error is CatalogException && error.statusCode == 401) throw error
+        }
     }
 
     private suspend fun refreshAssetBundle(
@@ -179,6 +231,7 @@ class OfflineMetadataRefreshCoordinator(
         session: AuthSession,
         asset: OfflineAsset,
         fallbackLanguage: String,
+        itemBundles: Boolean = false,
     ) {
         val currentAsset = dao.asset(profile.id, asset.id) ?: return
         if (currentAsset.state != "complete" || currentAsset.locked) return
@@ -189,7 +242,10 @@ class OfflineMetadataRefreshCoordinator(
         val bundle =
             request(
                 session,
-                "/api/offline/assets/${Uri.encode(asset.id)}/bundle?language=${Uri.encode(language)}",
+                if (itemBundles)
+                    "/api/offline/items/${Uri.encode(asset.item)}/bundle?sourceId=${Uri.encode(asset.sourceId)}&sourceRevision=${Uri.encode(asset.sourceRevision)}&language=${Uri.encode(language)}"
+                else
+                    "/api/offline/assets/${Uri.encode(asset.id)}/bundle?language=${Uri.encode(language)}",
                 "GET",
                 null,
             )
@@ -197,11 +253,75 @@ class OfflineMetadataRefreshCoordinator(
             "Server returned a metadata bundle for a different media item."
         }
         val oldBundle = descriptor.optJSONObject("bundle")
+        val external = bundle.optString("subtitleScope") == "external"
+        if (external) {
+            val maintenance =
+                dao.maintenance(profile.id, asset.id)
+                    ?: OfflineAssetMaintenance(profile.id, asset.id)
+            val status = bundle.getString("sourceStatus")
+            dao.putMaintenance(
+                maintenance.copy(
+                    sourceStatus = status,
+                    sourceRevision =
+                        bundle.optString("sourceRevision").takeIf {
+                            it.isNotBlank() && it != "null"
+                        },
+                )
+            )
+            dao.item(profile.id, asset.item)?.let {
+                dao.putItems(
+                    listOf(
+                        it.copy(newSourceAvailable = dao.hasOutdatedAsset(profile.id, asset.item))
+                    )
+                )
+            }
+            if (status != "unchanged") {
+                for (key in
+                    listOf("subtitles", "chapters", "segments", "lyrics", "episodeNeighbors")) {
+                    if (oldBundle?.has(key) == true) bundle.put(key, oldBundle.get(key))
+                    else bundle.remove(key)
+                }
+            } else {
+                val indices = descriptor.optJSONObject("subtitleIndexMap") ?: JSONObject()
+                val previous = dao.supplements(profile.id, asset.id)
+                previous.forEach { row ->
+                    val entry = JSONObject(row.descriptor)
+                    val id = entry.optString("fileId")
+                    if (id.isNotBlank() && !entry.isNull("fileId"))
+                        indices.put("file:$id", row.key.substringAfter(':').toIntOrNull())
+                }
+                var next =
+                    maxOf(
+                        999,
+                        previous.mapNotNull { it.key.substringAfter(':').toIntOrNull() }.maxOrNull()
+                            ?: 999,
+                        indices.keys().asSequence().map { indices.optInt(it) }.maxOrNull() ?: 999,
+                    ) + 1
+                val subtitles = bundle.optJSONArray("subtitles") ?: JSONArray()
+                subtitles.objects().forEach { entry ->
+                    val id = entry.getString("id")
+                    val index =
+                        if (indices.has(id)) indices.getInt(id)
+                        else next++.also { indices.put(id, it) }
+                    entry.put("index", index)
+                }
+                // Embedded subtitles belong to the saved media representation.
+                oldBundle
+                    ?.optJSONArray("subtitles")
+                    ?.objects()
+                    ?.filter { it.isNull("fileId") || it.optString("fileId").isBlank() }
+                    ?.forEach { subtitles.put(it) }
+                bundle.put("subtitles", subtitles)
+                descriptor.put("subtitleIndexMap", indices)
+            }
+        }
         if (
             oldBundle != null &&
                 oldBundle.optString("presentationRevision") ==
                     bundle.optString("presentationRevision") &&
-                oldBundle.optString("supplementRevision") == bundle.optString("supplementRevision")
+                oldBundle.optString("supplementRevision") ==
+                    bundle.optString("supplementRevision") &&
+                oldBundle.optString("sourceStatus") == bundle.optString("sourceStatus")
         )
             return
 
@@ -248,6 +368,8 @@ class OfflineMetadataRefreshCoordinator(
         bundle: JSONObject,
     ): DownloadedSupplements {
         val pending = mutableListOf<Pair<OfflineSupplement, ByteArray>>()
+        val reused = mutableListOf<OfflineSupplement>()
+        val existing = dao.supplements(profileId, assetId)
         for ((kind, list) in
             listOf(
                 "artwork" to bundle.optJSONArray("artwork"),
@@ -260,7 +382,32 @@ class OfflineMetadataRefreshCoordinator(
                     if (kind == "artwork")
                         "art:${entry.optString("itemId")}:${entry.optString("type")}"
                     else "subtitle:${entry.getInt("index")}"
+                val saved = existing.firstOrNull { it.key == key }
+                if (
+                    kind == "subtitle" &&
+                        bundle.optString("subtitleScope") == "external" &&
+                        bundle.optString("sourceStatus") != "unchanged" &&
+                        saved != null
+                ) {
+                    reused += saved
+                    continue
+                }
+                val revision = entry.optString("revision").ifBlank { entry.optString("sha256") }
+                if (
+                    saved != null &&
+                        revision.isNotBlank() &&
+                        saved.revision == revision &&
+                        storage.paths.resolve(saved.relativePath).isFile &&
+                        sha256(storage.paths.resolve(saved.relativePath).readBytes()) ==
+                            storage.paths.resolve(saved.relativePath).name.substringBefore('.')
+                ) {
+                    entry.put("localPath", saved.relativePath)
+                    reused += saved.copy(descriptor = entry.toString())
+                    continue
+                }
                 val bytes = downloadBytes(session, url)
+                if (!storage.canStoreSupplement(profileId, bytes.size.toLong()))
+                    throw IOException("Not enough storage for metadata update.")
                 val digest = sha256(bytes)
                 if (entry.has("sha256") && entry.getString("sha256") != digest)
                     throw IOException("Supplement integrity check failed.")
@@ -292,7 +439,7 @@ class OfflineMetadataRefreshCoordinator(
             deleteUnreferencedFiles(profileId, created)
             throw error
         }
-        return DownloadedSupplements(pending.map { it.first }, created)
+        return DownloadedSupplements(reused + pending.map { it.first }, created)
     }
 
     private suspend fun downloadBytes(session: AuthSession, url: String): ByteArray {
@@ -304,6 +451,7 @@ class OfflineMetadataRefreshCoordinator(
             response.body.byteStream().use { input ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
+                    if (!canFetchSupplements()) throw AttachmentNetworkDeferred()
                     val count = input.read(buffer)
                     if (count < 0) break
                     if (output.size() + count > MAX_SUPPLEMENT_BYTES)
@@ -438,9 +586,7 @@ class OfflineMetadataRefreshCoordinator(
 
     private suspend fun deleteUnreferencedFiles(profileId: String, paths: List<String>) {
         paths.distinct().forEach { relative ->
-            if (dao.fileReferences(profileId, relative, "") == 0) {
-                runCatching { storage.paths.resolve(relative).delete() }
-            }
+            storage.deleteSupplementWhenUnused(profileId, relative)
         }
     }
 

@@ -213,6 +213,35 @@ interface OfflineDao {
 
     @Upsert suspend fun putAsset(value: OfflineAsset)
 
+    @Upsert suspend fun putMaintenance(value: OfflineAssetMaintenance)
+
+    @Query("SELECT * FROM offline_asset_maintenance WHERE profile=:profile AND asset=:asset")
+    suspend fun maintenance(profile: String, asset: String): OfflineAssetMaintenance?
+
+    @Query(
+        "SELECT a.* FROM offline_assets a LEFT JOIN offline_asset_maintenance m ON m.profile=a.profile AND m.asset=a.id WHERE a.profile=:profile AND a.state='complete' AND a.locked=0 AND COALESCE(m.nextAttempt,0)<=:now ORDER BY COALESCE(m.nextAttempt,0),a.id LIMIT :limit"
+    )
+    suspend fun dueMetadataAssets(profile: String, now: Long, limit: Int): List<OfflineAsset>
+
+    @Query("UPDATE offline_asset_maintenance SET nextAttempt=0 WHERE profile=:profile")
+    suspend fun requestMetadataCheck(profile: String)
+
+    @Query(
+        "UPDATE offline_asset_maintenance SET nextAttempt=0 WHERE profile=:profile AND lastChecked<:before AND error IS NULL"
+    )
+    suspend fun requestStaleMetadataCheck(profile: String, before: Long)
+
+    @Query("SELECT MAX(lastSuccess) FROM offline_asset_maintenance WHERE profile=:profile")
+    fun lastMetadataSuccess(profile: String): Flow<Long?>
+
+    @Query(
+        "SELECT * FROM offline_asset_maintenance WHERE profile=:profile ORDER BY lastChecked DESC LIMIT 1"
+    )
+    fun maintenanceStatus(profile: String): Flow<OfflineAssetMaintenance?>
+
+    @Query("SELECT * FROM offline_supplements WHERE profile=:profile AND asset=:asset")
+    fun observeSupplements(profile: String, asset: String): Flow<List<OfflineSupplement>>
+
     @Query("SELECT * FROM offline_assets WHERE profile=:profile AND id=:id")
     suspend fun asset(profile: String, id: String): OfflineAsset?
 
@@ -251,6 +280,48 @@ interface OfflineDao {
     fun storageUsed(profile: String): Flow<Long>
 
     @Upsert suspend fun putReference(value: OfflineAssetReference)
+
+    @Query(
+        "SELECT selection FROM offline_asset_refs WHERE profile=:profile AND asset=:asset ORDER BY selection"
+    )
+    suspend fun assetSelections(profile: String, asset: String): List<String>
+
+    @Query("DELETE FROM offline_asset_refs WHERE profile=:profile AND asset=:asset")
+    suspend fun removeAssetReferences(profile: String, asset: String)
+
+    @Query(
+        "SELECT * FROM offline_transfers WHERE profile=:profile AND options LIKE '%\"replacesAssetId\"%'"
+    )
+    suspend fun mediaUpdateTransfers(profile: String): List<OfflineTransfer>
+
+    @Query("SELECT * FROM offline_transfers WHERE profile=:profile AND assetId=:asset")
+    suspend fun transfersForAsset(profile: String, asset: String): List<OfflineTransfer>
+
+    @Query("DELETE FROM offline_transfers WHERE profile=:profile AND id=:id")
+    suspend fun deleteTransfer(profile: String, id: String)
+
+    @Query(
+        "SELECT a.* FROM offline_assets a JOIN offline_asset_maintenance m ON m.profile=a.profile AND m.asset=a.id WHERE a.profile=:profile AND a.state='complete' AND a.locked=0 AND m.sourceStatus='changed' AND m.error IS NULL AND NOT EXISTS(SELECT 1 FROM offline_transfers t WHERE t.profile=a.profile AND t.options LIKE '%\"replacesAssetId\":\"'||a.id||'\"%' AND t.options LIKE '%\"targetSourceRevision\":\"'||m.sourceRevision||'\"%') ORDER BY a.id LIMIT :limit"
+    )
+    suspend fun outdatedAssets(profile: String, limit: Int): List<OfflineAsset>
+
+    @Query(
+        "UPDATE offline_asset_maintenance SET nextAttempt=0 WHERE profile=:profile AND error='waiting_for_network'"
+    )
+    suspend fun retryDeferredMetadata(profile: String)
+
+    @Query(
+        "SELECT MIN(m.nextAttempt) FROM offline_asset_maintenance m JOIN offline_assets a ON a.profile=m.profile AND a.id=m.asset WHERE m.profile=:profile AND m.error IS NOT NULL AND a.state='complete' AND a.locked=0"
+    )
+    suspend fun nextMetadataRetry(profile: String): Long?
+
+    @Query("DELETE FROM offline_asset_maintenance WHERE profile=:profile AND asset=:asset")
+    suspend fun deleteAssetMaintenance(profile: String, asset: String)
+
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM offline_assets a JOIN offline_asset_maintenance m ON m.profile=a.profile AND m.asset=a.id WHERE a.profile=:profile AND a.item=:item AND a.state='complete' AND a.locked=0 AND m.sourceStatus IN ('changed','unavailable'))"
+    )
+    suspend fun hasOutdatedAsset(profile: String, item: String): Boolean
 
     @Query("SELECT COUNT(*) FROM offline_asset_refs WHERE profile=:profile AND asset=:asset")
     suspend fun references(profile: String, asset: String): Int
@@ -758,6 +829,9 @@ interface OfflineDao {
 
     @Query("DELETE FROM offline_asset_refs WHERE profile=:profile")
     suspend fun deleteAllAssetReferences(profile: String)
+
+    @Query("DELETE FROM offline_asset_maintenance WHERE profile=:profile")
+    suspend fun deleteMaintenance(profile: String)
 
     @Query("DELETE FROM offline_transfers WHERE profile=:profile")
     suspend fun deleteAllTransfers(profile: String)

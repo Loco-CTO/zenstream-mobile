@@ -171,6 +171,19 @@ data class OfflineSupplement(
     val descriptor: String,
 )
 
+@Entity(tableName = "offline_asset_maintenance", primaryKeys = ["profile", "asset"])
+data class OfflineAssetMaintenance(
+    val profile: String,
+    val asset: String,
+    val lastChecked: Long = 0,
+    val lastSuccess: Long = 0,
+    val nextAttempt: Long = 0,
+    val attempts: Int = 0,
+    val error: String? = null,
+    val sourceStatus: String = "unchanged",
+    val sourceRevision: String? = null,
+)
+
 @Entity(tableName = "offline_states", primaryKeys = ["profile", "target"])
 data class OfflineUserState(
     val profile: String,
@@ -261,6 +274,7 @@ data class OfflineAudioQueue(
             OfflineAssetReference::class,
             OfflineTransfer::class,
             OfflineSupplement::class,
+            OfflineAssetMaintenance::class,
             OfflineUserState::class,
             OfflinePlaybackState::class,
             OfflinePlaylist::class,
@@ -268,7 +282,7 @@ data class OfflineAudioQueue(
             OfflineOperation::class,
             OfflineAudioQueue::class,
         ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class OfflineDatabase : RoomDatabase() {
@@ -320,6 +334,15 @@ abstract class OfflineDatabase : RoomDatabase() {
             }
         @Volatile private var instance: OfflineDatabase? = null
 
+        val MIGRATION_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS offline_asset_maintenance (profile TEXT NOT NULL, asset TEXT NOT NULL, lastChecked INTEGER NOT NULL, lastSuccess INTEGER NOT NULL, nextAttempt INTEGER NOT NULL, attempts INTEGER NOT NULL, error TEXT, sourceStatus TEXT NOT NULL, sourceRevision TEXT, PRIMARY KEY(profile, asset))"
+                    )
+                }
+            }
+
         fun get(context: Context): OfflineDatabase =
             instance
                 ?: synchronized(this) {
@@ -335,6 +358,7 @@ abstract class OfflineDatabase : RoomDatabase() {
                                 MIGRATION_3_4,
                                 MIGRATION_4_5,
                                 MIGRATION_5_6,
+                                MIGRATION_6_7,
                             )
                             .build()
                             .also { instance = it }

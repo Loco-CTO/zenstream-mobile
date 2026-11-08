@@ -15,8 +15,6 @@ import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 enum class PlaybackSourcePreference {
@@ -62,16 +60,38 @@ sealed interface ResolvedPlaybackSource : Closeable {
         val asset: OfflineAsset,
         override val data: PlaybackData,
         private val lease: OfflineFileLease,
-        val supplements: List<LocalSupplement>,
+        var supplements: List<LocalSupplement>,
         val bundle: JSONObject,
+        private val supplementLease: Closeable = Closeable {},
     ) : ResolvedPlaybackSource {
+        private val supplementLeases = mutableListOf(supplementLease)
+        private var closed = false
+
+        suspend fun refreshSupplements(storage: OfflineStorage) {
+            val (current, lease) = storage.leaseSupplements(profile.id, asset.id)
+            synchronized(supplementLeases) {
+                if (closed) lease.close()
+                else {
+                    supplementLeases += lease
+                    supplements = current
+                }
+            }
+        }
+
         override val uri: String
             get() = lease.file.toURI().toASCIIString()
 
         val file: File
             get() = lease.file
 
-        override fun close() = lease.close()
+        override fun close() {
+            synchronized(supplementLeases) {
+                if (closed) return
+                closed = true
+                supplementLeases.forEach { it.close() }
+            }
+            lease.close()
+        }
     }
 }
 
@@ -162,6 +182,7 @@ class PlaybackSourceResolver(
     private val catalog: OfflineCatalogRepository,
     private val storage: OfflineStorage,
     private val policy: suspend () -> ConnectionState,
+    private val onLocalResolved: (String, String) -> Unit = { _, _ -> },
     private val remote: suspend (AuthSession, String, PlaybackOptions) -> PlaybackData,
 ) {
     private val dao = catalog.database.offline()
@@ -214,20 +235,9 @@ class PlaybackSourceResolver(
                         if (options.startPositionSeconds > 0) options.startPositionSeconds
                         else (item.playbackPositionTicks ?: 0) / 10000000.0
                     val data = localPlaybackData(item, asset, start)
-                    val supplementary =
-                        withContext(Dispatchers.IO) {
-                            dao.supplements(profile.id, asset.id).mapNotNull { row ->
-                                try {
-                                    require(row.relativePath.startsWith(profile.id + "/"))
-                                    val file = storage.paths.resolve(row.relativePath)
-                                    if (!file.isFile) null
-                                    else LocalSupplement(row.key, file, JSONObject(row.descriptor))
-                                } catch (error: Exception) {
-                                    if (error is CancellationException) throw error
-                                    null
-                                }
-                            }
-                        }
+                    val (supplementary, supplementsLease) =
+                        storage.leaseSupplements(profile.id, asset.id)
+                    onLocalResolved(profile.id, itemId)
                     return ResolvedPlaybackSource.Local(
                         profile,
                         asset,
@@ -235,6 +245,7 @@ class PlaybackSourceResolver(
                         lease,
                         supplementary,
                         JSONObject(asset.descriptor).optJSONObject("bundle") ?: JSONObject(),
+                        supplementsLease,
                     )
                 } catch (error: Exception) {
                     lease.close()

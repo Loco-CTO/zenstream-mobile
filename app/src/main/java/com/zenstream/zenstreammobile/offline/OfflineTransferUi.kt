@@ -325,6 +325,11 @@ private fun DownloadTransferRow(
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
+    val revision by runtime.catalogRevision.collectAsState()
+    val availability by
+        produceState(OfflineAvailability(0, 0), revision, transfer.item) {
+            value = runtime.catalog.availability(profile.id, transfer.item)
+        }
     val item by
         produceState<MediaItem?>(null, profile.id, transfer.item) {
             value = offlineUiRead(null) { runtime.catalog.item(profile.id, transfer.item) }
@@ -340,6 +345,8 @@ private fun DownloadTransferRow(
         }
     }
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 12.dp)) {
+        if (availability.newSourceAvailable > 0 && transfer.state == "complete")
+            UpdateDownloadAction(runtime, profile, transfer.item, item?.name.orEmpty(), false)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(

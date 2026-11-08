@@ -12,6 +12,7 @@ import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.data.CatalogException
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.data.SessionStore
+import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.PlaylistData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +57,8 @@ class OfflineRuntime private constructor(context: Context) {
                 "offline_operations",
                 "offline_playlists",
                 "offline_selections",
+                "offline_supplements",
+                "offline_asset_maintenance",
             )
             .scan(0L) { revision, _ -> revision + 1 }
             .stateIn(scope, SharingStarted.Eagerly, 0L)
@@ -86,7 +89,15 @@ class OfflineRuntime private constructor(context: Context) {
             },
             activeSession = { sessionStore.session.first() },
             sourceDetails = { session, item -> network.offlineSourceDetails(session, item) },
+            automaticUpdatesAllowed = { connection.autoUpdateMedia.value },
+            binaryAllowed = ::attachmentNetworkAllowed,
         )
+    val mediaUpdates =
+        OfflineMediaUpdates(catalog) { session, path, method, body ->
+            requireCurrentSession(session)
+            check(connection.state.value.mode != ConnectionMode.OFFLINE)
+            network.offlineRequest(session, path, method, body)
+        }
 
     val audio = OfflineAudioRepository(catalog, storage)
     val playbackState = OfflinePlaybackStateRepository(appContext, database)
@@ -117,10 +128,23 @@ class OfflineRuntime private constructor(context: Context) {
                 check(connection.state.value.mode != ConnectionMode.OFFLINE) {
                     "Offline mode is enabled."
                 }
+                if (!attachmentNetworkAllowed()) throw AttachmentNetworkDeferred()
+                requireCurrentSession(session)
                 network.offlineBinaryRequest(session, path, headers, receive)
             },
             loadCursor = connection::maintenanceCursor,
             saveCursor = connection::saveMaintenanceCursor,
+            supportsItemBundles = { session ->
+                val features =
+                    network
+                        .offlineRequest(session, "/api/offline/capabilities", "GET", null)
+                        .optJSONArray("features")
+                features != null &&
+                    (0 until features.length()).any {
+                        features.optString(it) == "item-bundle-refresh"
+                    }
+            },
+            canFetchSupplements = ::attachmentNetworkAllowed,
         )
     val playbackSources =
         PlaybackSourceResolver(
@@ -128,6 +152,7 @@ class OfflineRuntime private constructor(context: Context) {
             storage,
             policy = { connection.state.first { it.initialized } },
             remote = { session, item, options -> network.playback(session, item, options) },
+            onLocalResolved = { profile, item -> checkDownloadedItem(profile, item) },
         )
 
     init {
@@ -153,8 +178,12 @@ class OfflineRuntime private constructor(context: Context) {
                                 if (
                                     policy.mode == ConnectionMode.AUTOMATIC &&
                                         policy.profile != null
-                                )
+                                ) {
+                                    database
+                                        .offline()
+                                        .retryDeferredMetadata(requireNotNull(policy.profile))
                                     DownloadExecution.scheduleReconciliationNow(appContext)
+                                }
                             }
                         }
                     }
@@ -515,6 +544,7 @@ class OfflineRuntime private constructor(context: Context) {
                 .filter { it.id != profile.id && !it.locked }
                 .forEach { lockProfileForIdentityChange(it) }
             connection.selectProfile(profile.id)
+            dao.requestStaleMetadataCheck(profile.id, System.currentTimeMillis() - 15 * 60_000L)
             try {
                 catalog.syncLibraryNames(session, profile.id, network.libraries(session))
             } catch (error: CancellationException) {
@@ -589,6 +619,7 @@ class OfflineRuntime private constructor(context: Context) {
             return false
         for (part in listOf("metadata-catalog", "metadata-assets", "metadata-playlists")) connection
             .saveMaintenanceCursor("${profile.id}:$part", 0)
+        database.offline().requestMetadataCheck(profileId)
         DownloadExecution.scheduleReconciliationNow(appContext)
         return true
     }
@@ -613,7 +644,113 @@ class OfflineRuntime private constructor(context: Context) {
         }
         connection.saveMaintenanceCursor("$id:orphan-bucket", (bucket + 8) % 256)
         accountSync.reconcile(profile.id, session)
-        metadataRefresh.refresh(profile.id, session, sessionStore.metadataLanguage.first())
+        val more =
+            metadataRefresh.refresh(profile.id, session, sessionStore.metadataLanguage.first())
+        if (more) DownloadExecution.scheduleMaintenanceContinuation(appContext)
+        else
+            database.offline().nextMetadataRetry(profile.id)?.let {
+                DownloadExecution.scheduleMaintenanceRetry(appContext, profile.id, it)
+            }
+        if (connection.autoUpdateMedia.value) {
+            for (asset in database.offline().outdatedAssets(profile.id, 16)) {
+                try {
+                    val preview = mediaUpdates.preview(session, profile.id, asset.id)
+                    val source = preview.source
+                    if (source == null || asset.quality !in preview.availableProfiles(source)) {
+                        database.offline().maintenance(profile.id, asset.id)?.let {
+                            database
+                                .offline()
+                                .putMaintenance(it.copy(error = "manual_update_required"))
+                        }
+                        continue
+                    }
+                    if (source.optString("revision") == asset.sourceRevision) {
+                        database.offline().maintenance(profile.id, asset.id)?.let {
+                            database
+                                .offline()
+                                .putMaintenance(it.copy(sourceStatus = "unchanged", error = null))
+                        }
+                        continue
+                    }
+                    mediaUpdates.enqueue(session, preview, source, asset.quality, true)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    /* An unavailable representation must not block maintenance. */
+                }
+            }
+            if (database.offline().outdatedAssets(profile.id, 1).isNotEmpty())
+                DownloadExecution.scheduleMaintenanceContinuation(appContext)
+        }
+        if (
+            database.offline().mediaUpdateTransfers(profile.id).any {
+                it.state in setOf("queued", "preparing", "transferring", "verifying", "publishing")
+            }
+        )
+            DownloadExecution.scheduleMediaUpdates(appContext, profile.id)
+    }
+
+    internal fun attachmentNetworkAllowed(): Boolean =
+        connection.state.value.mode != ConnectionMode.OFFLINE &&
+            (connection.allowMetered.value || !connectivity.isActiveNetworkMetered)
+
+    suspend fun setAutoUpdateMedia(enabled: Boolean) {
+        connection.setAutoUpdateMedia(enabled)
+        if (!enabled) {
+            val id = connection.state.first { it.initialized }.profile ?: return
+            database.withTransaction {
+                for (transfer in database.offline().mediaUpdateTransfers(id)) {
+                    if (
+                        org.json.JSONObject(transfer.options).optBoolean("automaticUpdate") &&
+                            transfer.state !in setOf("complete", "cancelled", "failed")
+                    )
+                        database
+                            .offline()
+                            .putTransfer(transfer.copy(state = "paused", reserved = 0))
+                }
+            }
+        }
+    }
+
+    fun checkDownloadedLibrary(profile: String) {
+        scope.launch {
+            val policy = connection.state.first { it.initialized }
+            if (
+                policy.mode == ConnectionMode.OFFLINE ||
+                    policy.authentication == OnlineAuthentication.NEEDS_SIGN_IN
+            )
+                return@launch
+            database
+                .offline()
+                .requestStaleMetadataCheck(profile, System.currentTimeMillis() - 15 * 60_000L)
+            DownloadExecution.scheduleReconciliationNow(appContext)
+        }
+    }
+
+    private suspend fun requireCurrentSession(expected: AuthSession) {
+        val actual = sessionStore.session.first()
+        check(actual?.userId == expected.userId && actual.serverUrl == expected.serverUrl)
+    }
+
+    fun checkDownloadedItem(profileId: String, item: String) {
+        scope.launch {
+            val policy = connection.state.first { it.initialized }
+            if (
+                policy.mode == ConnectionMode.OFFLINE ||
+                    policy.authentication == OnlineAuthentication.NEEDS_SIGN_IN
+            )
+                return@launch
+            val session = sessionStore.session.first() ?: return@launch
+            runCatching {
+                if (!matchesCurrentServerIdentity(profileId, session)) return@runCatching
+                metadataRefresh.refreshItem(
+                    profileId,
+                    session,
+                    item,
+                    sessionStore.metadataLanguage.first(),
+                )
+            }
+        }
     }
 
     companion object {

@@ -63,6 +63,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -733,6 +734,7 @@ class PlaybackViewModel(
             val data = local?.videoData() ?: resolved.data
             val outgoingSource = resolvedSource
             resolvedSource = resolved
+            observeDownloadedSupplements(local)
             Log.i(
                 PLAYBACK_TAG,
                 "playback data item=$currentItemId mode=${data.mode} state=${data.sessionState} sessionId=${data.sessionId} url=${redactPlaybackUrl(data.url)}",
@@ -1802,6 +1804,30 @@ class PlaybackViewModel(
         }
     }
 
+    private var downloadedSupplementsJob: Job? = null
+
+    private fun observeDownloadedSupplements(local: ResolvedPlaybackSource.Local?) {
+        downloadedSupplementsJob?.cancel()
+        val runtime = repository.offline ?: return
+        if (local == null) return
+        downloadedSupplementsJob = viewModelScope.launch {
+            runtime.database
+                .offline()
+                .observeSupplements(local.profile.id, local.asset.id)
+                .distinctUntilChanged()
+                .collect {
+                    if (resolvedSource !== local) return@collect
+                    local.refreshSupplements(runtime.storage)
+                    if (resolvedSource !== local) return@collect
+                    val data = _uiState.value.playback ?: return@collect
+                    _uiState.value =
+                        _uiState.value.copy(
+                            playback = data.copy(subtitles = local.videoData().subtitles)
+                        )
+                }
+        }
+    }
+
     private fun loadSubtitle(loadGeneration: Long, requestGeneration: Long) {
         val selected = _uiState.value.selectedSubtitle ?: return
         val playback = _uiState.value.playback ?: return
@@ -1878,6 +1904,7 @@ class PlaybackViewModel(
     fun onPause() = flushProgress()
 
     override fun onCleared() {
+        downloadedSupplementsJob?.cancel()
         progressJob?.cancel()
         viewerHeartbeatJob?.cancel()
         playbackAccessJob?.cancel()
