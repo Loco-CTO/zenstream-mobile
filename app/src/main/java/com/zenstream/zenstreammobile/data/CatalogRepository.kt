@@ -45,6 +45,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 private data class AudioLyricsCacheKey(
@@ -69,19 +72,20 @@ private data class AudioLyricsCacheKey(
 )
 
 private sealed interface AudioLyricsLookup {
-    data class Cached(val value: AudioLyrics) : AudioLyricsLookup
+    data class Cached(val value: AudioLyrics?, val savedAt: Long) : AudioLyricsLookup
 
     data class InFlight(val request: Deferred<AudioLyrics?>) : AudioLyricsLookup
 }
 
-/** Shares one lyrics request between the playback service and the foreground UI. */
+/** Reuses lyrics across panel opens and shares requests for the same track. */
 private object AudioLyricsCache {
     private const val MAX_ENTRIES = 48
+    private const val MISS_TTL_NANOS = 60_000_000_000L
 
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val values =
-        LinkedHashMap<AudioLyricsCacheKey, AudioLyrics>(
+        LinkedHashMap<AudioLyricsCacheKey, AudioLyricsLookup.Cached>(
             MAX_ENTRIES,
             .75f,
             true,
@@ -93,28 +97,41 @@ private object AudioLyricsCache {
         loader: suspend () -> AudioLyrics?,
     ): AudioLyrics? {
         val lookup = mutex.withLock {
-            values[key]?.let { AudioLyricsLookup.Cached(it) }
-                ?: AudioLyricsLookup.InFlight(inFlight.getOrPut(key) { scope.async { loader() } })
-        }
-        return when (lookup) {
-            is AudioLyricsLookup.Cached -> lookup.value
-            is AudioLyricsLookup.InFlight ->
-                try {
-                    lookup.request.await()?.also { value ->
-                        mutex.withLock {
-                            values[key] = value
-                            while (values.size > MAX_ENTRIES) {
-                                val iterator = values.entries.iterator()
-                                iterator.next()
-                                iterator.remove()
+            values[key]?.takeIf {
+                it.value != null || System.nanoTime() - it.savedAt < MISS_TTL_NANOS
+            }
+                ?: AudioLyricsLookup.InFlight(
+                    inFlight.getOrPut(key) {
+                        scope.async {
+                            val job = coroutineContext[Job]
+                            try {
+                                loader().also { value ->
+                                    mutex.withLock {
+                                        if (inFlight[key] === job) {
+                                            values[key] =
+                                                AudioLyricsLookup.Cached(value, System.nanoTime())
+                                            if (values.size > MAX_ENTRIES) {
+                                                val iterator = values.entries.iterator()
+                                                iterator.next()
+                                                iterator.remove()
+                                            }
+                                        }
+                                    }
+                                }
+                            } finally {
+                                withContext(NonCancellable) {
+                                    mutex.withLock {
+                                        if (inFlight[key] === job) inFlight.remove(key)
+                                    }
+                                }
                             }
                         }
                     }
-                } finally {
-                    mutex.withLock {
-                        if (inFlight[key] === lookup.request) inFlight.remove(key)
-                    }
-                }
+                )
+        }
+        return when (lookup) {
+            is AudioLyricsLookup.Cached -> lookup.value
+            is AudioLyricsLookup.InFlight -> lookup.request.await()
         }
     }
 
@@ -1375,8 +1392,11 @@ class CatalogRepository(
             if (
                 profile != null &&
                     offline.database.offline().playable(profile.id, itemId).isNotEmpty()
-            )
-                return offline.audio.lyrics(profile.id, itemId)
+            ) {
+                offline.audio.lyrics(profile.id, itemId)?.let {
+                    return it
+                }
+            }
             if (policy.mode == com.zenstream.zenstreammobile.offline.ConnectionMode.OFFLINE)
                 return null
         }
@@ -1384,16 +1404,6 @@ class CatalogRepository(
             AudioLyricsCacheKey(session.serverUrl, session.userId, itemId)
         ) {
             authenticatedCatalogRequest(session) { current -> api.audioLyrics(current, itemId) }
-        }
-    }
-
-    suspend fun prefetchAudioLyrics(session: AuthSession, itemId: String) {
-        try {
-            audioLyrics(session, itemId)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Throwable) {
-            // Prefetch is best-effort. The foreground lyrics page will retry on demand.
         }
     }
 

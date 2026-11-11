@@ -140,12 +140,12 @@ internal fun OfflineSavedMusicScreen(
     var failed by remember(root.id) { mutableStateOf(false) }
     var downloaded by remember(root.id) { mutableStateOf(emptySet<String>()) }
     var innerPage by remember(root.id) { mutableIntStateOf(0) }
-    var lyrics by remember(root.id) { mutableStateOf<AudioLyrics?>(null) }
-    var lyricsLoading by remember(root.id) { mutableStateOf(false) }
-    var lyricsFailed by remember(root.id) { mutableStateOf(false) }
-    var lyricsRetry by remember(root.id) { mutableIntStateOf(0) }
     val isTrack = root.type == "Audio"
     val current = state.currentEntry?.track?.takeIf { state.offlineProfileId == profile.id }
+    var lyrics by remember(profile.id, current?.id) { mutableStateOf<AudioLyrics?>(null) }
+    var lyricsLoading by remember(profile.id, current?.id) { mutableStateOf(false) }
+    var lyricsFailed by remember(profile.id, current?.id) { mutableStateOf(false) }
+    var lyricsRetry by remember(profile.id, current?.id) { mutableIntStateOf(0) }
     val palette =
         remember(current?.id, current?.imageBlurHashes) {
             current?.let(::musicArtworkPalette) ?: musicArtworkPalette(root)
@@ -193,8 +193,9 @@ internal fun OfflineSavedMusicScreen(
             }
         }
     }
-    LaunchedEffect(profile.id, current?.id, revision, lyricsRetry) {
-        if (current != null) {
+    val lyricsVisible = isTrack && innerPage == 2
+    LaunchedEffect(profile.id, current?.id, lyricsVisible, revision, lyricsRetry) {
+        if (lyricsVisible && current != null) {
             lyricsLoading = true
             lyricsFailed = false
             try {
@@ -207,10 +208,6 @@ internal fun OfflineSavedMusicScreen(
             } finally {
                 lyricsLoading = false
             }
-        } else {
-            lyrics = null
-            lyricsLoading = false
-            lyricsFailed = false
         }
     }
 

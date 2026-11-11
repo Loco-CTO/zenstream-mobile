@@ -18,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
@@ -118,7 +119,7 @@ class DownloadRestartTest {
         val assetId = "b".repeat(64)
         val selectionId = "selection"
         val transferId = "transfer"
-        val itemId = "movie"
+        val itemId = "track"
         val bytes = ByteArray(2 * 1024 * 1024) { (it % 251).toByte() }
         val source = File(root, "source").apply { writeBytes(bytes) }
         val digest = sha256(source)
@@ -136,7 +137,7 @@ class DownloadRestartTest {
                     .put("profile", "original")
                     .put("sourceId", "source")
                     .put("sourceRevision", "revision")
-                    .put("mimeType", "video/mp4")
+                    .put("mimeType", "audio/flac")
                     .put("contentUrl", "/api/offline/assets/$assetId/content")
                     .put("bundleUrl", "/api/offline/assets/$assetId/bundle")
             val api = CatalogApi(OkHttpClient.Builder().readTimeout(30, TimeUnit.SECONDS).build())
@@ -145,7 +146,20 @@ class DownloadRestartTest {
                     when {
                         path.endsWith("capabilities") ->
                             JSONObject().put("serverInstanceId", "server")
-                        path.contains("/bundle") -> JSONObject()
+                        path.contains("/bundle") -> {
+                            assertTrue(path.contains("fallback=netease"))
+                            JSONObject()
+                                .put(
+                                    "lyrics",
+                                    JSONObject()
+                                        .put("source", "netease")
+                                        .put(
+                                            "lines",
+                                            JSONArray()
+                                                .put(JSONObject().put("text", "Saved lyrics")),
+                                        ),
+                                )
+                        }
                         else -> JSONObject(descriptor.toString())
                     }
                 }
@@ -171,7 +185,7 @@ class DownloadRestartTest {
                             selectionId,
                             itemId,
                             itemId,
-                            "Movie",
+                            "Audio",
                             "{}",
                             state = "queued",
                         )
@@ -221,6 +235,16 @@ class DownloadRestartTest {
                 assertEquals("complete", db.offline().transfer(profileId, transferId)?.state)
                 val asset = requireNotNull(db.offline().asset(profileId, assetId))
                 assertEquals(digest, sha256(storage.paths.resolve(asset.relativePath)))
+                val lyrics =
+                    OfflineAudioRepository(
+                            OfflineCatalogRepository(db) { _, _, _, _ ->
+                                error("Saved lyrics should be available without a server request")
+                            },
+                            storage,
+                        )
+                        .lyrics(profileId, itemId)
+                assertEquals("netease", lyrics?.source)
+                assertEquals("Saved lyrics", lyrics?.lines?.single()?.text)
             } finally {
                 running?.cancel()
                 server.close()

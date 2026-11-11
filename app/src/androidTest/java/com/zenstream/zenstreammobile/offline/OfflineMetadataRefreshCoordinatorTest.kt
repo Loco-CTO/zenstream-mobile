@@ -25,6 +25,42 @@ import org.junit.Test
 
 class OfflineMetadataRefreshCoordinatorTest {
     @Test
+    fun downloadedNetEaseLyricsSurviveLocalMissAndYieldToLocalLyrics() = runBlocking {
+        val fixture = Fixture()
+        try {
+            fun lyrics(source: String) = JSONObject().put("source", source)
+            fun bundleSnapshot(revision: String, lyrics: Any) =
+                bundle("p1", revision)
+                    .put("subtitleScope", "external")
+                    .put("sourceStatus", "unchanged")
+                    .put("sourceRevision", "source-revision-1")
+                    .put("lyrics", lyrics)
+
+            suspend fun savedSource() =
+                JSONObject(fixture.dao.asset(fixture.profileId, fixture.assetId)!!.descriptor)
+                    .getJSONObject("bundle")
+                    .getJSONObject("lyrics")
+                    .getString("source")
+
+            fixture.seed("Track", bundle("p1", "s1").put("lyrics", lyrics("netease")))
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundleSnapshot("s2", JSONObject.NULL),
+                itemBundles = true,
+            )
+            assertEquals("netease", savedSource())
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                bundleSnapshot("s3", lyrics("sidecar")),
+                itemBundles = true,
+            )
+            assertEquals("sidecar", savedSource())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
     fun externalSnapshotPreservesEmbeddedSubtitlesWithNullFileIdentity() = runBlocking {
         val fixture = Fixture()
         try {

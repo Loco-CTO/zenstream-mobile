@@ -1969,7 +1969,7 @@ internal fun musicArtistPath(artistId: String): String =
 internal fun musicArtistTracksPath(artistId: String): String = "${musicArtistPath(artistId)}/tracks"
 
 internal fun audioLyricsPath(itemId: String): String =
-    "/api/playback/items/${encodePathSegment(itemId)}/lyrics"
+    "/api/playback/items/${encodePathSegment(itemId)}/lyrics?fallback=netease"
 
 internal fun audioPlayStartPath(itemId: String): String =
     "/api/catalog/items/${encodePathSegment(itemId)}/play-start"
@@ -2066,7 +2066,12 @@ internal fun parseAudioLyrics(value: Any?): AudioLyrics? {
             .orEmpty()
     if (lines.isEmpty()) return null
     return AudioLyrics(
-        source = if (root.optString("source") == "embedded") "embedded" else "sidecar",
+        source =
+            when (val source = root.optString("source")) {
+                "embedded",
+                "netease" -> source
+                else -> "sidecar"
+            },
         timed = root.optBoolean("timed", false),
         language = root.optString("language").ifBlank { null },
         lines = lines,

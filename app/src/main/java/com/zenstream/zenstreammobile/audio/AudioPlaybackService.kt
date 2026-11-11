@@ -121,7 +121,6 @@ class AudioPlaybackService : MediaLibraryService() {
     private var progressJob: Job? = null
     private var positionJob: Job? = null
     private var persistJob: Job? = null
-    private var lyricsPrefetchJob: Job? = null
     private var audioAccessRefreshJob: Job? = null
     private var autoAdoptionJob: Job? = null
     private var currentState = AudioPlayerState()
@@ -178,8 +177,6 @@ class AudioPlaybackService : MediaLibraryService() {
             if (sessionDetached) attachAudioSession()
             restoreValidationJob?.cancel()
             restoreValidationJob = null
-            lyricsPrefetchJob?.cancel()
-            lyricsPrefetchJob = null
             autoAdoptionJob?.cancel()
             autoAdoptionJob = null
         }
@@ -519,7 +516,6 @@ class AudioPlaybackService : MediaLibraryService() {
                     queueCommandMutex.withLock {
                         transactionController.invalidate()
                         audioAccessRefreshJob?.cancel()
-                        lyricsPrefetchJob?.cancel()
                         restoreValidationJob?.cancel()
                         loadingCurrent = false
                         suppressEnded = true
@@ -611,8 +607,6 @@ class AudioPlaybackService : MediaLibraryService() {
                 persistenceEpoch += 1L
                 persistJob?.cancel()
                 restoreValidationJob?.cancel()
-                lyricsPrefetchJob?.cancel()
-                lyricsPrefetchJob = null
                 autoAdoptionJob?.cancel()
                 autoAdoptionJob = null
                 transactionController.invalidate()
@@ -1291,7 +1285,6 @@ class AudioPlaybackService : MediaLibraryService() {
             }
             persistSnapshot()
             if (source is ResolvedPlaybackSource.Remote && account != null) {
-                prefetchLyrics(account, entry)
                 // Telemetry cannot delay or fail playback.
                 if (shouldPlay) launchPlayStart(account, entry, request.generation)
                 startAudioAccessRefresh(account, entry, request, data)
@@ -1440,17 +1433,6 @@ class AudioPlaybackService : MediaLibraryService() {
                     if (shouldPlay) player.play() else player.pause()
                 }
                 expiresInSeconds = refreshed.expiresInSeconds
-            }
-        }
-    }
-
-    private fun prefetchLyrics(account: AuthSession, entry: AudioQueueEntry) {
-        lyricsPrefetchJob?.cancel()
-        val nextEntry = currentState.queue.getOrNull(currentState.currentIndex + 1)
-        val candidates = listOf(entry, nextEntry).filterNotNull().distinctBy { it.track.id }
-        lyricsPrefetchJob = serviceScope.launch {
-            for (candidate in candidates) {
-                repository.prefetchAudioLyrics(account, candidate.track.id)
             }
         }
     }
@@ -2010,8 +1992,6 @@ class AudioPlaybackService : MediaLibraryService() {
         // This is local persistence only; it is not on the progress/network critical path.
         if (account != null) clearPersistedSnapshot(account)
         progress?.let(::enqueueProgress)
-        lyricsPrefetchJob?.cancel()
-        lyricsPrefetchJob = null
         autoAdoptionJob?.cancel()
         autoAdoptionJob = null
         if (!detachAudioSessionIfCurrent(commandSequence, teardownGeneration)) return
@@ -2043,8 +2023,6 @@ class AudioPlaybackService : MediaLibraryService() {
             loadingCurrent = false
             activeAudioSource = null
             lastAutoplay = false
-            lyricsPrefetchJob?.cancel()
-            lyricsPrefetchJob = null
             autoAdoptionJob?.cancel()
             autoAdoptionJob = null
             audioAccessRefreshJob?.cancel()
@@ -2881,7 +2859,6 @@ class AudioPlaybackService : MediaLibraryService() {
         positionJob?.cancel()
         progressJob?.cancel()
         audioAccessRefreshJob?.cancel()
-        lyricsPrefetchJob?.cancel()
         autoAdoptionJob?.cancel()
         cancelRecovery()
         restoreValidationJob?.cancel()
