@@ -358,23 +358,39 @@ fun NowPlayingScreen(
             initialValue = PlaybackTimeDisplayMode.Remaining
         )
     val scope = rememberCoroutineScope()
-    var lyrics by remember(current?.id) { mutableStateOf<AudioLyrics?>(null) }
-    var lyricsLoading by remember(current?.id) { mutableStateOf(false) }
-    var lyricsError by remember(current?.id) { mutableStateOf(false) }
-    var lyricsRetry by remember(current?.id) { mutableIntStateOf(0) }
+    var lyrics by
+        remember(session.serverUrl, session.userId, current?.id) {
+            mutableStateOf<AudioLyrics?>(null)
+        }
+    var lyricsLoading by
+        remember(session.serverUrl, session.userId, current?.id) {
+            mutableStateOf(false)
+        }
+    var lyricsError by
+        remember(session.serverUrl, session.userId, current?.id) {
+            mutableStateOf(false)
+        }
+    var lyricsRetry by
+        remember(session.serverUrl, session.userId, current?.id) {
+            mutableIntStateOf(0)
+        }
 
-    val offlineRevision by
-        (repository.offline?.catalogRevision ?: kotlinx.coroutines.flow.MutableStateFlow(0L))
-            .collectAsStateWithLifecycle()
-    LaunchedEffect(current?.id, lyricsRetry, offlineRevision) {
-        if (current != null) {
+    val lyricsVisible = innerPage == 2
+    LaunchedEffect(
+        session.serverUrl,
+        session.userId,
+        current?.id,
+        lyricsVisible,
+        lyricsRetry,
+    ) {
+        if (lyricsVisible && current != null) {
             lyricsLoading = true
             lyricsError = false
             try {
                 lyrics = repository.audioLyrics(session, current.id)
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 if (
                     error is com.zenstream.zenstreammobile.data.CatalogException &&
                         error.statusCode == 401
@@ -382,8 +398,9 @@ fun NowPlayingScreen(
                     repository.clearSessionIfCurrent(session)
                 }
                 lyricsError = true
+            } finally {
+                lyricsLoading = false
             }
-            lyricsLoading = false
         }
     }
     val artworkPalette =
@@ -544,7 +561,7 @@ fun NowPlayingScreen(
                                 onOpenArtist = onOpenArtist,
                                 onFavorite = onFavorite,
                                 coordinator = coordinator,
-                                showLyrics = innerPage == 2,
+                                showLyrics = lyricsVisible,
                                 lyrics = lyrics,
                                 lyricsLoading = lyricsLoading,
                                 lyricsError = lyricsError,

@@ -242,7 +242,7 @@ class CatalogApiTest {
             musicArtistTracksPath("artist/1"),
         )
         assertEquals(
-            "/api/playback/items/track%2F1/lyrics",
+            "/api/playback/items/track%2F1/lyrics?fallback=netease",
             audioLyricsPath("track/1"),
         )
         assertEquals(

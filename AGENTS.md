@@ -19,6 +19,7 @@ This repository owns the ZenStream Android client. It is a Jetpack Compose appli
 - The Orchestrator owns catalog and account data. Device-local settings in `SessionStore` must not be moved into account preferences without an API and product decision.
 - `AudioPlaybackService` owns audio queue and Android media-session behavior. The active negotiated source is separate from the queue snapshot.
 - Offline playback must resolve a verified local asset and must not silently fall back to streaming. Read `docs/offline.md` before changing offline flows.
+- Request NetEase lyrics only from the visible Lyrics page or when saving a download. Background attachment refresh uses library lyrics and preserves saved NetEase lyrics on a miss.
 - `OfflineMetadataRefreshCoordinator` owns per-asset attachment checks; `OfflineMediaUpdates` owns durable replacement intent. Keep automatic replacements in WorkManager, reserve UIDT jobs for visible user actions, and protect both media and supplements with playback leases.
 - Read `docs/playback.md` before changing Media3, MPV, audio service, PiP, decoder recovery, or player UI behavior.
 - Remote playback access renewal and bounded HTTP authorization recovery belong to `ui/PlaybackAccessRecovery.kt` and `PlaybackViewModel.kt`; keep them separate from decoder/transcoding recovery and local playback.

@@ -603,7 +603,7 @@ class DownloadCoordinator(
             try {
                 request(
                     session,
-                    descriptor.getString("bundleUrl") + "?language=$language",
+                    descriptor.getString("bundleUrl") + "?language=$language&fallback=netease",
                     "GET",
                     null,
                 )

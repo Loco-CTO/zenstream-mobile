@@ -22,6 +22,8 @@ Downloads keeps an All filter and adds one filter for each library that has down
 
 ## Automatic maintenance and media updates
 
+When a music download has no embedded or sidecar lyrics, ZenStream asks the server for NetEase lyrics if the provider is enabled. A match is saved with the download for offline use. Background attachment refresh preserves saved NetEase lyrics until embedded or sidecar lyrics become available.
+
 Subtitles, lyrics, artwork, chapters, and presentation metadata refresh automatically. Periodic maintenance runs approximately every six hours, with additional checks on reconnect, authenticated startup, opening Downloads, and local playback. Foreground checks become eligible after fifteen minutes. Android scheduling may defer background work; explicit Offline mode prevents network access.
 
 Servers advertising `item-bundle-refresh` expose an item-based snapshot independent of the prepared asset reservation. The external-subtitle snapshot merges with saved embedded tracks; stable file identities map to persistent local track IDs. Lyrics use the same saved bundle and update the local Now Playing screen. Timing-dependent attachments stay with the saved copy when its source changes. Older servers retain the legacy asset-bundle refresh path.

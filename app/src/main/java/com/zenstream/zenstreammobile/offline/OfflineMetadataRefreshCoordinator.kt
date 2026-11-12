@@ -315,6 +315,12 @@ class OfflineMetadataRefreshCoordinator(
                 descriptor.put("subtitleIndexMap", indices)
             }
         }
+        // Background refresh checks local attachments. Keep downloaded NetEase
+        // lyrics until an actual local lyric replaces them.
+        val savedLyrics = oldBundle?.optJSONObject("lyrics")
+        if (bundle.isNull("lyrics") && savedLyrics?.optString("source") == "netease") {
+            bundle.put("lyrics", savedLyrics)
+        }
         if (
             oldBundle != null &&
                 oldBundle.optString("presentationRevision") ==

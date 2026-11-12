@@ -18,7 +18,7 @@ PiP, mini-player gestures, subtitle rendering, route changes, and session restor
 
 - Selecting a different queue entry starts at zero; selecting the current entry resumes it.
 - Full Now Playing owns previous/next, shuffle, and repeat actions. The compact mini-player remains focused on current playback.
-- Queue and lyrics are inner pages of Now Playing. Lyrics highlighting uses the playback position anchor and bounded shared lyrics cache.
+- Queue and lyrics are inner pages of Now Playing. Lyrics load when the Lyrics page is visible, using saved or library lyrics first and NetEase when the server enables it. Lyrics highlighting uses the playback position anchor.
 - Direct lossless FLAC uses the checked-in Media3 FLAC extension. Keep libFLAC preferred for music, and do not resolve FFmpeg/MPV collisions with `pickFirst` or by replacing MPV binaries.
 - Album, artist, mini-player, and Now Playing color accents use `ArtworkPalette.kt`.
 
