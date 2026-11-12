@@ -4,7 +4,6 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import android.os.SystemClock
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -15,6 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -65,7 +65,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,6 +74,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -91,7 +93,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.R as LucideR
@@ -116,7 +117,6 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 private fun repeatIconResource(mode: AudioRepeatMode): Int =
@@ -1843,7 +1843,7 @@ internal fun QueuePanel(
 }
 
 @Composable
-private fun LyricsPanel(
+internal fun LyricsPanel(
     modifier: Modifier = Modifier,
     trackKey: String,
     lyrics: AudioLyrics?,
@@ -1885,11 +1885,24 @@ private fun LyricsPanel(
             }
         else -> {
             val listState = rememberLazyListState()
-            var followCurrentLine by remember { mutableStateOf(true) }
-            var automaticScroll by remember { mutableStateOf(false) }
-            var positionedCurrentLine by remember(trackKey, lyrics.timed) { mutableStateOf(false) }
-            var currentIndex by
+            var followCurrentLine by remember(trackKey) { mutableStateOf(true) }
+            var positionedCurrentLine by remember(trackKey, lyrics) { mutableStateOf(false) }
+            val manualScroll =
                 remember(trackKey) {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(
+                            available: Offset,
+                            source: NestedScrollSource,
+                        ): Offset {
+                            if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                                followCurrentLine = false
+                            }
+                            return Offset.Zero
+                        }
+                    }
+                }
+            var currentIndex by
+                remember(trackKey, lyrics) {
                     mutableIntStateOf(
                         lyricIndexAt(
                             lyrics.lines,
@@ -1907,7 +1920,7 @@ private fun LyricsPanel(
             val latestPositionUpdatedAtElapsedRealtime by
                 rememberUpdatedState(positionUpdatedAtElapsedRealtime)
             val latestIsPlaying by rememberUpdatedState(isPlaying)
-            LaunchedEffect(trackKey, lyrics.timed) {
+            LaunchedEffect(trackKey, lyrics) {
                 if (!lyrics.timed) {
                     currentIndex = -1
                     return@LaunchedEffect
@@ -1973,24 +1986,24 @@ private fun LyricsPanel(
                     delay(if (playing) waitMillis else 100L)
                 }
             }
-            LaunchedEffect(listState) {
-                snapshotFlow { listState.isScrollInProgress }
-                    .collect { scrolling ->
-                        if (scrolling && !automaticScroll) followCurrentLine = false
-                    }
-            }
-            LaunchedEffect(currentIndex, followCurrentLine) {
-                if (followCurrentLine && currentIndex >= 0) {
-                    automaticScroll = true
-                    try {
-                        if (positionedCurrentLine) {
-                            listState.animateScrollToItem(currentIndex)
-                        } else {
-                            listState.scrollToItem(currentIndex)
-                            positionedCurrentLine = true
+            val targetIndex = currentIndex.coerceAtLeast(0)
+            LaunchedEffect(trackKey, lyrics, targetIndex, followCurrentLine) {
+                if (followCurrentLine && lyrics.timed && lyrics.lines.isNotEmpty()) {
+                    val visibleLine =
+                        listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                            it.index == targetIndex
                         }
-                    } finally {
-                        automaticScroll = false
+                    if (!positionedCurrentLine || visibleLine == null) {
+                        // Open or seek directly to distant lyrics without scrolling through the
+                        // song.
+                        listState.scrollToItem(targetIndex)
+                        positionedCurrentLine = true
+                    } else if (visibleLine.offset != 0) {
+                        listState.animateScrollBy(
+                            visibleLine.offset.toFloat(),
+                            animationSpec =
+                                tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                        )
                     }
                 }
             }
@@ -2006,71 +2019,38 @@ private fun LyricsPanel(
                 }
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier =
+                        Modifier.weight(1f)
+                            .fillMaxWidth()
+                            .then(
+                                if (lyrics.timed) Modifier.nestedScroll(manualScroll) else Modifier
+                            ),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     itemsIndexed(lyrics.lines, key = { index, _ -> "lyric-$index" }) { index, line
                         ->
                         val isCurrent = index == currentIndex
-                        val targetTextStyle =
-                            if (isCurrent) {
-                                MaterialTheme.typography.titleLarge
-                            } else {
-                                MaterialTheme.typography.bodyLarge
-                            }
-                        val animatedFontSize by
-                            animateFloatAsState(
-                                targetValue = targetTextStyle.fontSize.value,
-                                animationSpec =
-                                    tween(
-                                        durationMillis = 320,
-                                        easing = FastOutSlowInEasing,
-                                    ),
-                                label = "lyric-font-size",
-                            )
-                        val animatedColor by
-                            animateColorAsState(
-                                targetValue =
-                                    if (isCurrent) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                animationSpec =
-                                    tween(
-                                        durationMillis = 320,
-                                        easing = FastOutSlowInEasing,
-                                    ),
-                                label = "lyric-color",
-                            )
                         val animatedAlpha by
                             animateFloatAsState(
                                 targetValue = if (isCurrent) 1f else .72f,
                                 animationSpec =
-                                    tween(
-                                        durationMillis = 320,
-                                        easing = FastOutSlowInEasing,
-                                    ),
+                                    tween(durationMillis = 240, easing = FastOutSlowInEasing),
                                 label = "lyric-emphasis",
                             )
                         Text(
                             line.text,
                             style =
                                 MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = animatedFontSize.sp,
-                                    fontWeight =
-                                        if (isCurrent) {
-                                            FontWeight.SemiBold
-                                        } else {
-                                            FontWeight.Medium
-                                        },
+                                    fontWeight = FontWeight.Medium
                                 ),
-                            color = animatedColor,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier =
-                                Modifier.fillMaxWidth().alpha(animatedAlpha).clickable {
-                                    line.startSeconds?.toLong()?.let(onSeek)
-                                },
+                                Modifier.fillMaxWidth()
+                                    .graphicsLayer { alpha = animatedAlpha }
+                                    .clickable {
+                                        line.startSeconds?.toLong()?.let(onSeek)
+                                    },
                         )
                     }
                 }
