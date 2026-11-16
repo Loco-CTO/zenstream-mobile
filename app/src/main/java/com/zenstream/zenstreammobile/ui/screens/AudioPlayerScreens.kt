@@ -116,6 +116,7 @@ import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -745,7 +746,7 @@ internal fun NowPlayingMain(
                                     state.positionUpdatedAtElapsedRealtime,
                                 isPlaying = state.isPlaying,
                                 accent = accent,
-                                onSeek = coordinator::seekTo,
+                                onSeek = coordinator::seekToMillis,
                                 onRetry = onRetryLyrics,
                             )
                         } else {
@@ -1090,7 +1091,7 @@ private fun NowPlayingLandscape(
                                     state.positionUpdatedAtElapsedRealtime,
                                 isPlaying = state.isPlaying,
                                 accent = accent,
-                                onSeek = coordinator::seekTo,
+                                onSeek = coordinator::seekToMillis,
                                 onRetry = onRetryLyrics,
                             )
                         } else {
@@ -1842,6 +1843,8 @@ internal fun QueuePanel(
     }
 }
 
+private const val LYRIC_TRANSITION_MILLIS = 240
+
 @Composable
 internal fun LyricsPanel(
     modifier: Modifier = Modifier,
@@ -1969,7 +1972,8 @@ internal fun LyricsPanel(
                             } else {
                                 reportedPosition
                             }
-                    val nextIndex = lyricIndexAt(lyrics.lines, displayPosition)
+                    val transitionLead = if (playing) LYRIC_TRANSITION_MILLIS / 1_000.0 else 0.0
+                    val nextIndex = lyricIndexAt(lyrics.lines, displayPosition + transitionLead)
                     if (nextIndex != currentIndex) currentIndex = nextIndex
                     val nextStart =
                         lyrics.lines
@@ -1979,7 +1983,7 @@ internal fun LyricsPanel(
                             .firstOrNull()
                     val waitMillis =
                         nextStart
-                            ?.let { ((it - displayPosition) * 1_000.0).toLong() }
+                            ?.let { ((it - transitionLead - displayPosition) * 1_000.0).toLong() }
                             ?.coerceIn(32L, 500L) ?: 500L
                     lastReportedPosition = reportedPosition
                     wasPlaying = playing
@@ -2035,7 +2039,10 @@ internal fun LyricsPanel(
                             animateFloatAsState(
                                 targetValue = if (isCurrent) 1f else .72f,
                                 animationSpec =
-                                    tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                                    tween(
+                                        durationMillis = LYRIC_TRANSITION_MILLIS,
+                                        easing = FastOutSlowInEasing,
+                                    ),
                                 label = "lyric-emphasis",
                             )
                         Text(
@@ -2049,7 +2056,9 @@ internal fun LyricsPanel(
                                 Modifier.fillMaxWidth()
                                     .graphicsLayer { alpha = animatedAlpha }
                                     .clickable {
-                                        line.startSeconds?.toLong()?.let(onSeek)
+                                        line.startSeconds?.let {
+                                            onSeek((it * 1_000.0).roundToLong())
+                                        }
                                     },
                         )
                     }

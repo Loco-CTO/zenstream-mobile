@@ -50,6 +50,7 @@ object AudioServiceBridge {
     const val ACTION_UPDATE_FAVORITE = "com.zenstream.zenstreammobile.audio.UPDATE_FAVORITE"
     const val EXTRA_SNAPSHOT = "snapshot"
     const val EXTRA_POSITION = "position"
+    const val EXTRA_POSITION_MILLIS = "positionMillis"
     const val EXTRA_VOLUME = "volume"
     const val EXTRA_ENTRY_ID = "entryId"
     const val EXTRA_FROM = "from"

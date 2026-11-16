@@ -210,6 +210,12 @@ private constructor(
         }
     }
 
+    fun seekToMillis(positionMillis: Long) {
+        AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_SEEK) {
+            putExtra(AudioServiceBridge.EXTRA_POSITION_MILLIS, positionMillis.coerceAtLeast(0L))
+        }
+    }
+
     fun removeQueueEntry(entryId: String) =
         AudioServiceBridge.command(appContext, AudioServiceBridge.ACTION_REMOVE_QUEUE) {
             putExtra(AudioServiceBridge.EXTRA_ENTRY_ID, entryId)

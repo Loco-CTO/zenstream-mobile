@@ -39,6 +39,36 @@ class LyricsPanelTest {
         }
 
     @Test
+    fun tappingLyricSeeksToFractionalSecond() {
+        var seekMillis = -1L
+        val lyrics =
+            AudioLyrics(
+                source = "test",
+                timed = true,
+                lines = listOf(LyricLine(text = "Fractional line", startSeconds = 12.75)),
+            )
+        compose.setContent {
+            ZenStreamTheme {
+                LyricsPanel(
+                    trackKey = "fractional",
+                    lyrics = lyrics,
+                    loading = false,
+                    error = false,
+                    positionSeconds = 0,
+                    positionMillis = 0,
+                    positionUpdatedAtElapsedRealtime = 1,
+                    isPlaying = false,
+                    accent = Color.Magenta,
+                    onSeek = { seekMillis = it },
+                    onRetry = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Fractional line").performClick()
+        compose.runOnIdle { assertEquals(12_750L, seekMillis) }
+    }
+
+    @Test
     fun followingKeepsWrappedLineHeightAndRealignsAfterSeeks() {
         showLyrics()
         val firstLineTop = lineTop("Line 1")
