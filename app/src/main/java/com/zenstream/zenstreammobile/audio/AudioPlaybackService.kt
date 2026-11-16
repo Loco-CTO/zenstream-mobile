@@ -452,7 +452,15 @@ class AudioPlaybackService : MediaLibraryService() {
                 AudioServiceBridge.ACTION_PLAY_DOWNLOADED_CURRENT ->
                     retryCurrent(commandSequence, playDownloaded = true)
                 AudioServiceBridge.ACTION_SEEK ->
-                    seekTo(intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L))
+                    seekToMillis(
+                        if (intent.hasExtra(AudioServiceBridge.EXTRA_POSITION_MILLIS)) {
+                            intent.getLongExtra(AudioServiceBridge.EXTRA_POSITION_MILLIS, 0L)
+                        } else {
+                            intent
+                                .getLongExtra(AudioServiceBridge.EXTRA_POSITION, 0L)
+                                .coerceIn(0L, Long.MAX_VALUE / 1_000L) * 1_000L
+                        }
+                    )
                 AudioServiceBridge.ACTION_REMOVE_QUEUE ->
                     removeQueue(
                         intent.getStringExtra(AudioServiceBridge.EXTRA_ENTRY_ID),
@@ -1874,13 +1882,13 @@ class AudioPlaybackService : MediaLibraryService() {
         }
     }
 
-    private suspend fun seekTo(positionSeconds: Long) {
-        val position = positionSeconds.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1_000L)
+    private suspend fun seekToMillis(positionMillis: Long) {
+        val position = positionMillis.coerceAtLeast(0L)
         queueCommandMutex.withLock {
             if (loadingCurrent || currentState.currentEntry == null) return@withLock
-            player.seekTo(position * 1_000L)
-            rememberPosition(currentState.currentEntry?.entryId, position * 1_000L)
-            currentState = currentState.copy(positionSeconds = position)
+            player.seekTo(position)
+            rememberPosition(currentState.currentEntry?.entryId, position)
+            currentState = currentState.copy(positionSeconds = position / 1_000L)
             publishPlayerState()
         }
         persistSnapshot()
