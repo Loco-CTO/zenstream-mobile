@@ -36,7 +36,7 @@ data class DownloadUiActions(
     val playSaved: (OfflineProfile, MediaItem) -> Unit,
     val playSavedQueue: ((OfflineProfile, MediaItem, List<MediaItem>) -> Unit)? = null,
     val canDownload: (OfflineProfile) -> Boolean = { false },
-    val recoverNotifications: () -> Unit = {},
+    val onTransferRequested: () -> Unit = {},
 )
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
@@ -209,6 +209,10 @@ fun OfflineDownloadHost(
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
     val recoverNotifications = rememberNotificationPermissionHandler(requestNotificationsOnStartup)
+    val showBatteryPrompt = rememberDownloadBatteryPrompt(recoverNotifications)
+    val onTransferRequested: () -> Unit = {
+        if (!showBatteryPrompt()) recoverNotifications()
+    }
     val actions =
         if (runtime != null && OfflineRuntime.ENABLED)
             DownloadUiActions(
@@ -235,7 +239,6 @@ fun OfflineDownloadHost(
                         }
                 },
                 downloadMissing = { selection ->
-                    recoverNotifications()
                     if (session != null)
                         scope.launch {
                             try {
@@ -252,6 +255,7 @@ fun OfflineDownloadHost(
                                     ),
                                     options,
                                 )
+                                onTransferRequested()
                                 snackbar.showSnackbar(resources.getString(R.string.offline_added))
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
@@ -262,7 +266,7 @@ fun OfflineDownloadHost(
                         }
                 },
                 playSaved = playSaved,
-                recoverNotifications = recoverNotifications,
+                onTransferRequested = onTransferRequested,
                 canDownload = { profile ->
                     session != null &&
                         session.userId == profile.account &&
@@ -352,7 +356,7 @@ fun OfflineDownloadHost(
                     onDismiss = { selected = null },
                     onQueued = { started ->
                         selected = null
-                        recoverNotifications()
+                        onTransferRequested()
                         scope.launch {
                             snackbar.showSnackbar(
                                 resources.getString(

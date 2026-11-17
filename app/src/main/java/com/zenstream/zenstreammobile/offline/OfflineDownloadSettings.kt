@@ -153,6 +153,7 @@ internal fun DownloadSettings(
             }
         }
         DownloadNotificationSettings()
+        DownloadBatterySettings()
         Text(
             stringResource(R.string.offline_storage_settings),
             style = MaterialTheme.typography.titleSmall,

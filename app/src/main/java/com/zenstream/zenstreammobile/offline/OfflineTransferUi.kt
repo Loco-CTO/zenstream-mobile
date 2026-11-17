@@ -66,8 +66,8 @@ internal fun ColumnScope.TransferDownloadList(runtime: OfflineRuntime, profile: 
                     onClick = {
                         perform {
                             runtime.resumeDownloads(profile.id)
-                            actions?.recoverNotifications?.invoke()
                             DownloadExecution.start(context, profile.id)
+                            actions?.onTransferRequested?.invoke()
                         }
                     },
                 ) {
@@ -374,8 +374,8 @@ private fun DownloadTransferRow(
                         onClick = {
                             perform {
                                 runtime.downloads.retry(profile.id, transfer.id)
-                                actions?.recoverNotifications?.invoke()
                                 DownloadExecution.start(context, profile.id)
+                                actions?.onTransferRequested?.invoke()
                             }
                         },
                     ) {
