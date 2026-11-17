@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
@@ -17,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.zenstream.zenstreammobile.R
@@ -31,17 +32,25 @@ internal fun downloadBatteryInstructions(manufacturer: String, brand: String): I
     else R.string.download_battery_android
 }
 
-private fun openDownloadBatterySettings(context: Context): Boolean {
+internal fun downloadBatteryExempt(context: Context): Boolean =
+    context
+        .getSystemService(PowerManager::class.java)
+        .isIgnoringBatteryOptimizations(context.packageName)
+
+private fun openDownloadBatterySettings(context: Context, optimizationListOnly: Boolean = false) {
     val appDetails =
         Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", context.packageName, null),
         )
     val optimizationList = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-    for (intent in listOf(appDetails, optimizationList)) {
+    val targets =
+        if (optimizationListOnly) listOf(optimizationList, appDetails)
+        else listOf(appDetails, optimizationList)
+    for (intent in targets) {
         try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return true
+            return
         } catch (_: ActivityNotFoundException) {
             // Some Android builds omit a settings activity.
         } catch (_: SecurityException) {
@@ -50,65 +59,47 @@ private fun openDownloadBatterySettings(context: Context): Boolean {
     }
     Toast.makeText(context, R.string.download_battery_settings_unavailable, Toast.LENGTH_SHORT)
         .show()
-    return false
 }
 
 @Composable
-internal fun rememberDownloadBatteryPrompt(onClosed: () -> Unit): () -> Boolean {
-    val context = LocalContext.current
-    val activity = LocalActivity.current
-    val preferences =
-        remember(context) {
-            context.getSharedPreferences("download-battery", Context.MODE_PRIVATE)
-        }
+internal fun rememberDownloadBatteryGate(): () -> Boolean {
+    val context = LocalActivity.current ?: LocalContext.current
     var show by rememberSaveable { mutableStateOf(false) }
-    var openedSettings by rememberSaveable { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (openedSettings) {
-            openedSettings = false
-            onClosed()
-        }
+        if (show && downloadBatteryExempt(context)) show = false
     }
     if (show) {
-        val dismiss = {
-            show = false
-            onClosed()
-        }
         AlertDialog(
-            onDismissRequest = dismiss,
+            onDismissRequest = {},
+            properties =
+                DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
             title = { Text(stringResource(R.string.download_battery_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.download_battery_prompt))
+                    Text(stringResource(R.string.download_battery_required))
                     Text(
                         stringResource(downloadBatteryInstructions(Build.MANUFACTURER, Build.BRAND))
                     )
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        show = false
-                        openedSettings = openDownloadBatterySettings(activity ?: context)
-                        if (!openedSettings) onClosed()
-                    }
-                ) {
+                TextButton(onClick = { openDownloadBatterySettings(context) }) {
                     Text(stringResource(R.string.download_battery_settings))
                 }
             },
             dismissButton = {
-                TextButton(onClick = dismiss) {
-                    Text(stringResource(R.string.notification_permission_not_now))
+                TextButton(
+                    onClick = { openDownloadBatterySettings(context, optimizationListOnly = true) }
+                ) {
+                    Text(stringResource(R.string.download_battery_optimization_list))
                 }
             },
         )
     }
     return {
-        if (activity != null && !preferences.getBoolean("prompt-shown", false)) {
-            preferences.edit { putBoolean("prompt-shown", true) }
-            show = true
-        }
-        show
+        val allowed = downloadBatteryExempt(context)
+        show = !allowed
+        allowed
     }
 }
 

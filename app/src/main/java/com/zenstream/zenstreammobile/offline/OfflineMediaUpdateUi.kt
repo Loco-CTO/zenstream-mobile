@@ -39,6 +39,7 @@ internal fun UpdateDownloadAction(
     TextButton(
         enabled = online && !busy,
         onClick = {
+            if (actions?.requireBatteryExemption?.invoke() == false) return@TextButton
             open = true
             busy = true
             failed = false
@@ -221,7 +222,7 @@ internal fun UpdateDownloadAction(
                                 }
                                 DownloadExecution.start(context, profile.id)
                                 open = false
-                                actions?.onTransferRequested?.invoke()
+                                actions?.recoverNotifications?.invoke()
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (_: Exception) {

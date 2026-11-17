@@ -700,7 +700,8 @@
     <string name="notification_permission_allow">通知を許可</string>
     <string name="notification_permission_not_now">今はしない</string>
     <string name="download_battery_title">バックグラウンドでのダウンロード</string>
-    <string name="download_battery_prompt">画面をロックしたり、別のアプリに切り替えたりするとダウンロードが止まる場合は、ZenStream のバックグラウンド動作を許可してください。バッテリーの消費が増える場合があります。</string>
+    <string name="download_battery_required">ダウンロードを始めるには、ZenStream のバッテリー使用を「制限なし」にしてください。設定を変更したら、ここに戻ってもう一度お試しください。</string>
+    <string name="download_battery_optimization_list">バッテリー最適化の一覧</string>
     <string name="download_battery_xiaomi">ZenStream のアプリ情報で「バッテリーセーバー」または「バッテリー使用量」を開き、「制限なし」を選択してください。</string>
     <string name="download_battery_samsung">ZenStream のアプリ情報で「バッテリー」を開き、選択できる場合は「制限なし」にしてください。それでもスリープになる場合は、端末のバッテリー設定からバックグラウンドでの使用制限を開き、ZenStream をスリープにしないアプリに追加してください。</string>
     <string name="download_battery_android">ZenStream のアプリ情報で「バッテリー」または「アプリのバッテリー使用量」を開いてください。バックグラウンドでの使用を許可し、選択できる場合は「制限なし」にしてください。項目名は端末によって異なります。</string>

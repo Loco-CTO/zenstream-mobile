@@ -248,6 +248,8 @@ internal fun DownloadSettings(
                             contentDescription = autoMediaLabel
                         },
                     onCheckedChange = { enabled ->
+                        if (enabled && actions?.requireBatteryExemption?.invoke() == false)
+                            return@Switch
                         scope.launch {
                             runtime.setAutoUpdateMedia(enabled)
                             if (enabled) runtime.refreshMetadata(profile.id)

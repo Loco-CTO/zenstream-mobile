@@ -36,7 +36,8 @@ data class DownloadUiActions(
     val playSaved: (OfflineProfile, MediaItem) -> Unit,
     val playSavedQueue: ((OfflineProfile, MediaItem, List<MediaItem>) -> Unit)? = null,
     val canDownload: (OfflineProfile) -> Boolean = { false },
-    val onTransferRequested: () -> Unit = {},
+    val requireBatteryExemption: () -> Boolean = { true },
+    val recoverNotifications: () -> Unit = {},
 )
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
@@ -209,21 +210,18 @@ fun OfflineDownloadHost(
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
     val recoverNotifications = rememberNotificationPermissionHandler(requestNotificationsOnStartup)
-    val showBatteryPrompt = rememberDownloadBatteryPrompt(recoverNotifications)
-    val onTransferRequested: () -> Unit = {
-        if (!showBatteryPrompt()) recoverNotifications()
-    }
+    val requireBatteryExemption = rememberDownloadBatteryGate()
     val actions =
         if (runtime != null && OfflineRuntime.ENABLED)
             DownloadUiActions(
                 runtime,
                 request = {
-                    if (session != null && OfflineNetworkPolicy.allowed) selected = it
-                    else open = true
+                    if (session == null || !OfflineNetworkPolicy.allowed) open = true
+                    else if (requireBatteryExemption()) selected = it
                 },
                 openDownloads = { open = true },
                 savePlaylistMetadata = { spec ->
-                    if (session != null)
+                    if (session != null && requireBatteryExemption())
                         scope.launch {
                             try {
                                 runtime.enqueuePlaylistMetadata(context, session, spec)
@@ -239,7 +237,7 @@ fun OfflineDownloadHost(
                         }
                 },
                 downloadMissing = { selection ->
-                    if (session != null)
+                    if (session != null && requireBatteryExemption())
                         scope.launch {
                             try {
                                 val options =
@@ -255,7 +253,7 @@ fun OfflineDownloadHost(
                                     ),
                                     options,
                                 )
-                                onTransferRequested()
+                                recoverNotifications()
                                 snackbar.showSnackbar(resources.getString(R.string.offline_added))
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
@@ -266,7 +264,8 @@ fun OfflineDownloadHost(
                         }
                 },
                 playSaved = playSaved,
-                onTransferRequested = onTransferRequested,
+                requireBatteryExemption = requireBatteryExemption,
+                recoverNotifications = recoverNotifications,
                 canDownload = { profile ->
                     session != null &&
                         session.userId == profile.account &&
@@ -356,7 +355,7 @@ fun OfflineDownloadHost(
                     onDismiss = { selected = null },
                     onQueued = { started ->
                         selected = null
-                        onTransferRequested()
+                        recoverNotifications()
                         scope.launch {
                             snackbar.showSnackbar(
                                 resources.getString(

@@ -18,6 +18,8 @@ Automatic reachability is separate from explicit Offline mode. Any HTTP response
 
 ## Downloads browsing
 
+Starting or resuming a download requires the Android battery optimization exemption. The download prompt opens app settings and can also open Android’s battery optimization list when a manufacturer puts the exemption there. On return, the prompt checks the system setting again. Browsing and playing saved media remain available without the exemption.
+
 Downloads keeps an All filter and adds one filter for each library that has downloaded media. The filter uses the catalog library ID, so media of the same type from different libraries remains separate. Library names are cached per offline profile and remain available without a connection; libraries with no downloaded media do not appear.
 
 ## Automatic maintenance and media updates
