@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -19,18 +20,19 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 
+internal val LocalMiniVideoControlScale = compositionLocalOf { 1f }
+
 @Composable
 internal fun MiniVideoControls(
     playing: Boolean,
     canControl: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
-    controlScale: Float = 1f,
     onToggle: () -> Unit,
     onClose: () -> Unit,
     onExpand: () -> Unit,
 ) {
-    val inverseScale = 1f / controlScale.coerceAtLeast(.01f)
+    val inverseScale = 1f / LocalMiniVideoControlScale.current.coerceAtLeast(.01f)
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxSize()

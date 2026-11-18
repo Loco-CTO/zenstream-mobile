@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.zenstream.zenstreammobile.VideoPlaybackSessions
@@ -142,7 +145,7 @@ internal fun VideoMiniPlayerHost(
             }
         }
     }
-    VideoMiniPlayerFrame(systemPip = systemPip) { controlScale ->
+    VideoMiniPlayerFrame(systemPip = systemPip) {
         PlaybackScreen(
             repository = repository,
             session = currentSession,
@@ -161,7 +164,6 @@ internal fun VideoMiniPlayerHost(
             isInPictureInPictureMode = systemPip,
             onPictureInPicturePlaybackChanged = onPipPlaybackChanged,
             miniPlayer = !systemPip,
-            miniPlayerControlScale = controlScale,
             onRestore = { playback.presentation = VideoPresentation.TO_FULL },
             playbackOwner = playback,
         )
@@ -171,7 +173,7 @@ internal fun VideoMiniPlayerHost(
 @Composable
 internal fun VideoMiniPlayerFrame(
     systemPip: Boolean = false,
-    content: @Composable (controlScale: Float) -> Unit,
+    content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val preferences = remember {
@@ -194,7 +196,7 @@ internal fun VideoMiniPlayerFrame(
         val screenWidth = maxWidth.value
         val screenHeight = maxHeight.value
         val bounds = miniVideoBounds(width, screenWidth, screenHeight, right, bottom, 12f)
-        val latestBounds by rememberUpdatedState(bounds)
+        val latestBounds = rememberUpdatedState(bounds)
         val animatedX = remember { Animatable(bounds.x) }
         val animatedY = remember { Animatable(bounds.y) }
         LaunchedEffect(isGesturing, bounds.x, bounds.y) {
@@ -219,7 +221,7 @@ internal fun VideoMiniPlayerFrame(
             Box(
                 Modifier.fillMaxSize().testTag("video-mini-player").clip(RoundedCornerShape(12.dp))
             ) {
-                content(1f)
+                CompositionLocalProvider(LocalMiniVideoControlScale provides 1f) { content() }
             }
         } else {
             val frameModifier =
@@ -237,88 +239,36 @@ internal fun VideoMiniPlayerFrame(
                             with(density) { displayed.y.dp.roundToPx() },
                         )
                     }
-                    .pointerInput(screenWidth, screenHeight) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val initialBounds =
-                                gestureBounds
-                                    ?: latestBounds.copy(x = animatedX.value, y = animatedY.value)
-                            var transformed = false
-                            var accumulated = Offset.Zero
-                            var accumulatedZoom = 1f
-                            var current = initialBounds
-                            var position = Offset(initialBounds.x, initialBounds.y)
-                            do {
-                                val event = awaitPointerEvent()
-                                val pan = event.calculatePan()
-                                val zoom = event.calculateZoom()
-                                accumulated += pan
-                                accumulatedZoom *= zoom
-                                if (
-                                    !transformed &&
-                                        (accumulated.getDistance() > viewConfiguration.touchSlop ||
-                                            kotlin.math.abs(1 - accumulatedZoom) *
-                                                current.width *
-                                                density.density > viewConfiguration.touchSlop)
-                                ) {
-                                    transformed = true
-                                    isGesturing = true
-                                }
-                                if (transformed) {
-                                    val resized =
-                                        miniVideoBounds(
-                                            current.width * zoom,
-                                            screenWidth,
-                                            screenHeight,
-                                            right,
-                                            bottom,
-                                            12f,
-                                        )
-                                    val x =
-                                        (position.x +
-                                                pan.x / this.density +
-                                                (current.width - resized.width) / 2f)
-                                            .coerceIn(
-                                                12f,
-                                                (screenWidth - resized.width - 12f).coerceAtLeast(
-                                                    12f
-                                                ),
-                                            )
-                                    val y =
-                                        (position.y +
-                                                pan.y / this.density +
-                                                (current.height - resized.height) / 2f)
-                                            .coerceIn(
-                                                12f,
-                                                (screenHeight - resized.height - 12f).coerceAtLeast(
-                                                    12f
-                                                ),
-                                            )
-                                    current = resized.copy(x = x, y = y)
-                                    position = Offset(x, y)
-                                    gestureBounds = current
-                                    event.changes.forEach { it.consume() }
-                                }
-                            } while (event.changes.any { it.pressed })
-                            if (transformed) {
-                                gestureScope.launch {
-                                    animatedX.snapTo(position.x)
-                                    animatedY.snapTo(position.y)
-                                    width = current.width
-                                    right = position.x + current.width / 2 >= screenWidth / 2
-                                    bottom = position.y + current.height / 2 >= screenHeight / 2
-                                    preferences
-                                        .edit()
-                                        .putFloat("width_dp", width)
-                                        .putBoolean("right", right)
-                                        .putBoolean("bottom", bottom)
-                                        .apply()
-                                    gestureBounds = null
-                                    isGesturing = false
-                                }
-                            } else gestureBounds = null
-                        }
-                    }
+                    .miniVideoResizeGestures(
+                        screenWidth = screenWidth,
+                        screenHeight = screenHeight,
+                        density = density,
+                        latestBounds = latestBounds,
+                        currentGestureBounds = { gestureBounds },
+                        currentAnimatedX = { animatedX.value },
+                        currentAnimatedY = { animatedY.value },
+                        right = right,
+                        bottom = bottom,
+                        onGesturingChanged = { isGesturing = it },
+                        onGestureBoundsChanged = { gestureBounds = it },
+                        onResizeCompleted = { current, position ->
+                            gestureScope.launch {
+                                animatedX.snapTo(position.x)
+                                animatedY.snapTo(position.y)
+                                width = current.width
+                                right = position.x + current.width / 2 >= screenWidth / 2
+                                bottom = position.y + current.height / 2 >= screenHeight / 2
+                                preferences
+                                    .edit()
+                                    .putFloat("width_dp", width)
+                                    .putBoolean("right", right)
+                                    .putBoolean("bottom", bottom)
+                                    .apply()
+                                gestureBounds = null
+                                isGesturing = false
+                            }
+                        },
+                    )
                     .testTag("video-mini-player")
             val baseWidthPx = with(density) { MIN_VIDEO_MINI_PLAYER_WIDTH_DP.dp.roundToPx() }
             val baseHeightPx =
@@ -340,14 +290,16 @@ internal fun VideoMiniPlayerFrame(
                             }
                             .clip(RoundedCornerShape(12.dp))
                     ) {
-                        content(controlScale)
+                        CompositionLocalProvider(LocalMiniVideoControlScale provides controlScale) {
+                            content()
+                        }
                     }
                 },
                 modifier = frameModifier,
             ) { measurables, _ ->
-                val displayWidth = gestureBounds?.width ?: bounds.width
-                val frameWidthPx = with(density) { displayWidth.dp.roundToPx() }
-                val frameHeightPx = with(density) { (displayWidth * 9f / 16f).dp.roundToPx() }
+                val frameWidthDp = gestureBounds?.width ?: bounds.width
+                val frameWidthPx = with(density) { frameWidthDp.dp.roundToPx() }
+                val frameHeightPx = with(density) { (frameWidthDp * 9f / 16f).dp.roundToPx() }
                 val player =
                     measurables.single().measure(Constraints.fixed(baseWidthPx, baseHeightPx))
                 layout(frameWidthPx, frameHeightPx) {
@@ -360,3 +312,77 @@ internal fun VideoMiniPlayerFrame(
         }
     }
 }
+
+private fun Modifier.miniVideoResizeGestures(
+    screenWidth: Float,
+    screenHeight: Float,
+    density: Density,
+    latestBounds: State<MiniVideoBounds>,
+    currentGestureBounds: () -> MiniVideoBounds?,
+    currentAnimatedX: () -> Float,
+    currentAnimatedY: () -> Float,
+    right: Boolean,
+    bottom: Boolean,
+    onGesturingChanged: (Boolean) -> Unit,
+    onGestureBoundsChanged: (MiniVideoBounds?) -> Unit,
+    onResizeCompleted: (MiniVideoBounds, Offset) -> Unit,
+): Modifier =
+    pointerInput(screenWidth, screenHeight) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            val initialBounds =
+                currentGestureBounds()
+                    ?: latestBounds.value.copy(x = currentAnimatedX(), y = currentAnimatedY())
+            var transformed = false
+            var accumulated = Offset.Zero
+            var accumulatedZoom = 1f
+            var current = initialBounds
+            var position = Offset(initialBounds.x, initialBounds.y)
+            do {
+                val event = awaitPointerEvent()
+                val pan = event.calculatePan()
+                val zoom = event.calculateZoom()
+                accumulated += pan
+                accumulatedZoom *= zoom
+                if (
+                    !transformed &&
+                        (accumulated.getDistance() > viewConfiguration.touchSlop ||
+                            kotlin.math.abs(1 - accumulatedZoom) *
+                                current.width *
+                                density.density > viewConfiguration.touchSlop)
+                ) {
+                    transformed = true
+                    onGesturingChanged(true)
+                }
+                if (transformed) {
+                    val resized =
+                        miniVideoBounds(
+                            current.width * zoom,
+                            screenWidth,
+                            screenHeight,
+                            right,
+                            bottom,
+                            12f,
+                        )
+                    val x =
+                        (position.x + pan.x / this.density + (current.width - resized.width) / 2f)
+                            .coerceIn(
+                                12f,
+                                (screenWidth - resized.width - 12f).coerceAtLeast(12f),
+                            )
+                    val y =
+                        (position.y + pan.y / this.density + (current.height - resized.height) / 2f)
+                            .coerceIn(
+                                12f,
+                                (screenHeight - resized.height - 12f).coerceAtLeast(12f),
+                            )
+                    current = resized.copy(x = x, y = y)
+                    position = Offset(x, y)
+                    onGestureBoundsChanged(current)
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+            if (transformed) onResizeCompleted(current, position)
+            else onGestureBoundsChanged(null)
+        }
+    }
