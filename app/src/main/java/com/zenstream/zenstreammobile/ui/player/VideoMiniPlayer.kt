@@ -44,8 +44,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.zenstream.zenstreammobile.VideoPlaybackSessions
 import com.zenstream.zenstreammobile.VideoPlaybackSession
+import com.zenstream.zenstreammobile.VideoPlaybackSessions
 import com.zenstream.zenstreammobile.VideoPresentation
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.launchPlayback
