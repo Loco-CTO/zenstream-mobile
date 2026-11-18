@@ -37,16 +37,14 @@ internal fun downloadBatteryExempt(context: Context): Boolean =
         .getSystemService(PowerManager::class.java)
         .isIgnoringBatteryOptimizations(context.packageName)
 
-private fun openDownloadBatterySettings(context: Context, optimizationListOnly: Boolean = false) {
+private fun openDownloadBatterySettings(context: Context) {
     val appDetails =
         Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", context.packageName, null),
         )
     val optimizationList = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-    val targets =
-        if (optimizationListOnly) listOf(optimizationList, appDetails)
-        else listOf(appDetails, optimizationList)
+    val targets = listOf(appDetails, optimizationList)
     for (intent in targets) {
         try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -85,13 +83,6 @@ internal fun rememberDownloadBatteryGate(): () -> Boolean {
             confirmButton = {
                 TextButton(onClick = { openDownloadBatterySettings(context) }) {
                     Text(stringResource(R.string.download_battery_settings))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { openDownloadBatterySettings(context, optimizationListOnly = true) }
-                ) {
-                    Text(stringResource(R.string.download_battery_optimization_list))
                 }
             },
         )

@@ -717,7 +717,6 @@
     <string name="notification_permission_not_now">Not now</string>
     <string name="download_battery_title">Background downloads</string>
     <string name="download_battery_required">Allow unrestricted battery use for ZenStream before starting downloads. After changing the setting, return here and try again.</string>
-    <string name="download_battery_optimization_list">Battery optimization list</string>
     <string name="download_battery_xiaomi">In ZenStream’s app info, open Battery saver or Battery usage and choose No restrictions.</string>
     <string name="download_battery_samsung">In ZenStream’s app info, open Battery and choose Unrestricted if available. If ZenStream is still put to sleep, add it under Battery → Background usage limits → Never auto sleeping apps.</string>
     <string name="download_battery_android">In ZenStream’s app info, open Battery or App battery usage. Allow background usage and choose Unrestricted if available. Some devices call this Allow background activity or Don’t optimize.</string>
