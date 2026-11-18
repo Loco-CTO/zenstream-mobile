@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.zenstream.zenstreammobile.VideoPlaybackSessions
+import com.zenstream.zenstreammobile.VideoPlaybackSession
 import com.zenstream.zenstreammobile.VideoPresentation
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.launchPlayback
@@ -91,35 +92,85 @@ internal fun VideoMiniPlayerHost(
     onPipPlaybackChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
 ) {
     val playback = VideoPlaybackSessions.active ?: return
-    val context = LocalContext.current
     val currentSession = session ?: playback.session.takeUnless { sessionResolved }
     val profile = playback.profile
-    val retainedAllowed by
-        produceState<Boolean?>(if (profile == null) false else null, playback, session) {
-            val runtime = repository.offline
-            if (profile != null && runtime != null) {
-                combine(runtime.catalogRevision, runtime.connection.state) { _, policy -> policy }
-                    .collect { policy ->
-                        value =
-                            policy.profile == profile.id &&
-                                runtime.database.offline().profile(profile.id)?.locked == false &&
-                                (session == null || playback.matches(session))
-                    }
-            }
+    val retainedAllowed by rememberRetainedMiniVideoPlaybackAccess(repository, playback, session)
+    val authorized = isMiniVideoPlaybackAuthorized(playback, currentSession, retainedAllowed)
+    CloseUnauthorizedMiniVideoPlaybackEffect(currentSession, playback, retainedAllowed, authorized)
+    if (!authorized || !playback.isPresentedInMiniPlayer()) return
+    RestoreMiniVideoPlaybackOnDispose(playback)
+    VideoMiniPlayerFrame(systemPip = systemPip) {
+        PlaybackScreen(
+            repository = repository,
+            session = currentSession,
+            syncplay =
+                currentSession
+                    ?.takeIf { playback.args.offlineProfileId == null }
+                    ?.let(repository::syncplayManager),
+            offlineProfileId = profile?.id,
+            offlineOnly = playback.args.offlineProfileId != null,
+            itemId = playback.args.itemId,
+            initialItemName = playback.args.itemName,
+            enterPictureInPicture = { false },
+            shouldPauseForBackground = { true },
+            onBack = { VideoPlaybackSessions.close() },
+            pipInstanceId = "in-app-mini",
+            isInPictureInPictureMode = systemPip,
+            onPictureInPicturePlaybackChanged = onPipPlaybackChanged,
+            miniPlayer = !systemPip,
+            onRestore = { playback.presentation = VideoPresentation.TO_FULL },
+            playbackOwner = playback,
+        )
+    }
+}
+
+@Composable
+private fun rememberRetainedMiniVideoPlaybackAccess(
+    repository: CatalogRepository,
+    playback: VideoPlaybackSession,
+    session: AuthSession?,
+): State<Boolean?> {
+    val profile = playback.profile
+    return produceState<Boolean?>(if (profile == null) false else null, playback, session) {
+        val runtime = repository.offline
+        if (profile != null && runtime != null) {
+            combine(runtime.catalogRevision, runtime.connection.state) { _, policy -> policy }
+                .collect { policy ->
+                    value =
+                        policy.profile == profile.id &&
+                            runtime.database.offline().profile(profile.id)?.locked == false &&
+                            (session == null || playback.matches(session))
+                }
         }
-    val authorized =
-        retainedAllowed == true ||
-            (profile == null && currentSession != null && playback.matches(currentSession))
+    }
+}
+
+private fun isMiniVideoPlaybackAuthorized(
+    playback: VideoPlaybackSession,
+    currentSession: AuthSession?,
+    retainedAllowed: Boolean?,
+): Boolean =
+    retainedAllowed == true ||
+        (playback.profile == null && currentSession != null && playback.matches(currentSession))
+
+@Composable
+private fun CloseUnauthorizedMiniVideoPlaybackEffect(
+    currentSession: AuthSession?,
+    playback: VideoPlaybackSession,
+    retainedAllowed: Boolean?,
+    authorized: Boolean,
+) {
     LaunchedEffect(currentSession, playback, retainedAllowed) {
         if (retainedAllowed != null && !authorized) VideoPlaybackSessions.close()
     }
-    if (!authorized) return
-    if (
-        playback.presentation != VideoPresentation.TO_MINI &&
-            playback.presentation != VideoPresentation.MINI
-    ) {
-        return
-    }
+}
+
+private fun VideoPlaybackSession.isPresentedInMiniPlayer(): Boolean =
+    presentation == VideoPresentation.TO_MINI || presentation == VideoPresentation.MINI
+
+@Composable
+private fun RestoreMiniVideoPlaybackOnDispose(playback: VideoPlaybackSession) {
+    val context = LocalContext.current
     DisposableEffect(playback) {
         onDispose {
             if (
@@ -144,29 +195,6 @@ internal fun VideoMiniPlayerHost(
                 }
             }
         }
-    }
-    VideoMiniPlayerFrame(systemPip = systemPip) {
-        PlaybackScreen(
-            repository = repository,
-            session = currentSession,
-            syncplay =
-                currentSession
-                    ?.takeIf { playback.args.offlineProfileId == null }
-                    ?.let(repository::syncplayManager),
-            offlineProfileId = profile?.id,
-            offlineOnly = playback.args.offlineProfileId != null,
-            itemId = playback.args.itemId,
-            initialItemName = playback.args.itemName,
-            enterPictureInPicture = { false },
-            shouldPauseForBackground = { true },
-            onBack = { VideoPlaybackSessions.close() },
-            pipInstanceId = "in-app-mini",
-            isInPictureInPictureMode = systemPip,
-            onPictureInPicturePlaybackChanged = onPipPlaybackChanged,
-            miniPlayer = !systemPip,
-            onRestore = { playback.presentation = VideoPresentation.TO_FULL },
-            playbackOwner = playback,
-        )
     }
 }
 
