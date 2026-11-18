@@ -45,13 +45,14 @@ class VideoMiniPlayerTest {
                 Box(
                     Modifier.fillMaxSize().background(Color(0xFF111114)).testTag("browse-surface")
                 ) {
-                    VideoMiniPlayerFrame {
+                    VideoMiniPlayerFrame { controlScale ->
                         Box(Modifier.fillMaxSize().background(Color(0xFF34304B))) {
                             MiniVideoControls(
                                 playing,
                                 canControl,
                                 30.0,
                                 120.0,
+                                controlScale,
                                 onToggle,
                                 onClose,
                                 onExpand,

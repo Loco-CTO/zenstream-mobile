@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -23,10 +25,12 @@ internal fun MiniVideoControls(
     canControl: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
+    controlScale: Float = 1f,
     onToggle: () -> Unit,
     onClose: () -> Unit,
     onExpand: () -> Unit,
 ) {
+    val inverseScale = 1f / controlScale.coerceAtLeast(.01f)
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxSize()
@@ -45,7 +49,16 @@ internal fun MiniVideoControls(
                 ),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            IconButton(onClick = onToggle, enabled = canControl) {
+            IconButton(
+                modifier =
+                    Modifier.graphicsLayer {
+                        scaleX = inverseScale
+                        scaleY = inverseScale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    },
+                onClick = onToggle,
+                enabled = canControl,
+            ) {
                 Icon(
                     painterResource(
                         if (playing) LucideR.drawable.lucide_ic_pause
@@ -55,7 +68,15 @@ internal fun MiniVideoControls(
                     tint = Color.White,
                 )
             }
-            IconButton(onClick = onClose) {
+            IconButton(
+                modifier =
+                    Modifier.graphicsLayer {
+                        scaleX = inverseScale
+                        scaleY = inverseScale
+                        transformOrigin = TransformOrigin(1f, 0f)
+                    },
+                onClick = onClose,
+            ) {
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_x),
                     stringResource(R.string.player_close),

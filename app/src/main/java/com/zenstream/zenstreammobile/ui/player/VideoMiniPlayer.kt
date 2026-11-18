@@ -142,7 +142,7 @@ internal fun VideoMiniPlayerHost(
             }
         }
     }
-    VideoMiniPlayerFrame(systemPip = systemPip) {
+    VideoMiniPlayerFrame(systemPip = systemPip) { controlScale ->
         PlaybackScreen(
             repository = repository,
             session = currentSession,
@@ -161,6 +161,7 @@ internal fun VideoMiniPlayerHost(
             isInPictureInPictureMode = systemPip,
             onPictureInPicturePlaybackChanged = onPipPlaybackChanged,
             miniPlayer = !systemPip,
+            miniPlayerControlScale = controlScale,
             onRestore = { playback.presentation = VideoPresentation.TO_FULL },
             playbackOwner = playback,
         )
@@ -168,7 +169,10 @@ internal fun VideoMiniPlayerHost(
 }
 
 @Composable
-internal fun VideoMiniPlayerFrame(systemPip: Boolean = false, content: @Composable () -> Unit) {
+internal fun VideoMiniPlayerFrame(
+    systemPip: Boolean = false,
+    content: @Composable (controlScale: Float) -> Unit,
+) {
     val context = LocalContext.current
     val preferences = remember {
         context.applicationContext.getSharedPreferences("video_miniplayer", Context.MODE_PRIVATE)
@@ -215,7 +219,7 @@ internal fun VideoMiniPlayerFrame(systemPip: Boolean = false, content: @Composab
             Box(
                 Modifier.fillMaxSize().testTag("video-mini-player").clip(RoundedCornerShape(12.dp))
             ) {
-                content()
+                content(1f)
             }
         } else {
             val frameModifier =
@@ -319,6 +323,8 @@ internal fun VideoMiniPlayerFrame(systemPip: Boolean = false, content: @Composab
             val baseWidthPx = with(density) { MIN_VIDEO_MINI_PLAYER_WIDTH_DP.dp.roundToPx() }
             val baseHeightPx =
                 with(density) { (MIN_VIDEO_MINI_PLAYER_WIDTH_DP * 9f / 16f).dp.roundToPx() }
+            val displayWidth = gestureBounds?.width ?: bounds.width
+            val controlScale = displayWidth / MIN_VIDEO_MINI_PLAYER_WIDTH_DP
 
             Layout(
                 content = {
@@ -328,15 +334,13 @@ internal fun VideoMiniPlayerFrame(systemPip: Boolean = false, content: @Composab
                                 (MIN_VIDEO_MINI_PLAYER_WIDTH_DP * 9f / 16f).dp,
                             )
                             .graphicsLayer {
-                                val displayWidth = gestureBounds?.width ?: bounds.width
-                                val scale = displayWidth / MIN_VIDEO_MINI_PLAYER_WIDTH_DP
-                                scaleX = scale
-                                scaleY = scale
+                                scaleX = controlScale
+                                scaleY = controlScale
                                 transformOrigin = TransformOrigin.Center
                             }
                             .clip(RoundedCornerShape(12.dp))
                     ) {
-                        content()
+                        content(controlScale)
                     }
                 },
                 modifier = frameModifier,
