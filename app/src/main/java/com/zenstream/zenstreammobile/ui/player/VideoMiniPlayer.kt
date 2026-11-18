@@ -347,9 +347,8 @@ private fun Modifier.miniVideoResizeGestures(
                 if (
                     !transformed &&
                         (accumulated.getDistance() > viewConfiguration.touchSlop ||
-                            kotlin.math.abs(1 - accumulatedZoom) *
-                                current.width *
-                                density.density > viewConfiguration.touchSlop)
+                            kotlin.math.abs(1 - accumulatedZoom) * current.width * density.density >
+                                viewConfiguration.touchSlop)
                 ) {
                     transformed = true
                     onGesturingChanged(true)
@@ -382,7 +381,6 @@ private fun Modifier.miniVideoResizeGestures(
                     event.changes.forEach { it.consume() }
                 }
             } while (event.changes.any { it.pressed })
-            if (transformed) onResizeCompleted(current, position)
-            else onGestureBoundsChanged(null)
+            if (transformed) onResizeCompleted(current, position) else onGestureBoundsChanged(null)
         }
     }
