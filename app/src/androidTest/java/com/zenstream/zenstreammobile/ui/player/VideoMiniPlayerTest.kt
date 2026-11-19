@@ -19,6 +19,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+private const val VIDEO_MINI_PLAYER_TAG = "video-mini-player"
+
 class VideoMiniPlayerTest {
     @get:Rule val compose = createComposeRule()
     private val context
@@ -86,7 +88,7 @@ class VideoMiniPlayerTest {
                 100,
                 context.filesDir.resolve("video-mini-player.png").outputStream(),
             )
-        compose.onNodeWithTag("video-mini-player").performTouchInput {
+        compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG).performTouchInput {
             click(Offset(center.x, height * .75f))
         }
         compose.runOnIdle {
@@ -116,7 +118,7 @@ class VideoMiniPlayerTest {
     fun draggingSnapsToTheOppositeCornerAndDoesNotExpand() {
         var expands = 0
         render(onExpand = { expands++ })
-        val player = compose.onNodeWithTag("video-mini-player")
+        val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
         val before = player.fetchSemanticsNode().boundsInRoot
         player.performTouchInput {
             down(Offset(center.x, height * .75f))
@@ -136,8 +138,11 @@ class VideoMiniPlayerTest {
     @Test
     fun twoFingerScalingStaysWithinTheScreen() {
         render()
-        val player = compose.onNodeWithTag("video-mini-player")
+        val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
         val before = player.fetchSemanticsNode().boundsInRoot
+        val closeButton =
+            compose.onNodeWithContentDescription(context.getString(R.string.player_close))
+        val closeBefore = closeButton.fetchSemanticsNode().boundsInRoot
         player.performTouchInput {
             down(0, center - Offset(30f, 0f))
             down(1, center + Offset(30f, 0f))
@@ -148,18 +153,22 @@ class VideoMiniPlayerTest {
         }
         compose.waitForIdle()
         val after = player.fetchSemanticsNode().boundsInRoot
+        val closeAfter = closeButton.fetchSemanticsNode().boundsInRoot
         val screen = compose.onNodeWithTag("browse-surface").fetchSemanticsNode().boundsInRoot
         assertTrue(after.width > before.width)
         assertTrue(after.left >= screen.left)
         assertTrue(after.right <= screen.right)
         assertTrue(after.top >= screen.top)
         assertTrue(after.bottom <= screen.bottom)
+        assertEquals(closeBefore.width, closeAfter.width, 1f)
+        assertEquals(closeBefore.height, closeAfter.height, 1f)
+        assertEquals(after.right, closeAfter.right, 1f)
     }
 
     @Test
     fun releaseGlidesThroughIntermediatePositionsBeforeAligning() {
         render()
-        val player = compose.onNodeWithTag("video-mini-player")
+        val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
         val before = player.fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         player.performTouchInput {
