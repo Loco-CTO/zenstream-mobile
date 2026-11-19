@@ -153,6 +153,7 @@ internal fun DownloadSettings(
             }
         }
         DownloadNotificationSettings()
+        DownloadBatterySettings()
         Text(
             stringResource(R.string.offline_storage_settings),
             style = MaterialTheme.typography.titleSmall,
@@ -247,6 +248,8 @@ internal fun DownloadSettings(
                             contentDescription = autoMediaLabel
                         },
                     onCheckedChange = { enabled ->
+                        if (enabled && actions?.requireBatteryExemption?.invoke() == false)
+                            return@Switch
                         scope.launch {
                             runtime.setAutoUpdateMedia(enabled)
                             if (enabled) runtime.refreshMetadata(profile.id)

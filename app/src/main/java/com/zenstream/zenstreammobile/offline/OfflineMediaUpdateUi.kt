@@ -27,9 +27,9 @@ internal fun UpdateDownloadAction(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val connection by runtime.connection.state.collectAsState()
+    val actions = LocalDownloadUi.current
     val online =
-        connection.mode == ConnectionMode.AUTOMATIC &&
-            LocalDownloadUi.current?.canDownload?.invoke(profile) == true
+        connection.mode == ConnectionMode.AUTOMATIC && actions?.canDownload?.invoke(profile) == true
     var open by remember(item) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -39,6 +39,7 @@ internal fun UpdateDownloadAction(
     TextButton(
         enabled = online && !busy,
         onClick = {
+            if (actions?.requireBatteryExemption?.invoke() == false) return@TextButton
             open = true
             busy = true
             failed = false
@@ -221,6 +222,7 @@ internal fun UpdateDownloadAction(
                                 }
                                 DownloadExecution.start(context, profile.id)
                                 open = false
+                                actions?.recoverNotifications?.invoke()
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (_: Exception) {

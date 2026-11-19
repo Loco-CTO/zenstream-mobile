@@ -64,10 +64,12 @@ internal fun ColumnScope.TransferDownloadList(runtime: OfflineRuntime, profile: 
                 OutlinedButton(
                     enabled = online,
                     onClick = {
+                        if (actions?.requireBatteryExemption?.invoke() == false)
+                            return@OutlinedButton
                         perform {
                             runtime.resumeDownloads(profile.id)
-                            actions?.recoverNotifications?.invoke()
                             DownloadExecution.start(context, profile.id)
+                            actions?.recoverNotifications?.invoke()
                         }
                     },
                 ) {
@@ -372,10 +374,12 @@ private fun DownloadTransferRow(
                     TextButton(
                         enabled = online,
                         onClick = {
+                            if (actions?.requireBatteryExemption?.invoke() == false)
+                                return@TextButton
                             perform {
                                 runtime.downloads.retry(profile.id, transfer.id)
-                                actions?.recoverNotifications?.invoke()
                                 DownloadExecution.start(context, profile.id)
+                                actions?.recoverNotifications?.invoke()
                             }
                         },
                     ) {

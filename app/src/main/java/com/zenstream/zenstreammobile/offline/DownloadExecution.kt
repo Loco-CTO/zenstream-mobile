@@ -151,6 +151,7 @@ object DownloadExecution {
 
     /** Call from a visible, explicit user action. Failure leaves the durable queue intact. */
     suspend fun start(context: Context, profile: String): Boolean {
+        if (!downloadBatteryExempt(context)) return false
         WorkManager.getInstance(context).cancelUniqueWork("offline-media-update:$profile")
         val runtime = OfflineRuntime.get(context)
         val policy = runtime.connection.state.first { it.initialized }
@@ -599,6 +600,7 @@ class OfflineMediaUpdateWorker(context: Context, params: WorkerParameters) :
         val runtime = OfflineRuntime.get(applicationContext)
         if (runtime.connection.state.first { it.initialized }.mode == ConnectionMode.OFFLINE)
             return Result.success()
+        if (!downloadBatteryExempt(applicationContext)) return Result.retry()
         if (!runtime.attachmentNetworkAllowed()) return Result.retry()
         return try {
             setForeground(getForegroundInfo())
