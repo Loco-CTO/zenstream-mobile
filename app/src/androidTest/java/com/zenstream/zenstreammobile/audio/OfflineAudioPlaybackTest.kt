@@ -127,9 +127,10 @@ class OfflineAudioPlaybackTest {
                         "lines",
                         JSONArray().put(JSONObject().put("text", "Saved lyrics")),
                     )
-            val bundle = JSONObject().apply {
-                if (includeLyrics) put("lyrics", lyrics)
-            }
+            val bundle =
+                JSONObject().apply {
+                    if (includeLyrics) put("lyrics", lyrics)
+                }
             val descriptor =
                 JSONObject()
                     .put("durationSeconds", 12)
