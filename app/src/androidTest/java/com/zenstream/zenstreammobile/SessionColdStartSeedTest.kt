@@ -31,18 +31,44 @@ class SessionColdStartSeedTest {
                 store.serverUrl.first() == null &&
                 store.orchestratorUrl.first() == null
         )
+        val mode = InstrumentationRegistry.getArguments().getString("coldStartMode") ?: "expired"
+        val now = System.currentTimeMillis()
         store.saveServerConfig(server)
         store.saveCheckForUpdatesOnStartup(false)
-        store.saveSession(
-            AuthSession(
-                serverUrl = server,
-                token = "cold-old-access",
-                userId = "cold-account",
-                username = "Cold Account",
-                refreshToken = "cold-old-refresh",
-                accessExpiresAtMillis = System.currentTimeMillis() - 60_000,
-                refreshExpiresAtMillis = System.currentTimeMillis() + 86_400_000,
-            )
-        )
+        val session =
+            when (mode) {
+                "valid" ->
+                    AuthSession(
+                        serverUrl = server,
+                        token = "cold-valid-access",
+                        userId = "cold-account",
+                        username = "Cold Account",
+                        refreshToken = "cold-valid-refresh",
+                        accessExpiresAtMillis = now + 3_600_000,
+                        refreshExpiresAtMillis = now + 86_400_000,
+                    )
+                "revoked" ->
+                    AuthSession(
+                        serverUrl = server,
+                        token = "cold-old-access",
+                        userId = "cold-account",
+                        username = "Cold Account",
+                        refreshToken = "cold-revoked-refresh",
+                        accessExpiresAtMillis = now - 60_000,
+                        refreshExpiresAtMillis = now + 86_400_000,
+                    )
+                "expired" ->
+                    AuthSession(
+                        serverUrl = server,
+                        token = "cold-old-access",
+                        userId = "cold-account",
+                        username = "Cold Account",
+                        refreshToken = "cold-old-refresh",
+                        accessExpiresAtMillis = now - 60_000,
+                        refreshExpiresAtMillis = now + 86_400_000,
+                    )
+                else -> error("Unsupported cold-start session mode: $mode")
+            }
+        store.saveSession(session)
     }
 }
