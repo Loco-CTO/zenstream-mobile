@@ -89,7 +89,8 @@ class LyricsPanelTest {
             ZenStreamTheme {
                 Box {
                     LyricsPanel(
-                        modifier = Modifier.size(width = 220.dp, height = 250.dp).testTag("lyrics-panel"),
+                        modifier =
+                            Modifier.size(width = 220.dp, height = 250.dp).testTag("lyrics-panel"),
                         trackKey = "pause-resume-track",
                         lyrics = lyrics,
                         loading = false,
@@ -230,4 +231,3 @@ class LyricsPanelTest {
         }
     }
 }
-
