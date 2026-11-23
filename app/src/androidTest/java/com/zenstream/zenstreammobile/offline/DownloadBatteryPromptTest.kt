@@ -20,6 +20,13 @@ import org.junit.Test
 class DownloadBatteryPromptTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    private companion object {
+        const val QUEUE_DOWNLOAD_LABEL = "Queue download"
+        const val PLAY_DOWNLOADED_MEDIA_LABEL = "Play downloaded media"
+        const val CONTINUED_ZERO_LABEL = "Continued 0"
+        const val CONTINUED_ONE_LABEL = "Continued 1"
+    }
+
     @Test
     fun transfersRequireTheSystemBatteryExemption() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -45,10 +52,10 @@ class DownloadBatteryPromptTest {
                         TextButton(
                             onClick = { if (requireBatteryExemption()) continued.intValue++ }
                         ) {
-                            Text("Queue download")
+                            Text(QUEUE_DOWNLOAD_LABEL)
                         }
                         TextButton(onClick = { played.intValue++ }) {
-                            Text("Play downloaded media")
+                            Text(PLAY_DOWNLOADED_MEDIA_LABEL)
                         }
                         Text("Continued ${continued.intValue}")
                         Text("Played ${played.intValue}")
@@ -57,7 +64,7 @@ class DownloadBatteryPromptTest {
             }
             val title = context.getString(R.string.download_battery_title)
             compose.onNodeWithText(title).assertDoesNotExist()
-            compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText(QUEUE_DOWNLOAD_LABEL).performClick()
             compose.onNodeWithText(title).assertIsDisplayed()
             compose
                 .onNodeWithText(context.getString(R.string.download_battery_settings))
@@ -73,33 +80,33 @@ class DownloadBatteryPromptTest {
                 .onNodeWithText(context.getString(R.string.download_battery_not_now))
                 .performClick()
             compose.onNodeWithText(title).assertDoesNotExist()
-            compose.onNodeWithText("Continued 0").assertIsDisplayed()
-            compose.onNodeWithText("Play downloaded media").performClick()
+            compose.onNodeWithText(CONTINUED_ZERO_LABEL).assertIsDisplayed()
+            compose.onNodeWithText(PLAY_DOWNLOADED_MEDIA_LABEL).performClick()
             compose.onNodeWithText("Played 1").assertIsDisplayed()
 
             // The required gate appears again only after another explicit download attempt.
-            compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText(QUEUE_DOWNLOAD_LABEL).performClick()
             compose.onNodeWithText(title).assertIsDisplayed()
-            compose.onNodeWithText("Continued 0").assertIsDisplayed()
+            compose.onNodeWithText(CONTINUED_ZERO_LABEL).assertIsDisplayed()
             scenario.moveToState(Lifecycle.State.STARTED)
             setExempt(true)
             assertTrue(downloadBatteryExempt(context))
             scenario.moveToState(Lifecycle.State.RESUMED)
             compose.onNodeWithText(title).assertDoesNotExist()
-            compose.onNodeWithText("Continued 0").assertIsDisplayed()
-            compose.onNodeWithText("Queue download").performClick()
-            compose.onNodeWithText("Continued 1").assertIsDisplayed()
+            compose.onNodeWithText(CONTINUED_ZERO_LABEL).assertIsDisplayed()
+            compose.onNodeWithText(QUEUE_DOWNLOAD_LABEL).performClick()
+            compose.onNodeWithText(CONTINUED_ONE_LABEL).assertIsDisplayed()
 
             setExempt(false)
             assertFalse(downloadBatteryExempt(context))
-            compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText(QUEUE_DOWNLOAD_LABEL).performClick()
             compose.onNodeWithText(title).assertIsDisplayed()
-            compose.onNodeWithText("Continued 1").assertIsDisplayed()
+            compose.onNodeWithText(CONTINUED_ONE_LABEL).assertIsDisplayed()
             compose
                 .onNodeWithText(context.getString(R.string.download_battery_not_now))
                 .performClick()
             compose.onNodeWithText(title).assertDoesNotExist()
-            compose.onNodeWithText("Continued 1").assertIsDisplayed()
+            compose.onNodeWithText(CONTINUED_ONE_LABEL).assertIsDisplayed()
         } finally {
             setExempt(previouslyExempt)
         }
