@@ -72,8 +72,7 @@ class LyricsPanelTest {
 
     @Test
     fun pausingFreezesTheCurrentLyricAndResumingFollowsPlayback() {
-        val positionMillis = mutableLongStateOf(0L)
-        val positionUpdatedAt = mutableLongStateOf(0L)
+        val positionSeconds = mutableLongStateOf(0L)
         val isPlaying = mutableStateOf(false)
         val lyrics =
             AudioLyrics(
@@ -93,9 +92,9 @@ class LyricsPanelTest {
                         lyrics = lyrics,
                         loading = false,
                         error = false,
-                        positionSeconds = positionMillis.longValue / 1_000,
-                        positionMillis = positionMillis.longValue,
-                        positionUpdatedAtElapsedRealtime = positionUpdatedAt.longValue,
+                        positionSeconds = positionSeconds.longValue,
+                        positionMillis = positionSeconds.longValue * 1_000L,
+                        positionUpdatedAtElapsedRealtime = 0L,
                         isPlaying = isPlaying.value,
                         accent = Color.Magenta,
                         onSeek = {},
@@ -107,15 +106,11 @@ class LyricsPanelTest {
 
         val firstLineTop = lineTop("Playback line 1")
         compose.runOnIdle {
-            positionMillis.longValue = 2_250L
-            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
+            positionSeconds.longValue = 2L
         }
         awaitLineAtTop("Playback line 2", firstLineTop.value)
 
-        compose.runOnIdle {
-            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
-            isPlaying.value = true
-        }
+        compose.runOnIdle { isPlaying.value = true }
         awaitLineAtTop("Playback line 2", firstLineTop.value)
         val playingAt = SystemClock.elapsedRealtime()
         compose.waitUntil(timeoutMillis = 3_000) {
@@ -123,10 +118,7 @@ class LyricsPanelTest {
                 abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
         }
 
-        compose.runOnIdle {
-            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
-            isPlaying.value = false
-        }
+        compose.runOnIdle { isPlaying.value = false }
         awaitLineAtTop("Playback line 2", firstLineTop.value)
         val pausedAt = SystemClock.elapsedRealtime()
         compose.waitUntil(timeoutMillis = 3_000) {
@@ -134,10 +126,7 @@ class LyricsPanelTest {
                 abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
         }
 
-        compose.runOnIdle {
-            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
-            isPlaying.value = true
-        }
+        compose.runOnIdle { isPlaying.value = true }
         awaitLineAtTop("Playback line 3", firstLineTop.value)
     }
 
