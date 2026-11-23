@@ -1,8 +1,10 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
@@ -66,6 +68,67 @@ class LyricsPanelTest {
         }
         compose.onNodeWithText("Fractional line").performClick()
         compose.runOnIdle { assertEquals(12_750L, seekMillis) }
+    }
+
+    @Test
+    fun pausingFreezesTheCurrentLyricAndResumingFollowsPlayback() {
+        val positionMillis = mutableLongStateOf(0L)
+        val positionUpdatedAt = mutableLongStateOf(1L)
+        val isPlaying = mutableStateOf(false)
+        val lyrics =
+            AudioLyrics(
+                source = "test",
+                timed = true,
+                lines =
+                    List(6) { index ->
+                        LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 0.5)
+                    },
+            )
+        compose.setContent {
+            ZenStreamTheme {
+                Box {
+                    LyricsPanel(
+                        modifier = Modifier.size(width = 220.dp, height = 250.dp),
+                        trackKey = "pause-resume-track",
+                        lyrics = lyrics,
+                        loading = false,
+                        error = false,
+                        positionSeconds = positionMillis.longValue / 1_000,
+                        positionMillis = positionMillis.longValue,
+                        positionUpdatedAtElapsedRealtime = positionUpdatedAt.longValue,
+                        isPlaying = isPlaying.value,
+                        accent = Color.Magenta,
+                        onSeek = {},
+                        onRetry = {},
+                    )
+                }
+            }
+        }
+
+        val firstLineTop = lineTop("Playback line 1")
+        compose.runOnIdle {
+            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
+            isPlaying.value = true
+        }
+        awaitLineAtTop("Playback line 2", firstLineTop.value)
+
+        compose.runOnIdle {
+            positionMillis.longValue = 750L
+            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
+            isPlaying.value = false
+        }
+        awaitLineAtTop("Playback line 2", firstLineTop.value)
+        val pausedAt = SystemClock.elapsedRealtime()
+        compose.waitUntil(timeoutMillis = 3_000) {
+            SystemClock.elapsedRealtime() - pausedAt >= 700L &&
+                abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
+        }
+
+        compose.runOnIdle {
+            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
+            isPlaying.value = true
+        }
+        awaitLineAtTop("Playback line 3", firstLineTop.value)
     }
 
     @Test
