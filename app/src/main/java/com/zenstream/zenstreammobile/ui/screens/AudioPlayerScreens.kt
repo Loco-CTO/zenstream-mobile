@@ -108,6 +108,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.LyricLine
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.PlaybackTimeDisplayMode
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import com.zenstream.zenstreammobile.ui.components.ArtworkPalette
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.decodeBlurHashBitmap
@@ -1772,6 +1773,7 @@ internal fun QueuePanel(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                                DownloadedBadge(entry.track.id, Modifier.padding(start = 8.dp))
                             }
                             IconButton(
                                 onClick = { coordinator.removeQueueEntry(entry.entryId) },

@@ -49,6 +49,7 @@ import com.zenstream.zenstreammobile.data.imageBlurHash
 import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 
 @Composable
 fun AudioCard(
@@ -78,12 +79,15 @@ fun AudioCard(
                 }
                 .clickable { onClick(item) }
     ) {
-        MusicArtwork(
-            item = item,
-            session = session,
-            requestedSize = 360,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-        )
+        Box {
+            MusicArtwork(
+                item = item,
+                session = session,
+                requestedSize = 360,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+            )
+            DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(6.dp))
+        }
         Text(
             text = item.name,
             maxLines = 1,
@@ -191,15 +195,18 @@ fun MusicArtistCard(
                 .clickable { onClick(item) },
         horizontalAlignment = Alignment.Start,
     ) {
-        MusicArtwork(
-            item = item,
-            session = session,
-            requestedSize = 320,
-            fallbackGlyph = "★",
-            shape = CircleShape,
-            modifier = Modifier.size(size),
-            contentDescription = item.name,
-        )
+        Box {
+            MusicArtwork(
+                item = item,
+                session = session,
+                requestedSize = 320,
+                fallbackGlyph = "★",
+                shape = CircleShape,
+                modifier = Modifier.size(size),
+                contentDescription = item.name,
+            )
+            DownloadedBadge(item.id, Modifier.align(Alignment.BottomEnd).padding(4.dp))
+        }
         Text(
             text = item.name,
             maxLines = 1,
@@ -275,7 +282,7 @@ fun AudioTrackRow(
                 }
             }
         }
-        com.zenstream.zenstreammobile.offline.DownloadButton(item, Modifier.size(44.dp))
+        com.zenstream.zenstreammobile.offline.DownloadButton(item, Modifier.size(48.dp))
         if (onFavorite != null) {
             IconButton(
                 onClick = { onFavorite(item) },

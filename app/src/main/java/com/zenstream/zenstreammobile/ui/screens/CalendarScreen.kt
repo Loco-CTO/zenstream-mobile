@@ -63,6 +63,7 @@ import com.zenstream.zenstreammobile.data.calendarEventSortKey
 import com.zenstream.zenstreammobile.data.parseCalendarInstant
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.CalendarEvent
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import com.zenstream.zenstreammobile.ui.CalendarUiState
 import com.zenstream.zenstreammobile.ui.CalendarViewModel
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
@@ -449,6 +450,7 @@ private fun CalendarEventRow(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            event.catalogItemId?.let { DownloadedBadge(it, Modifier.padding(end = 8.dp)) }
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_chevron_right),
                 contentDescription = null,

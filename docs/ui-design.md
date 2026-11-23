@@ -48,6 +48,7 @@ Reuse the relevant shared composable or extend it for a reusable variation. Ordi
 
 - Reflect pressed, selected, pending, success, and error states immediately. Prevent unsafe duplicate actions while keeping Back and recovery available where safe.
 - Keep useful content during refresh. Distinguish no media, no matches, offline availability, missing local assets, permission limits, and request failures. Show request failures in the affected screen's error state without a redundant app-wide banner.
+- Use the shared download indicator on media cards, rows, and download controls. A circled downward arrow marks a downloaded title or track. A folder with a downward arrow indicates that the group contains downloads. Use the localized accessibility labels for both states and leave transfer progress in Downloads.
 - Download updates keep the playable copy visible while showing replacement progress in download management. Place update actions beside the affected saved title; settings owns background-update preferences and check status. See `offline.md` for maintenance and replacement behavior.
 - Retain entered values after failure. Keep labels visible, put errors by the affected field, and use suitable input types and keyboard actions.
 - Follow the existing save model and describe changes that require a restart or affect playback. Confirm consequential destructive actions with their specific effect; avoid confirmations for routine movement.

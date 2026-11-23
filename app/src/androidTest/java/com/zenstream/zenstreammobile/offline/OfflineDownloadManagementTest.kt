@@ -218,6 +218,146 @@ class OfflineDownloadManagementTest {
             .build()
 
     @Test
+    fun downloadStatusesFollowCompletionRemovalAndProfileLocks() = runBlocking {
+        val fixture = OfflineDownloadStatusTestFixtures
+        val db = database()
+        val dao = db.offline()
+        try {
+            val profile =
+                OfflineProfile(
+                    fixture.PROFILE_ID,
+                    fixture.SERVER_ID,
+                    fixture.USER_ID,
+                    fixture.PROFILE_URL,
+                    fixture.PROFILE_NAME,
+                )
+            dao.putProfile(profile)
+            dao.putItems(
+                listOf(
+                    OfflineCatalogItem(
+                        fixture.PROFILE_ID,
+                        fixture.EPISODE_ID,
+                        null,
+                        fixture.SEASON_ID,
+                        fixture.EPISODE_TYPE,
+                        fixture.EPISODE_TITLE,
+                        payload = fixture.EMPTY_PAYLOAD,
+                    ),
+                    OfflineCatalogItem(
+                        fixture.PROFILE_ID,
+                        fixture.SEASON_ID,
+                        null,
+                        fixture.SERIES_ID,
+                        fixture.SEASON_TYPE,
+                        fixture.SEASON_TITLE,
+                        payload = fixture.EMPTY_PAYLOAD,
+                    ),
+                )
+            )
+            dao.putSelection(
+                OfflineSelection(
+                    fixture.PROFILE_ID,
+                    fixture.SELECTION_ID,
+                    fixture.COLLECTION_ID,
+                    fixture.CATALOG_ID,
+                    fixture.COLLECTION_TITLE,
+                    fixture.EMPTY_PAYLOAD,
+                )
+            )
+            dao.putMembers(
+                listOf(
+                    OfflineMember(
+                        fixture.PROFILE_ID,
+                        fixture.SELECTION_ID,
+                        fixture.EPISODE_ID,
+                        0,
+                    )
+                )
+            )
+            val download =
+                OfflineAsset(
+                    fixture.PROFILE_ID,
+                    fixture.ASSET_ID,
+                    fixture.EPISODE_ID,
+                    fixture.QUALITY,
+                    fixture.SOURCE_ID,
+                    fixture.REVISION,
+                    4,
+                    fixture.ASSET_HASH,
+                    fixture.VIDEO_MIME_TYPE,
+                    fixture.EMPTY_PAYLOAD,
+                    fixture.ASSET_PATH,
+                    state = fixture.STAGED_STATE,
+                )
+            dao.putAsset(download)
+            dao.putAsset(
+                download.copy(
+                    profile = fixture.OTHER_PROFILE_ID,
+                    item = fixture.FOREIGN_ITEM_ID,
+                    state = fixture.COMPLETE_STATE,
+                )
+            )
+            dao.putAsset(
+                download.copy(
+                    id = fixture.LOCKED_ASSET_ID,
+                    item = fixture.LOCKED_ITEM_ID,
+                    state = fixture.COMPLETE_STATE,
+                    locked = true,
+                )
+            )
+            val statuses =
+                dao.observeDownloadStatuses(
+                    fixture.PROFILE_ID,
+                    fixture.USER_ID,
+                    fixture.SERVER_URL,
+                )
+            assertTrue(statuses.first().isEmpty())
+
+            val observed = CompletableDeferred<Unit>()
+            val changed = async {
+                withTimeout(5_000) { statuses.onEach { observed.complete(Unit) }.drop(1).first() }
+            }
+            observed.await()
+            dao.putAsset(download.copy(state = fixture.COMPLETE_STATE))
+            assertEquals(
+                setOf(
+                    OfflineDownloadStatus(fixture.EPISODE_ID, false),
+                    OfflineDownloadStatus(fixture.SEASON_ID, true),
+                    OfflineDownloadStatus(fixture.SERIES_ID, true),
+                    OfflineDownloadStatus(fixture.COLLECTION_ID, true),
+                ),
+                changed.await().toSet(),
+            )
+            assertTrue(
+                dao.observeDownloadStatuses(
+                        fixture.PROFILE_ID,
+                        fixture.DIFFERENT_USER_ID,
+                        fixture.SERVER_URL,
+                    )
+                    .first()
+                    .isEmpty()
+            )
+            assertTrue(
+                dao.observeDownloadStatuses(
+                        fixture.PROFILE_ID,
+                        fixture.USER_ID,
+                        fixture.DIFFERENT_SERVER_URL,
+                    )
+                    .first()
+                    .isEmpty()
+            )
+
+            dao.putProfile(profile.copy(locked = true))
+            assertTrue(statuses.first().isEmpty())
+            dao.putProfile(profile)
+            dao.markItemAssetsForDeletion(fixture.PROFILE_ID, fixture.EPISODE_ID)
+            assertTrue(statuses.first().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun savedBrowsingIncludesParentsAndSelectionRootsWithoutLeakingRemovedOrOtherProfiles() =
         runBlocking {
             val db = database()

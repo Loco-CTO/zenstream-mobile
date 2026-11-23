@@ -3,12 +3,14 @@ package com.zenstream.zenstreammobile.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +34,9 @@ import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.PagedLibrary
 import com.zenstream.zenstreammobile.model.PagedSearch
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.offline.DownloadStatus
+import com.zenstream.zenstreammobile.offline.LocalDownloadStatuses
+import com.zenstream.zenstreammobile.ui.components.AudioCard
 import com.zenstream.zenstreammobile.ui.components.MediaCard
 import com.zenstream.zenstreammobile.ui.components.MediaRowView
 import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MAX_WIDTH
@@ -141,6 +146,54 @@ class ContentScreensTest {
             assertTrue(width >= POSTER_CARD_MIN_WIDTH)
             assertTrue(width <= POSTER_CARD_MAX_WIDTH)
         }
+    }
+
+    @Test
+    fun videoAndMusicCardsReflectTheSameDownloadState() {
+        val fixture = ContentScreensTestFixtures
+        val statuses = mutableStateOf(emptyMap<String, DownloadStatus>())
+        val movie =
+            MediaItem(
+                fixture.DOWNLOADED_MOVIE_ID,
+                fixture.DOWNLOADED_MOVIE_TITLE,
+                type = fixture.MOVIE_TYPE,
+            )
+        val album =
+            MediaItem(
+                fixture.DOWNLOADED_ALBUM_ID,
+                fixture.DOWNLOADED_ALBUM_TITLE,
+                type = fixture.ALBUM_TYPE,
+            )
+        composeRule.setContent {
+            ZenStreamTheme {
+                CompositionLocalProvider(LocalDownloadStatuses provides statuses.value) {
+                    Row {
+                        MediaCard(movie, session, wide = false, onClick = {})
+                        AudioCard(album, session, onClick = {})
+                    }
+                }
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val downloaded = context.getString(R.string.offline_saved_badge)
+        val containsDownloads = context.getString(R.string.offline_contains_downloads)
+        composeRule.onNodeWithContentDescription(downloaded).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(containsDownloads).assertDoesNotExist()
+
+        composeRule.runOnIdle {
+            statuses.value =
+                mapOf(
+                    movie.id to DownloadStatus.Saved,
+                    album.id to DownloadStatus.ContainsDownloads,
+                )
+        }
+        composeRule.onNodeWithContentDescription(downloaded).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(containsDownloads).assertIsDisplayed()
+
+        composeRule.runOnIdle { statuses.value = emptyMap() }
+        composeRule.onNodeWithContentDescription(downloaded).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(containsDownloads).assertDoesNotExist()
     }
 
     @Test

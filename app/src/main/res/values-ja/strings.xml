@@ -91,7 +91,8 @@
     <string name="offline_resume_all">ダウンロードを再開</string>
     <string name="offline_saved">保存済み</string>
     <string name="offline_item_actions">項目の操作</string>
-    <string name="offline_saved_badge">オフラインで利用可能</string>
+    <string name="offline_saved_badge">ダウンロード済み</string>
+    <string name="offline_contains_downloads">ダウンロード済みの項目を含む</string>
     <string name="offline_saved_count">確認済み%2$d項目中%1$d項目を保存済み</string>
     <string name="offline_downloaded_watched_count">ダウンロード済みエピソード%2$d件中%1$d件を視聴済み</string>
     <string name="offline_mark_downloaded_watched">ダウンロード済みエピソードを視聴済みにする</string>
