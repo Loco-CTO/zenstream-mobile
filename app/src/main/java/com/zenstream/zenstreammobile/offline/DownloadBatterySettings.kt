@@ -69,8 +69,7 @@ internal fun rememberDownloadBatteryGate(): () -> Boolean {
     if (show) {
         AlertDialog(
             onDismissRequest = { show = false },
-            properties =
-                DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
+            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
             title = { Text(stringResource(R.string.download_battery_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
