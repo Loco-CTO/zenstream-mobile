@@ -2028,16 +2028,6 @@ internal fun LyricsPanel(
                         // Open or seek directly to distant lyrics without scrolling through the
                         // song.
                         listState.scrollToItem(targetIndex)
-                        val positionedLine =
-                            listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                it.index == targetIndex
-                            }
-                        if (positionedLine != null && positionedLine.offset != 0) {
-                            listState.scrollToItem(
-                                targetIndex,
-                                scrollOffset = positionedLine.offset,
-                            )
-                        }
                         positionedCurrentLine = true
                     } else if (visibleLine.offset != 0) {
                         listState.animateScrollBy(
