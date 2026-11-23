@@ -73,7 +73,7 @@ class LyricsPanelTest {
     @Test
     fun pausingFreezesTheCurrentLyricAndResumingFollowsPlayback() {
         val positionMillis = mutableLongStateOf(0L)
-        val positionUpdatedAt = mutableLongStateOf(1L)
+        val positionUpdatedAt = mutableLongStateOf(0L)
         val isPlaying = mutableStateOf(false)
         val lyrics =
             AudioLyrics(
@@ -81,7 +81,7 @@ class LyricsPanelTest {
                 timed = true,
                 lines =
                     List(6) { index ->
-                        LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 0.5)
+                        LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 2.0)
                     },
             )
         compose.setContent {
@@ -107,13 +107,23 @@ class LyricsPanelTest {
 
         val firstLineTop = lineTop("Playback line 1")
         compose.runOnIdle {
+            positionMillis.longValue = 2_250L
             positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
-            isPlaying.value = true
         }
         awaitLineAtTop("Playback line 2", firstLineTop.value)
 
         compose.runOnIdle {
-            positionMillis.longValue = 750L
+            positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
+            isPlaying.value = true
+        }
+        awaitLineAtTop("Playback line 2", firstLineTop.value)
+        val playingAt = SystemClock.elapsedRealtime()
+        compose.waitUntil(timeoutMillis = 3_000) {
+            SystemClock.elapsedRealtime() - playingAt >= 300L &&
+                abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
+        }
+
+        compose.runOnIdle {
             positionUpdatedAt.longValue = SystemClock.elapsedRealtime()
             isPlaying.value = false
         }
