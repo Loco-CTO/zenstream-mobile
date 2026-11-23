@@ -146,6 +146,106 @@ class OfflineMetadataRefreshCoordinatorTest {
     }
 
     @Test
+    fun attachmentRefreshDefersOfflinePreservesSavedFilesAndRetriesWhenOnline() = runBlocking {
+        val fixture = Fixture()
+        try {
+            var networkAvailable = true
+            val oldSubtitle = "WEBVTT\n\nSaved subtitle".toByteArray()
+            val updatedSubtitle = "WEBVTT\n\nUpdated subtitle".toByteArray()
+            fun externalBundle(presentation: String, supplement: String, bytes: ByteArray) =
+                bundle(presentation, supplement, subtitleBytes = bytes).apply {
+                    put("subtitleScope", "external")
+                    put("sourceStatus", "unchanged")
+                    put("sourceRevision", "source-revision-1")
+                    getJSONArray("subtitles")
+                        .getJSONObject(0)
+                        .put("id", "file:japanese")
+                        .put("fileId", "japanese")
+                        .put("language", "ja")
+                }
+
+            fixture.seed("Old title", bundle("presentation-0", "supplement-0"))
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                externalBundle("presentation-1", "supplement-1", oldSubtitle),
+                binaryResponses = mapOf("subtitle" to oldSubtitle),
+                itemBundles = true,
+            )
+            val savedAsset = fixture.dao.asset(fixture.profileId, fixture.assetId)!!
+            val savedSupplement =
+                fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+
+            networkAvailable = false
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                externalBundle("presentation-2", "supplement-2", updatedSubtitle),
+                binaryResponses = mapOf("subtitle" to updatedSubtitle),
+                itemBundles = true,
+                canFetchSupplements = { networkAvailable },
+            )
+
+            val deferred = fixture.dao.maintenance(fixture.profileId, fixture.assetId)!!
+            assertEquals("waiting_for_network", deferred.error)
+            assertTrue(deferred.nextAttempt > System.currentTimeMillis())
+            assertEquals(
+                savedAsset.descriptor,
+                fixture.dao.asset(fixture.profileId, fixture.assetId)!!.descriptor,
+            )
+            assertEquals(
+                savedSupplement,
+                fixture.dao.supplements(fixture.profileId, fixture.assetId).single(),
+            )
+            assertArrayEquals(
+                oldSubtitle,
+                fixture.storage.paths.resolve(savedSupplement.relativePath).readBytes(),
+            )
+            assertArrayEquals(
+                fixture.mediaBytes,
+                fixture.storage.paths.resolve(fixture.mediaPath).readBytes(),
+            )
+            assertEquals(1, fixture.binaryCalls)
+
+            networkAvailable = true
+            fixture.dao.retryDeferredMetadata(fixture.profileId)
+            assertEquals(
+                0,
+                fixture.dao.maintenance(fixture.profileId, fixture.assetId)!!.nextAttempt,
+            )
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                externalBundle("presentation-2", "supplement-2", updatedSubtitle),
+                binaryResponses = mapOf("subtitle" to updatedSubtitle),
+                itemBundles = true,
+                force = false,
+                canFetchSupplements = { networkAvailable },
+            )
+
+            val refreshedAsset = fixture.dao.asset(fixture.profileId, fixture.assetId)!!
+            val refreshedBundle = JSONObject(refreshedAsset.descriptor).getJSONObject("bundle")
+            val refreshedSupplement =
+                fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+            assertEquals("presentation-2", refreshedBundle.getString("presentationRevision"))
+            assertEquals(
+                "Updated lyrics",
+                refreshedBundle.getJSONObject("lyrics").getString("text"),
+            )
+            assertEquals(savedSupplement.key, refreshedSupplement.key)
+            assertArrayEquals(
+                updatedSubtitle,
+                fixture.storage.paths.resolve(refreshedSupplement.relativePath).readBytes(),
+            )
+            assertFalse(fixture.storage.paths.resolve(savedSupplement.relativePath).exists())
+            assertArrayEquals(
+                fixture.mediaBytes,
+                fixture.storage.paths.resolve(fixture.mediaPath).readBytes(),
+            )
+            assertNull(fixture.dao.maintenance(fixture.profileId, fixture.assetId)!!.error)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
     fun changedMediaKeepsSavedLyricsUntilMediaIsReplaced() = runBlocking {
         val fixture = Fixture()
         try {
@@ -575,6 +675,7 @@ class OfflineMetadataRefreshCoordinatorTest {
             failBinaryCall: (Int) -> Boolean = { false },
             itemBundles: Boolean = false,
             force: Boolean = true,
+            canFetchSupplements: () -> Boolean = { true },
         ) {
             if (force) dao.requestMetadataCheck(profileId)
             reconcileResponse =
@@ -615,6 +716,7 @@ class OfflineMetadataRefreshCoordinatorTest {
                     loadCursor = { 0 },
                     saveCursor = { _, _ -> },
                     supportsItemBundles = { itemBundles },
+                    canFetchSupplements = canFetchSupplements,
                 )
                 .refresh(profileId, session, "en")
         }
