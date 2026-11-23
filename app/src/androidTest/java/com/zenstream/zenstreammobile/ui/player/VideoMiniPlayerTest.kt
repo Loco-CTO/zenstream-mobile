@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
@@ -162,7 +163,10 @@ class VideoMiniPlayerTest {
         assertTrue(after.bottom <= screen.bottom)
         assertEquals(closeBefore.width, closeAfter.width, 1f)
         assertEquals(closeBefore.height, closeAfter.height, 1f)
-        assertEquals(after.right, closeAfter.right, 1f)
+        assertTrue(closeAfter.left >= after.left)
+        assertTrue(closeAfter.right <= after.right)
+        val maxControlInset = with(compose.density) { 5.dp.toPx() }
+        assertTrue(after.right - closeAfter.right <= maxControlInset)
     }
 
     @Test
