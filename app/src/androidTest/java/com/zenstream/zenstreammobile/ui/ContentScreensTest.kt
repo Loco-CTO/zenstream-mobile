@@ -150,9 +150,20 @@ class ContentScreensTest {
 
     @Test
     fun videoAndMusicCardsReflectTheSameDownloadState() {
+        val fixture = ContentScreensTestFixtures
         val statuses = mutableStateOf(emptyMap<String, DownloadStatus>())
-        val movie = MediaItem("movie", "Movie", type = "Movie")
-        val album = MediaItem("album", "Album", type = "MusicAlbum")
+        val movie =
+            MediaItem(
+                fixture.DOWNLOADED_MOVIE_ID,
+                fixture.DOWNLOADED_MOVIE_TITLE,
+                type = fixture.MOVIE_TYPE,
+            )
+        val album =
+            MediaItem(
+                fixture.DOWNLOADED_ALBUM_ID,
+                fixture.DOWNLOADED_ALBUM_TITLE,
+                type = fixture.ALBUM_TYPE,
+            )
         composeRule.setContent {
             ZenStreamTheme {
                 CompositionLocalProvider(LocalDownloadStatuses provides statuses.value) {

@@ -26,7 +26,9 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.ui.components.CardBadgeSurface
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -188,21 +190,18 @@ private fun downloadStatuses(
     return key(runtime, profile, account, serverUrl) {
         val statuses by
             produceState<Map<String, DownloadStatus>?>(null) {
-                try {
-                    runtime.database
-                        .offline()
-                        .observeDownloadStatuses(profile, account, serverUrl)
-                        .collect { rows ->
-                            value = rows.associate { row ->
-                                row.id to
-                                    if (row.isContainer) DownloadStatus.ContainsDownloads
-                                    else DownloadStatus.Saved
-                            }
+                runtime.database
+                    .offline()
+                    .observeDownloadStatuses(profile, account, serverUrl)
+                    .map { rows ->
+                        rows.associate { row ->
+                            row.id to
+                                if (row.isContainer) DownloadStatus.ContainsDownloads
+                                else DownloadStatus.Saved
                         }
-                } catch (error: Exception) {
-                    if (error is CancellationException) throw error
-                    value = null
-                }
+                    }
+                    .catch { value = null }
+                    .collect { rows -> value = rows }
             }
         statuses
     }
