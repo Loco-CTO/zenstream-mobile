@@ -21,7 +21,7 @@ Remove credentials, access tokens, private media paths, personal data, and conve
 
 ## Set up development
 
-Install Android Studio, JDK 21, and Android SDK 37. Open the project in Android Studio or run `./gradlew assembleDebug`. Configure the Orchestrator connection in the app.
+Install Android Studio, JDK 21, and Android SDK Platform 37.1. Open the project in Android Studio or run `./gradlew assembleDebug`. Configure the Orchestrator connection in the app.
 
 Read [architecture and ownership](docs/architecture.md) and the focused guides for the affected area. The README remains the source for configuration and deployment instructions.
 

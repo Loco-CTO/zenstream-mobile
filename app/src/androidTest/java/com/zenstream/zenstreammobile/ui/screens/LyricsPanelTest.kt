@@ -7,11 +7,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -72,14 +74,15 @@ class LyricsPanelTest {
 
     @Test
     fun pausingFreezesTheCurrentLyricAndResumingFollowsPlayback() {
-        val positionSeconds = mutableLongStateOf(0L)
+        val positionSeconds = mutableLongStateOf(2L)
         val isPlaying = mutableStateOf(false)
         val lyrics =
             AudioLyrics(
                 source = "test",
                 timed = true,
                 lines =
-                    List(6) { index ->
+                    // Leave enough content below line 2 for it to scroll to the content inset.
+                    List(8) { index ->
                         LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 2.0)
                     },
             )
@@ -87,7 +90,8 @@ class LyricsPanelTest {
             ZenStreamTheme {
                 Box {
                     LyricsPanel(
-                        modifier = Modifier.size(width = 220.dp, height = 250.dp),
+                        modifier =
+                            Modifier.size(width = 220.dp, height = 250.dp).testTag("lyrics-panel"),
                         trackKey = "pause-resume-track",
                         lyrics = lyrics,
                         loading = false,
@@ -104,22 +108,20 @@ class LyricsPanelTest {
             }
         }
 
-        val firstLineTop = lineTop("Playback line 1")
-        compose.runOnIdle {
-            positionSeconds.longValue = 2L
-        }
-        awaitLineAtTop("Playback line 2", firstLineTop.value)
+        val panelTop = compose.onNodeWithTag("lyrics-panel").getUnclippedBoundsInRoot().top
+        val expectedLineTop = panelTop + 12.dp
+        awaitLineAtTop("Playback line 2", expectedLineTop.value)
 
         compose.runOnIdle { isPlaying.value = true }
         advanceComposeTime(300L)
-        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
+        assertEquals(expectedLineTop.value, lineTop("Playback line 2").value, 1f)
 
         compose.runOnIdle { isPlaying.value = false }
         advanceComposeTime(700L)
-        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
+        assertEquals(expectedLineTop.value, lineTop("Playback line 2").value, 1f)
 
         compose.runOnIdle { isPlaying.value = true }
-        awaitLineAtTop("Playback line 3", firstLineTop.value)
+        awaitLineAtTop("Playback line 3", expectedLineTop.value)
     }
 
     @Test
@@ -207,7 +209,11 @@ class LyricsPanelTest {
                 return
             }
         }
-        throw AssertionError("$text did not reach top=$top within 3000 ms")
+        val actualTop = runCatching { lineTop(text).value }.getOrNull()
+        val offsetFromExpected = actualTop?.minus(top)
+        throw AssertionError(
+            "$text top=$top, actual=$actualTop (delta=$offsetFromExpected) after 3000 ms"
+        )
     }
 
     private fun awaitLineDisplayed(text: String) {
