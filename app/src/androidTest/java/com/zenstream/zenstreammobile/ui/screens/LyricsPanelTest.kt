@@ -11,7 +11,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -111,20 +111,12 @@ class LyricsPanelTest {
         awaitLineAtTop("Playback line 2", firstLineTop.value)
 
         compose.runOnIdle { isPlaying.value = true }
-        awaitLineAtTop("Playback line 2", firstLineTop.value)
-        val playingAt = SystemClock.elapsedRealtime()
-        compose.waitUntil(timeoutMillis = 3_000) {
-            SystemClock.elapsedRealtime() - playingAt >= 300L &&
-                abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
-        }
+        advanceComposeTime(300L)
+        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
 
         compose.runOnIdle { isPlaying.value = false }
-        awaitLineAtTop("Playback line 2", firstLineTop.value)
-        val pausedAt = SystemClock.elapsedRealtime()
-        compose.waitUntil(timeoutMillis = 3_000) {
-            SystemClock.elapsedRealtime() - pausedAt >= 700L &&
-                abs(lineTop("Playback line 2").value - firstLineTop.value) < 1f
-        }
+        advanceComposeTime(700L)
+        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
 
         compose.runOnIdle { isPlaying.value = true }
         awaitLineAtTop("Playback line 3", firstLineTop.value)
@@ -145,9 +137,7 @@ class LyricsPanelTest {
         seekTo(0)
         awaitLineAtTop("Line 1", firstLineTop.value)
         seekTo(30)
-        compose.waitUntil(timeoutMillis = 3_000) {
-            compose.onAllNodes(hasText("Line 30")).fetchSemanticsNodes().isNotEmpty()
-        }
+        awaitLineDisplayed("Line 30")
         compose.onNodeWithText("Line 30").assertIsDisplayed()
     }
 
@@ -206,9 +196,37 @@ class LyricsPanelTest {
         compose.onNodeWithText(text).getUnclippedBoundsInRoot().let { it.bottom - it.top }
 
     private fun awaitLineAtTop(text: String, top: Float) {
-        compose.waitUntil(timeoutMillis = 3_000) {
-            compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() &&
-                abs(lineTop(text).value - top) < 1f
+        compose.mainClock.autoAdvance = false
+        val deadline = SystemClock.elapsedRealtime() + 3_000L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            advanceComposeTime(16L)
+            if (
+                compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() &&
+                    abs(lineTop(text).value - top) < 1f
+            ) {
+                return
+            }
+        }
+        throw AssertionError("$text did not reach top=$top within 3000 ms")
+    }
+
+    private fun awaitLineDisplayed(text: String) {
+        compose.mainClock.autoAdvance = false
+        val deadline = SystemClock.elapsedRealtime() + 3_000L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            advanceComposeTime(16L)
+            if (compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()) return
+        }
+        throw AssertionError("$text did not become displayed within 3000 ms")
+    }
+
+    private fun advanceComposeTime(durationMillis: Long) {
+        var advancedMillis = 0L
+        while (advancedMillis < durationMillis) {
+            val step = minOf(16L, durationMillis - advancedMillis)
+            compose.mainClock.advanceTimeBy(step, ignoreFrameDuration = true)
+            SystemClock.sleep(step)
+            advancedMillis += step
         }
     }
 }
