@@ -208,7 +208,11 @@ class LyricsPanelTest {
                 return
             }
         }
-        throw AssertionError("$text did not reach top=$top within 3000 ms")
+        val actualTop = runCatching { lineTop(text).value }.getOrNull()
+        val offsetFromExpected = actualTop?.minus(top)
+        throw AssertionError(
+            "$text top=$top, actual=$actualTop (delta=$offsetFromExpected) after 3000 ms"
+        )
     }
 
     private fun awaitLineDisplayed(text: String) {
