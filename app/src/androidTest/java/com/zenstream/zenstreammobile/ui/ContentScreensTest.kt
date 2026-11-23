@@ -188,16 +188,12 @@ class ContentScreensTest {
                     album.id to DownloadStatus.ContainsDownloads,
                 )
         }
-        composeRule.onNodeWithContentDescription(downloaded, substring = true).assertIsDisplayed()
-        composeRule
-            .onNodeWithContentDescription(containsDownloads, substring = true)
-            .assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(downloaded).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(containsDownloads).assertIsDisplayed()
 
         composeRule.runOnIdle { statuses.value = emptyMap() }
-        composeRule.onNodeWithContentDescription(downloaded, substring = true).assertDoesNotExist()
-        composeRule
-            .onNodeWithContentDescription(containsDownloads, substring = true)
-            .assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(downloaded).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription(containsDownloads).assertDoesNotExist()
     }
 
     @Test
