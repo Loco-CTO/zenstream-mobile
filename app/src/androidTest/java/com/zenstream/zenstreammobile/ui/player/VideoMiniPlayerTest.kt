@@ -170,6 +170,87 @@ class VideoMiniPlayerTest {
     }
 
     @Test
+    fun controlsRemainUsableAfterRepeatedMinimumAndMaximumResizing() {
+        var toggles = 0
+        var closes = 0
+        var expands = 0
+        render(onToggle = { toggles++ }, onClose = { closes++ }, onExpand = { expands++ })
+        val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
+        val closeButton =
+            compose.onNodeWithContentDescription(context.getString(R.string.player_close))
+        val pauseButton =
+            compose.onNodeWithContentDescription(context.getString(R.string.pause))
+        val screen = compose.onNodeWithTag("browse-surface").fetchSemanticsNode().boundsInRoot
+        val minimumWidth = with(compose.density) { 192.dp.toPx() }
+        val initial = player.fetchSemanticsNode().boundsInRoot
+
+        resizeByPinching(player, startRadius = 30f, endRadius = 180f)
+        val maximum = player.fetchSemanticsNode().boundsInRoot
+        assertTrue(maximum.width > initial.width)
+        assertTrue(maximum.left >= screen.left)
+        assertTrue(maximum.right <= screen.right)
+        assertControlInside(closeButton, player)
+        pauseButton.assertIsDisplayed().performClick()
+        closeButton.assertIsDisplayed().performClick()
+        tapExpandSurface(player)
+
+        // Return to the size limit, then resize rapidly twice more to catch stale bounds.
+        resizeByPinching(player, startRadius = 80f, endRadius = 5f)
+        val minimum = player.fetchSemanticsNode().boundsInRoot
+        assertEquals(minimumWidth, minimum.width, 1f)
+        assertControlInside(closeButton, player)
+        pauseButton.assertIsDisplayed().performClick()
+        closeButton.assertIsDisplayed().performClick()
+        tapExpandSurface(player)
+
+        resizeByPinching(player, startRadius = 5f, endRadius = 80f)
+        val largerAgain = player.fetchSemanticsNode().boundsInRoot
+        assertTrue(largerAgain.width > minimum.width)
+        assertControlInside(closeButton, player)
+        resizeByPinching(player, startRadius = 80f, endRadius = 5f)
+        assertEquals(minimumWidth, player.fetchSemanticsNode().boundsInRoot.width, 1f)
+        assertControlInside(closeButton, player)
+
+        compose.runOnIdle {
+            assertEquals(2, toggles)
+            assertEquals(2, closes)
+            assertEquals(2, expands)
+        }
+    }
+
+    private fun resizeByPinching(
+        player: SemanticsNodeInteraction,
+        startRadius: Float,
+        endRadius: Float,
+    ) {
+        player.performTouchInput {
+            down(0, center - Offset(startRadius, 0f))
+            down(1, center + Offset(startRadius, 0f))
+            moveTo(0, center - Offset(endRadius, 0f))
+            moveTo(1, center + Offset(endRadius, 0f))
+            up(0)
+            up(1)
+        }
+        compose.waitForIdle()
+    }
+
+    private fun assertControlInside(
+        closeButton: SemanticsNodeInteraction,
+        player: SemanticsNodeInteraction,
+    ) {
+        val playerBounds = player.fetchSemanticsNode().boundsInRoot
+        val closeBounds = closeButton.fetchSemanticsNode().boundsInRoot
+        assertTrue(closeBounds.left >= playerBounds.left)
+        assertTrue(closeBounds.right <= playerBounds.right)
+        assertTrue(closeBounds.top >= playerBounds.top)
+        assertTrue(closeBounds.bottom <= playerBounds.bottom)
+    }
+
+    private fun tapExpandSurface(player: SemanticsNodeInteraction) {
+        player.performTouchInput { click(Offset(center.x, height * .75f)) }
+    }
+
+    @Test
     fun releaseGlidesThroughIntermediatePositionsBeforeAligning() {
         render()
         val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
