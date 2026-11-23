@@ -2020,6 +2020,7 @@ internal fun LyricsPanel(
             val targetIndex = currentIndex.coerceAtLeast(0)
             LaunchedEffect(trackKey, lyrics, targetIndex, followCurrentLine) {
                 if (followCurrentLine && lyrics.timed && lyrics.lines.isNotEmpty()) {
+                    val contentTop = listState.layoutInfo.beforeContentPadding
                     val visibleLine =
                         listState.layoutInfo.visibleItemsInfo.firstOrNull {
                             it.index == targetIndex
@@ -2027,11 +2028,11 @@ internal fun LyricsPanel(
                     if (!positionedCurrentLine || visibleLine == null) {
                         // Open or seek directly to distant lyrics without scrolling through the
                         // song.
-                        listState.scrollToItem(targetIndex)
+                        listState.scrollToItem(targetIndex, scrollOffset = -contentTop)
                         positionedCurrentLine = true
-                    } else if (visibleLine.offset != 0) {
+                    } else if (visibleLine.offset != contentTop) {
                         listState.animateScrollBy(
-                            visibleLine.offset.toFloat(),
+                            (visibleLine.offset - contentTop).toFloat(),
                             animationSpec =
                                 tween(durationMillis = 240, easing = FastOutSlowInEasing),
                         )
