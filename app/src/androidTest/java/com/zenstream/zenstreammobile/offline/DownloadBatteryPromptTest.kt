@@ -37,6 +37,7 @@ class DownloadBatteryPromptTest {
             setExempt(false)
             assertFalse(downloadBatteryExempt(context))
             val continued = mutableIntStateOf(0)
+            val played = mutableIntStateOf(0)
             compose.setContent {
                 ZenStreamTheme {
                     val requireBatteryExemption = rememberDownloadBatteryGate()
@@ -46,7 +47,11 @@ class DownloadBatteryPromptTest {
                         ) {
                             Text("Queue download")
                         }
+                        TextButton(onClick = { played.intValue++ }) {
+                            Text("Play downloaded media")
+                        }
                         Text("Continued ${continued.intValue}")
+                        Text("Played ${played.intValue}")
                     }
                 }
             }
@@ -58,12 +63,24 @@ class DownloadBatteryPromptTest {
                 .onNodeWithText(context.getString(R.string.download_battery_settings))
                 .assertIsDisplayed()
             compose
-                .onNodeWithText(context.getString(R.string.notification_permission_not_now))
-                .assertDoesNotExist()
+                .onNodeWithText(context.getString(R.string.download_battery_not_now))
+                .assertIsDisplayed()
             val scenario = compose.activityRule.scenario
             scenario.moveToState(Lifecycle.State.STARTED)
             scenario.moveToState(Lifecycle.State.RESUMED)
             compose.onNodeWithText(title).assertIsDisplayed()
+            compose
+                .onNodeWithText(context.getString(R.string.download_battery_not_now))
+                .performClick()
+            compose.onNodeWithText(title).assertDoesNotExist()
+            compose.onNodeWithText("Continued 0").assertIsDisplayed()
+            compose.onNodeWithText("Play downloaded media").performClick()
+            compose.onNodeWithText("Played 1").assertIsDisplayed()
+
+            // The required gate appears again only after another explicit download attempt.
+            compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.onNodeWithText("Continued 0").assertIsDisplayed()
             scenario.moveToState(Lifecycle.State.STARTED)
             setExempt(true)
             assertTrue(downloadBatteryExempt(context))
@@ -71,6 +88,17 @@ class DownloadBatteryPromptTest {
             compose.onNodeWithText(title).assertDoesNotExist()
             compose.onNodeWithText("Continued 0").assertIsDisplayed()
             compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText("Continued 1").assertIsDisplayed()
+
+            setExempt(false)
+            assertFalse(downloadBatteryExempt(context))
+            compose.onNodeWithText("Queue download").performClick()
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.onNodeWithText("Continued 1").assertIsDisplayed()
+            compose
+                .onNodeWithText(context.getString(R.string.download_battery_not_now))
+                .performClick()
+            compose.onNodeWithText(title).assertDoesNotExist()
             compose.onNodeWithText("Continued 1").assertIsDisplayed()
         } finally {
             setExempt(previouslyExempt)

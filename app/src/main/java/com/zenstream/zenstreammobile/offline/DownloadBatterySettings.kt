@@ -68,9 +68,9 @@ internal fun rememberDownloadBatteryGate(): () -> Boolean {
     }
     if (show) {
         AlertDialog(
-            onDismissRequest = {},
+            onDismissRequest = { show = false },
             properties =
-                DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+                DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
             title = { Text(stringResource(R.string.download_battery_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -83,6 +83,11 @@ internal fun rememberDownloadBatteryGate(): () -> Boolean {
             confirmButton = {
                 TextButton(onClick = { openDownloadBatterySettings(context) }) {
                     Text(stringResource(R.string.download_battery_settings))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { show = false }) {
+                    Text(stringResource(R.string.download_battery_not_now))
                 }
             },
         )
