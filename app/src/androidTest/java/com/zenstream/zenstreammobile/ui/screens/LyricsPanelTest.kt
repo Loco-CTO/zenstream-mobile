@@ -81,7 +81,8 @@ class LyricsPanelTest {
                 source = "test",
                 timed = true,
                 lines =
-                    List(6) { index ->
+                    // Leave enough content below line 2 for it to scroll to the content inset.
+                    List(8) { index ->
                         LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 2.0)
                     },
             )
