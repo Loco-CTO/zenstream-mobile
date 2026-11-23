@@ -1944,8 +1944,7 @@ internal fun LyricsPanel(
                         isPlaying = isPlaying,
                         nowElapsedRealtime = now,
                     )
-                val transitionLead =
-                    if (isPlaying) LYRIC_TRANSITION_MILLIS / 1_000.0 else 0.0
+                val transitionLead = if (isPlaying) LYRIC_TRANSITION_MILLIS / 1_000.0 else 0.0
                 val nextIndex = lyricIndexAt(lyrics.lines, position + transitionLead)
                 if (nextIndex != currentIndex) currentIndex = nextIndex
             }
@@ -2117,4 +2116,3 @@ private fun lyricPositionSeconds(
         }
     return positionMillis.coerceAtLeast(0L) / 1_000.0 + elapsedSeconds
 }
-
