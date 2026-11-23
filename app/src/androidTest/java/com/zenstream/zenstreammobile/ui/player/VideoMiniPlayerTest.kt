@@ -178,8 +178,7 @@ class VideoMiniPlayerTest {
         val player = compose.onNodeWithTag(VIDEO_MINI_PLAYER_TAG)
         val closeButton =
             compose.onNodeWithContentDescription(context.getString(R.string.player_close))
-        val pauseButton =
-            compose.onNodeWithContentDescription(context.getString(R.string.pause))
+        val pauseButton = compose.onNodeWithContentDescription(context.getString(R.string.pause))
         val screen = compose.onNodeWithTag("browse-surface").fetchSemanticsNode().boundsInRoot
         val minimumWidth = with(compose.density) { 192.dp.toPx() }
         val initial = player.fetchSemanticsNode().boundsInRoot
