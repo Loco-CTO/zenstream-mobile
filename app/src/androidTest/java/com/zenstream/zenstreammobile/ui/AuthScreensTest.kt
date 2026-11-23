@@ -52,6 +52,7 @@ import com.zenstream.zenstreammobile.ui.screens.calculateFeatureLogoWidth
 import com.zenstream.zenstreammobile.ui.screens.shouldExpandFeatureHero
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -155,7 +156,7 @@ class AuthScreensTest {
 
     @Test
     fun serverSetupDoesNotRequestLocalNetworkPermissionForPublicEndpoint() {
-        var configuredServer: String? = null
+        val configuredServer = AtomicReference<String?>(null)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
         composeRule.setContent {
@@ -165,7 +166,7 @@ class AuthScreensTest {
                     onRequestLocalNetworkPermission = { _ ->
                         throw AssertionError("Public server unexpectedly requested local access")
                     },
-                    onConfigured = { configuredServer = it },
+                    onConfigured = { configuredServer.set(it) },
                 )
             }
         }
@@ -174,9 +175,10 @@ class AuthScreensTest {
             .onNodeWithText(context.getString(R.string.orchestrator_url))
             .performTextInput(TEST_ORCHESTRATOR_URL)
         composeRule.onNodeWithText(context.getString(R.string.continue_label)).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) { configuredServer.get() != null }
         composeRule.waitForIdle()
 
-        assertEquals(TEST_ORCHESTRATOR_URL, configuredServer)
+        assertEquals(TEST_ORCHESTRATOR_URL, configuredServer.get())
     }
 
     @Test
