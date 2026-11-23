@@ -13,6 +13,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -42,6 +45,13 @@ data class DownloadUiActions(
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
 
+internal enum class DownloadStatus(val icon: Int, val label: Int) {
+    Saved(LucideR.drawable.lucide_ic_circle_arrow_down, R.string.offline_saved_badge),
+    ContainsDownloads(LucideR.drawable.lucide_ic_folder_down, R.string.offline_contains_downloads),
+}
+
+internal val LocalDownloadStatuses = compositionLocalOf<Map<String, DownloadStatus>?> { null }
+
 internal fun offlineCapabilityErrorMessage(failure: Exception): Int =
     when {
         failure is OfflineDownloadsUnsupportedException -> R.string.offline_not_supported
@@ -68,44 +78,33 @@ fun DownloadButton(item: MediaItem?, modifier: Modifier = Modifier) {
 fun DownloadButton(spec: DownloadSpec, modifier: Modifier = Modifier) {
     val actions = LocalDownloadUi.current ?: return
     val connection by actions.runtime.connection.state.collectAsState()
-    val revision by actions.runtime.catalogRevision.collectAsState()
+    val statuses = LocalDownloadStatuses.current
+    val status = statuses?.get(spec.id)
+    val savedLabel = status?.let { stringResource(it.label) }
     val scope = rememberCoroutineScope()
-    var confirm by remember(spec.id) { mutableStateOf(false) }
-    var busy by remember(spec.id) { mutableStateOf(false) }
-    var failed by remember(spec.id) { mutableStateOf(false) }
-    val downloaded by
-        produceState<Int?>(null, spec.id, connection.profile, revision) {
-            value = null
-            value =
-                connection.profile?.let { profile ->
-                    try {
-                        actions.runtime.catalog.availability(profile, spec.id).downloaded
-                    } catch (error: Exception) {
-                        if (error is CancellationException) throw error
-                        null
-                    }
-                } ?: if (connection.profile == null) 0 else null
-        }
+    var confirm by remember(spec.id, connection.profile, status) { mutableStateOf(false) }
+    var busy by remember(spec.id, connection.profile) { mutableStateOf(false) }
+    var failed by remember(spec.id, connection.profile) { mutableStateOf(false) }
     IconButton(
         onClick = {
-            if (downloaded != null && downloaded!! > 0) confirm = true else actions.request(spec)
+            if (status != null) confirm = true else actions.request(spec)
         },
-        enabled = downloaded != null && !busy,
-        modifier = modifier,
+        enabled = statuses != null && !busy,
+        modifier = modifier.semantics { savedLabel?.let { stateDescription = it } },
     ) {
-        Icon(
-            painterResource(
-                if ((downloaded ?: 0) > 0) LucideR.drawable.lucide_ic_trash_2
-                else LucideR.drawable.lucide_ic_download
-            ),
+        val actionLabel =
             stringResource(
-                if ((downloaded ?: 0) > 0) R.string.offline_delete_item
+                if (status != null) R.string.offline_delete_item
                 else R.string.offline_download_item,
                 spec.title,
-            ),
-        )
+            )
+        if (status != null) {
+            DownloadStatusIcon(status, actionLabel, size = 22.dp)
+        } else {
+            Icon(painterResource(LucideR.drawable.lucide_ic_download), actionLabel)
+        }
     }
-    if (confirm)
+    if (confirm && status != null)
         AlertDialog(
             onDismissRequest = { if (!busy) confirm = false },
             title = { Text(stringResource(R.string.offline_delete_item, spec.title)) },
@@ -150,29 +149,63 @@ fun DownloadButton(spec: DownloadSpec, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DownloadedBadge(item: MediaItem, modifier: Modifier = Modifier) {
-    val actions = LocalDownloadUi.current ?: return
-    val connection by actions.runtime.connection.state.collectAsState()
-    val revision by actions.runtime.catalogRevision.collectAsState()
-    val count by
-        produceState(0, item.id, connection.profile, revision) {
-            value =
-                connection.profile?.let { profile ->
-                    runCatching {
-                            actions.runtime.catalog.availability(profile, item.id).downloaded
+internal fun DownloadedBadge(itemId: String, modifier: Modifier = Modifier) {
+    val status = LocalDownloadStatuses.current?.get(itemId) ?: return
+    CardBadgeSurface(modifier) {
+        DownloadStatusIcon(
+            status,
+            stringResource(status.label),
+            modifier = Modifier.padding(5.dp),
+        )
+    }
+}
+
+@Composable
+private fun DownloadStatusIcon(
+    status: DownloadStatus,
+    description: String,
+    modifier: Modifier = Modifier,
+    size: Dp = 16.dp,
+) {
+    Icon(
+        painterResource(status.icon),
+        description,
+        modifier = modifier.size(size),
+        tint = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun downloadStatuses(
+    runtime: OfflineRuntime,
+    session: AuthSession?,
+): Map<String, DownloadStatus>? {
+    val connection by runtime.connection.state.collectAsState()
+    if (!connection.initialized) return null
+    val profile = connection.profile ?: return emptyMap()
+    val serverUrl = session?.serverUrl?.trimEnd('/')
+    val account = session?.userId
+    return key(runtime, profile, account, serverUrl) {
+        val statuses by
+            produceState<Map<String, DownloadStatus>?>(null) {
+                try {
+                    runtime.database
+                        .offline()
+                        .observeDownloadStatuses(profile, account, serverUrl)
+                        .collect { rows ->
+                            value = rows.associate { row ->
+                                row.id to
+                                    if (row.isContainer) DownloadStatus.ContainsDownloads
+                                    else DownloadStatus.Saved
+                            }
                         }
-                        .getOrDefault(0)
-                } ?: 0
-        }
-    if (count > 0)
-        CardBadgeSurface(modifier) {
-            Icon(
-                painterResource(LucideR.drawable.lucide_ic_download),
-                stringResource(R.string.offline_saved_badge),
-                modifier = Modifier.padding(5.dp).size(16.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    value = null
+                }
+            }
+        statuses
+    }
 }
 
 @Composable
@@ -293,7 +326,11 @@ fun OfflineDownloadHost(
         if (runtime != null && session != null && OfflineRuntime.ENABLED)
             runtime.onAuthenticatedSession(session)
     }
-    CompositionLocalProvider(LocalDownloadUi provides actions) {
+    val statuses = if (actions != null) downloadStatuses(actions.runtime, session) else null
+    CompositionLocalProvider(
+        LocalDownloadUi provides actions,
+        LocalDownloadStatuses provides statuses,
+    ) {
         Box(Modifier.fillMaxSize()) {
             content()
             SnackbarHost(

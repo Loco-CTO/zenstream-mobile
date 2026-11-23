@@ -120,6 +120,7 @@ import com.zenstream.zenstreammobile.model.SearchFilter
 import com.zenstream.zenstreammobile.model.SortOrder
 import com.zenstream.zenstreammobile.model.homeSectionId
 import com.zenstream.zenstreammobile.model.orderHomeRows
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import com.zenstream.zenstreammobile.ui.FavoritesViewModel
 import com.zenstream.zenstreammobile.ui.HomeViewModel
 import com.zenstream.zenstreammobile.ui.LibraryViewModel
@@ -420,12 +421,18 @@ internal fun FeaturedHero(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (metadata.isNotBlank()) {
-                    Text(
-                        metadata,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = .7f),
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DownloadedBadge(item.id)
+                    if (metadata.isNotBlank()) {
+                        Text(
+                            metadata,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = .7f),
+                        )
+                    }
                 }
                 item.overview?.takeIf(String::isNotBlank)?.let { overview ->
                     Text(
@@ -934,6 +941,7 @@ private fun SearchFeaturedPanel(
                         )
                     )
             )
+            DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(8.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
                 Text(
                     stringResource(searchFilterLabel(searchFilterForItem(item))),
@@ -1021,6 +1029,7 @@ private fun SearchResultRow(
                     contentDescription = stringResource(R.string.poster_description, item.name),
                     contentScale = ContentScale.Crop,
                 )
+                DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(4.dp))
             }
             Column(
                 modifier = Modifier.weight(1f).padding(start = 12.dp),
@@ -1571,6 +1580,7 @@ private fun FavoriteListRow(
                 )
             }
         }
+        DownloadedBadge(item.id, Modifier.padding(start = 8.dp))
     }
 }
 

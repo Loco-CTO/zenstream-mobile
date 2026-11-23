@@ -50,6 +50,7 @@ import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import java.time.Instant
 import kotlin.math.roundToInt
 
@@ -227,6 +228,7 @@ private fun StackedEpisodeCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MediaImage(item, session, wide = false, useSeriesPoster = true)
+                DownloadedBadge(item.id, Modifier.align(Alignment.TopEnd).padding(6.dp))
                 CardBadgeSurface(modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
                     Text(
                         text = stack.items.size.toString(),
@@ -298,10 +300,7 @@ fun MediaCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             MediaImage(item, session, wide, useSeriesPoster = useSeriesPoster)
-            com.zenstream.zenstreammobile.offline.DownloadedBadge(
-                item,
-                Modifier.align(Alignment.TopStart).padding(6.dp),
-            )
+            DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(6.dp))
             if (item.type != "BoxSet" && (item.played || item.unplayedItemCount != null)) {
                 CardBadgeSurface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                     Row(

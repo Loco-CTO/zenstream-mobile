@@ -697,6 +697,36 @@ interface OfflineDao {
     )
     suspend fun availability(profile: String, item: String): OfflineAvailability
 
+    @Query(
+        """WITH RECURSIVE downloaded(id) AS (
+            SELECT DISTINCT a.item FROM offline_assets a
+            JOIN offline_profiles p ON p.id=a.profile
+            WHERE a.profile=:profile AND a.state='complete' AND a.locked=0 AND p.locked=0
+                AND (:account IS NULL OR p.account=:account)
+                AND (:serverUrl IS NULL OR RTRIM(p.serverUrl, '/')=:serverUrl)
+        ), ancestors(id) AS (
+            SELECT c.parentId FROM offline_catalog c JOIN downloaded d ON c.id=d.id
+            WHERE c.profile=:profile AND c.parentId IS NOT NULL
+            UNION
+            SELECT c.parentId FROM offline_catalog c JOIN ancestors a ON c.id=a.id
+            WHERE c.profile=:profile AND c.parentId IS NOT NULL
+        ), statuses(id, isContainer) AS (
+            SELECT id, 0 FROM downloaded
+            UNION ALL SELECT id, 1 FROM ancestors
+            UNION ALL
+            SELECT s.rootId, 1 FROM offline_members m
+            JOIN downloaded d ON d.id=m.item
+            JOIN offline_selections s ON s.profile=m.profile AND s.id=m.selection
+            WHERE m.profile=:profile
+        )
+        SELECT id, MIN(isContainer) AS isContainer FROM statuses GROUP BY id"""
+    )
+    fun observeDownloadStatuses(
+        profile: String,
+        account: String?,
+        serverUrl: String?,
+    ): Flow<List<OfflineDownloadStatus>>
+
     @Query("DELETE FROM offline_playlists WHERE profile=:profile AND id=:id")
     suspend fun deletePlaylist(profile: String, id: String)
 
@@ -881,6 +911,8 @@ interface OfflineDao {
     )
     suspend fun nextTransferAttempt(profile: String): Long
 }
+
+data class OfflineDownloadStatus(val id: String, val isContainer: Boolean)
 
 data class OfflineAvailability(val total: Int, val downloaded: Int, val newSourceAvailable: Int = 0)
 

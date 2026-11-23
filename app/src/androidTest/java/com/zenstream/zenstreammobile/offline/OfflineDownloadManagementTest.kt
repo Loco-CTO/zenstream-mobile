@@ -218,6 +218,96 @@ class OfflineDownloadManagementTest {
             .build()
 
     @Test
+    fun downloadStatusesFollowCompletionRemovalAndProfileLocks() = runBlocking {
+        val db = database()
+        val dao = db.offline()
+        try {
+            val profile = OfflineProfile("p", "server", "user", "https://example.test/", "Test")
+            dao.putProfile(profile)
+            dao.putItems(
+                listOf(
+                    OfflineCatalogItem(
+                        "p",
+                        "episode",
+                        null,
+                        "season",
+                        "episode",
+                        "Episode",
+                        payload = "{}",
+                    ),
+                    OfflineCatalogItem(
+                        "p",
+                        "season",
+                        null,
+                        "series",
+                        "season",
+                        "Season",
+                        payload = "{}",
+                    ),
+                )
+            )
+            dao.putSelection(
+                OfflineSelection("p", "selection", "collection", "catalog", "Collection", "{}")
+            )
+            dao.putMembers(listOf(OfflineMember("p", "selection", "episode", 0)))
+            val download =
+                OfflineAsset(
+                    "p",
+                    "asset",
+                    "episode",
+                    "original",
+                    "source",
+                    "revision",
+                    4,
+                    "hash",
+                    "video/mp4",
+                    "{}",
+                    "path",
+                    state = "staged",
+                )
+            dao.putAsset(download)
+            dao.putAsset(download.copy(profile = "other", item = "foreign", state = "complete"))
+            dao.putAsset(
+                download.copy(id = "locked", item = "locked", state = "complete", locked = true)
+            )
+            val statuses = dao.observeDownloadStatuses("p", "user", "https://example.test")
+            assertTrue(statuses.first().isEmpty())
+
+            val observed = CompletableDeferred<Unit>()
+            val changed = async {
+                withTimeout(5_000) { statuses.onEach { observed.complete(Unit) }.drop(1).first() }
+            }
+            observed.await()
+            dao.putAsset(download.copy(state = "complete"))
+            assertEquals(
+                setOf(
+                    OfflineDownloadStatus("episode", false),
+                    OfflineDownloadStatus("season", true),
+                    OfflineDownloadStatus("series", true),
+                    OfflineDownloadStatus("collection", true),
+                ),
+                changed.await().toSet(),
+            )
+            assertTrue(
+                dao.observeDownloadStatuses("p", "different-user", "https://example.test")
+                    .first()
+                    .isEmpty()
+            )
+            assertTrue(
+                dao.observeDownloadStatuses("p", "user", "https://different.test").first().isEmpty()
+            )
+
+            dao.putProfile(profile.copy(locked = true))
+            assertTrue(statuses.first().isEmpty())
+            dao.putProfile(profile)
+            dao.markItemAssetsForDeletion("p", "episode")
+            assertTrue(statuses.first().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun savedBrowsingIncludesParentsAndSelectionRootsWithoutLeakingRemovedOrOtherProfiles() =
         runBlocking {
             val db = database()

@@ -91,6 +91,7 @@ import com.zenstream.zenstreammobile.model.PlaylistEntry
 import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.model.appendPlaylistPage
 import com.zenstream.zenstreammobile.model.playlistStartIndex
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import com.zenstream.zenstreammobile.ui.components.MediaImage
 import com.zenstream.zenstreammobile.ui.components.MusicArtwork
 import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
@@ -643,6 +644,7 @@ private fun WatchlistRow(
                 )
             }
         }
+        DownloadedBadge(item.id)
         IconButton(onClick = onFavorite, enabled = !busy) {
             Icon(
                 painterResource(LucideR.drawable.lucide_ic_heart),
@@ -1031,6 +1033,7 @@ private fun PlaylistCard(summary: PlaylistSummary, session: AuthSession, onClick
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        DownloadedBadge(summary.id, Modifier.padding(end = 8.dp))
         Icon(
             painterResource(LucideR.drawable.lucide_ic_chevron_right),
             contentDescription = null,
@@ -1522,6 +1525,7 @@ private fun PlaylistDetailContent(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
+                                DownloadedBadge(entry.item.id)
                                 if (summary.isOwner) {
                                     IconButton(onClick = { onRemoveEntry(entry.entryId) }) {
                                         Icon(

@@ -92,6 +92,7 @@ import com.zenstream.zenstreammobile.model.MediaPerson
 import com.zenstream.zenstreammobile.model.MediaSource
 import com.zenstream.zenstreammobile.model.MediaStream
 import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
+import com.zenstream.zenstreammobile.offline.DownloadedBadge
 import com.zenstream.zenstreammobile.ui.DetailViewModel
 import com.zenstream.zenstreammobile.ui.components.BlurHashAsyncImage
 import com.zenstream.zenstreammobile.ui.components.ExpandableDescription
@@ -1160,7 +1161,9 @@ private fun SeasonPicker(
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
                 )
+                selected?.let { DownloadedBadge(it.id, Modifier.padding(end = 8.dp)) }
                 Icon(
                     painter =
                         painterResource(
@@ -1245,6 +1248,7 @@ private fun SeasonPicker(
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f),
                                 )
+                                DownloadedBadge(season.id)
                                 IconButton(
                                     onClick = { onToggleSeasonPlayed(season.id) },
                                     enabled = !loading && !actionBusy,
@@ -1318,6 +1322,7 @@ private fun EpisodeRow(item: MediaItem, session: AuthSession, onClick: () -> Uni
                     ContentScale.Fit,
                     blurHash = type?.let { imageBlurHash(item, it) },
                 )
+                DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(5.dp))
                 if (item.played) {
                     Surface(
                         color = Color.Black.copy(alpha = .65f),

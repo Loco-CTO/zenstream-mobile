@@ -97,7 +97,8 @@
     <string name="offline_resume_all">Resume downloads</string>
     <string name="offline_saved">Saved</string>
     <string name="offline_item_actions">Item actions</string>
-    <string name="offline_saved_badge">Available offline</string>
+    <string name="offline_saved_badge">Downloaded</string>
+    <string name="offline_contains_downloads">Contains downloads</string>
     <string name="offline_saved_count">%1$d of %2$d known items saved</string>
     <string name="offline_downloaded_watched_count">%1$d of %2$d downloaded episodes watched</string>
     <string name="offline_mark_downloaded_watched">Mark downloaded episodes watched</string>
