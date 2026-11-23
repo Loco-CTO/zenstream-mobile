@@ -1923,6 +1923,32 @@ internal fun LyricsPanel(
             val latestPositionUpdatedAtElapsedRealtime by
                 rememberUpdatedState(positionUpdatedAtElapsedRealtime)
             val latestIsPlaying by rememberUpdatedState(isPlaying)
+            LaunchedEffect(
+                trackKey,
+                lyrics,
+                positionSeconds,
+                positionMillis,
+                positionUpdatedAtElapsedRealtime,
+                isPlaying,
+            ) {
+                if (!lyrics.timed) {
+                    currentIndex = -1
+                    return@LaunchedEffect
+                }
+                val now = SystemClock.elapsedRealtime()
+                val position =
+                    lyricPositionSeconds(
+                        positionSeconds = positionSeconds,
+                        positionMillis = positionMillis,
+                        positionUpdatedAtElapsedRealtime = positionUpdatedAtElapsedRealtime,
+                        isPlaying = isPlaying,
+                        nowElapsedRealtime = now,
+                    )
+                val transitionLead =
+                    if (isPlaying) LYRIC_TRANSITION_MILLIS / 1_000.0 else 0.0
+                val nextIndex = lyricIndexAt(lyrics.lines, position + transitionLead)
+                if (nextIndex != currentIndex) currentIndex = nextIndex
+            }
             LaunchedEffect(trackKey, lyrics) {
                 if (!lyrics.timed) {
                     currentIndex = -1
@@ -2091,3 +2117,4 @@ private fun lyricPositionSeconds(
         }
     return positionMillis.coerceAtLeast(0L) / 1_000.0 + elapsedSeconds
 }
+
