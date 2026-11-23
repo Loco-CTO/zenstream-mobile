@@ -706,6 +706,7 @@
     <string name="download_battery_android">ZenStream のアプリ情報で「バッテリー」または「アプリのバッテリー使用量」を開いてください。バックグラウンドでの使用を許可し、選択できる場合は「制限なし」にしてください。項目名は端末によって異なります。</string>
     <string name="download_battery_settings">バッテリー設定を開く</string>
     <string name="download_battery_settings_unavailable">端末の設定を開き、ZenStream のバッテリー項目を探してください。</string>
+    <string name="download_battery_not_now">今はしない</string>
     <string name="notification_recovery_title">ダウンロード通知がオフです</string>
     <string name="notification_recovery_message">ダウンロードは続行できますが、アプリの外では進行状況が表示されません。通知を許可すると、通知欄で進行状況を確認し、転送を操作できます。</string>
     <string name="notification_recovery_settings_message">ダウンロードは続行できます。アプリの外で進行状況を確認するには、Android の通知設定で ZenStream と「ダウンロード」の通知を有効にしてください。</string>

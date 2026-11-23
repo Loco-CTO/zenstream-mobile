@@ -722,6 +722,7 @@
     <string name="download_battery_android">In ZenStream’s app info, open Battery or App battery usage. Allow background usage and choose Unrestricted if available. Some devices call this Allow background activity or Don’t optimize.</string>
     <string name="download_battery_settings">Open battery settings</string>
     <string name="download_battery_settings_unavailable">Open your device settings and look for ZenStream’s battery options.</string>
+    <string name="download_battery_not_now">Not now</string>
     <string name="notification_recovery_title">Download notifications are off</string>
     <string name="notification_recovery_message">Your download can continue, but its progress will not appear outside ZenStream. Allow notifications to follow progress and control transfers from the notification drawer.</string>
     <string name="notification_recovery_settings_message">Your download can continue. To see its progress outside ZenStream, open Android notification settings and enable notifications for ZenStream and Downloads.</string>
