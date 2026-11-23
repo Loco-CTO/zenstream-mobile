@@ -35,9 +35,13 @@ class OfflineAudioPlaybackTest {
     @Test fun compactAacPlaysWithoutOnlineCredentials() = exerciseLocalAudio("m4a")
 
     @Test
+    fun downloadedAudioWithoutLyricsStillPlaysOffline() =
+        exerciseLocalAudio("wav", includeLyrics = false)
+
+    @Test
     fun originalMultipleAudioTracksHonorsTheDownloadedSelection() = exerciseLocalAudio("multi")
 
-    private fun exerciseLocalAudio(format: String) = runBlocking {
+    private fun exerciseLocalAudio(format: String, includeLyrics: Boolean = true) = runBlocking {
         assumeTrue("Offline playback must remain enabled", OfflineRuntime.ENABLED)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val runtime = OfflineRuntime.get(context)
@@ -123,6 +127,10 @@ class OfflineAudioPlaybackTest {
                         "lines",
                         JSONArray().put(JSONObject().put("text", "Saved lyrics")),
                     )
+            val bundle =
+                JSONObject().apply {
+                    if (includeLyrics) put("lyrics", lyrics)
+                }
             val descriptor =
                 JSONObject()
                     .put("durationSeconds", 12)
@@ -145,7 +153,7 @@ class OfflineAudioPlaybackTest {
                                     .put("sampleRate", if (format == "wav") 8000 else 48000)
                             ),
                     )
-                    .put("bundle", JSONObject().put("lyrics", lyrics))
+                    .put("bundle", bundle)
             if (format == "multi") {
                 descriptor.getJSONArray("trackManifest").getJSONObject(0).put("language", "eng")
                 descriptor
@@ -279,10 +287,14 @@ class OfflineAudioPlaybackTest {
             context.contentResolver.openInputStream(artUri).use {
                 assertEquals(artwork.toList(), it!!.readBytes().toList())
             }
-            assertEquals(
-                "Saved lyrics",
-                runtime.audio.lyrics(profile.id, "local-track")?.lines?.single()?.text,
-            )
+            if (includeLyrics) {
+                assertEquals(
+                    "Saved lyrics",
+                    runtime.audio.lyrics(profile.id, "local-track")?.lines?.single()?.text,
+                )
+            } else {
+                assertNull(runtime.audio.lyrics(profile.id, "local-track"))
+            }
             assertNull(runtime.sessionStore.session.first())
             assertFalse(OfflineNetworkPolicy.allowed)
             if (format == "multi")

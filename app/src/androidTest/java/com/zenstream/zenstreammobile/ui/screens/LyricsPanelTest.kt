@@ -1,15 +1,17 @@
 package com.zenstream.zenstreammobile.ui.screens
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -69,6 +71,58 @@ class LyricsPanelTest {
     }
 
     @Test
+    fun pausingFreezesTheCurrentLyricAndResumingFollowsPlayback() {
+        val positionSeconds = mutableLongStateOf(0L)
+        val isPlaying = mutableStateOf(false)
+        val lyrics =
+            AudioLyrics(
+                source = "test",
+                timed = true,
+                lines =
+                    List(6) { index ->
+                        LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 2.0)
+                    },
+            )
+        compose.setContent {
+            ZenStreamTheme {
+                Box {
+                    LyricsPanel(
+                        modifier = Modifier.size(width = 220.dp, height = 250.dp),
+                        trackKey = "pause-resume-track",
+                        lyrics = lyrics,
+                        loading = false,
+                        error = false,
+                        positionSeconds = positionSeconds.longValue,
+                        positionMillis = positionSeconds.longValue * 1_000L,
+                        positionUpdatedAtElapsedRealtime = 0L,
+                        isPlaying = isPlaying.value,
+                        accent = Color.Magenta,
+                        onSeek = {},
+                        onRetry = {},
+                    )
+                }
+            }
+        }
+
+        val firstLineTop = lineTop("Playback line 1")
+        compose.runOnIdle {
+            positionSeconds.longValue = 2L
+        }
+        awaitLineAtTop("Playback line 2", firstLineTop.value)
+
+        compose.runOnIdle { isPlaying.value = true }
+        advanceComposeTime(300L)
+        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
+
+        compose.runOnIdle { isPlaying.value = false }
+        advanceComposeTime(700L)
+        assertEquals(firstLineTop.value, lineTop("Playback line 2").value, 1f)
+
+        compose.runOnIdle { isPlaying.value = true }
+        awaitLineAtTop("Playback line 3", firstLineTop.value)
+    }
+
+    @Test
     fun followingKeepsWrappedLineHeightAndRealignsAfterSeeks() {
         showLyrics()
         val firstLineTop = lineTop("Line 1")
@@ -83,9 +137,7 @@ class LyricsPanelTest {
         seekTo(0)
         awaitLineAtTop("Line 1", firstLineTop.value)
         seekTo(30)
-        compose.waitUntil(timeoutMillis = 3_000) {
-            compose.onAllNodes(hasText("Line 30")).fetchSemanticsNodes().isNotEmpty()
-        }
+        awaitLineDisplayed("Line 30")
         compose.onNodeWithText("Line 30").assertIsDisplayed()
     }
 
@@ -144,9 +196,37 @@ class LyricsPanelTest {
         compose.onNodeWithText(text).getUnclippedBoundsInRoot().let { it.bottom - it.top }
 
     private fun awaitLineAtTop(text: String, top: Float) {
-        compose.waitUntil(timeoutMillis = 3_000) {
-            compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() &&
-                abs(lineTop(text).value - top) < 1f
+        compose.mainClock.autoAdvance = false
+        val deadline = SystemClock.elapsedRealtime() + 3_000L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            advanceComposeTime(16L)
+            if (
+                compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() &&
+                    abs(lineTop(text).value - top) < 1f
+            ) {
+                return
+            }
+        }
+        throw AssertionError("$text did not reach top=$top within 3000 ms")
+    }
+
+    private fun awaitLineDisplayed(text: String) {
+        compose.mainClock.autoAdvance = false
+        val deadline = SystemClock.elapsedRealtime() + 3_000L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            advanceComposeTime(16L)
+            if (compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()) return
+        }
+        throw AssertionError("$text did not become displayed within 3000 ms")
+    }
+
+    private fun advanceComposeTime(durationMillis: Long) {
+        var advancedMillis = 0L
+        while (advancedMillis < durationMillis) {
+            val step = minOf(16L, durationMillis - advancedMillis)
+            compose.mainClock.advanceTimeBy(step, ignoreFrameDuration = true)
+            SystemClock.sleep(step)
+            advancedMillis += step
         }
     }
 }
