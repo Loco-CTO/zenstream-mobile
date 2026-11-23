@@ -219,58 +219,98 @@ class OfflineDownloadManagementTest {
 
     @Test
     fun downloadStatusesFollowCompletionRemovalAndProfileLocks() = runBlocking {
+        val fixture = OfflineDownloadStatusTestFixtures
         val db = database()
         val dao = db.offline()
         try {
-            val profile = OfflineProfile("p", "server", "user", "https://example.test/", "Test")
+            val profile =
+                OfflineProfile(
+                    fixture.PROFILE_ID,
+                    fixture.SERVER_ID,
+                    fixture.USER_ID,
+                    fixture.PROFILE_URL,
+                    fixture.PROFILE_NAME,
+                )
             dao.putProfile(profile)
             dao.putItems(
                 listOf(
                     OfflineCatalogItem(
-                        "p",
-                        "episode",
+                        fixture.PROFILE_ID,
+                        fixture.EPISODE_ID,
                         null,
-                        "season",
-                        "episode",
-                        "Episode",
-                        payload = "{}",
+                        fixture.SEASON_ID,
+                        fixture.EPISODE_TYPE,
+                        fixture.EPISODE_TITLE,
+                        payload = fixture.EMPTY_PAYLOAD,
                     ),
                     OfflineCatalogItem(
-                        "p",
-                        "season",
+                        fixture.PROFILE_ID,
+                        fixture.SEASON_ID,
                         null,
-                        "series",
-                        "season",
-                        "Season",
-                        payload = "{}",
+                        fixture.SERIES_ID,
+                        fixture.SEASON_TYPE,
+                        fixture.SEASON_TITLE,
+                        payload = fixture.EMPTY_PAYLOAD,
                     ),
                 )
             )
             dao.putSelection(
-                OfflineSelection("p", "selection", "collection", "catalog", "Collection", "{}")
+                OfflineSelection(
+                    fixture.PROFILE_ID,
+                    fixture.SELECTION_ID,
+                    fixture.COLLECTION_ID,
+                    fixture.CATALOG_ID,
+                    fixture.COLLECTION_TITLE,
+                    fixture.EMPTY_PAYLOAD,
+                )
             )
-            dao.putMembers(listOf(OfflineMember("p", "selection", "episode", 0)))
+            dao.putMembers(
+                listOf(
+                    OfflineMember(
+                        fixture.PROFILE_ID,
+                        fixture.SELECTION_ID,
+                        fixture.EPISODE_ID,
+                        0,
+                    )
+                )
+            )
             val download =
                 OfflineAsset(
-                    "p",
-                    "asset",
-                    "episode",
-                    "original",
-                    "source",
-                    "revision",
+                    fixture.PROFILE_ID,
+                    fixture.ASSET_ID,
+                    fixture.EPISODE_ID,
+                    fixture.QUALITY,
+                    fixture.SOURCE_ID,
+                    fixture.REVISION,
                     4,
-                    "hash",
-                    "video/mp4",
-                    "{}",
-                    "path",
-                    state = "staged",
+                    fixture.ASSET_HASH,
+                    fixture.VIDEO_MIME_TYPE,
+                    fixture.EMPTY_PAYLOAD,
+                    fixture.ASSET_PATH,
+                    state = fixture.STAGED_STATE,
                 )
             dao.putAsset(download)
-            dao.putAsset(download.copy(profile = "other", item = "foreign", state = "complete"))
             dao.putAsset(
-                download.copy(id = "locked", item = "locked", state = "complete", locked = true)
+                download.copy(
+                    profile = fixture.OTHER_PROFILE_ID,
+                    item = fixture.FOREIGN_ITEM_ID,
+                    state = fixture.COMPLETE_STATE,
+                )
             )
-            val statuses = dao.observeDownloadStatuses("p", "user", "https://example.test")
+            dao.putAsset(
+                download.copy(
+                    id = fixture.LOCKED_ASSET_ID,
+                    item = fixture.LOCKED_ITEM_ID,
+                    state = fixture.COMPLETE_STATE,
+                    locked = true,
+                )
+            )
+            val statuses =
+                dao.observeDownloadStatuses(
+                    fixture.PROFILE_ID,
+                    fixture.USER_ID,
+                    fixture.SERVER_URL,
+                )
             assertTrue(statuses.first().isEmpty())
 
             val observed = CompletableDeferred<Unit>()
@@ -278,29 +318,39 @@ class OfflineDownloadManagementTest {
                 withTimeout(5_000) { statuses.onEach { observed.complete(Unit) }.drop(1).first() }
             }
             observed.await()
-            dao.putAsset(download.copy(state = "complete"))
+            dao.putAsset(download.copy(state = fixture.COMPLETE_STATE))
             assertEquals(
                 setOf(
-                    OfflineDownloadStatus("episode", false),
-                    OfflineDownloadStatus("season", true),
-                    OfflineDownloadStatus("series", true),
-                    OfflineDownloadStatus("collection", true),
+                    OfflineDownloadStatus(fixture.EPISODE_ID, false),
+                    OfflineDownloadStatus(fixture.SEASON_ID, true),
+                    OfflineDownloadStatus(fixture.SERIES_ID, true),
+                    OfflineDownloadStatus(fixture.COLLECTION_ID, true),
                 ),
                 changed.await().toSet(),
             )
             assertTrue(
-                dao.observeDownloadStatuses("p", "different-user", "https://example.test")
+                dao.observeDownloadStatuses(
+                    fixture.PROFILE_ID,
+                    fixture.DIFFERENT_USER_ID,
+                    fixture.SERVER_URL,
+                )
                     .first()
                     .isEmpty()
             )
             assertTrue(
-                dao.observeDownloadStatuses("p", "user", "https://different.test").first().isEmpty()
+                dao.observeDownloadStatuses(
+                    fixture.PROFILE_ID,
+                    fixture.USER_ID,
+                    fixture.DIFFERENT_SERVER_URL,
+                )
+                    .first()
+                    .isEmpty()
             )
 
             dao.putProfile(profile.copy(locked = true))
             assertTrue(statuses.first().isEmpty())
             dao.putProfile(profile)
-            dao.markItemAssetsForDeletion("p", "episode")
+            dao.markItemAssetsForDeletion(fixture.PROFILE_ID, fixture.EPISODE_ID)
             assertTrue(statuses.first().isEmpty())
         } finally {
             db.close()
