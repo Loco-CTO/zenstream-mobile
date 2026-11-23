@@ -81,8 +81,8 @@ class LyricsPanelTest {
                 source = "test",
                 timed = true,
                 lines =
-                    // Leave enough content below line 2 for it to scroll to the content inset.
-                    List(8) { index ->
+                    // Leave enough content below line 3 to scroll it to the inset after resume.
+                    List(10) { index ->
                         LyricLine(text = "Playback line ${index + 1}", startSeconds = index * 2.0)
                     },
             )
@@ -120,7 +120,10 @@ class LyricsPanelTest {
         advanceComposeTime(700L)
         assertEquals(expectedLineTop.value, lineTop("Playback line 2").value, 1f)
 
-        compose.runOnIdle { isPlaying.value = true }
+        compose.runOnIdle {
+            positionSeconds.longValue = 4L
+            isPlaying.value = true
+        }
         awaitLineAtTop("Playback line 3", expectedLineTop.value)
     }
 
