@@ -189,6 +189,11 @@ class VideoMiniPlayerTest {
         assertTrue(maximum.left >= screen.left)
         assertTrue(maximum.right <= screen.right)
         assertControlInside(closeButton, player)
+        compose.runOnIdle {
+            assertEquals(0, toggles)
+            assertEquals(0, closes)
+            assertEquals(0, expands)
+        }
         pauseButton.assertIsDisplayed().performClick()
         closeButton.assertIsDisplayed().performClick()
         tapExpandSurface(player)
@@ -198,6 +203,11 @@ class VideoMiniPlayerTest {
         val minimum = player.fetchSemanticsNode().boundsInRoot
         assertEquals(minimumWidth, minimum.width, 1f)
         assertControlInside(closeButton, player)
+        compose.runOnIdle {
+            assertEquals(1, toggles)
+            assertEquals(1, closes)
+            assertEquals(1, expands)
+        }
         pauseButton.assertIsDisplayed().performClick()
         closeButton.assertIsDisplayed().performClick()
         tapExpandSurface(player)
