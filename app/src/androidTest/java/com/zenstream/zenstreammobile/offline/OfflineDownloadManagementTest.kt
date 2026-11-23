@@ -330,19 +330,19 @@ class OfflineDownloadManagementTest {
             )
             assertTrue(
                 dao.observeDownloadStatuses(
-                    fixture.PROFILE_ID,
-                    fixture.DIFFERENT_USER_ID,
-                    fixture.SERVER_URL,
-                )
+                        fixture.PROFILE_ID,
+                        fixture.DIFFERENT_USER_ID,
+                        fixture.SERVER_URL,
+                    )
                     .first()
                     .isEmpty()
             )
             assertTrue(
                 dao.observeDownloadStatuses(
-                    fixture.PROFILE_ID,
-                    fixture.USER_ID,
-                    fixture.DIFFERENT_SERVER_URL,
-                )
+                        fixture.PROFILE_ID,
+                        fixture.USER_ID,
+                        fixture.DIFFERENT_SERVER_URL,
+                    )
                     .first()
                     .isEmpty()
             )
