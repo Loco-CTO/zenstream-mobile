@@ -212,31 +212,14 @@ private fun StackedEpisodeCard(
             Box(
                 modifier =
                     Modifier.fillMaxWidth()
-                        .padding(start = 10.dp, top = 10.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.White.copy(alpha = .10f))
-            )
-            Box(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(start = 5.dp, top = 5.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.White.copy(alpha = .16f))
-            )
-            Box(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(end = 10.dp, bottom = 10.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MediaImage(item, session, wide = false, useSeriesPoster = true)
-                DownloadedBadge(item.id, Modifier.align(Alignment.TopEnd).padding(6.dp))
-                CardBadgeSurface(modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
+                DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(6.dp))
+                CardBadgeSurface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                     Text(
-                        text = stack.items.size.toString(),
+                        text = stringResource(R.string.stacked_episode_count, stack.items.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),

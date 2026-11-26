@@ -512,6 +512,7 @@
     <string name="runtime_minutes">%1$d min</string>
     <string name="season_episode">Season %1$d · Episode %2$d</string>
     <string name="episodes_label">Episodes</string>
+    <string name="stacked_episode_count">%1$d EP</string>
     <string name="cast_crew">Cast &amp; Crew</string>
     <string name="cast">Cast</string>
     <string name="crew">Crew</string>

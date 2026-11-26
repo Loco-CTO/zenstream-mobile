@@ -471,6 +471,7 @@
     <string name="runtime_minutes">%1$d分</string>
     <string name="season_episode">シーズン%1$d · エピソード%2$d</string>
     <string name="episodes_label">エピソード</string>
+    <string name="stacked_episode_count">%1$d話</string>
     <string name="cast_crew">キャスト＆スタッフ</string>
     <string name="more_like_this">関連作品</string>
     <string name="no_episodes">エピソードがありません。</string>
