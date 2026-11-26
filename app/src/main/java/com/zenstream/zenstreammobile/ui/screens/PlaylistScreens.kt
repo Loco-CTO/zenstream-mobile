@@ -598,6 +598,14 @@ private fun WatchlistRow(
     onRemove: () -> Unit,
 ) {
     val status = item.watchlistStatus
+    val isEpisode = item.type == "Episode"
+    val isMusicArtwork = item.type in setOf("MusicArtist", "MusicAlbum", "Audio")
+    val artworkModifier =
+        when {
+            isEpisode -> Modifier.size(width = 112.dp, height = 63.dp)
+            isMusicArtwork -> Modifier.size(76.dp)
+            else -> Modifier.size(width = 76.dp, height = 114.dp)
+        }
     var menuExpanded by remember { mutableStateOf(false) }
     val statusText =
         when (status?.kind) {
@@ -614,8 +622,8 @@ private fun WatchlistRow(
         MediaImage(
             item,
             session,
-            wide = false,
-            modifier = Modifier.size(width = 76.dp, height = 112.dp),
+            wide = isEpisode,
+            modifier = artworkModifier,
         )
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(

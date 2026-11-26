@@ -224,6 +224,12 @@ internal fun NotificationRow(
     val readActionIcon =
         if (item.readAt == null) LucideR.drawable.lucide_ic_mail_open
         else LucideR.drawable.lucide_ic_mail
+    val thumbnailSize =
+        when (item.kind) {
+            "new_release" -> Modifier.size(72.dp)
+            "new_movie" -> Modifier.size(width = 64.dp, height = 96.dp)
+            else -> Modifier.size(width = 104.dp, height = 59.dp)
+        }
     val background =
         if (item.readAt == null) MaterialTheme.colorScheme.primary.copy(alpha = .10f)
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .35f)
@@ -236,7 +242,7 @@ internal fun NotificationRow(
         verticalAlignment = Alignment.Top,
     ) {
         Box(
-            Modifier.size(width = 104.dp, height = 60.dp)
+            thumbnailSize
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
         ) {

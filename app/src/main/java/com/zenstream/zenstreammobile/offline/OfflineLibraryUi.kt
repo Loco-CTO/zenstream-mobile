@@ -750,14 +750,20 @@ internal fun OfflineMediaArtwork(
                     offlineUiRead(null) { runtime.audio.artwork(profileId, it) }
                 }
     }
+    val isEpisode = item.type.equals("Episode", ignoreCase = true)
+    val isMusic = item.isOfflineMusic()
     val size =
-        if (item.isOfflineMusic()) Modifier.size(64.dp) else Modifier.width(72.dp).height(108.dp)
+        when {
+            isEpisode -> Modifier.width(108.dp).aspectRatio(16f / 9f)
+            isMusic -> Modifier.size(64.dp)
+            else -> Modifier.width(72.dp).aspectRatio(2f / 3f)
+        }
     Box(size.clip(RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surfaceVariant) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     painterResource(
-                        if (item.isOfflineMusic()) LucideR.drawable.lucide_ic_music
+                        if (isMusic) LucideR.drawable.lucide_ic_music
                         else LucideR.drawable.lucide_ic_film
                     ),
                     null,
