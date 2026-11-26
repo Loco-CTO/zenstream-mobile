@@ -974,14 +974,19 @@ private fun SearchResultRow(
     onItemClick: (MediaItem) -> Unit,
 ) {
     val isMusic = item.type in setOf("MusicAlbum", "MusicArtist", "Audio")
+    val isEpisode = item.type == "Episode"
     val imageWidth = 64.dp
     val imageUrl =
         imageUrl(
             session.serverUrl,
             item,
             "Primary",
-            if (isMusic) 320 else 280,
-            if (isMusic) 320 else 420,
+            if (isMusic || isEpisode) 320 else 280,
+            when {
+                isMusic -> 320
+                isEpisode -> 180
+                else -> 420
+            },
         )
     val request = imageUrl?.let { authenticatedImageRequest(LocalContext.current, it, session) }
     val actionDescription = searchItemActionDescription(item)
@@ -1017,7 +1022,13 @@ private fun SearchResultRow(
             Box(
                 modifier =
                     Modifier.width(imageWidth)
-                        .aspectRatio(if (isMusic) 1f else 2f / 3f)
+                        .aspectRatio(
+                            when {
+                                isMusic -> 1f
+                                isEpisode -> 16f / 9f
+                                else -> 2f / 3f
+                            }
+                        )
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .testTag("search-artwork-${item.id}")
@@ -1546,8 +1557,10 @@ private fun FavoriteListRow(
             MediaImage(
                 item = item,
                 session = session,
-                wide = false,
-                modifier = Modifier.size(width = 72.dp, height = 108.dp),
+                wide = isEpisode,
+                modifier =
+                    if (isEpisode) Modifier.width(108.dp).aspectRatio(16f / 9f)
+                    else Modifier.size(width = 72.dp, height = 108.dp),
             )
         }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
