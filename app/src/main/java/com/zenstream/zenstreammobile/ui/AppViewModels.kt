@@ -19,7 +19,6 @@ import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.data.StoredSessionState
 import com.zenstream.zenstreammobile.data.SyncplaySession
 import com.zenstream.zenstreammobile.data.UpdateSource
-import com.zenstream.zenstreammobile.data.checkForUpdateBestEffort
 import com.zenstream.zenstreammobile.data.deriveAuthState
 import com.zenstream.zenstreammobile.data.isInitialAuthResolutionPending
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
@@ -67,6 +66,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import org.json.JSONException
 
+enum class AppUpdateCheckStatus {
+    NOT_CHECKED,
+    CHECKING,
+    UP_TO_DATE,
+    UPDATE_AVAILABLE,
+    FAILED,
+}
+
 data class AppUiState(
     val loading: Boolean = true,
     val orchestratorUrl: String? = null,
@@ -77,6 +84,7 @@ data class AppUiState(
     val availableUpdate: AppUpdate? = null,
     val pendingDeepLink: NativeAppDeepLink? = null,
     val serverSwitchRequest: NativeAppDeepLink? = null,
+    val appUpdateCheckStatus: AppUpdateCheckStatus = AppUpdateCheckStatus.NOT_CHECKED,
 ) {
     val showSetup
         get() = !loading && (orchestratorUrl.isNullOrBlank() || serverUrl.isNullOrBlank())
@@ -130,6 +138,8 @@ class AppViewModel(
 ) : ViewModel() {
     private var accountRefreshToken: String? = null
     private val _availableUpdate = MutableStateFlow<AppUpdate?>(null)
+    private val _appUpdateCheckStatus = MutableStateFlow(AppUpdateCheckStatus.NOT_CHECKED)
+    private var appUpdateCheckJob: Job? = null
     private val _pendingDeepLink = MutableStateFlow<NativeAppDeepLink?>(null)
     private val _serverSwitchRequest = MutableStateFlow<NativeAppDeepLink?>(null)
     private val lastKnownSession = MutableStateFlow<AuthSession?>(null)
@@ -174,6 +184,9 @@ class AppViewModel(
             .combine(_serverSwitchRequest) { state, serverSwitchRequest ->
                 state.copy(serverSwitchRequest = serverSwitchRequest)
             }
+            .combine(_appUpdateCheckStatus) { state, appUpdateCheckStatus ->
+                state.copy(appUpdateCheckStatus = appUpdateCheckStatus)
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -209,10 +222,29 @@ class AppViewModel(
             if (!com.zenstream.zenstreammobile.offline.ConnectionCoordinator.onlineStartupAllowed())
                 return@launch
             if (!repository.checkForUpdatesOnStartup.first()) return@launch
+            startUpdateCheck()
+        }
+    }
+
+    fun checkForUpdatesManually() {
+        startUpdateCheck()
+    }
+
+    private fun startUpdateCheck() {
+        if (appUpdateCheckJob?.isActive == true) return
+        _appUpdateCheckStatus.value = AppUpdateCheckStatus.CHECKING
+        appUpdateCheckJob = viewModelScope.launch {
             try {
-                _availableUpdate.value = checkForUpdateBestEffort(updateSource)
+                val update = updateSource.checkForUpdate()
+                _availableUpdate.value = update
+                _appUpdateCheckStatus.value =
+                    if (update == null) AppUpdateCheckStatus.UP_TO_DATE
+                    else AppUpdateCheckStatus.UPDATE_AVAILABLE
             } catch (error: CancellationException) {
+                _appUpdateCheckStatus.value = AppUpdateCheckStatus.NOT_CHECKED
                 throw error
+            } catch (_: Exception) {
+                _appUpdateCheckStatus.value = AppUpdateCheckStatus.FAILED
             }
         }
     }

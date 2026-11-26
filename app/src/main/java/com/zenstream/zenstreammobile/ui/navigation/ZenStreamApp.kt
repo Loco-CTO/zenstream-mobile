@@ -107,6 +107,7 @@ import com.zenstream.zenstreammobile.model.PlaybackTrackSelection
 import com.zenstream.zenstreammobile.model.SyncplayGroup
 import com.zenstream.zenstreammobile.model.mediaItemId
 import com.zenstream.zenstreammobile.ui.AppUiState
+import com.zenstream.zenstreammobile.ui.AppUpdateCheckStatus
 import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.NotificationsViewModel
 import com.zenstream.zenstreammobile.ui.components.SyncplayToastNotifications
@@ -276,6 +277,8 @@ fun ZenStreamApp(
                 MainScaffold(
                     repository = repository,
                     session = requireNotNull(appState.session),
+                    appUpdateCheckStatus = appState.appUpdateCheckStatus,
+                    onCheckForUpdates = appViewModel::checkForUpdatesManually,
                     pendingDeepLink = appState.pendingDeepLink,
                     onNativeAppLinkConsumed = appViewModel::consumeNativeAppLink,
                     onLogout = appViewModel::logout,
@@ -444,6 +447,8 @@ private fun AuthRestoreUnavailableScreen(
 private fun MainScaffold(
     repository: CatalogRepository,
     session: AuthSession,
+    appUpdateCheckStatus: AppUpdateCheckStatus,
+    onCheckForUpdates: () -> Unit,
     pendingDeepLink: NativeAppDeepLink?,
     onNativeAppLinkConsumed: () -> Unit,
     onLogout: (keepDownloadsLocked: Boolean) -> Unit,
@@ -824,6 +829,8 @@ private fun MainScaffold(
                             MyPageScreen(
                                 repository = repository,
                                 session = session,
+                                appUpdateCheckStatus = appUpdateCheckStatus,
+                                onCheckForUpdates = onCheckForUpdates,
                                 onLogout = { keepDownloadsLocked ->
                                     audio.stopAndClear()
                                     onLogout(keepDownloadsLocked)
