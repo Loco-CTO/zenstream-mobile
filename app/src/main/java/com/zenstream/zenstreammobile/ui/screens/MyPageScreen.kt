@@ -69,6 +69,7 @@ import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.CatalogRepository
 import com.zenstream.zenstreammobile.model.AuthSession
+import com.zenstream.zenstreammobile.ui.AppUpdateCheckStatus
 import com.zenstream.zenstreammobile.ui.HomeLayoutViewModel
 import com.zenstream.zenstreammobile.ui.SettingsViewModel
 import com.zenstream.zenstreammobile.ui.components.UserAvatar
@@ -90,6 +91,8 @@ fun MyPageScreen(
     onOpenNotifications: () -> Unit = {},
     navigationResetKey: Int = 0,
     onScrollabilityChanged: (Boolean) -> Unit = {},
+    appUpdateCheckStatus: AppUpdateCheckStatus = AppUpdateCheckStatus.NOT_CHECKED,
+    onCheckForUpdates: () -> Unit = {},
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val statusBarTopPadding =
@@ -356,6 +359,8 @@ fun MyPageScreen(
                                     clearWatchHistoryOpen = true
                                 },
                                 onSubtitleChange = settingsViewModel::updateSubtitle,
+                                appUpdateCheckStatus = appUpdateCheckStatus,
+                                onCheckForUpdates = onCheckForUpdates,
                             )
                         }
                     }

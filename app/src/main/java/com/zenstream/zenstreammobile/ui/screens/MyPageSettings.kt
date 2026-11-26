@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import com.zenstream.zenstreammobile.model.MpvVideoProfile
 import com.zenstream.zenstreammobile.model.MpvVideoScaler
 import com.zenstream.zenstreammobile.model.PlayerEngine
 import com.zenstream.zenstreammobile.model.SubtitleStyle
+import com.zenstream.zenstreammobile.ui.AppUpdateCheckStatus
 import com.zenstream.zenstreammobile.ui.SettingsUiState
 
 internal enum class MyPageSettingsSection {
@@ -228,6 +230,8 @@ internal fun MyPageSettingsContent(
     onWatchHistoryChange: (Boolean) -> Unit,
     onClearWatchHistory: () -> Unit,
     onSubtitleChange: (SubtitleStyle.() -> SubtitleStyle) -> Unit,
+    appUpdateCheckStatus: AppUpdateCheckStatus = AppUpdateCheckStatus.NOT_CHECKED,
+    onCheckForUpdates: () -> Unit = {},
 ) {
     when (section) {
         MyPageSettingsSection.Home -> Unit
@@ -379,6 +383,33 @@ internal fun MyPageSettingsContent(
                     checked = state.checkForUpdatesOnStartup,
                     onCheckedChange = onCheckForUpdatesOnStartupChange,
                 )
+                Spacer(Modifier.height(8.dp))
+                SettingActionRow(
+                    title = stringResource(R.string.app_update_check_title),
+                    supporting = stringResource(R.string.app_update_check_description),
+                    actionLabel =
+                        stringResource(
+                            if (appUpdateCheckStatus == AppUpdateCheckStatus.CHECKING)
+                                R.string.app_update_checking
+                            else R.string.app_update_check_action
+                        ),
+                    enabled = appUpdateCheckStatus != AppUpdateCheckStatus.CHECKING,
+                    loading = appUpdateCheckStatus == AppUpdateCheckStatus.CHECKING,
+                    onClick = onCheckForUpdates,
+                )
+                when (appUpdateCheckStatus) {
+                    AppUpdateCheckStatus.UP_TO_DATE ->
+                        SettingsStatusText(R.string.app_update_up_to_date)
+                    AppUpdateCheckStatus.UPDATE_AVAILABLE ->
+                        SettingsStatusText(
+                            R.string.app_update_available,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    AppUpdateCheckStatus.FAILED ->
+                        SettingsErrorText(R.string.app_update_check_failed)
+                    AppUpdateCheckStatus.NOT_CHECKED,
+                    AppUpdateCheckStatus.CHECKING -> Unit
+                }
             }
     }
 }
@@ -809,6 +840,8 @@ private fun SettingActionRow(
     supporting: String,
     actionLabel: String,
     destructive: Boolean = false,
+    enabled: Boolean = true,
+    loading: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
@@ -825,6 +858,7 @@ private fun SettingActionRow(
             )
         }
         TextButton(
+            enabled = enabled,
             onClick = onClick,
             colors =
                 ButtonDefaults.textButtonColors(
@@ -833,9 +867,30 @@ private fun SettingActionRow(
                         else MaterialTheme.colorScheme.primary
                 ),
         ) {
-            Text(actionLabel)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                }
+                Text(actionLabel)
+            }
         }
     }
+}
+
+@Composable
+private fun SettingsStatusText(
+    message: Int,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    Text(
+        text = stringResource(message),
+        color = color,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
 }
 
 @Composable

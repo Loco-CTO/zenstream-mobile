@@ -554,6 +554,13 @@
     <string name="updates_settings_summary">App updates and startup checks</string>
     <string name="check_for_updates_on_startup">Check for updates on startup</string>
     <string name="check_for_updates_on_startup_description">Check GitHub for a newer app release whenever ZenStream starts.</string>
+    <string name="app_update_check_title">Check for app updates</string>
+    <string name="app_update_check_description">Check GitHub for a newer ZenStream release.</string>
+    <string name="app_update_check_action">Check now</string>
+    <string name="app_update_checking">Checking…</string>
+    <string name="app_update_up_to_date">You are using the latest version.</string>
+    <string name="app_update_available">A newer ZenStream release is available.</string>
+    <string name="app_update_check_failed">Unable to check for updates. Check your connection and try again.</string>
     <string name="update_available_title">Update available</string>
     <string name="update_available_message">ZenStream %1$s is available. Would you like to view the release?</string>
     <string name="update_open_release">Open release page</string>

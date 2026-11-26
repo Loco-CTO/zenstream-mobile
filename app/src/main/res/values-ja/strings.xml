@@ -546,6 +546,13 @@
     <string name="updates_settings_summary">アプリの更新と起動時の確認</string>
     <string name="check_for_updates_on_startup">起動時に更新を確認</string>
     <string name="check_for_updates_on_startup_description">ZenStreamの起動時にGitHubで新しいリリースを確認します。</string>
+    <string name="app_update_check_title">アプリの更新を確認</string>
+    <string name="app_update_check_description">GitHubで新しいZenStreamのリリースを確認します。</string>
+    <string name="app_update_check_action">今すぐ確認</string>
+    <string name="app_update_checking">確認中…</string>
+    <string name="app_update_up_to_date">最新バージョンを使用しています。</string>
+    <string name="app_update_available">新しいZenStreamのリリースがあります。</string>
+    <string name="app_update_check_failed">更新を確認できませんでした。接続を確認して、もう一度お試しください。</string>
     <string name="update_available_title">更新があります</string>
     <string name="update_available_message">ZenStream %1$s が利用可能です。リリースページを開きますか？</string>
     <string name="update_open_release">リリースページを開く</string>
