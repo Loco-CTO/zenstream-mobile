@@ -16,12 +16,14 @@ import com.zenstream.zenstreammobile.model.BazarrSubtitleMatch
 import com.zenstream.zenstreammobile.model.BazarrSubtitleSummary
 import com.zenstream.zenstreammobile.model.CalendarEvent
 import com.zenstream.zenstreammobile.model.CalendarResponse
+import com.zenstream.zenstreammobile.model.CatalogFilterOptions
 import com.zenstream.zenstreammobile.model.DerivedHomeData
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.LibraryFilters
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.LyricLine
@@ -1051,34 +1053,60 @@ class CatalogApi(
         startIndex: Int,
         limit: Int,
         sort: LibrarySort,
+        filters: LibraryFilters = LibraryFilters(),
     ): PagedLibrary =
         withContext(Dispatchers.IO) {
             val page = startIndex / limit + 1
+            val filterQuery =
+                buildList {
+                    filters.genres.distinct().forEach { add("genre" to it) }
+                    filters.officialRatings.distinct().forEach { add("officialRating" to it) }
+                    filters.yearFrom?.let { add("yearFrom" to it.toString()) }
+                    filters.yearTo?.let { add("yearTo" to it.toString()) }
+                    filters.watchState?.let { add("watchState" to it) }
+                    if (filters.favoritesOnly) add("favoritesOnly" to "true")
+                    filters.artists.distinct().forEach { add("artist" to it) }
+                    filters.albumArtists.distinct().forEach { add("albumArtist" to it) }
+                    filters.albumTypes.distinct().forEach { add("albumType" to it) }
+                    if (startIndex == 0) add("includeFilterOptions" to "true")
+                }
             if (library.collectionType == "music") {
                 val json =
                     requestJson(
                         session,
                         "/api/catalog/music/albums",
                         query = musicAlbumsQuery(library.id, page, limit, sort),
+                        additionalQueryParameters = filterQuery,
                     )
                 val parsed = catalogItems(json)
                 return@withContext PagedLibrary(
                     library = library,
                     items = parsed,
                     totalRecordCount = json.optInt("total", (page - 1) * limit + parsed.size),
+                    filterOptions = parseCatalogFilterOptions(json),
                 )
             }
             val sortBy = catalogSort(sort.sortBy)
             val json =
                 requestJson(
                     session,
-                    "/api/catalog/items?libraryId=${android.net.Uri.encode(library.id)}&page=$page&pageSize=$limit&sortBy=$sortBy&sortOrder=${sort.sortOrder.apiValue.lowercase()}",
+                    "/api/catalog/items",
+                    query =
+                        mapOf(
+                            "libraryId" to library.id,
+                            "page" to page.toString(),
+                            "pageSize" to limit.toString(),
+                            "sortBy" to sortBy,
+                            "sortOrder" to sort.sortOrder.apiValue.lowercase(),
+                        ),
+                    additionalQueryParameters = filterQuery,
                 )
             val parsed = catalogItems(json)
             PagedLibrary(
                 library = library,
                 items = parsed,
                 totalRecordCount = json.optInt("total", parsed.size),
+                filterOptions = parseCatalogFilterOptions(json),
             )
         }
 
@@ -1773,6 +1801,7 @@ class CatalogApi(
         method: String = "GET",
         body: String? = null,
         requestTimeoutMillis: Long? = null,
+        additionalQueryParameters: List<Pair<String, String>> = emptyList(),
     ): JSONObject =
         requestJson(
             session.serverUrl,
@@ -1782,6 +1811,7 @@ class CatalogApi(
             method,
             body,
             requestTimeoutMillis,
+            additionalQueryParameters,
         )
 
     private suspend fun requestJson(
@@ -1792,9 +1822,13 @@ class CatalogApi(
         method: String = "GET",
         body: String? = null,
         requestTimeoutMillis: Long? = null,
+        additionalQueryParameters: List<Pair<String, String>> = emptyList(),
     ): JSONObject = suspendCancellableCoroutine { continuation ->
         val urlBuilder = "$server$path".toHttpUrl().newBuilder()
         query.forEach { (key, value) -> urlBuilder.addQueryParameter(key, value) }
+        additionalQueryParameters.forEach { (key, value) ->
+            urlBuilder.addQueryParameter(key, value)
+        }
         val request =
             Request.Builder()
                 .url(urlBuilder.build())
@@ -1931,6 +1965,23 @@ internal fun musicAlbumsQuery(
     put("pageSize", pageSize.coerceIn(1, 100).toString())
     put("sortBy", musicCatalogSort(sort.sortBy))
     put("sortOrder", sort.sortOrder.apiValue.lowercase())
+}
+
+private fun parseCatalogFilterOptions(payload: JSONObject): CatalogFilterOptions? {
+    val options = payload.optJSONObject("filterOptions") ?: return null
+    fun strings(key: String): List<String> =
+        options.optJSONArray(key)?.let { values ->
+            List(values.length()) { index -> values.optString(index).trim() }
+                .filter(String::isNotBlank)
+                .distinct()
+        }.orEmpty()
+    return CatalogFilterOptions(
+        genres = strings("genres"),
+        officialRatings = strings("officialRatings"),
+        artists = strings("artists"),
+        albumArtists = strings("albumArtists"),
+        albumTypes = strings("albumTypes"),
+    )
 }
 
 internal fun encodePathSegment(value: String): String = buildString {

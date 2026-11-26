@@ -267,6 +267,27 @@ data class PagedLibrary(
     val library: Library,
     val items: List<MediaItem>,
     val totalRecordCount: Int,
+    val filterOptions: CatalogFilterOptions? = null,
+)
+
+data class CatalogFilterOptions(
+    val genres: List<String> = emptyList(),
+    val officialRatings: List<String> = emptyList(),
+    val artists: List<String> = emptyList(),
+    val albumArtists: List<String> = emptyList(),
+    val albumTypes: List<String> = emptyList(),
+)
+
+data class LibraryFilters(
+    val genres: List<String> = emptyList(),
+    val officialRatings: List<String> = emptyList(),
+    val yearFrom: Int? = null,
+    val yearTo: Int? = null,
+    val watchState: String? = null,
+    val favoritesOnly: Boolean = false,
+    val artists: List<String> = emptyList(),
+    val albumArtists: List<String> = emptyList(),
+    val albumTypes: List<String> = emptyList(),
 )
 
 enum class SearchFilter(val apiValue: String?) {
