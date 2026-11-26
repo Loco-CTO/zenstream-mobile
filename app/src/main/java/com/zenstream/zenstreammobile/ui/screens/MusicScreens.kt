@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +81,7 @@ import com.zenstream.zenstreammobile.ui.components.musicArtworkPalette
 import com.zenstream.zenstreammobile.ui.musicAlbumSharePath
 import com.zenstream.zenstreammobile.ui.musicArtistSharePath
 import com.zenstream.zenstreammobile.ui.navigation.LocalBottomOverlayHeight
+import kotlinx.coroutines.flow.first
 
 private val MUSIC_DETAIL_TOP_CONTENT_PADDING = 96.dp
 
@@ -244,10 +246,7 @@ private fun AlbumContent(
     onDetailScrolled: (Boolean) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(data.album.id) {
-        onDetailScrolled(false)
-        listState.scrollToItem(0)
-    }
+    var listResetForAlbum by remember(data.album.id) { mutableStateOf(false) }
     ObserveDetailScroll(listState, onDetailScrolled)
     val accent =
         remember(data.album.id, data.album.imageBlurHashes["Primary"]) {
@@ -274,8 +273,18 @@ private fun AlbumContent(
         remember(selectedTrackId, tracks) {
             albumTrackListIndex(grouped, selectedTrackId)
         }
-    LaunchedEffect(selectedTrackId, selectedListIndex) {
-        if (selectedListIndex >= 0) listState.animateScrollToItem(selectedListIndex)
+    LaunchedEffect(data.album.id, selectedTrackId, selectedListIndex) {
+        if (!listResetForAlbum) {
+            onDetailScrolled(false)
+            listState.scrollToItem(0)
+            listResetForAlbum = true
+        }
+        if (selectedListIndex >= 0) {
+            // Wait until the LazyColumn has measured its items before jumping to a deep track.
+            snapshotFlow { listState.layoutInfo.totalItemsCount }
+                .first { itemCount -> itemCount > selectedListIndex }
+            listState.animateScrollToItem(selectedListIndex)
+        }
     }
     LazyColumn(
         state = listState,
