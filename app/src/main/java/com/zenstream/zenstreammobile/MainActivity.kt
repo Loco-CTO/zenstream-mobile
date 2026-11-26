@@ -26,7 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.R as LucideR
 import com.zenstream.zenstreammobile.data.ACCESS_LOCAL_NETWORK_PERMISSION
@@ -102,14 +101,15 @@ class MainActivity : ComponentActivity() {
             ZenStreamTheme {
                 val appState by appViewModel.uiState.collectAsStateWithLifecycle()
                 ZenStreamLocale(appState.locale) {
-                    Box(Modifier.fillMaxSize()) {
+                    StartupSplash(
+                        active = showStartupSplash,
+                        destinationReady = startupDestinationReady,
+                        onFinished = { showStartupSplash = false },
+                    ) {
                         Box(
-                            Modifier.fillMaxSize()
-                                .graphicsLayer { alpha = if (miniSystemPip) 0f else 1f }
-                                .then(
-                                    if (showStartupSplash) Modifier.clearAndSetSemantics {}
-                                    else Modifier
-                                )
+                            Modifier.fillMaxSize().graphicsLayer {
+                                alpha = if (miniSystemPip) 0f else 1f
+                            }
                         ) {
                             com.zenstream.zenstreammobile.offline.OfflineDownloadHost(
                                 runtime = repository.offline,
@@ -152,12 +152,6 @@ class MainActivity : ComponentActivity() {
                             miniPlaying = playing
                             miniAutomaticPip = enabled
                             updateMiniPipParams()
-                        }
-                        if (showStartupSplash) {
-                            StartupSplash(
-                                destinationReady = startupDestinationReady,
-                                onFinished = { showStartupSplash = false },
-                            )
                         }
                     }
                 }

@@ -27,7 +27,8 @@ class StartupSplashTest {
         composeRule.mainClock.advanceTimeBy(590)
         composeRule.onNode(splash).assertExists()
 
-        composeRule.mainClock.advanceTimeBy(210)
+        composeRule.onNodeWithText("Destination").assertDoesNotExist()
+        composeRule.mainClock.advanceTimeBy(260)
         assertDestinationVisible()
     }
 
@@ -41,7 +42,7 @@ class StartupSplashTest {
         composeRule.mainClock.advanceTimeBy(130)
         composeRule.onNode(splash).assertExists()
 
-        composeRule.mainClock.advanceTimeBy(150)
+        composeRule.mainClock.advanceTimeBy(180)
         assertDestinationVisible()
     }
 
@@ -61,8 +62,13 @@ class StartupSplashTest {
         val showing = mutableStateOf(true)
         composeRule.setContent {
             ZenStreamTheme {
-                if (showing.value) StartupSplash(destinationReady.value) { showing.value = false }
-                else Text("Destination")
+                StartupSplash(
+                    active = showing.value,
+                    destinationReady = destinationReady.value,
+                    onFinished = { showing.value = false },
+                ) {
+                    Text("Destination")
+                }
             }
         }
     }
