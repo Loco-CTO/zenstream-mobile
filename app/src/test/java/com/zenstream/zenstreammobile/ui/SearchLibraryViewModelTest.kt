@@ -4,6 +4,7 @@ import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.Library
+import com.zenstream.zenstreammobile.model.LibraryFilters
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -425,6 +426,7 @@ private class FakeLibraryDataSource(
         startIndex: Int,
         limit: Int,
         sort: LibrarySort,
+        filters: LibraryFilters,
     ): PagedLibrary {
         requestedSorts += sort
         pageGate?.await()

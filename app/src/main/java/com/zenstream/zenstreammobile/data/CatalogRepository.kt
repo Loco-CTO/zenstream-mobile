@@ -13,6 +13,7 @@ import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibraryData
+import com.zenstream.zenstreammobile.model.LibraryFilters
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
@@ -203,6 +204,7 @@ interface LibraryDataSource : CatalogRefreshSource {
         startIndex: Int,
         limit: Int,
         sort: LibrarySort,
+        filters: LibraryFilters = LibraryFilters(),
     ): PagedLibrary
 
     suspend fun cachedLibrarySort(userId: String, libraryId: String): LibrarySort?
@@ -1103,9 +1105,10 @@ class CatalogRepository(
         startIndex: Int,
         limit: Int,
         sort: LibrarySort,
+        filters: LibraryFilters,
     ): PagedLibrary =
         authenticatedCatalogRequest(session) { current ->
-            api.fetchLibraryPage(current, library, startIndex, limit, sort)
+            api.fetchLibraryPage(current, library, startIndex, limit, sort, filters)
         }
 
     override suspend fun search(session: AuthSession, query: String, page: Int) =

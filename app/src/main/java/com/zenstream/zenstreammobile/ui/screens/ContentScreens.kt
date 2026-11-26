@@ -45,7 +45,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,6 +57,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -97,6 +100,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -113,6 +117,7 @@ import com.zenstream.zenstreammobile.data.imageUrl
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.FavoriteSortBy
+import com.zenstream.zenstreammobile.model.LibraryFilters
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -1611,6 +1616,7 @@ fun LibraryScreen(
             factory = LibraryViewModel.Factory(repository, session),
         )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    var filterSheetOpen by remember { mutableStateOf(false) }
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val density = LocalDensity.current
     val topBarVisibility =
@@ -1691,7 +1697,11 @@ fun LibraryScreen(
                     Spacer(Modifier.height(12.dp))
                 }
 
-                LibraryHeader(state = state, onSortChanged = vm::setSort)
+                LibraryHeader(
+                    state = state,
+                    onSortChanged = vm::setSort,
+                    onFilterClick = { filterSheetOpen = true },
+                )
             }
         }
         PullToRefreshLayout(
@@ -1713,6 +1723,12 @@ fun LibraryScreen(
                         stringResource(R.string.no_libraries),
                         stringResource(R.string.no_libraries_hint),
                     )
+
+                !state.loading &&
+                    state.items.isEmpty() &&
+                    (state.filters.genres.isNotEmpty() ||
+                        state.filters.officialRatings.isNotEmpty()) ->
+                    LibraryFilteredEmptyState(onClear = { vm.setFilters(LibraryFilters()) })
 
                 !state.loading && state.items.isEmpty() ->
                     EmptyState(
@@ -1779,12 +1795,23 @@ fun LibraryScreen(
             }
         }
     }
+    if (filterSheetOpen && state.selected != null) {
+        LibraryFilterSheet(
+            state = state,
+            onDismiss = { filterSheetOpen = false },
+            onApply = { filters ->
+                filterSheetOpen = false
+                vm.setFilters(filters)
+            },
+        )
+    }
 }
 
 @Composable
 private fun LibraryHeader(
     state: com.zenstream.zenstreammobile.ui.LibraryUiState,
     onSortChanged: (LibrarySort) -> Unit,
+    onFilterClick: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Row(
@@ -1802,6 +1829,38 @@ private fun LibraryHeader(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        IconButton(onClick = onFilterClick, enabled = state.selected != null) {
+            Box {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_funnel),
+                    contentDescription = stringResource(R.string.library_filters),
+                )
+                val activeFilterCount =
+                    state.filters.genres.size +
+                        state.filters.officialRatings.size +
+                        (if (state.filters.yearFrom != null || state.filters.yearTo != null) 1
+                        else 0) +
+                        (if (state.filters.watchState != null) 1 else 0) +
+                        (if (state.filters.favoritesOnly) 1 else 0) +
+                        state.filters.artists.size +
+                        state.filters.albumArtists.size +
+                        state.filters.albumTypes.size
+                if (activeFilterCount > 0) {
+                    Text(
+                        activeFilterCount.toString(),
+                        modifier =
+                            Modifier.align(Alignment.TopEnd)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    RoundedCornerShape(percent = 50),
+                                )
+                                .padding(horizontal = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
         }
         IconButton(
             onClick = {
@@ -1837,7 +1896,7 @@ private fun LibraryHeader(
         Box {
             IconButton(onClick = { menuExpanded = true }, enabled = state.selected != null) {
                 Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_list_filter),
+                    painter = painterResource(R.drawable.lucide_ic_list_sort_descending),
                     contentDescription = stringResource(R.string.sort_by),
                 )
             }
@@ -1870,6 +1929,399 @@ private fun LibraryHeader(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryFilterSheet(
+    state: com.zenstream.zenstreammobile.ui.LibraryUiState,
+    onDismiss: () -> Unit,
+    onApply: (LibraryFilters) -> Unit,
+) {
+    var draft by remember(state.filters) { mutableStateOf(state.filters) }
+    var genreSearch by remember { mutableStateOf("") }
+    var ratingSearch by remember { mutableStateOf("") }
+    var yearFromText by
+        remember(state.filters) {
+            mutableStateOf(state.filters.yearFrom?.toString().orEmpty())
+        }
+    var yearToText by
+        remember(state.filters) {
+            mutableStateOf(state.filters.yearTo?.toString().orEmpty())
+        }
+    val visibleGenres =
+        remember(state.filterOptions.genres, genreSearch) {
+            state.filterOptions.genres.filter { it.contains(genreSearch.trim(), ignoreCase = true) }
+        }
+    val visibleRatings =
+        remember(state.filterOptions.officialRatings, ratingSearch) {
+            state.filterOptions.officialRatings.filter {
+                it.contains(ratingSearch.trim(), ignoreCase = true)
+            }
+        }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text(
+                stringResource(R.string.library_filters),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                stringResource(R.string.filter_genre),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            )
+            OutlinedTextField(
+                value = genreSearch,
+                onValueChange = { genreSearch = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text(stringResource(R.string.filter_search_genres)) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_search),
+                        contentDescription = null,
+                    )
+                },
+            )
+            if (visibleGenres.isEmpty()) {
+                Text(
+                    stringResource(
+                        if (state.filterOptions.genres.isEmpty()) R.string.filter_no_genres
+                        else R.string.filter_no_options_match
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+            } else {
+                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+                    visibleGenres.forEach { genre ->
+                        val checked = genre in draft.genres
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .selectable(
+                                    selected = checked,
+                                    role = Role.Checkbox,
+                                    onClick = {
+                                        draft =
+                                            draft.copy(
+                                                genres =
+                                                    if (checked) draft.genres - genre
+                                                    else draft.genres + genre
+                                            )
+                                    },
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = checked, onCheckedChange = null)
+                            Text(genre, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+
+            Text(
+                stringResource(R.string.filter_year_range),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = yearFromText,
+                    onValueChange = { value ->
+                        if (value.isEmpty() || value.all(Char::isDigit)) yearFromText = value
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.filter_year_from)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(
+                    value = yearToText,
+                    onValueChange = { value ->
+                        if (value.isEmpty() || value.all(Char::isDigit)) yearToText = value
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.filter_year_to)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+
+            if (state.selected?.collectionType != "music") {
+                Text(
+                    stringResource(R.string.filter_watch_state),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                            null to R.string.filter_any,
+                            "watched" to R.string.filter_watched,
+                            "unwatched" to R.string.filter_unwatched,
+                        )
+                        .forEach { (value, label) ->
+                            FilterChip(
+                                selected = draft.watchState == value,
+                                onClick = { draft = draft.copy(watchState = value) },
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .selectable(
+                        selected = draft.favoritesOnly,
+                        role = Role.Checkbox,
+                        onClick = { draft = draft.copy(favoritesOnly = !draft.favoritesOnly) },
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = draft.favoritesOnly, onCheckedChange = null)
+                Text(
+                    stringResource(R.string.filter_favorites_only),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (
+                state.selected?.collectionType != "music" &&
+                    state.filterOptions.officialRatings.isNotEmpty()
+            ) {
+                Text(
+                    stringResource(R.string.filter_official_rating),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+                )
+                if (state.filterOptions.officialRatings.size > 5) {
+                    OutlinedTextField(
+                        value = ratingSearch,
+                        onValueChange = { ratingSearch = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.filter_search_ratings)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(LucideR.drawable.lucide_ic_search),
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
+                if (visibleRatings.isEmpty()) {
+                    Text(
+                        stringResource(
+                            if (state.filterOptions.officialRatings.isEmpty()) {
+                                R.string.filter_no_ratings
+                            } else {
+                                R.string.filter_no_options_match
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp),
+                    )
+                } else {
+                    Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
+                        visibleRatings.forEach { rating ->
+                            val checked = rating in draft.officialRatings
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .selectable(
+                                        selected = checked,
+                                        role = Role.Checkbox,
+                                        onClick = {
+                                            draft =
+                                                draft.copy(
+                                                    officialRatings =
+                                                        if (checked) draft.officialRatings - rating
+                                                        else draft.officialRatings + rating
+                                                )
+                                        },
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = checked, onCheckedChange = null)
+                                Text(rating, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (state.selected?.collectionType == "music") {
+                LibraryFilterMultiSelectSection(
+                    title = stringResource(R.string.filter_artist),
+                    searchLabel = stringResource(R.string.filter_search_artists),
+                    emptyLabel = stringResource(R.string.filter_no_artists),
+                    options = state.filterOptions.artists,
+                    selected = draft.artists,
+                    onToggle = { value ->
+                        draft =
+                            draft.copy(
+                                artists =
+                                    if (value in draft.artists) draft.artists - value
+                                    else draft.artists + value
+                            )
+                    },
+                )
+                LibraryFilterMultiSelectSection(
+                    title = stringResource(R.string.filter_album_artist),
+                    searchLabel = stringResource(R.string.filter_search_album_artists),
+                    emptyLabel = stringResource(R.string.filter_no_album_artists),
+                    options = state.filterOptions.albumArtists,
+                    selected = draft.albumArtists,
+                    onToggle = { value ->
+                        draft =
+                            draft.copy(
+                                albumArtists =
+                                    if (value in draft.albumArtists) draft.albumArtists - value
+                                    else draft.albumArtists + value
+                            )
+                    },
+                )
+                LibraryFilterMultiSelectSection(
+                    title = stringResource(R.string.filter_album_type),
+                    searchLabel = stringResource(R.string.filter_search_album_types),
+                    emptyLabel = stringResource(R.string.filter_no_album_types),
+                    options = state.filterOptions.albumTypes,
+                    selected = draft.albumTypes,
+                    onToggle = { value ->
+                        draft =
+                            draft.copy(
+                                albumTypes =
+                                    if (value in draft.albumTypes) draft.albumTypes - value
+                                    else draft.albumTypes + value
+                            )
+                    },
+                )
+            }
+
+            Row(
+                Modifier.fillMaxWidth().padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { onApply(LibraryFilters()) }) {
+                    Text(stringResource(R.string.clear_filters))
+                }
+                Button(
+                    onClick = {
+                        onApply(
+                            draft.copy(
+                                yearFrom = yearFromText.toIntOrNull(),
+                                yearTo = yearToText.toIntOrNull(),
+                                watchState =
+                                    if (state.selected?.collectionType == "music") null
+                                    else draft.watchState,
+                            )
+                        )
+                    }
+                ) {
+                    Text(stringResource(R.string.apply_filters))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryFilterMultiSelectSection(
+    title: String,
+    searchLabel: String,
+    emptyLabel: String,
+    options: List<String>,
+    selected: List<String>,
+    onToggle: (String) -> Unit,
+) {
+    var search by remember { mutableStateOf("") }
+    val visibleOptions =
+        remember(options, search) {
+            options.filter { it.contains(search.trim(), ignoreCase = true) }
+        }
+    if (options.isEmpty() && selected.isEmpty()) return
+
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+    )
+    OutlinedTextField(
+        value = search,
+        onValueChange = { search = it },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(searchLabel) },
+        leadingIcon = {
+            Icon(
+                painter = painterResource(LucideR.drawable.lucide_ic_search),
+                contentDescription = null,
+            )
+        },
+    )
+    if (visibleOptions.isEmpty()) {
+        Text(
+            if (options.isEmpty()) emptyLabel else stringResource(R.string.filter_no_options_match),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 12.dp),
+        )
+    } else {
+        Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
+            visibleOptions.forEach { value ->
+                val checked = value in selected
+                Row(
+                    Modifier.fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .selectable(
+                            selected = checked,
+                            role = Role.Checkbox,
+                            onClick = { onToggle(value) },
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = checked, onCheckedChange = null)
+                    Text(value, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryFilteredEmptyState(onClear: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            stringResource(R.string.filter_no_results),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            stringResource(R.string.filter_no_results_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        TextButton(onClick = onClear, modifier = Modifier.padding(top = 8.dp)) {
+            Text(stringResource(R.string.clear_filters))
         }
     }
 }

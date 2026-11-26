@@ -26,11 +26,13 @@ import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
+import com.zenstream.zenstreammobile.model.CatalogFilterOptions
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
 import com.zenstream.zenstreammobile.model.HomeLayoutPreferences
 import com.zenstream.zenstreammobile.model.Library
+import com.zenstream.zenstreammobile.model.LibraryFilters
 import com.zenstream.zenstreammobile.model.LibrarySort
 import com.zenstream.zenstreammobile.model.LibrarySortBy
 import com.zenstream.zenstreammobile.model.MediaItem
@@ -822,6 +824,8 @@ data class LibraryUiState(
     val libraries: List<Library> = emptyList(),
     val selected: Library? = null,
     val sort: LibrarySort = LibrarySort(),
+    val filters: LibraryFilters = LibraryFilters(),
+    val filterOptions: CatalogFilterOptions = CatalogFilterOptions(),
     val items: List<MediaItem> = emptyList(),
     val totalRecordCount: Int = 0,
     val loadingMore: Boolean = false,
@@ -861,7 +865,8 @@ class LibraryViewModel(
             if (generation != requestGeneration) return@launch
             result
                 .onSuccess { libraries ->
-                    val currentId = _uiState.value.selected?.id
+                    val currentState = _uiState.value
+                    val currentId = currentState.selected?.id
                     val selected =
                         libraries.firstOrNull { it.id == preferredLibraryId }
                             ?: libraries.firstOrNull { it.id == currentId }
@@ -871,6 +876,12 @@ class LibraryViewModel(
                             loading = selected != null,
                             libraries = libraries,
                             selected = selected,
+                            filters =
+                                if (selected?.id == currentId) currentState.filters
+                                else LibraryFilters(),
+                            filterOptions =
+                                if (selected?.id == currentId) currentState.filterOptions
+                                else CatalogFilterOptions(),
                             items = emptyList(),
                             totalRecordCount = 0,
                         )
@@ -912,6 +923,8 @@ class LibraryViewModel(
                 items = emptyList(),
                 totalRecordCount = 0,
                 sort = LibrarySort(),
+                filters = LibraryFilters(),
+                filterOptions = CatalogFilterOptions(),
             )
         requestJob = viewModelScope.launch {
             val storedSort =
@@ -947,6 +960,58 @@ class LibraryViewModel(
         }
     }
 
+    fun setFilters(filters: LibraryFilters) {
+        val library = _uiState.value.selected ?: return
+        val normalizedFilters =
+            LibraryFilters(
+                genres = filters.genres.distinct().sortedBy(String::lowercase),
+                officialRatings =
+                    if (library.collectionType == "music") emptyList()
+                    else filters.officialRatings.distinct().sortedBy(String::lowercase),
+                yearFrom = listOfNotNull(filters.yearFrom, filters.yearTo).minOrNull(),
+                yearTo = listOfNotNull(filters.yearFrom, filters.yearTo).maxOrNull(),
+                watchState =
+                    filters.watchState?.lowercase()?.takeIf {
+                        library.collectionType != "music" && it in setOf("watched", "unwatched")
+                    },
+                favoritesOnly = filters.favoritesOnly,
+                artists =
+                    if (library.collectionType == "music") {
+                        filters.artists.distinct().sortedBy(String::lowercase)
+                    } else {
+                        emptyList()
+                    },
+                albumArtists =
+                    if (library.collectionType == "music") {
+                        filters.albumArtists.distinct().sortedBy(String::lowercase)
+                    } else {
+                        emptyList()
+                    },
+                albumTypes =
+                    if (library.collectionType == "music") {
+                        filters.albumTypes.distinct().sortedBy(String::lowercase)
+                    } else {
+                        emptyList()
+                    },
+            )
+        if (_uiState.value.filters == normalizedFilters) return
+        requestJob?.cancel()
+        val generation = ++requestGeneration
+        _uiState.value =
+            _uiState.value.copy(
+                filters = normalizedFilters,
+                loading = true,
+                loadingMore = false,
+                error = false,
+                loadMoreError = false,
+                items = emptyList(),
+                totalRecordCount = 0,
+            )
+        requestJob = viewModelScope.launch {
+            loadFirstPage(library, generation, _uiState.value.sort, normalizedFilters)
+        }
+    }
+
     fun loadMore() {
         val state = _uiState.value
         val library = state.selected ?: return
@@ -963,6 +1028,7 @@ class LibraryViewModel(
                         startIndex = startIndex,
                         limit = LIBRARY_PAGE_SIZE,
                         sort = _uiState.value.sort,
+                        filters = state.filters,
                     )
                 }
                 .onSuccess { page ->
@@ -992,6 +1058,7 @@ class LibraryViewModel(
         library: Library,
         generation: Long,
         sort: LibrarySort = _uiState.value.sort,
+        filters: LibraryFilters = _uiState.value.filters,
     ) {
         runCatching {
                 repository.libraryPage(
@@ -1000,6 +1067,7 @@ class LibraryViewModel(
                     startIndex = 0,
                     limit = LIBRARY_PAGE_SIZE,
                     sort = sort,
+                    filters = filters,
                 )
             }
             .onSuccess { page ->
@@ -1009,6 +1077,7 @@ class LibraryViewModel(
                         loading = false,
                         items = uniqueItems(page.items),
                         totalRecordCount = page.totalRecordCount,
+                        filterOptions = page.filterOptions ?: it.filterOptions,
                         error = false,
                         loadMoreError = false,
                     )
