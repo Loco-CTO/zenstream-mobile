@@ -25,9 +25,9 @@ import com.zenstream.zenstreammobile.data.isInitialAuthResolutionPending
 import com.zenstream.zenstreammobile.data.parseNativeAppDeepLink
 import com.zenstream.zenstreammobile.data.sameNativeAppServer
 import com.zenstream.zenstreammobile.model.AuthSession
-import com.zenstream.zenstreammobile.model.CatalogFilterOptions
 import com.zenstream.zenstreammobile.model.BazarrSearchResult
 import com.zenstream.zenstreammobile.model.BazarrStatus
+import com.zenstream.zenstreammobile.model.CatalogFilterOptions
 import com.zenstream.zenstreammobile.model.DetailData
 import com.zenstream.zenstreammobile.model.FavoriteSort
 import com.zenstream.zenstreammobile.model.HomeData
@@ -936,17 +936,12 @@ class LibraryViewModel(
                 officialRatings =
                     if (library.collectionType == "music") emptyList()
                     else filters.officialRatings.distinct().sortedBy(String::lowercase),
-                yearFrom =
-                    listOfNotNull(filters.yearFrom, filters.yearTo).minOrNull(),
-                yearTo =
-                    listOfNotNull(filters.yearFrom, filters.yearTo).maxOrNull(),
+                yearFrom = listOfNotNull(filters.yearFrom, filters.yearTo).minOrNull(),
+                yearTo = listOfNotNull(filters.yearFrom, filters.yearTo).maxOrNull(),
                 watchState =
-                    filters.watchState
-                        ?.lowercase()
-                        ?.takeIf {
-                            library.collectionType != "music" &&
-                                it in setOf("watched", "unwatched")
-                        },
+                    filters.watchState?.lowercase()?.takeIf {
+                        library.collectionType != "music" && it in setOf("watched", "unwatched")
+                    },
                 favoritesOnly = filters.favoritesOnly,
                 artists =
                     if (library.collectionType == "music") {

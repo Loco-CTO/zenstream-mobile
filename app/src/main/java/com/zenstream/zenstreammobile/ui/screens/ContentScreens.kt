@@ -1713,7 +1713,8 @@ fun LibraryScreen(
 
                 !state.loading &&
                     state.items.isEmpty() &&
-                    (state.filters.genres.isNotEmpty() || state.filters.officialRatings.isNotEmpty()) ->
+                    (state.filters.genres.isNotEmpty() ||
+                        state.filters.officialRatings.isNotEmpty()) ->
                     LibraryFilteredEmptyState(onClear = { vm.setFilters(LibraryFilters()) })
 
                 !state.loading && state.items.isEmpty() ->
@@ -1825,7 +1826,8 @@ private fun LibraryHeader(
                 val activeFilterCount =
                     state.filters.genres.size +
                         state.filters.officialRatings.size +
-                        (if (state.filters.yearFrom != null || state.filters.yearTo != null) 1 else 0) +
+                        (if (state.filters.yearFrom != null || state.filters.yearTo != null) 1
+                        else 0) +
                         (if (state.filters.watchState != null) 1 else 0) +
                         (if (state.filters.favoritesOnly) 1 else 0) +
                         state.filters.artists.size +
@@ -1928,12 +1930,14 @@ private fun LibraryFilterSheet(
     var draft by remember(state.filters) { mutableStateOf(state.filters) }
     var genreSearch by remember { mutableStateOf("") }
     var ratingSearch by remember { mutableStateOf("") }
-    var yearFromText by remember(state.filters) {
-        mutableStateOf(state.filters.yearFrom?.toString().orEmpty())
-    }
-    var yearToText by remember(state.filters) {
-        mutableStateOf(state.filters.yearTo?.toString().orEmpty())
-    }
+    var yearFromText by
+        remember(state.filters) {
+            mutableStateOf(state.filters.yearFrom?.toString().orEmpty())
+        }
+    var yearToText by
+        remember(state.filters) {
+            mutableStateOf(state.filters.yearTo?.toString().orEmpty())
+        }
     val visibleGenres =
         remember(state.filterOptions.genres, genreSearch) {
             state.filterOptions.genres.filter { it.contains(genreSearch.trim(), ignoreCase = true) }
@@ -1951,7 +1955,7 @@ private fun LibraryFilterSheet(
                 .heightIn(max = 640.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp)
         ) {
             Text(
                 stringResource(R.string.library_filters),
@@ -2050,16 +2054,17 @@ private fun LibraryFilterSheet(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        null to R.string.filter_any,
-                        "watched" to R.string.filter_watched,
-                        "unwatched" to R.string.filter_unwatched,
-                    ).forEach { (value, label) ->
-                        FilterChip(
-                            selected = draft.watchState == value,
-                            onClick = { draft = draft.copy(watchState = value) },
-                            label = { Text(stringResource(label)) },
+                            null to R.string.filter_any,
+                            "watched" to R.string.filter_watched,
+                            "unwatched" to R.string.filter_unwatched,
                         )
-                    }
+                        .forEach { (value, label) ->
+                            FilterChip(
+                                selected = draft.watchState == value,
+                                onClick = { draft = draft.copy(watchState = value) },
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
                 }
             }
 
@@ -2080,8 +2085,9 @@ private fun LibraryFilterSheet(
                 )
             }
 
-            if (state.selected?.collectionType != "music" &&
-                state.filterOptions.officialRatings.isNotEmpty()
+            if (
+                state.selected?.collectionType != "music" &&
+                    state.filterOptions.officialRatings.isNotEmpty()
             ) {
                 Text(
                     stringResource(R.string.filter_official_rating),
@@ -2257,8 +2263,7 @@ private fun LibraryFilterMultiSelectSection(
     )
     if (visibleOptions.isEmpty()) {
         Text(
-            if (options.isEmpty()) emptyLabel
-            else stringResource(R.string.filter_no_options_match),
+            if (options.isEmpty()) emptyLabel else stringResource(R.string.filter_no_options_match),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 12.dp),

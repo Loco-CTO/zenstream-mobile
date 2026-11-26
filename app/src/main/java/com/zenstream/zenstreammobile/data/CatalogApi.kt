@@ -1057,19 +1057,18 @@ class CatalogApi(
     ): PagedLibrary =
         withContext(Dispatchers.IO) {
             val page = startIndex / limit + 1
-            val filterQuery =
-                buildList {
-                    filters.genres.distinct().forEach { add("genre" to it) }
-                    filters.officialRatings.distinct().forEach { add("officialRating" to it) }
-                    filters.yearFrom?.let { add("yearFrom" to it.toString()) }
-                    filters.yearTo?.let { add("yearTo" to it.toString()) }
-                    filters.watchState?.let { add("watchState" to it) }
-                    if (filters.favoritesOnly) add("favoritesOnly" to "true")
-                    filters.artists.distinct().forEach { add("artist" to it) }
-                    filters.albumArtists.distinct().forEach { add("albumArtist" to it) }
-                    filters.albumTypes.distinct().forEach { add("albumType" to it) }
-                    if (startIndex == 0) add("includeFilterOptions" to "true")
-                }
+            val filterQuery = buildList {
+                filters.genres.distinct().forEach { add("genre" to it) }
+                filters.officialRatings.distinct().forEach { add("officialRating" to it) }
+                filters.yearFrom?.let { add("yearFrom" to it.toString()) }
+                filters.yearTo?.let { add("yearTo" to it.toString()) }
+                filters.watchState?.let { add("watchState" to it) }
+                if (filters.favoritesOnly) add("favoritesOnly" to "true")
+                filters.artists.distinct().forEach { add("artist" to it) }
+                filters.albumArtists.distinct().forEach { add("albumArtist" to it) }
+                filters.albumTypes.distinct().forEach { add("albumType" to it) }
+                if (startIndex == 0) add("includeFilterOptions" to "true")
+            }
             if (library.collectionType == "music") {
                 val json =
                     requestJson(
@@ -1970,11 +1969,14 @@ internal fun musicAlbumsQuery(
 private fun parseCatalogFilterOptions(payload: JSONObject): CatalogFilterOptions? {
     val options = payload.optJSONObject("filterOptions") ?: return null
     fun strings(key: String): List<String> =
-        options.optJSONArray(key)?.let { values ->
-            List(values.length()) { index -> values.optString(index).trim() }
-                .filter(String::isNotBlank)
-                .distinct()
-        }.orEmpty()
+        options
+            .optJSONArray(key)
+            ?.let { values ->
+                List(values.length()) { index -> values.optString(index).trim() }
+                    .filter(String::isNotBlank)
+                    .distinct()
+            }
+            .orEmpty()
     return CatalogFilterOptions(
         genres = strings("genres"),
         officialRatings = strings("officialRatings"),
