@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="zenstream_black">#FF080808</color>
+    <color name="zenstream_black">#FF08090B</color>
     <color name="zenstream_surface">#FF111111</color>
     <color name="zenstream_violet">#FFA78BFA</color>
     <color name="zenstream_deep_violet">#FF6D28D9</color>

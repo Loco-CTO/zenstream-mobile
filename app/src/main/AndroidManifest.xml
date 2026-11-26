@@ -32,6 +32,7 @@
             android:grantUriPermissions="true" />
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.ZenStreamMobile.Starting"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:supportsPictureInPicture="true"
             android:launchMode="singleTop"
