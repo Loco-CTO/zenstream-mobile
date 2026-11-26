@@ -10,12 +10,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -85,6 +91,19 @@ fun MyPageScreen(
     navigationResetKey: Int = 0,
     onScrollabilityChanged: (Boolean) -> Unit = {},
 ) {
+    val layoutDirection = LocalLayoutDirection.current
+    val statusBarTopPadding =
+        with(LocalDensity.current) {
+            WindowInsets.statusBarsIgnoringVisibility.getTop(this).toDp()
+        }
+    // The root scaffold hides its top bar on My Page, so preserve the system status-bar inset here.
+    val screenPadding =
+        PaddingValues(
+            start = outerPadding.calculateStartPadding(layoutDirection),
+            top = outerPadding.calculateTopPadding().coerceAtLeast(statusBarTopPadding),
+            end = outerPadding.calculateEndPadding(layoutDirection),
+            bottom = outerPadding.calculateBottomPadding(),
+        )
     val settingsViewModel: SettingsViewModel =
         viewModel(
             key = "settings",
@@ -176,7 +195,7 @@ fun MyPageScreen(
         CalendarScreen(
             repository = repository,
             session = session,
-            modifier = Modifier.padding(outerPadding),
+            modifier = Modifier.padding(screenPadding),
             onBack = { calendarOpen = false },
             onOpenItem = onOpenItem,
             onScrollabilityChanged = onScrollabilityChanged,
@@ -185,7 +204,7 @@ fun MyPageScreen(
         PullToRefreshLayout(
             isRefreshing = settingsState.refreshing,
             onRefresh = settingsViewModel::refresh,
-            modifier = Modifier.padding(outerPadding),
+            modifier = Modifier.padding(screenPadding),
         ) {
             val activeSection = settingsSection
             LazyColumn(
