@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.ZenStreamMobile.Starting" parent="Theme.ZenStreamMobile">
+        <item name="android:windowSplashScreenBackground">@color/zenstream_black</item>
+        <!-- The Compose surface owns the only logo reveal. -->
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

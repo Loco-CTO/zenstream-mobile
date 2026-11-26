@@ -28,6 +28,12 @@ Reuse the relevant shared composable or extend it for a reusable variation. Ordi
 - Keep common actions visible and labeled. Gestures, long press, and overflow menus can support secondary actions, but must not be the only discoverable route to an essential task.
 - Keep queue and lyrics within the established Now Playing flow. Read [playback](playback.md) and [offline behavior](offline.md) before changing media-related navigation or availability.
 
+## Cold startup
+
+- MainActivity shares the app background with the Android starting window. The Compose splash keeps the existing route mounted underneath while session and connection state resolve. The logo enters as a whole and has the first 250 ms to itself at normal animation speed. It then scales down as the progress line slides up. On exit the logo lifts away and the destination settles into place behind it.
+- The route reports readiness when it can show setup, sign-in, Home, retained downloads, authentication recovery, or a local-network permission prompt. Catalog contents and account updates may load independently. If routing is still pending after the splash wait limit, the normal route continues without the branded overlay.
+- The progress line is indeterminate while startup is pending. The animation follows the Android animator duration scale and skips the branded motion when animations are disabled.
+
 ## Layout and information density
 
 - Give a screen a clear title and dominant task action. Keep supporting actions close to the content they affect and visually quieter than the primary task.

@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
@@ -36,9 +37,17 @@ import com.zenstream.zenstreammobile.ui.AppViewModel
 import com.zenstream.zenstreammobile.ui.locale.ZenStreamLocale
 import com.zenstream.zenstreammobile.ui.navigation.ZenStreamApp
 import com.zenstream.zenstreammobile.ui.player.VideoMiniPlayerHost
+import com.zenstream.zenstreammobile.ui.startup.StartupSplash
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
 
 class MainActivity : ComponentActivity() {
+    private companion object {
+        // Activity creation runs on the main thread. A new process gets a fresh launch.
+        var hasCreatedMainActivity = false
+    }
+
+    private var showStartupSplash by mutableStateOf(false)
+    private var startupDestinationReady by mutableStateOf(false)
     private var openDownloads by mutableStateOf(false)
     private var miniSystemPip by mutableStateOf(false)
     private var miniPlaying = false
@@ -68,12 +77,21 @@ class MainActivity : ComponentActivity() {
     private val appViewModel by viewModels<AppViewModel> { AppViewModel.Factory(repository) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_ZenStreamMobile)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setOnExitAnimationListener { it.remove() }
+        }
         super.onCreate(savedInstanceState)
+        showStartupSplash = savedInstanceState == null && !hasCreatedMainActivity
+        hasCreatedMainActivity = true
         openDownloads = intent?.getBooleanExtra("open_downloads", false) == true
         AuthLifecycleLog.processCreated(android.os.Process.myPid())
         appViewModel.handleNativeAppLink(intent?.data?.toString())
         localNetworkPermissionGranted = hasLocalNetworkPermission()
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Let the Compose navigation surface provide the color behind the
             // three-button controls instead of Android adding a lighter scrim.
@@ -83,7 +101,11 @@ class MainActivity : ComponentActivity() {
             ZenStreamTheme {
                 val appState by appViewModel.uiState.collectAsStateWithLifecycle()
                 ZenStreamLocale(appState.locale) {
-                    Box(Modifier.fillMaxSize()) {
+                    StartupSplash(
+                        active = showStartupSplash,
+                        destinationReady = startupDestinationReady,
+                        onFinished = { showStartupSplash = false },
+                    ) {
                         Box(
                             Modifier.fillMaxSize().graphicsLayer {
                                 alpha = if (miniSystemPip) 0f else 1f
@@ -92,14 +114,16 @@ class MainActivity : ComponentActivity() {
                             com.zenstream.zenstreammobile.offline.OfflineDownloadHost(
                                 runtime = repository.offline,
                                 session = appState.session,
-                                openRequested = openDownloads,
+                                openRequested = openDownloads && !showStartupSplash,
                                 onOpenConsumed = { openDownloads = false },
-                                requestNotificationsOnStartup = true,
+                                requestNotificationsOnStartup = !showStartupSplash,
                             ) {
                                 ZenStreamApp(
                                     appState = appState,
                                     repository = repository,
                                     appViewModel = appViewModel,
+                                    startupInProgress = showStartupSplash,
+                                    onStartupDestinationReady = { startupDestinationReady = it },
                                     localNetworkPermissionGranted = localNetworkPermissionGranted,
                                     onRequestLocalNetworkPermission =
                                         ::requestLocalNetworkPermission,
@@ -231,6 +255,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        showStartupSplash = false
         AuthLifecycleLog.appBackgrounded()
         super.onStop()
     }

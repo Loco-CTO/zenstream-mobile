@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -173,6 +174,8 @@ fun ZenStreamApp(
     onPickAvatar: () -> Unit = {},
     avatarPickerResult: Uri? = null,
     onAvatarPickerResultConsumed: () -> Unit = {},
+    startupInProgress: Boolean = false,
+    onStartupDestinationReady: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val offline = repository.offline
@@ -204,7 +207,8 @@ fun ZenStreamApp(
     }
     if (offline != null && com.zenstream.zenstreammobile.offline.OfflineRuntime.ENABLED) {
         if (offlineConnection?.initialized != true) {
-            LoadingScreen()
+            if (startupInProgress) SideEffect { onStartupDestinationReady(false) }
+            LoadingScreen(showIndicator = !startupInProgress)
             return
         }
         val localEntry =
@@ -215,6 +219,7 @@ fun ZenStreamApp(
                 onlineRequested = onlineRequested,
             )
         if (localEntry) {
+            if (startupInProgress) SideEffect { onStartupDestinationReady(true) }
             com.zenstream.zenstreammobile.offline.OfflineEntryScreen(
                 offline,
                 onOnline = {
@@ -244,8 +249,19 @@ fun ZenStreamApp(
             localNetworkPermissionGranted,
         )
 
+    val showLocalNetworkPermission =
+        shouldGateServerAccess &&
+            localNetworkPermissionStatus == LocalNetworkPermissionStatus.REQUIRED &&
+            !localNetworkPermissionGranted
+    if (startupInProgress) {
+        val destinationReady =
+            appState.showSetup ||
+                (shouldGateServerAccess && (canUseActiveServer || showLocalNetworkPermission))
+        SideEffect { onStartupDestinationReady(destinationReady) }
+    }
+
     when {
-        appState.loading -> LoadingScreen()
+        appState.loading -> LoadingScreen(showIndicator = !startupInProgress)
         appState.showSetup ->
             ServerSetupScreen(
                 initialServerUrl = appState.pendingDeepLink?.serverUrl ?: appState.orchestratorUrl,
@@ -262,14 +278,14 @@ fun ZenStreamApp(
                     onUseSignIn = appViewModel::useSignInInstead,
                 )
             } else {
-                LoadingScreen()
+                LoadingScreen(showIndicator = !startupInProgress)
             }
 
         appState.showLogin ->
             if (canUseActiveServer) {
                 LoginScreen(repository, appViewModel::changeServer)
             } else {
-                LoadingScreen()
+                LoadingScreen(showIndicator = !startupInProgress)
             }
 
         appState.showMain -> {
@@ -288,10 +304,10 @@ fun ZenStreamApp(
                     onAvatarPickerResultConsumed = onAvatarPickerResultConsumed,
                 )
             } else {
-                LoadingScreen()
+                LoadingScreen(showIndicator = !startupInProgress)
             }
         }
-        else -> LoadingScreen()
+        else -> LoadingScreen(showIndicator = !startupInProgress)
     }
 
     LaunchedEffect(
@@ -308,6 +324,9 @@ fun ZenStreamApp(
     LaunchedEffect(appState.showLogin) {
         if (appState.showLogin) AuthLifecycleLog.event("navigation_login", appState.session)
     }
+
+    // Dialogs use their own windows and must appear after the branded surface leaves.
+    if (startupInProgress) return
 
     appState.availableUpdate?.let { update ->
         UpdateAvailableDialog(
@@ -342,11 +361,7 @@ fun ZenStreamApp(
         }
     }
 
-    if (
-        shouldGateServerAccess &&
-            localNetworkPermissionStatus == LocalNetworkPermissionStatus.REQUIRED &&
-            !localNetworkPermissionGranted
-    ) {
+    if (showLocalNetworkPermission) {
         LocalNetworkPermissionDialog(
             onRequestPermission = { onRequestLocalNetworkPermission {} },
             onOpenSettings = onOpenLocalNetworkSettings,
@@ -408,7 +423,8 @@ internal fun UpdateAvailableDialog(
 }
 
 @Composable
-private fun LoadingScreen() {
+private fun LoadingScreen(showIndicator: Boolean) {
+    if (!showIndicator) return
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
