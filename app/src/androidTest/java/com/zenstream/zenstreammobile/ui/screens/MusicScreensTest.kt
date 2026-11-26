@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.ui.screens
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.MusicDataSource
 import com.zenstream.zenstreammobile.model.AudioLyrics
@@ -20,6 +22,7 @@ import com.zenstream.zenstreammobile.model.MusicArtistData
 import com.zenstream.zenstreammobile.model.PlaylistData
 import com.zenstream.zenstreammobile.model.PlaylistSummary
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,6 +55,74 @@ class MusicScreensTest {
         }
 
         assertExpansionCycle()
+    }
+
+    @Test
+    fun selectingTracksAcrossDiscsPositionsEachSelectedTrackAtTheTop() {
+        val tracks = buildList {
+            repeat(32) { index ->
+                val number = index + 1
+                add(
+                    MediaItem(
+                        id = "disc-1-track-$number",
+                        name = "Disc 1 Track $number",
+                        type = "Audio",
+                        discNumber = 1,
+                        trackNumber = number,
+                    )
+                )
+            }
+            repeat(32) { index ->
+                val number = index + 1
+                add(
+                    MediaItem(
+                        id = "disc-2-track-$number",
+                        name = "Disc 2 Track $number",
+                        type = "Audio",
+                        discNumber = 2,
+                        trackNumber = number,
+                    )
+                )
+            }
+        }
+        val album = MediaItem(id = "album", name = "Example Album", type = "MusicAlbum")
+        val repository = FakeMusicDataSource(album = MusicAlbumData(album = album, tracks = tracks))
+        val session = AuthSession("https://example.com", "token", "user", "name")
+        val selectedTrackId = mutableStateOf(tracks[19].id)
+        val selections = listOf(tracks[19], tracks[44], tracks[7], tracks[36], tracks[19])
+        val topLimitPx = with(composeRule.density) { 48.dp.toPx() }
+
+        composeRule.setContent {
+            ZenStreamTheme {
+                MusicAlbumScreen(
+                    repository = repository,
+                    session = session,
+                    albumId = album.id,
+                    selectedTrackId = selectedTrackId.value,
+                    onBack = {},
+                    onOpenArtist = {},
+                    onOpenAlbum = {},
+                    onPlayTracks = { _, _, _ -> },
+                    onAddToQueue = {},
+                )
+            }
+        }
+
+        selections.forEach { track ->
+            composeRule.runOnIdle { selectedTrackId.value = track.id }
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                composeRule.onAllNodesWithText(track.name).fetchSemanticsNodes().any { node ->
+                    node.boundsInRoot.top <= topLimitPx
+                }
+            }
+            composeRule.waitForIdle()
+            val selectedNode =
+                composeRule.onAllNodesWithText(track.name).fetchSemanticsNodes().first()
+            assertTrue(
+                "${track.name} should appear near the top of the album list",
+                selectedNode.boundsInRoot.top <= topLimitPx,
+            )
+        }
     }
 
     @Test
