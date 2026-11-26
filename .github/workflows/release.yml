@@ -198,11 +198,7 @@ jobs:
         with:
           packages: >-
             platform-tools
-            platforms;android-37.1
             build-tools;37.0.0
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
 
       - name: Verify branch refs before publishing
         env:
@@ -210,10 +206,19 @@ jobs:
           CANDIDATE_REF: ${{ needs.candidate.outputs.candidate_ref }}
           CANDIDATE_REF_PRESENT: ${{ needs.candidate.outputs.candidate_ref_present }}
           BASE_MAIN: ${{ needs.candidate.outputs.base_main }}
+          APK_ARTIFACT_ID: ${{ needs.validate.outputs.release_apk_artifact_id }}
         run: |
           source scripts/release-candidate.sh
           assert_candidate_ref_state "$CANDIDATE_REF" "$CANDIDATE_SHA" "$CANDIDATE_REF_PRESENT"
           assert_ref_state refs/heads/main "$BASE_MAIN" "$CANDIDATE_SHA"
+          [[ "$APK_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+
+      - name: Download the exact APK from Android CI
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.validate.outputs.release_apk_artifact_id }}
+          path: ${{ runner.temp }}/candidate-apk
+          merge-multiple: true
 
       - name: Prepare release signing key
         env:
@@ -230,12 +235,8 @@ jobs:
           [[ -n "$KEY_PASSWORD" ]] || { echo 'ANDROID_KEY_PASSWORD is not configured.' >&2; exit 1; }
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zenstream-release.jks"
           test -s "$RUNNER_TEMP/zenstream-release.jks"
-          echo "ANDROID_RELEASE_STORE_FILE=$RUNNER_TEMP/zenstream-release.jks" >> "$GITHUB_ENV"
-          echo "ANDROID_RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "ANDROID_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "ANDROID_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
+      - name: Sign the validated APK with the release key
         env:
           VERSION: ${{ needs.candidate.outputs.version }}
           ANDROID_RELEASE_STORE_FILE: ${{ runner.temp }}/zenstream-release.jks
@@ -245,16 +246,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash ./gradlew assembleRelease \
-            -PzenstreamVersion="$VERSION" \
-            -PzenstreamMain=0 \
-            -PzenstreamRelease=true
+          input="$RUNNER_TEMP/candidate-apk/app-release.apk"
           apk="$RUNNER_TEMP/zenstream-mobile-v$VERSION.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$apk"
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$apk"
+          apksigner="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          "$apksigner" sign --in "$input" --out "$apk" \
+            --ks "$ANDROID_RELEASE_STORE_FILE" \
+            --ks-pass env:ANDROID_RELEASE_STORE_PASSWORD \
+            --ks-key-alias "$ANDROID_RELEASE_KEY_ALIAS" \
+            --key-pass env:ANDROID_RELEASE_KEY_PASSWORD \
+            --debuggable-apk-permitted false --alignment-preserved true --v4-signing-enabled false
+          "$apksigner" verify --verbose --print-certs "$apk"
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$apk" | grep -F "versionName='$VERSION'"
           echo "APK_PATH=$apk" >> "$GITHUB_ENV"
-          echo "APK_NAME=$(basename "$apk")" >> "$GITHUB_ENV"
           (cd "$RUNNER_TEMP" && sha256sum "$(basename "$apk")" > SHA256SUMS.txt)
 
       - name: Prepare decoder corresponding source
@@ -333,9 +336,8 @@ jobs:
           test -s "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"
           gh release upload "$TAG" "$APK_PATH" "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME" "$RUNNER_TEMP/SHA256SUMS.txt" --clobber
           mkdir -p "$RUNNER_TEMP/release-assets"
-          gh release download "$TAG" --pattern "$APK_NAME" --dir "$RUNNER_TEMP/release-assets"
-          gh release download "$TAG" --pattern "$MEDIA3_SOURCE_NAME" --dir "$RUNNER_TEMP/release-assets"
-          gh release download "$TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-assets"
+          gh release download "$TAG" --dir "$RUNNER_TEMP/release-assets" \
+            --pattern "$APK_NAME" --pattern "$MEDIA3_SOURCE_NAME" --pattern SHA256SUMS.txt
           cmp "$APK_PATH" "$RUNNER_TEMP/release-assets/$APK_NAME"
           cmp "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME" "$RUNNER_TEMP/release-assets/$MEDIA3_SOURCE_NAME"
           cmp "$RUNNER_TEMP/SHA256SUMS.txt" "$RUNNER_TEMP/release-assets/SHA256SUMS.txt"

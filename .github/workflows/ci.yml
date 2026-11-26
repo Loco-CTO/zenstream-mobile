@@ -12,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+    outputs:
+      release_apk_artifact_id:
+        description: Temporarily signed APK built and smoked by Android CI
+        value: ${{ jobs.build.outputs.release_apk_artifact_id }}
   workflow_dispatch:
   push:
     branches: [main]
@@ -28,6 +32,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      release_apk_artifact_id: ${{ steps.release-apk.outputs.artifact-id }}
     permissions:
       contents: read
       id-token: write
@@ -98,15 +104,17 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build release APK for emulator smoke
-        run: bash ./gradlew assembleRelease -PzenstreamMain=0 -PzenstreamRelease=true
+        run: bash ./gradlew assembleRelease --build-cache -PzenstreamMain=0 -PzenstreamRelease=true
 
       - name: Upload release APK for emulator smoke
+        id: release-apk
         uses: actions/upload-artifact@v7
         with:
-          name: signed-release-apk
+          name: signed-release-apk-${{ github.run_attempt }}
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
+          compression-level: 0
 
       - name: Install DeepSource CLI
         if: ${{ !inputs.skip_coverage_upload }}
@@ -125,13 +133,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
 
       - name: Download release APK
         uses: actions/download-artifact@v8
         with:
-          name: signed-release-apk
+          artifact-ids: ${{ needs.build.outputs.release_apk_artifact_id }}
           path: _artifacts
+          merge-multiple: true
 
       - name: Enable KVM
         run: |
@@ -152,12 +161,14 @@ jobs:
 
   instrumentation:
     runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: -Dorg.gradle.caching=true
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
