@@ -2,6 +2,7 @@ package com.zenstream.zenstreammobile.offline
 
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import com.zenstream.zenstreammobile.data.CatalogApi
 import com.zenstream.zenstreammobile.model.AuthSession
 import java.io.File
 import java.io.IOException
@@ -18,12 +19,89 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
 class OfflineMetadataRefreshCoordinatorTest {
+    @Test
+    fun refreshDownloadsItemScopedSubtitleOverHttpAndPublishesUpdatedMetadata() = runBlocking {
+        Fixture().use { fixture ->
+            MockWebServer().use { server ->
+                server.start()
+                val api = CatalogApi(deviceId = "download-refresh-test")
+                val path =
+                    "/api/offline/items/movie/subtitles/japanese.vtt?sourceId=source-1&sourceRevision=source-revision-1&v=corrected"
+                val subtitle = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nUpdated subtitle\n"
+                server.enqueue(MockResponse().setBody(subtitle))
+                fixture.seed("Old title", bundle("p1", "s1"))
+                val updated =
+                    bundle("p2", "s2", "New title", subtitleBytes = subtitle.toByteArray())
+                        .put("subtitleScope", "external")
+                        .put("sourceStatus", "unchanged")
+                        .put("sourceRevision", "source-revision-1")
+                updated
+                    .getJSONArray("subtitles")
+                    .getJSONObject(0)
+                    .put("id", "file:japanese")
+                    .put("fileId", "japanese")
+                    .put("url", path)
+
+                fixture.refresh(
+                    reconcileResult("unchanged", "unchanged"),
+                    updated,
+                    itemBundles = true,
+                    binaryRequest = { session, url, headers, receive ->
+                        api.offlineBinaryRequest(
+                            session.copy(serverUrl = server.url("/").toString().trimEnd('/')),
+                            url,
+                            headers,
+                            receive,
+                        )
+                    },
+                )
+
+                assertNull(fixture.dao.maintenance(fixture.profileId, fixture.assetId)?.error)
+                val request = server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)
+                assertEquals(path, request?.path)
+                assertEquals("Bearer token", request?.getHeader("Authorization"))
+                val saved = fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+                assertEquals(subtitle, fixture.storage.paths.resolve(saved.relativePath).readText())
+                assertEquals("New title", fixture.dao.item(fixture.profileId, "movie")?.name)
+                assertArrayEquals(
+                    fixture.mediaBytes,
+                    fixture.storage.paths.resolve(fixture.mediaPath).readBytes(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun refreshRetriesFailedInitialAttachmentEvenWhenBundleRevisionsMatch() = runBlocking {
+        Fixture().use { fixture ->
+            val bytes = "WEBVTT\n\nMissing from initial download".toByteArray()
+            val fresh = bundle("p1", "s1", subtitleBytes = bytes)
+            val initial =
+                JSONObject(fresh.toString())
+                    .put("downloadWarnings", JSONArray().put("subtitle_refresh_needed"))
+            fixture.seed("Old title", initial)
+
+            fixture.refresh(
+                reconcileResult("unchanged", "unchanged"),
+                fresh,
+                binaryResponses = mapOf("subtitle" to bytes),
+            )
+
+            val saved = fixture.dao.supplements(fixture.profileId, fixture.assetId).single()
+            assertArrayEquals(bytes, fixture.storage.paths.resolve(saved.relativePath).readBytes())
+            assertEquals(1, fixture.binaryCalls)
+            assertNull(fixture.dao.maintenance(fixture.profileId, fixture.assetId)?.error)
+        }
+    }
+
     @Test
     fun downloadedNetEaseLyricsSurviveLocalMissAndYieldToLocalLyrics() = runBlocking {
         val fixture = Fixture()
@@ -177,7 +255,12 @@ class OfflineMetadataRefreshCoordinatorTest {
 
             networkAvailable = false
             fixture.refresh(
-                reconcileResult("unchanged", "unchanged"),
+                reconcileResult(
+                    "updated",
+                    "unchanged",
+                    presentationRevision = "catalog-revision",
+                    item = item("movie", "Updated title"),
+                ),
                 externalBundle("presentation-2", "supplement-2", updatedSubtitle),
                 binaryResponses = mapOf("subtitle" to updatedSubtitle),
                 itemBundles = true,
@@ -187,6 +270,7 @@ class OfflineMetadataRefreshCoordinatorTest {
             val deferred = fixture.dao.maintenance(fixture.profileId, fixture.assetId)!!
             assertEquals("waiting_for_network", deferred.error)
             assertTrue(deferred.nextAttempt > System.currentTimeMillis())
+            assertEquals("Updated title", fixture.dao.item(fixture.profileId, "movie")?.name)
             assertEquals(
                 savedAsset.descriptor,
                 fixture.dao.asset(fixture.profileId, fixture.assetId)!!.descriptor,
@@ -246,12 +330,13 @@ class OfflineMetadataRefreshCoordinatorTest {
     }
 
     @Test
-    fun changedMediaKeepsSavedLyricsUntilMediaIsReplaced() = runBlocking {
+    fun changedMediaIsEligibleForReplacementEvenWithAnOldMissingSubtitle() = runBlocking {
         val fixture = Fixture()
         try {
             fixture.seed(
                 "Old title",
-                bundle("p1", "s1").put("lyrics", JSONObject().put("text", "Saved lyrics")),
+                bundle("p1", "s1", subtitleBytes = "Old subtitle".toByteArray())
+                    .put("lyrics", JSONObject().put("text", "Saved lyrics")),
             )
             fixture.refresh(
                 reconcileResult("unchanged", "changed"),
@@ -274,6 +359,11 @@ class OfflineMetadataRefreshCoordinatorTest {
                 "new-revision",
                 fixture.dao.maintenance(fixture.profileId, fixture.assetId)?.sourceRevision,
             )
+            assertEquals(
+                listOf(fixture.assetId),
+                fixture.dao.outdatedAssets(fixture.profileId, 16).map { it.id },
+            )
+            assertEquals(0, fixture.binaryCalls)
         } finally {
             fixture.close()
         }
@@ -676,6 +766,7 @@ class OfflineMetadataRefreshCoordinatorTest {
             itemBundles: Boolean = false,
             force: Boolean = true,
             canFetchSupplements: () -> Boolean = { true },
+            binaryRequest: OfflineBinaryRequest? = null,
         ) {
             if (force) dao.requestMetadataCheck(profileId)
             reconcileResponse =
@@ -700,19 +791,22 @@ class OfflineMetadataRefreshCoordinatorTest {
                     catalog = catalog,
                     storage = storage,
                     request = { _, path, _, body -> requestHandler(path, body) },
-                    binary = { _, url, _, receive ->
-                        binaryCalls++
-                        if (failBinaryCall(binaryCalls))
-                            throw IOException("interrupted metadata fetch")
-                        val key =
-                            when {
-                                url.contains("artwork") -> "artwork"
-                                url.contains("subtitle") -> "subtitle"
-                                else -> "first"
-                            }
-                        val bytes = binaryResponses[key] ?: error("Missing response for $url")
-                        receive(response(bytes))
-                    },
+                    binary =
+                        binaryRequest
+                            ?: { _, url, _, receive ->
+                                binaryCalls++
+                                if (failBinaryCall(binaryCalls))
+                                    throw IOException("interrupted metadata fetch")
+                                val key =
+                                    when {
+                                        url.contains("artwork") -> "artwork"
+                                        url.contains("subtitle") -> "subtitle"
+                                        else -> "first"
+                                    }
+                                val bytes =
+                                    binaryResponses[key] ?: error("Missing response for $url")
+                                receive(response(bytes))
+                            },
                     loadCursor = { 0 },
                     saveCursor = { _, _ -> },
                     supportsItemBundles = { itemBundles },
