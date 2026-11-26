@@ -344,7 +344,11 @@ fun OfflineDownloadHost(
         if (open && runtime != null) {
             Dialog(
                 onDismissRequest = { open = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
+                properties =
+                    DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false,
+                    ),
             ) {
                 Surface(Modifier.fillMaxSize()) {
                     DownloadsScreen(
