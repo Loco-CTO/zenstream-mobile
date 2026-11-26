@@ -47,9 +47,9 @@ data class DownloadUiActions(
 
 val LocalDownloadUi = staticCompositionLocalOf<DownloadUiActions?> { null }
 
-internal enum class DownloadStatus(val icon: Int, val label: Int) {
-    Saved(LucideR.drawable.lucide_ic_circle_arrow_down, R.string.offline_saved_badge),
-    ContainsDownloads(LucideR.drawable.lucide_ic_folder_down, R.string.offline_contains_downloads),
+internal enum class DownloadStatus(val label: Int) {
+    Saved(R.string.offline_saved_badge),
+    ContainsDownloads(R.string.offline_contains_downloads),
 }
 
 internal val LocalDownloadStatuses = compositionLocalOf<Map<String, DownloadStatus>?> { null }
@@ -101,7 +101,11 @@ fun DownloadButton(spec: DownloadSpec, modifier: Modifier = Modifier) {
                 spec.title,
             )
         if (status != null) {
-            DownloadStatusIcon(status, actionLabel, size = 22.dp)
+            DownloadStatusIcon(
+                LucideR.drawable.lucide_ic_trash_2,
+                actionLabel,
+                size = 22.dp,
+            )
         } else {
             Icon(painterResource(LucideR.drawable.lucide_ic_download), actionLabel)
         }
@@ -155,7 +159,7 @@ internal fun DownloadedBadge(itemId: String, modifier: Modifier = Modifier) {
     val status = LocalDownloadStatuses.current?.get(itemId) ?: return
     CardBadgeSurface(modifier) {
         DownloadStatusIcon(
-            status,
+            LucideR.drawable.lucide_ic_download,
             stringResource(status.label),
             modifier = Modifier.padding(5.dp),
         )
@@ -164,13 +168,13 @@ internal fun DownloadedBadge(itemId: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun DownloadStatusIcon(
-    status: DownloadStatus,
+    icon: Int,
     description: String,
     modifier: Modifier = Modifier,
     size: Dp = 16.dp,
 ) {
     Icon(
-        painterResource(status.icon),
+        painterResource(icon),
         description,
         modifier = modifier.size(size),
         tint = MaterialTheme.colorScheme.primary,
