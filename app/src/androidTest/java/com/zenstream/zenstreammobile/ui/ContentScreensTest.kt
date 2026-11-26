@@ -20,12 +20,14 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zenstream.zenstreammobile.R
 import com.zenstream.zenstreammobile.data.LibraryDataSource
 import com.zenstream.zenstreammobile.data.SearchDataSource
+import com.zenstream.zenstreammobile.data.parseHomeLibraryData
 import com.zenstream.zenstreammobile.model.AuthSession
 import com.zenstream.zenstreammobile.model.Library
 import com.zenstream.zenstreammobile.model.LibrarySort
@@ -44,6 +46,8 @@ import com.zenstream.zenstreammobile.ui.components.POSTER_CARD_MIN_WIDTH
 import com.zenstream.zenstreammobile.ui.screens.LibraryScreen
 import com.zenstream.zenstreammobile.ui.screens.SearchOverlayScreen
 import com.zenstream.zenstreammobile.ui.theme.ZenStreamTheme
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -236,6 +240,35 @@ class ContentScreensTest {
         }
 
         composeRule.waitForIdle()
+    }
+
+    @Test
+    fun newlyAddedHomeRowStacksEpisodesWithServerTimestamps() {
+        val library = Library("shows", "Shows", "tvshows")
+        val payload =
+            JSONObject(
+                """
+                {"libraryRows":[{"titleKey":"newlyAddedOn","stackEpisodes":true,"items":[
+                    {"id":"latest","type":"episode","seriesId":"series","seriesName":"Example Show",
+                     "lastAddedAt":"2026-01-01T12:00:00.123456+00:00"},
+                    {"id":"same-batch","type":"episode","seriesId":"series","seriesName":"Example Show",
+                     "lastAddedAt":"2026-01-01T11:00:00.123456+00:00"},
+                    {"id":"earlier","type":"episode","seriesId":"series","seriesName":"Example Show",
+                     "lastAddedAt":"2026-01-01T09:59:59.123456+00:00"}
+                ]}]}
+                """
+                    .trimIndent()
+            )
+        val row = parseHomeLibraryData(payload, library).rows.single()
+        var selectedId: String? = null
+        composeRule.setContent {
+            ZenStreamTheme {
+                MediaRowView(row, session, onItemClick = { selectedId = it.id })
+            }
+        }
+
+        composeRule.onNodeWithText("2").assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertEquals("latest", selectedId) }
     }
 
     private fun capturePosterGridBounds(
