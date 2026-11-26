@@ -219,7 +219,7 @@ private fun StackedEpisodeCard(
                 DownloadedBadge(item.id, Modifier.align(Alignment.TopStart).padding(6.dp))
                 CardBadgeSurface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                     Text(
-                        text = stringResource(R.string.stacked_episode_count, stack.items.size),
+                        text = stack.items.size.toString(),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
