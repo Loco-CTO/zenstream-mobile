@@ -51,7 +51,7 @@ import com.zenstream.zenstreammobile.model.MediaItem
 import com.zenstream.zenstreammobile.model.MediaRow
 import com.zenstream.zenstreammobile.model.RowTitle
 import com.zenstream.zenstreammobile.offline.DownloadedBadge
-import java.time.Instant
+import java.time.OffsetDateTime
 import kotlin.math.roundToInt
 
 internal val POSTER_CARD_MIN_WIDTH = 140.dp
@@ -181,9 +181,14 @@ private fun areBatchEpisodes(a: MediaItem, b: MediaItem): Boolean =
         addedWithinOneHour(a.lastAddedAt, b.lastAddedAt)
 
 private fun addedWithinOneHour(a: String?, b: String?): Boolean {
-    val aTime = a?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-    val bTime = b?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-    return aTime != null && bTime != null && kotlin.math.abs(aTime - bTime) <= 3_600_000
+    // Catalog timestamps can use an explicit UTC offset, which desugared Instant.parse rejects.
+    fun epochMillis(value: String?): Long? = value?.let {
+        runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull()
+    }
+
+    val aTime = epochMillis(a) ?: return false
+    val bTime = epochMillis(b) ?: return false
+    return kotlin.math.abs(aTime - bTime) <= 3_600_000
 }
 
 @Composable
