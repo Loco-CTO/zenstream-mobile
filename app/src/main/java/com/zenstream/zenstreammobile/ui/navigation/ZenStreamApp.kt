@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -152,6 +154,15 @@ internal fun shouldShowMainSearchAction(route: String): Boolean =
     route == HOME || route == FAVORITES || route == LIBRARY
 
 internal fun shouldKeepMainBottomBarVisible(route: String): Boolean = route == MYPAGE
+
+internal fun shouldUseImmediateMyPageTabTransition(
+    initialRoute: String?,
+    targetRoute: String?,
+): Boolean =
+    (initialRoute == MYPAGE && hasSharedTopBarInsets(targetRoute)) ||
+        (targetRoute == MYPAGE && hasSharedTopBarInsets(initialRoute))
+
+private fun hasSharedTopBarInsets(route: String?): Boolean = route == FAVORITES || route == LIBRARY
 
 internal fun shouldResetMyPageNavigationOnRouteChange(
     previousRoute: String,
@@ -744,6 +755,32 @@ private fun MainScaffold(
                             Modifier.fillMaxSize()
                                 // Keep every route behind the player and navigation overlay.
                                 .nestedScroll(scrollConnection),
+                        // My Page removes the shared top bar. Skip crossfading with list screens
+                        // so their outgoing content does not remeasure under the status bar.
+                        enterTransition = {
+                            if (
+                                shouldUseImmediateMyPageTabTransition(
+                                    initialRoute = routeName(initialState.destination.route),
+                                    targetRoute = routeName(targetState.destination.route),
+                                )
+                            ) {
+                                EnterTransition.None
+                            } else {
+                                fadeIn(animationSpec = tween(700))
+                            }
+                        },
+                        exitTransition = {
+                            if (
+                                shouldUseImmediateMyPageTabTransition(
+                                    initialRoute = routeName(initialState.destination.route),
+                                    targetRoute = routeName(targetState.destination.route),
+                                )
+                            ) {
+                                ExitTransition.None
+                            } else {
+                                fadeOut(animationSpec = tween(700))
+                            }
+                        },
                     ) {
                         composable(HOME) {
                             HomeScreen(
