@@ -23,6 +23,7 @@ Reuse the relevant shared composable or extend it for a reusable variation. Ordi
 
 - Preserve the main destinations and their order: Home, Favorites, Library, and My Page. Keep selected states and destination labels consistent.
 - Search remains a full-screen dialog opened from the shared top bar on its supported tabs. Dismissal returns to the originating tab. My Page owns its settings and Services subpages; retain its documented reset behavior when reselected or left.
+- Switch immediately between Favorites or Library and My Page. Those destinations use different shared top-bar insets, so a crossfade would remeasure the outgoing page under the status bar. Keep other route transitions unchanged.
 - Put item-specific actions on their owning item/detail surface. Use tabs for peer content, a sheet for a bounded contextual choice, and a screen for a substantial task. Avoid nested sheets/dialogs and duplicate routes to the same settings.
 - Respect Android Back and the existing navigation stack: dismiss the current temporary surface before leaving its parent. Preserve relevant list position, filters, and entered data when returning.
 - Keep common actions visible and labeled. Gestures, long press, and overflow menus can support secondary actions, but must not be the only discoverable route to an essential task.
