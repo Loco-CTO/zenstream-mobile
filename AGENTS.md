@@ -31,6 +31,7 @@ This repository owns the ZenStream Android client. It is a Jetpack Compose appli
 
 - `./gradlew assembleDebug` — build a debug APK.
 - `./gradlew spotlessCheck lint test assembleDebug` — standard local checks.
+- Android CI builds and smokes the candidate APK with a temporary key. The release workflow re-signs that exact artifact with the production key and repeats the emulator smoke before publication.
 - The session restoration instrumentation and `scripts/test-session-cold-start.py` use the app's real session store and require a disposable, unconfigured debug installation. Use a separate `zenstreamApplicationIdSuffix` for local emulator runs.
 - `python third_party/media3-nextlib/verify.py` — verify the checked-in Media3 NextLib artifact.
 

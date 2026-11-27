@@ -24,7 +24,7 @@ class CandidateFirstWorkflowTest(unittest.TestCase):
         publish = job_block(RELEASE.read_text(encoding="utf-8"), "publish")
         self.assertIn("rebuild.py --sources-only", publish)
         self.assertIn('"$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"', publish)
-        self.assertIn('gh release download "$TAG" --pattern "$MEDIA3_SOURCE_NAME"', publish)
+        self.assertIn('--pattern "$APK_NAME" --pattern "$MEDIA3_SOURCE_NAME" --pattern SHA256SUMS.txt', publish)
         self.assertIn('cmp "$RUNNER_TEMP/$MEDIA3_SOURCE_NAME"', publish)
 
     def test_release_pipeline_orders_validation_publish_and_promotion(self) -> None:
@@ -57,8 +57,23 @@ class CandidateFirstWorkflowTest(unittest.TestCase):
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertRegex(ci, r"workflow_call:")
         self.assertRegex(ci, r"candidate_sha:")
-        self.assertRegex(ci, r"ref:.*inputs\.candidate_sha")
+        for job in ("build", "release-smoke", "instrumentation"):
+            self.assertRegex(job_block(ci, job), r"ref:.*inputs\.candidate_sha")
         self.assertNotRegex(ci, r"spotlessApply")
+
+    def test_publish_signs_the_same_candidate_artifact_smoked_by_ci(self) -> None:
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        publish = job_block(RELEASE.read_text(encoding="utf-8"), "publish")
+        self.assertIn("release_apk_artifact_id: ${{ steps.release-apk.outputs.artifact-id }}", ci)
+        self.assertIn("value: ${{ jobs.build.outputs.release_apk_artifact_id }}", ci)
+        self.assertIn(
+            "artifact-ids: ${{ needs.build.outputs.release_apk_artifact_id }}",
+            job_block(ci, "release-smoke"),
+        )
+        self.assertIn("artifact-ids: ${{ needs.validate.outputs.release_apk_artifact_id }}", publish)
+        self.assertLess(publish.index("Download the exact APK"), publish.index('"$apksigner" sign'))
+        self.assertLess(publish.index('"$apksigner" verify'), publish.index("scripts/smoke-release-apk.sh"))
+        self.assertNotIn("assembleRelease", publish)
 
     def test_publish_smokes_signed_apk_with_kvm_enabled(self) -> None:
         workflow = RELEASE.read_text(encoding="utf-8")
