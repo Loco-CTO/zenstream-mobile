@@ -1751,6 +1751,7 @@ class CatalogApi(
         withContext(Dispatchers.IO) {
             require(
                 path.startsWith("/api/offline/assets/") ||
+                    path.startsWith("/api/offline/items/") ||
                     path.startsWith("/api/catalog/items/") ||
                     path.startsWith("/api/playback/items/")
             )

@@ -131,33 +131,24 @@ class OfflineMetadataRefreshCoordinator(
         val payload = result.optJSONObject("item")
         val sourceStatus = result.optString("sourceStatus")
         val current = dao.item(profileId, previous.id) ?: previous
-        val hasDownloadedAsset = dao.latestCompleteAsset(profileId, previous.id) != null
-        if (payload != null && !hasDownloadedAsset) {
-            dao.putItems(
-                listOf(
-                    offlineCatalogItem(profileId, payload)
-                        .copy(
-                            presentationRevision = result.getString("presentationRevision"),
-                            unavailable = false,
-                            newSourceAvailable = sourceStatus == "changed",
-                        )
+        val updated =
+            payload?.let {
+                offlineCatalogItem(profileId, it)
+                    .copy(presentationRevision = result.getString("presentationRevision"))
+            } ?: current
+        dao.putItems(
+            listOf(
+                updated.copy(
+                    unavailable = false,
+                    newSourceAvailable =
+                        when (sourceStatus) {
+                            "changed" -> true
+                            "unchanged" -> false
+                            else -> current.newSourceAvailable
+                        },
                 )
             )
-        } else {
-            dao.putItems(
-                listOf(
-                    current.copy(
-                        unavailable = false,
-                        newSourceAvailable =
-                            when (sourceStatus) {
-                                "changed" -> true
-                                "unchanged" -> false
-                                else -> current.newSourceAvailable
-                            },
-                    )
-                )
-            )
-        }
+        )
         applyCanonicalState(
             profileId,
             previous.id,
@@ -323,6 +314,7 @@ class OfflineMetadataRefreshCoordinator(
         }
         if (
             oldBundle != null &&
+                (oldBundle.optJSONArray("downloadWarnings")?.length() ?: 0) == 0 &&
                 oldBundle.optString("presentationRevision") ==
                     bundle.optString("presentationRevision") &&
                 oldBundle.optString("supplementRevision") ==
@@ -392,10 +384,10 @@ class OfflineMetadataRefreshCoordinator(
                 if (
                     kind == "subtitle" &&
                         bundle.optString("subtitleScope") == "external" &&
-                        bundle.optString("sourceStatus") != "unchanged" &&
-                        saved != null
+                        bundle.optString("sourceStatus") != "unchanged"
                 ) {
-                    reused += saved
+                    // A saved subtitle URL may no longer serve the downloaded source revision.
+                    if (saved != null) reused += saved else entry.remove("localPath")
                     continue
                 }
                 val revision = entry.optString("revision").ifBlank { entry.optString("sha256") }
