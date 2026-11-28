@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -136,6 +137,82 @@ class MainNavigationTest {
                 }
 
         assertTrue(labels.zipWithNext().all { (left, right) -> left.left < right.left })
+    }
+
+    @Test
+    fun myPageCrossfadesWithoutMovingTheListOrItsToolbar() {
+        val navigate = mutableStateOf<(String) -> Unit>({})
+        val listRoutes = listOf("favorites", "library")
+        composeRule.setContent {
+            ZenStreamTheme {
+                val controller = rememberNavController()
+                LaunchedEffect(controller) {
+                    navigate.value = { route -> navigateToMainDestination(controller, route) }
+                }
+                MainRouteNavHost(controller, Modifier.fillMaxSize()) {
+                    composable("home") { Text("Home fixture") }
+                    listRoutes.forEach { route ->
+                        composable(route) {
+                            MainTabChromeScaffold(
+                                topBar = {
+                                    StatusBarAwareTopBarSlot(
+                                        visibilityFraction = 1f,
+                                        statusBarInsets = WindowInsets(top = 48),
+                                    ) {
+                                        Box(
+                                            Modifier.fillMaxWidth()
+                                                .height(64.dp)
+                                                .testTag("$route-toolbar")
+                                        )
+                                    }
+                                }
+                            ) { padding ->
+                                Box(Modifier.fillMaxSize().padding(padding)) {
+                                    Text("List fixture", Modifier.testTag("$route-content"))
+                                }
+                            }
+                        }
+                    }
+                    composable("my-page") {
+                        Text("My Page fixture", Modifier.testTag("my-page-content"))
+                    }
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.mainClock.autoAdvance = false
+        try {
+            for (route in listRoutes) {
+                composeRule.runOnIdle { navigate.value(route) }
+                composeRule.mainClock.advanceTimeBy(850)
+                val toolbar = composeRule.onNodeWithTag("$route-toolbar")
+                val content = composeRule.onNodeWithTag("$route-content")
+                val beforeToolbar = toolbar.getUnclippedBoundsInRoot()
+                val beforeContent = content.getUnclippedBoundsInRoot()
+                assertTrue(beforeToolbar.top > 0.dp)
+                assertTrue(beforeContent.top >= beforeToolbar.bottom)
+
+                composeRule.runOnIdle { navigate.value("my-page") }
+                composeRule.mainClock.advanceTimeBy(200)
+                composeRule.onNodeWithTag("my-page-content").assertIsDisplayed()
+                assertEquals(beforeToolbar, toolbar.getUnclippedBoundsInRoot())
+                assertEquals(beforeContent, content.getUnclippedBoundsInRoot())
+                composeRule.mainClock.advanceTimeBy(650)
+                toolbar.assertDoesNotExist()
+                content.assertDoesNotExist()
+
+                composeRule.runOnIdle { navigate.value(route) }
+                composeRule.mainClock.advanceTimeBy(200)
+                composeRule.onNodeWithTag("my-page-content").assertIsDisplayed()
+                assertEquals(beforeToolbar, toolbar.getUnclippedBoundsInRoot())
+                assertEquals(beforeContent, content.getUnclippedBoundsInRoot())
+                composeRule.mainClock.advanceTimeBy(650)
+                composeRule.onNodeWithTag("my-page-content").assertDoesNotExist()
+            }
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
     }
 
     @Test

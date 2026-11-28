@@ -24,15 +24,4 @@ class MainNavigationLogicTest {
         assertFalse(shouldResetMyPageNavigationOnReselection("home", "my-page"))
         assertFalse(shouldResetMyPageNavigationOnReselection("my-page", "home"))
     }
-
-    @Test
-    fun myPageSwitchesImmediatelyToAndFromInsetChangingTabs() {
-        assertTrue(shouldUseImmediateMyPageTabTransition("favorites", "my-page"))
-        assertTrue(shouldUseImmediateMyPageTabTransition("library", "my-page"))
-        assertTrue(shouldUseImmediateMyPageTabTransition("my-page", "favorites"))
-        assertTrue(shouldUseImmediateMyPageTabTransition("my-page", "library"))
-        assertFalse(shouldUseImmediateMyPageTabTransition("home", "my-page"))
-        assertFalse(shouldUseImmediateMyPageTabTransition("my-page", "home"))
-        assertFalse(shouldUseImmediateMyPageTabTransition("favorites", "library"))
-    }
 }

@@ -9,8 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -42,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -55,9 +54,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +80,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -154,15 +157,6 @@ internal fun shouldShowMainSearchAction(route: String): Boolean =
     route == HOME || route == FAVORITES || route == LIBRARY
 
 internal fun shouldKeepMainBottomBarVisible(route: String): Boolean = route == MYPAGE
-
-internal fun shouldUseImmediateMyPageTabTransition(
-    initialRoute: String?,
-    targetRoute: String?,
-): Boolean =
-    (initialRoute == MYPAGE && hasSharedTopBarInsets(targetRoute)) ||
-        (targetRoute == MYPAGE && hasSharedTopBarInsets(initialRoute))
-
-private fun hasSharedTopBarInsets(route: String?): Boolean = route == FAVORITES || route == LIBRARY
 
 internal fun shouldResetMyPageNavigationOnRouteChange(
     previousRoute: String,
@@ -624,7 +618,8 @@ private fun MainScaffold(
             )
         }
     var bottomBarVisibilityFraction by remember { mutableStateOf(1f) }
-    var topBarVisibilityFraction by remember { mutableStateOf(1f) }
+    val topBarFractions = remember { mutableStateMapOf<String, Float>() }
+    val activeRoute by rememberUpdatedState(mainRoute)
     var contentScrollable by remember { mutableStateOf(false) }
     var homeScrolled by remember { mutableStateOf(false) }
     var bottomOverlayHeightPx by remember { mutableStateOf(0) }
@@ -646,7 +641,7 @@ private fun MainScaffold(
                         availableY = available.y,
                         isScrollable = contentScrollable,
                     )
-                topBarVisibilityFraction =
+                topBarFractions[activeRoute] =
                     topBarVisibility.onNestedScroll(
                         consumedY = consumed.y,
                         availableY = available.y,
@@ -664,7 +659,7 @@ private fun MainScaffold(
         lastMainRoute = mainRoute
         contentScrollable = false
         bottomBarVisibilityFraction = bottomBarVisibility.resetForRoute()
-        topBarVisibilityFraction = topBarVisibility.resetForRoute()
+        topBarFractions[mainRoute] = topBarVisibility.resetForRoute()
         if (mainRoute == NOTIFICATIONS) notificationsViewModel.refresh(markOnOpen = true)
     }
     LaunchedEffect(session.serverUrl, session.userId) {
@@ -680,118 +675,74 @@ private fun MainScaffold(
                 ARTIST.substringBefore("/"),
                 NOW_PLAYING,
             )
-    val topBarHidden = detailRoute || mainRoute == MYPAGE || mainRoute == NOTIFICATIONS
     val miniPlayerUsesNavigationInset =
         detailRoute || mainRoute == NOTIFICATIONS || currentRoute == SEARCH
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        androidx.compose.material3.Scaffold(
-            topBar = {
-                Column {
-                    if (!topBarHidden) {
-                        val topBarContent: @Composable () -> Unit = {
-                            MainTopBar(
-                                containerColor =
-                                    if (mainRoute == HOME) Color.Transparent
-                                    else MaterialTheme.colorScheme.background,
-                                windowInsets = WindowInsets(0, 0, 0, 0),
-                                syncplay = syncplay,
-                                session = session,
-                                showSearchAction = shouldShowMainSearchAction(mainRoute),
-                                onSearch = { navigateToSearch(navController) },
-                                unreadCount = notificationsState.unreadCount,
-                                onNotifications = {
-                                    navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
-                                },
-                                onReturnToView = { group ->
-                                    group.mediaItemId()?.let { itemId ->
-                                        scope.launch {
-                                            if (
-                                                audio.pauseForVideoAndDetach() ==
-                                                    AudioCommandResult.Applied
-                                            ) {
-                                                launchPlayback(context, itemId, "")
-                                            } else {
-                                                queueSnackbarHostState.showSnackbar(
-                                                    videoHandoffError
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                        if (mainRoute == HOME) {
-                            HomeTopBarSlot(
-                                scrolled = homeScrolled,
-                                visibilityFraction = topBarVisibilityFraction,
-                                modifier = Modifier.fillMaxWidth(),
-                                content = topBarContent,
-                            )
-                        } else {
-                            StatusBarAwareTopBarSlot(
-                                visibilityFraction = topBarVisibilityFraction,
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.background),
-                                content = topBarContent,
-                            )
+    val tabTopBar: @Composable (String) -> Unit = { route ->
+        val content: @Composable () -> Unit = {
+            MainTopBar(
+                containerColor =
+                    if (route == HOME) Color.Transparent else MaterialTheme.colorScheme.background,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                syncplay = syncplay,
+                session = session,
+                showSearchAction = shouldShowMainSearchAction(route),
+                onSearch = { navigateToSearch(navController) },
+                unreadCount = notificationsState.unreadCount,
+                onNotifications = {
+                    navController.navigate(NOTIFICATIONS) { launchSingleTop = true }
+                },
+                onReturnToView = { group ->
+                    group.mediaItemId()?.let { itemId ->
+                        scope.launch {
+                            if (audio.pauseForVideoAndDetach() == AudioCommandResult.Applied) {
+                                launchPlayback(context, itemId, "")
+                            } else {
+                                queueSnackbarHostState.showSnackbar(videoHandoffError)
+                            }
                         }
                     }
-                }
-            },
-            // Player and navigation chrome are drawn in the transparent overlay below. Keeping the
-            // Scaffold bottom slot empty lets the current screen continue behind that chrome.
-            bottomBar = {},
-            containerColor = Color.Transparent,
-        ) { padding ->
+                },
+            )
+        }
+        if (route == HOME) {
+            HomeTopBarSlot(
+                scrolled = homeScrolled,
+                visibilityFraction = topBarFractions[route] ?: 1f,
+                modifier = Modifier.fillMaxWidth(),
+                content = content,
+            )
+        } else {
+            StatusBarAwareTopBarSlot(
+                visibilityFraction = topBarFractions[route] ?: 1f,
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+                content = content,
+            )
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Player and navigation chrome remain in the transparent overlay below.
+        Scaffold(containerColor = Color.Transparent) { padding ->
             val bottomOverlayHeight = with(density) { bottomOverlayHeightPx.toDp() }
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(LocalBottomOverlayHeight provides bottomOverlayHeight) {
-                    NavHost(
-                        navController,
-                        startDestination = HOME,
-                        modifier =
-                            Modifier.fillMaxSize()
-                                // Keep every route behind the player and navigation overlay.
-                                .nestedScroll(scrollConnection),
-                        // My Page removes the shared top bar. Skip crossfading with list screens
-                        // so their outgoing content does not remeasure under the status bar.
-                        enterTransition = {
-                            if (
-                                shouldUseImmediateMyPageTabTransition(
-                                    initialRoute = routeName(initialState.destination.route),
-                                    targetRoute = routeName(targetState.destination.route),
-                                )
-                            ) {
-                                EnterTransition.None
-                            } else {
-                                fadeIn(animationSpec = tween(700))
-                            }
-                        },
-                        exitTransition = {
-                            if (
-                                shouldUseImmediateMyPageTabTransition(
-                                    initialRoute = routeName(initialState.destination.route),
-                                    targetRoute = routeName(targetState.destination.route),
-                                )
-                            ) {
-                                ExitTransition.None
-                            } else {
-                                fadeOut(animationSpec = tween(700))
-                            }
-                        },
+                    MainRouteNavHost(
+                        navController = navController,
+                        modifier = Modifier.fillMaxSize().nestedScroll(scrollConnection),
                     ) {
                         composable(HOME) {
-                            HomeScreen(
-                                repository,
-                                session,
-                                padding,
-                                bottomContentPadding = bottomOverlayHeight + 20.dp,
-                                onItemClick = { item -> navigateToMedia(navController, item) },
-                                onScrollabilityChanged = onContentScrollabilityChanged,
-                                onHomeScrolledChanged = { homeScrolled = it },
-                            )
+                            MainTabChromeScaffold(topBar = { tabTopBar(HOME) }) { tabPadding ->
+                                HomeScreen(
+                                    repository,
+                                    session,
+                                    tabPadding,
+                                    bottomContentPadding = bottomOverlayHeight + 20.dp,
+                                    onItemClick = { item -> navigateToMedia(navController, item) },
+                                    onScrollabilityChanged = onContentScrollabilityChanged,
+                                    onHomeScrolledChanged = { homeScrolled = it },
+                                )
+                            }
                         }
                         dialog(
                             SEARCH,
@@ -822,33 +773,38 @@ private fun MainScaffold(
                             )
                         }
                         composable(LIBRARY) {
-                            LibraryScreen(
-                                repository = repository,
-                                session = session,
-                                padding = padding,
-                                onItemClick = { item -> navigateToMedia(navController, item) },
-                                onScrollabilityChanged = onContentScrollabilityChanged,
-                            )
+                            MainTabChromeScaffold(topBar = { tabTopBar(LIBRARY) }) { tabPadding ->
+                                LibraryScreen(
+                                    repository = repository,
+                                    session = session,
+                                    padding = tabPadding,
+                                    onItemClick = { item -> navigateToMedia(navController, item) },
+                                    onScrollabilityChanged = onContentScrollabilityChanged,
+                                )
+                            }
                         }
                         composable(FAVORITES) {
-                            FavoritesScreen(
-                                repository = repository,
-                                session = session,
-                                padding = padding,
-                                onItemClick = { item -> navigateToMedia(navController, item) },
-                                onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst ->
-                                    audio.playPlaylistTracks(
-                                        tracks,
-                                        index,
-                                        shuffle = shuffle ?: audioState.shuffle,
-                                        preserveSelectedFirst = preserveSelectedFirst,
-                                    )
-                                },
-                                onScrollabilityChanged = onContentScrollabilityChanged,
-                                onOpenPlaylist = { playlistId ->
-                                    navigateToPlaylist(navController, playlistId)
-                                },
-                            )
+                            MainTabChromeScaffold(topBar = { tabTopBar(FAVORITES) }) { tabPadding ->
+                                FavoritesScreen(
+                                    repository = repository,
+                                    session = session,
+                                    padding = tabPadding,
+                                    onItemClick = { item -> navigateToMedia(navController, item) },
+                                    onPlayTracks = { tracks, index, shuffle, preserveSelectedFirst
+                                        ->
+                                        audio.playPlaylistTracks(
+                                            tracks,
+                                            index,
+                                            shuffle = shuffle ?: audioState.shuffle,
+                                            preserveSelectedFirst = preserveSelectedFirst,
+                                        )
+                                    },
+                                    onScrollabilityChanged = onContentScrollabilityChanged,
+                                    onOpenPlaylist = { playlistId ->
+                                        navigateToPlaylist(navController, playlistId)
+                                    },
+                                )
+                            }
                         }
                         composable(
                             PLAYLIST,
@@ -1151,6 +1107,31 @@ private fun MainScaffold(
         )
         ToastHost(state = toast)
     }
+}
+
+/** Keep the chrome inside its animated destination so its measured insets leave with it. */
+@Composable
+internal fun MainTabChromeScaffold(
+    topBar: @Composable () -> Unit,
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Scaffold(topBar = topBar, containerColor = Color.Transparent, content = content)
+}
+
+@Composable
+internal fun MainRouteNavHost(
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+    builder: NavGraphBuilder.() -> Unit,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = HOME,
+        modifier = modifier,
+        enterTransition = { fadeIn(animationSpec = tween(700)) },
+        exitTransition = { fadeOut(animationSpec = tween(700)) },
+        builder = builder,
+    )
 }
 
 private fun queueAddedMessage(context: Context, trackCount: Int): String =
