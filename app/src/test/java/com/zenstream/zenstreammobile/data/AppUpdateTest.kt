@@ -3,6 +3,10 @@ package com.zenstream.zenstreammobile.data
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -41,6 +45,22 @@ class AppUpdateTest {
     }
 
     @Test
+    fun unsuccessfulHttpResponsesDoNotReportNoUpdate() = runTest {
+        for (statusCode in listOf(403, 429, 503)) {
+            val checker = updateChecker(statusCode, "{}")
+            val error = runCatching { checker.checkForUpdate() }.exceptionOrNull()
+
+            assertTrue("HTTP $statusCode should fail the check", error is IOException)
+        }
+    }
+
+    @Test
+    fun successfulHttpResponseReportsWhetherThereIsAnUpdate() = runTest {
+        assertEquals("1.2.0", updateChecker(200, releaseJson()).checkForUpdate()?.version)
+        assertNull(updateChecker(200, releaseJson(), "1.2.0").checkForUpdate())
+    }
+
+    @Test
     fun newerStableReleaseWithTheExpectedApkIsReturned() {
         val update = parseLatestReleaseUpdate(releaseJson(), "1.1.0-main.4")
 
@@ -64,6 +84,26 @@ class AppUpdateTest {
         val body = releaseJson().replace("https://github.com/Loco-CTO", "https://example.com")
 
         assertNull(parseLatestReleaseUpdate(body, "1.1.0"))
+    }
+
+    private fun updateChecker(
+        statusCode: Int,
+        body: String,
+        currentVersion: String = "1.1.0",
+    ): GitHubUpdateChecker {
+        val client =
+            OkHttpClient.Builder()
+                .addInterceptor { chain ->
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(statusCode)
+                        .message("Test response")
+                        .body(body.toResponseBody())
+                        .build()
+                }
+                .build()
+        return GitHubUpdateChecker(client, currentVersion)
     }
 
     private fun releaseJson(): String =

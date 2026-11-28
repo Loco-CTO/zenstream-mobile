@@ -1,6 +1,7 @@
 package com.zenstream.zenstreammobile.data
 
 import com.zenstream.zenstreammobile.BuildConfig
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -42,7 +43,9 @@ class GitHubUpdateChecker(
                     .get()
                     .build()
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
+                if (!response.isSuccessful) {
+                    throw IOException("Update check failed (HTTP ${response.code})")
+                }
                 parseLatestReleaseUpdate(response.body.string(), currentVersion)
             }
         }
